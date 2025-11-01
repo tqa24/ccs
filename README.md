@@ -14,7 +14,7 @@ Manual switching is tedious and error-prone.
 
 **The Solution**:
 ```bash
-ccs sonnet    # Complex refactoring? Use Claude Sonnet 4.5
+ccs son       # Complex refactoring? Use Claude Sonnet 4.5
 ccs glm       # Simple bug fix? Use GLM 4.6
 # Hit rate limit? Switch instantly:
 ccs glm       # Continue working with GLM
@@ -47,7 +47,7 @@ EOF
 ```bash
 ccs          # Use default profile
 ccs glm      # Use GLM profile
-ccs sonnet   # Use Sonnet profile
+ccs son      # Use Sonnet profile
 ```
 
 ## Why CCS?
@@ -72,7 +72,7 @@ ccs sonnet   # Use Sonnet profile
 **With CCS**: Switch models based on task complexity, maximize quality while managing costs.
 
 ```bash
-ccs sonnet    # Planning new feature architecture
+ccs son       # Planning new feature architecture
 # Got the plan? Implement with GLM:
 ccs glm       # Write the straightforward code
 ```
@@ -85,7 +85,7 @@ If you have both Claude subscription and GLM Coding Plan, you know the pain:
 - Repeat 10x per day
 
 **CCS solves this**:
-- One command to switch: `ccs glm` or `ccs sonnet`
+- One command to switch: `ccs glm` or `ccs son`
 - Keep both configs saved as profiles
 - Switch in <1 second
 - No file editing, no copy-paste, no mistakes
@@ -105,6 +105,8 @@ If you have both Claude subscription and GLM Coding Plan, you know the pain:
 curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | bash
 ```
 
+**Note**: The installer supports both direct execution (`./install.sh`) and piped installation (`curl | bash`).
+
 ### Git Clone
 
 ```bash
@@ -112,6 +114,8 @@ git clone https://github.com/kaitranntt/ccs.git
 cd ccs
 ./install.sh
 ```
+
+**Note**: Works with git worktrees and submodules - the installer detects both `.git` directory and `.git` file.
 
 ### Manual
 
@@ -124,9 +128,23 @@ chmod +x ~/.local/bin/ccs
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
+### Upgrade
+
+**From git clone**:
+```bash
+cd ccs && git pull && ./install.sh
+```
+
+**From curl install**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | bash
+```
+
+**Note**: Upgrading preserves your existing API keys and settings. The installer only adds new features without overwriting your configuration.
+
 ## Configuration
 
-Create `~/.ccs.json` with profile mappings:
+The installer auto-creates `~/.ccs.json` and profile templates during installation. If you need to customize:
 
 ```json
 {
@@ -140,6 +158,30 @@ Create `~/.ccs.json` with profile mappings:
 
 Each profile points to a Claude settings JSON file. Create settings files per [Claude CLI docs](https://docs.claude.com/en/docs/claude-code/installation).
 
+### GLM Profile Configuration
+
+The installer automatically configures GLM profiles with enhanced environment variables:
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api.z.ai/api/anthropic",
+    "ANTHROPIC_AUTH_TOKEN": "YOUR_GLM_API_KEY_HERE",
+    "ANTHROPIC_MODEL": "glm-4.6",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "glm-4.6",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "glm-4.6",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "glm-4.6"
+  }
+}
+```
+
+**Environment Variables**:
+- `ANTHROPIC_DEFAULT_OPUS_MODEL`: Default model for Opus-class requests
+- `ANTHROPIC_DEFAULT_SONNET_MODEL`: Default model for Sonnet-class requests
+- `ANTHROPIC_DEFAULT_HAIKU_MODEL`: Default model for Haiku-class requests
+
+These variables ensure GLM is used as the default provider when switching profiles.
+
 ## Usage
 
 ### Basic
@@ -147,7 +189,7 @@ Each profile points to a Claude settings JSON file. Create settings files per [C
 ```bash
 ccs           # Use default profile (no args)
 ccs glm       # Use GLM profile
-ccs sonnet    # Use Sonnet profile
+ccs son       # Use Sonnet profile
 ```
 
 ### With Arguments
@@ -156,7 +198,7 @@ All args after profile name pass directly to Claude CLI:
 
 ```bash
 ccs glm --verbose
-ccs sonnet /plan "add feature"
+ccs son /plan "add feature"
 ccs default --model claude-sonnet-4
 ```
 
@@ -175,7 +217,7 @@ ccs glm
 
 ```bash
 # Step 1: Architecture & Planning (needs Claude's intelligence)
-ccs sonnet
+ccs son
 /plan "Design payment integration with Stripe, handle webhooks, errors, retries"
 # → Claude Sonnet 4.5 thinks deeply about edge cases, security, architecture
 
@@ -185,7 +227,7 @@ ccs glm
 # → GLM 4.6 writes the code efficiently, saves Claude usage
 
 # Step 3: Code Review (needs deep analysis)
-ccs sonnet
+ccs son
 /review "check the payment handler for security issues"
 # → Claude Sonnet 4.5 catches subtle vulnerabilities
 
@@ -201,7 +243,7 @@ ccs glm
 
 ```bash
 # Working on complex refactoring with Claude
-ccs sonnet
+ccs son
 /plan "refactor authentication system"
 
 # Claude hits rate limit mid-task
@@ -212,7 +254,7 @@ ccs glm
 # Continue working without interruption
 
 # Rate limit resets? Switch back
-ccs sonnet
+ccs son
 ```
 
 ### Configuration Examples
@@ -272,7 +314,30 @@ sudo pacman -S jq
 
 ## Troubleshooting
 
-### Profile not found
+### Installation Issues
+
+#### BASH_SOURCE unbound variable error
+
+This error occurs when running the installer in some shells or environments.
+
+**Fixed in latest version**: The installer now handles both piped execution (`curl | bash`) and direct execution (`./install.sh`).
+
+**Solution**: Upgrade to the latest version:
+```bash
+curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | bash
+```
+
+#### Git worktree not detected
+
+If installing from a git worktree or submodule, older versions may fail to detect the git repository.
+
+**Fixed in latest version**: The installer now detects both `.git` directory (standard clone) and `.git` file (worktree/submodule).
+
+**Solution**: Upgrade to the latest version or use the curl installation method.
+
+### Configuration Issues
+
+#### Profile not found
 
 ```
 Error: Profile 'foo' not found in ~/.ccs.json
@@ -287,7 +352,7 @@ Error: Profile 'foo' not found in ~/.ccs.json
 }
 ```
 
-### Settings file missing
+#### Settings file missing
 
 ```
 Error: Settings file not found: ~/.claude/foo.settings.json
@@ -295,7 +360,7 @@ Error: Settings file not found: ~/.claude/foo.settings.json
 
 **Fix**: Create settings file or fix path in config.
 
-### jq not installed
+#### jq not installed
 
 ```
 Error: jq is required but not installed
@@ -303,7 +368,11 @@ Error: jq is required but not installed
 
 **Fix**: Install jq (see Requirements).
 
-### PATH not set
+**Note**: The installer creates basic templates even without jq, but enhanced features require jq.
+
+### Environment Issues
+
+#### PATH not set
 
 ```
 ⚠️  Warning: ~/.local/bin is not in PATH
@@ -315,7 +384,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 Then `source ~/.bashrc` or restart shell.
 
-### Default profile missing
+#### Default profile missing
 
 ```
 Error: Profile 'default' not found in ~/.ccs.json
@@ -329,6 +398,14 @@ Error: Profile 'default' not found in ~/.ccs.json
   }
 }
 ```
+
+### Upgrade Issues
+
+#### API keys lost after upgrade
+
+**Not a problem**: The installer preserves existing API keys when upgrading. If you're using GLM, your API key is automatically preserved and the profile is enhanced with new default model variables.
+
+**Verification**: Check `~/.claude/glm.settings.json` - your `ANTHROPIC_AUTH_TOKEN` should still be present.
 
 ## Uninstallation
 
