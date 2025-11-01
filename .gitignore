@@ -1,4 +1,5 @@
 # User config files
+# Note: config files now live in ~/.ccs/, not in project directory
 .ccs.json
 
 # macOS

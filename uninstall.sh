@@ -21,24 +21,18 @@ if [[ -L "$HOME/.local/bin/ccs-uninstall" ]]; then
   echo "✅ Removed: $HOME/.local/bin/ccs-uninstall"
 fi
 
-# Remove share directory
-if [[ -d "$HOME/.local/share/ccs" ]]; then
-  rm -rf "$HOME/.local/share/ccs"
-  echo "✅ Removed: $HOME/.local/share/ccs"
-fi
-
-# Ask about config
-if [[ -f "$HOME/.ccs.json" ]]; then
-  read -p "Remove config file ~/.ccs.json? (y/N) " -n 1 -r
+# Ask about ~/.ccs directory
+if [[ -d "$HOME/.ccs" ]]; then
+  read -p "Remove CCS directory ~/.ccs? This includes config and profiles. (y/N) " -n 1 -r
   echo
   if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm "$HOME/.ccs.json"
-    echo "✅ Removed: $HOME/.ccs.json"
+    rm -rf "$HOME/.ccs"
+    echo "✅ Removed: $HOME/.ccs"
   else
-    echo "ℹ️  Kept: $HOME/.ccs.json"
+    echo "ℹ️  Kept: $HOME/.ccs"
   fi
 else
-  echo "ℹ️  No config file found at $HOME/.ccs.json"
+  echo "ℹ️  No CCS directory found at $HOME/.ccs"
 fi
 
 echo ""

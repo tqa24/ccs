@@ -6,13 +6,13 @@ This diagram illustrates the installation flow for the `ccs` (claude-code-switch
 
 ```mermaid
 flowchart TD
-    Start([Start Installation]) --> Init[Initialize Configuration<br/>INSTALL_DIR, SHARE_DIR, CLAUDE_DIR]
+    Start([Start Installation]) --> Init[Initialize Configuration<br/>INSTALL_DIR, CCS_DIR, CLAUDE_DIR]
 
     Init --> DetectMethod{Detect Install Method<br/>ccs file exists?}
     DetectMethod -->|Yes: SCRIPT_DIR/ccs| GitMethod[Method: git]
     DetectMethod -->|No| StandaloneMethod[Method: standalone]
 
-    GitMethod --> CreateDirs[Create Directories<br/>mkdir INSTALL_DIR, SHARE_DIR]
+    GitMethod --> CreateDirs[Create Directories<br/>mkdir INSTALL_DIR, CCS_DIR]
     StandaloneMethod --> CheckCurl{curl available?}
     CheckCurl -->|No| ErrorCurl[❌ Error: curl required]
     CheckCurl -->|Yes| CreateDirs
@@ -21,7 +21,7 @@ flowchart TD
 
     CreateDirs --> InstallExec{Install Method?}
     InstallExec -->|Git| InstallGit[Use local ccs from SCRIPT_DIR<br/>chmod +x, ln -sf to INSTALL_DIR]
-    InstallExec -->|Standalone| DownloadCCS[Download ccs from GitHub<br/>to SHARE_DIR<br/>chmod +x, ln -sf to INSTALL_DIR]
+    InstallExec -->|Standalone| DownloadCCS[Download ccs from GitHub<br/>to CCS_DIR<br/>chmod +x, ln -sf to INSTALL_DIR]
 
     InstallGit --> CheckSymlink{Symlink Created?}
     DownloadCCS --> CheckDownload{Download success?}
@@ -78,9 +78,9 @@ flowchart TD
     CheckJQTemplate -->|Yes| MergeTemplate[Merge with current]
     CheckJQTemplate -->|No| BasicTemplate[Use basic template]
     MergeTemplate --> CheckMerge{Merge success?}
-    CheckMerge -->|Yes| AtomicMVGLM[atomic_mv to glm.settings.json]
+    CheckMerge -->|Yes| AtomicMVGLM[atomic_mv to ~/.ccs/glm.settings.json]
     CheckMerge -->|No| BasicTemplate
-    BasicTemplate --> WriteGLM[Write glm.settings.json]
+    BasicTemplate --> WriteGLM[Write ~/.ccs/glm.settings.json]
 
     AtomicMVGLM --> CheckAtomicGLM{Move success?}
     CheckAtomicGLM -->|No| ErrorAtomicGLM[❌ Error: Permission denied]
@@ -97,12 +97,12 @@ flowchart TD
     CreateSonnet -->|Yes| CopySonnetConfig[Copy current config]
     CreateSonnet -->|No| CreateSonnetTemplate[Create Sonnet template<br/>+ remove custom settings with jq]
 
-    CopySonnetConfig --> WriteSonnet[Write sonnet.settings.json]
+    CopySonnetConfig --> WriteSonnet[Write ~/.ccs/sonnet.settings.json]
     CreateSonnetTemplate --> CheckJQSonnet{jq available?}
     CheckJQSonnet -->|Yes| RemoveCustom[Remove ANTHROPIC_BASE_URL, etc.]
     CheckJQSonnet -->|No| BasicSonnet[Use basic template]
     RemoveCustom --> CheckRemove{Remove success?}
-    CheckRemove -->|Yes| AtomicMVSonnet[atomic_mv to sonnet.settings.json]
+    CheckRemove -->|Yes| AtomicMVSonnet[atomic_mv to ~/.ccs/sonnet.settings.json]
     CheckRemove -->|No| BasicSonnet
     BasicSonnet --> WriteSonnet
 
@@ -114,8 +114,8 @@ flowchart TD
 
     WriteSonnet --> CreateCCSConfig
 
-    CreateCCSConfig{~/.ccs.json exists?}
-    CreateCCSConfig -->|No| WriteCCSConfig[Create ~/.ccs.json<br/>with profile mappings]
+    CreateCCSConfig{~/.ccs/config.json exists?}
+    CreateCCSConfig -->|No| WriteCCSConfig[Create ~/.ccs/config.json<br/>with profile mappings]
     CreateCCSConfig -->|Yes| SkipCCSConfig[Skip: Already exists]
 
     WriteCCSConfig --> CheckCCSWrite{Write success?}

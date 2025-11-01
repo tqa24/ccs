@@ -1,8 +1,8 @@
 # CCS - Claude Code Switch
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Bash](https://img.shields.io/badge/bash-3.2%2B-blue.svg)](https://www.gnu.org/software/bash/)
-[![GitHub Stars](https://img.shields.io/github/stars/kaitranntt/ccs.svg)](https://github.com/kaitranntt/ccs/stargazers)
+[![Language: Bash](https://img.shields.io/badge/Language-Bash-blue.svg)](https://www.gnu.org/software/bash/)
+[![Platform: macOS | Linux](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)]()
 
 **Languages**: [English](README.md) | [Tiếng Việt](README.vi.md)
 
@@ -34,11 +34,11 @@ curl -fsSL ccs.kaitran.ca/install | bash
 **Configure**:
 ```bash
 # Edit with your profiles
-cat > ~/.ccs.json << 'EOF'
+cat > ~/.ccs/config.json << 'EOF'
 {
   "profiles": {
-    "glm": "~/.claude/glm.settings.json",
-    "son": "~/.claude/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "son": "~/.ccs/sonnet.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
@@ -156,13 +156,13 @@ curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | ba
 
 ## Configuration
 
-The installer auto-creates `~/.ccs.json` and profile templates during installation. If you need to customize:
+The installer auto-creates `~/.ccs/config.json` and profile templates during installation. If you need to customize:
 
 ```json
 {
   "profiles": {
-    "glm": "~/.claude/glm.settings.json",
-    "sonnet": "~/.claude/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "sonnet": "~/.ccs/sonnet.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
@@ -217,7 +217,7 @@ ccs default --model claude-sonnet-4
 ### Custom Config Location
 
 ```bash
-export CCS_CONFIG=~/my-custom-ccs.json
+export CCS_CONFIG=~/my-custom-config.json
 ccs glm
 ```
 
@@ -275,8 +275,8 @@ ccs son
 ```json
 {
   "profiles": {
-    "glm": "~/.claude/glm.settings.json",
-    "sonnet": "~/.claude/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "sonnet": "~/.ccs/sonnet.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
@@ -286,9 +286,9 @@ ccs son
 ```json
 {
   "profiles": {
-    "sonnet": "~/.claude/sonnet.settings.json",
-    "glm": "~/.claude/glm.settings.json",
-    "haiku": "~/.claude/haiku.settings.json",
+    "sonnet": "~/.ccs/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "haiku": "~/.ccs/haiku.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
@@ -297,7 +297,7 @@ ccs son
 ## How It Works
 
 1. Reads profile name (defaults to "default" if omitted)
-2. Looks up settings file path in `~/.ccs.json`
+2. Looks up settings file path in `~/.ccs/config.json`
 3. Executes `claude --settings <path> [remaining-args]`
 
 No magic. No file modification. Pure delegation.
@@ -352,14 +352,14 @@ If installing from a git worktree or submodule, older versions may fail to detec
 #### Profile not found
 
 ```
-Error: Profile 'foo' not found in ~/.ccs.json
+Error: Profile 'foo' not found in ~/.ccs/config.json
 ```
 
-**Fix**: Add profile to `~/.ccs.json`:
+**Fix**: Add profile to `~/.ccs/config.json`:
 ```json
 {
   "profiles": {
-    "foo": "~/.claude/foo.settings.json"
+    "foo": "~/.ccs/foo.settings.json"
   }
 }
 ```
@@ -367,7 +367,7 @@ Error: Profile 'foo' not found in ~/.ccs.json
 #### Settings file missing
 
 ```
-Error: Settings file not found: ~/.claude/foo.settings.json
+Error: Settings file not found: ~/.ccs/foo.settings.json
 ```
 
 **Fix**: Create settings file or fix path in config.
@@ -399,7 +399,7 @@ Then `source ~/.bashrc` or restart shell.
 #### Default profile missing
 
 ```
-Error: Profile 'default' not found in ~/.ccs.json
+Error: Profile 'default' not found in ~/.ccs/config.json
 ```
 
 **Fix**: Add "default" profile or always specify profile name:
@@ -417,7 +417,7 @@ Error: Profile 'default' not found in ~/.ccs.json
 
 **Not a problem**: The installer preserves existing API keys when upgrading. If you're using GLM, your API key is automatically preserved and the profile is enhanced with new default model variables.
 
-**Verification**: Check `~/.claude/glm.settings.json` - your `ANTHROPIC_AUTH_TOKEN` should still be present.
+**Verification**: Check `~/.ccs/glm.settings.json` - your `ANTHROPIC_AUTH_TOKEN` should still be present.
 
 ## Uninstallation
 
@@ -439,7 +439,7 @@ curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.sh | 
 ```bash
 rm ~/.local/bin/ccs
 rm ~/.local/bin/ccs-uninstall
-rm ~/.ccs.json  # If you want to remove config
+rm -rf ~/.ccs  # If you want to remove all CCS files
 ```
 
 ## Contributing

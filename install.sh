@@ -7,7 +7,7 @@ set -euo pipefail
 
 # --- Configuration ---
 INSTALL_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-SHARE_DIR="$HOME/.local/share/ccs"
+CCS_DIR="$HOME/.ccs"
 CLAUDE_DIR="$HOME/.claude"
 GLM_MODEL="glm-4.6"
 
@@ -82,7 +82,7 @@ atomic_mv() {
 
 create_glm_profile() {
   local current_settings="$CLAUDE_DIR/settings.json"
-  local glm_settings="$CLAUDE_DIR/glm.settings.json"
+  local glm_settings="$CCS_DIR/glm.settings.json"
   local provider="$1"
 
   if [[ "$provider" == "glm" ]]; then
@@ -131,7 +131,7 @@ create_glm_profile() {
 
 create_sonnet_profile() {
   local current_settings="$CLAUDE_DIR/settings.json"
-  local sonnet_settings="$CLAUDE_DIR/sonnet.settings.json"
+  local sonnet_settings="$CCS_DIR/sonnet.settings.json"
   local provider="$1"
 
   if [[ "$provider" == "claude" ]]; then
@@ -171,7 +171,7 @@ echo "Installing ccs to $INSTALL_DIR..."
 echo ""
 
 # Create directories
-mkdir -p "$INSTALL_DIR" "$SHARE_DIR"
+mkdir -p "$INSTALL_DIR" "$CCS_DIR"
 
 # Install main executable
 if [[ "$INSTALL_METHOD" == "standalone" ]]; then
@@ -182,9 +182,9 @@ if [[ "$INSTALL_METHOD" == "standalone" ]]; then
   fi
 
   echo "Fetching ccs executable..."
-  if curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/ccs -o "$SHARE_DIR/ccs"; then
-    chmod +x "$SHARE_DIR/ccs"
-    ln -sf "$SHARE_DIR/ccs" "$INSTALL_DIR/ccs"
+  if curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/ccs -o "$CCS_DIR/ccs"; then
+    chmod +x "$CCS_DIR/ccs"
+    ln -sf "$CCS_DIR/ccs" "$INSTALL_DIR/ccs"
   else
     echo "❌ Error: Failed to download ccs from GitHub"
     exit 1
@@ -201,16 +201,19 @@ if [[ ! -L "$INSTALL_DIR/ccs" ]]; then
   exit 1
 fi
 
-# Install uninstall script
+# Install uninstall script (with idempotency check)
 if [[ -f "$SCRIPT_DIR/uninstall.sh" ]]; then
-  cp "$SCRIPT_DIR/uninstall.sh" "$SHARE_DIR/uninstall.sh"
-  chmod +x "$SHARE_DIR/uninstall.sh"
-  ln -sf "$SHARE_DIR/uninstall.sh" "$INSTALL_DIR/ccs-uninstall"
+  # Only copy if source and destination are different
+  if [[ "$SCRIPT_DIR/uninstall.sh" != "$CCS_DIR/uninstall.sh" ]]; then
+    cp "$SCRIPT_DIR/uninstall.sh" "$CCS_DIR/uninstall.sh"
+  fi
+  chmod +x "$CCS_DIR/uninstall.sh"
+  ln -sf "$CCS_DIR/uninstall.sh" "$INSTALL_DIR/ccs-uninstall"
 elif [[ "$INSTALL_METHOD" == "standalone" ]] && command -v curl &> /dev/null; then
   echo "Fetching uninstall script..."
-  curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.sh -o "$SHARE_DIR/uninstall.sh"
-  chmod +x "$SHARE_DIR/uninstall.sh"
-  ln -sf "$SHARE_DIR/uninstall.sh" "$INSTALL_DIR/ccs-uninstall"
+  curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.sh -o "$CCS_DIR/uninstall.sh"
+  chmod +x "$CCS_DIR/uninstall.sh"
+  ln -sf "$CCS_DIR/uninstall.sh" "$INSTALL_DIR/ccs-uninstall"
 fi
 
 # Check PATH
@@ -228,8 +231,8 @@ echo ""
 # --- Profile Setup ---
 
 CURRENT_PROVIDER=$(detect_current_provider)
-GLM_SETTINGS="$CLAUDE_DIR/glm.settings.json"
-SONNET_SETTINGS="$CLAUDE_DIR/sonnet.settings.json"
+GLM_SETTINGS="$CCS_DIR/glm.settings.json"
+SONNET_SETTINGS="$CCS_DIR/sonnet.settings.json"
 
 [[ "$CURRENT_PROVIDER" != "unknown" ]] && echo "🔍 Detected current provider: $CURRENT_PROVIDER" && echo ""
 
@@ -243,24 +246,19 @@ if [[ ! -f "$GLM_SETTINGS" ]] || [[ ! -f "$SONNET_SETTINGS" ]]; then
 fi
 
 # Create ccs config
-if [[ ! -f "$HOME/.ccs.json" ]]; then
-  echo "Creating ~/.ccs.json config..."
-  cat > "$HOME/.ccs.json.tmp" << 'EOF'
+if [[ ! -f "$CCS_DIR/config.json" ]]; then
+  echo "Creating ~/.ccs/config.json..."
+  cat > "$CCS_DIR/config.json.tmp" << 'EOF'
 {
   "profiles": {
-    "glm": "~/.claude/glm.settings.json",
-    "son": "~/.claude/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "son": "~/.ccs/sonnet.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
 EOF
-  if [[ ! -f "$HOME/.ccs.json" ]]; then
-    atomic_mv "$HOME/.ccs.json.tmp" "$HOME/.ccs.json"
-    echo "  ✓ Created: ~/.ccs.json"
-  else
-    rm -f "$HOME/.ccs.json.tmp"
-    echo "  ℹ️  Config already exists"
-  fi
+  atomic_mv "$CCS_DIR/config.json.tmp" "$CCS_DIR/config.json"
+  echo "  ✓ Created: ~/.ccs/config.json"
   echo ""
 fi
 

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs.json}"
+CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
 PROFILE="${1:-default}"
 
 # Check config exists
 if [[ ! -f "$CONFIG_FILE" ]]; then
   echo "Error: Config file not found: $CONFIG_FILE"
   echo ""
-  echo "Create ~/.ccs.json with your profile mappings."
+  echo "Create ~/.ccs/config.json with your profile mappings."
   echo "See .ccs.example.json for template."
   exit 1
 fi

@@ -1,7 +1,7 @@
 {
   "profiles": {
-    "glm": "~/.claude/glm.settings.json",
-    "sonnet": "~/.claude/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "sonnet": "~/.ccs/sonnet.settings.json",
     "default": "~/.claude/settings.json"
   }
 }

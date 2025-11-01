@@ -1,8 +1,8 @@
 # CCS - Claude Code Switch
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Bash](https://img.shields.io/badge/bash-3.2%2B-blue.svg)](https://www.gnu.org/software/bash/)
-[![GitHub Stars](https://img.shields.io/github/stars/kaitranntt/ccs.svg)](https://github.com/kaitranntt/ccs/stargazers)
+[![Language: Bash](https://img.shields.io/badge/Language-Bash-blue.svg)](https://www.gnu.org/software/bash/)
+[![Platform: macOS | Linux](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg)]()
 
 **Ngôn ngữ**: [English](README.md) | [Tiếng Việt](README.vi.md)
 
@@ -34,11 +34,11 @@ curl -fsSL ccs.kaitran.ca/install | bash
 **Cấu hình**:
 ```bash
 # Sửa theo profile của bạn
-cat > ~/.ccs.json << 'EOF'
+cat > ~/.ccs/config.json << 'EOF'
 {
   "profiles": {
-    "glm": "~/.claude/glm.settings.json",
-    "son": "~/.claude/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "son": "~/.ccs/sonnet.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
@@ -147,13 +147,13 @@ curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/install.sh | ba
 
 ## Cấu Hình
 
-Installer tự động tạo `~/.ccs.json` và profile templates khi cài đặt. Nếu cần tùy chỉnh:
+Installer tự động tạo `~/.ccs/config.json` và profile templates khi cài đặt. Nếu cần tùy chỉnh:
 
 ```json
 {
   "profiles": {
-    "glm": "~/.claude/glm.settings.json",
-    "son": "~/.claude/sonnet.settings.json",
+    "glm": "~/.ccs/glm.settings.json",
+    "son": "~/.ccs/sonnet.settings.json",
     "default": "~/.claude/settings.json"
   }
 }
@@ -264,9 +264,9 @@ ccs son
 ```json
 {
   "profiles": {
-    "glm1": "~/.claude/glm-account1.settings.json",
-    "glm2": "~/.claude/glm-account2.settings.json",
-    "son": "~/.claude/sonnet.settings.json"
+    "glm1": "~/.ccs/glm-account1.settings.json",
+    "glm2": "~/.ccs/glm-account2.settings.json",
+    "son": "~/.ccs/sonnet.settings.json"
   }
 }
 ```
@@ -275,9 +275,9 @@ ccs son
 ```json
 {
   "profiles": {
-    "work": "~/.claude/work.settings.json",
-    "personal": "~/.claude/personal.settings.json",
-    "experiments": "~/.claude/experiments.settings.json"
+    "work": "~/.ccs/work.settings.json",
+    "personal": "~/.ccs/personal.settings.json",
+    "experiments": "~/.ccs/experiments.settings.json"
   }
 }
 ```
@@ -338,14 +338,14 @@ Nếu cài từ git worktree hoặc submodule, phiên bản cũ có thể không
 #### Profile không tìm thấy
 
 ```
-Error: Profile 'foo' not found in ~/.ccs.json
+Error: Profile 'foo' not found in ~/.ccs/config.json
 ```
 
 **Fix**: Thêm profile vào config:
 ```json
 {
   "profiles": {
-    "foo": "~/.claude/foo.settings.json"
+    "foo": "~/.ccs/foo.settings.json"
   }
 }
 ```
@@ -353,7 +353,7 @@ Error: Profile 'foo' not found in ~/.ccs.json
 #### File settings thiếu
 
 ```
-Error: Settings file not found: ~/.claude/foo.settings.json
+Error: Settings file not found: ~/.ccs/foo.settings.json
 ```
 
 **Fix**: Tạo file settings hoặc sửa path trong config.
@@ -385,7 +385,7 @@ Sau đó `source ~/.bashrc` hoặc khởi động lại shell.
 #### Profile mặc định thiếu
 
 ```
-Error: Profile 'default' not found in ~/.ccs.json
+Error: Profile 'default' not found in ~/.ccs/config.json
 ```
 
 **Fix**: Thêm profile default:
@@ -403,7 +403,7 @@ Error: Profile 'default' not found in ~/.ccs.json
 
 **Không phải vấn đề**: Installer giữ nguyên API keys hiện tại khi nâng cấp. Nếu bạn đang dùng GLM, API key của bạn được tự động giữ lại và profile được nâng cấp với các biến default model mới.
 
-**Xác minh**: Kiểm tra `~/.claude/glm.settings.json` - `ANTHROPIC_AUTH_TOKEN` của bạn vẫn còn đó.
+**Xác minh**: Kiểm tra `~/.ccs/glm.settings.json` - `ANTHROPIC_AUTH_TOKEN` của bạn vẫn còn đó.
 
 ## Gỡ Cài Đặt
 
@@ -425,7 +425,7 @@ curl -fsSL https://raw.githubusercontent.com/kaitranntt/ccs/main/uninstall.sh | 
 ```bash
 rm ~/.local/bin/ccs
 rm ~/.local/bin/ccs-uninstall
-rm ~/.ccs.json  # Nếu muốn xóa config
+rm -rf ~/.ccs  # Nếu muốn xóa tất cả files của CCS
 ```
 
 ## Bảo Mật
