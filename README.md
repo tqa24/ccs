@@ -4,6 +4,8 @@
 [![Bash](https://img.shields.io/badge/bash-3.2%2B-blue.svg)](https://www.gnu.org/software/bash/)
 [![GitHub Stars](https://img.shields.io/github/stars/kaitranntt/ccs.svg)](https://github.com/kaitranntt/ccs/stargazers)
 
+**Languages**: [English](README.md) | [Tiếng Việt](README.vi.md)
+
 > Switch between Claude Sonnet 4.5 and GLM 4.6 instantly. Use the right model for each task.
 
 **The Problem**: You have both Claude subscription and GLM Coding Plan. Two scenarios happen daily:
