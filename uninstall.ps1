@@ -20,11 +20,11 @@ if (Test-Path "$CcsDir\ccs.ps1") {
 $UninstallScript = "$CcsDir\uninstall.ps1"
 
 # Remove from PATH
-$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$UserPath = [Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
 if ($UserPath -like "*$CcsDir*") {
     try {
         $NewPath = ($UserPath -split ';' | Where-Object { $_ -ne $CcsDir }) -join ';'
-        [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+        [Environment]::SetEnvironmentVariable("Path", $NewPath, [System.EnvironmentVariableTarget]::User)
         Write-Host "[OK] Removed from PATH: $CcsDir"
         Write-Host "   Restart your terminal for changes to take effect."
     } catch {

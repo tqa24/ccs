@@ -235,7 +235,7 @@ Write-Host "└─"
 Write-Host ""
 
 # Check and update PATH
-$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$UserPath = [Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
 if ($UserPath -notlike "*$CcsDir*") {
     Write-Host "[!]  PATH Configuration Required"
     Write-Host ""
@@ -243,7 +243,7 @@ if ($UserPath -notlike "*$CcsDir*") {
 
     try {
         $NewPath = if ($UserPath) { "$UserPath;$CcsDir" } else { $CcsDir }
-        [Environment]::SetEnvironmentVariable("Path", $NewPath, "User")
+        [Environment]::SetEnvironmentVariable("Path", $NewPath, [System.EnvironmentVariableTarget]::User)
 
         Write-Host "   [OK] PATH updated. Restart your terminal for changes to take effect."
         Write-Host ""

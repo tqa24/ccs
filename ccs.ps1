@@ -144,11 +144,16 @@ if ($EnvVars.PSObject.Properties.Count -gt 0) {
         $VarName = $Property.Name
         $VarValue = $Property.Value
 
-        # Save original value
-        $OriginalEnvVars[$VarName] = [System.Environment]::GetEnvironmentVariable($VarName, 'Process')
+        try {
+            # Save original value
+            $OriginalEnvVars[$VarName] = [System.Environment]::GetEnvironmentVariable($VarName, [System.EnvironmentVariableTarget]::Process)
 
-        # Set new value for this process only
-        [System.Environment]::SetEnvironmentVariable($VarName, $VarValue, 'Process')
+            # Set new value for this process only
+            [System.Environment]::SetEnvironmentVariable($VarName, $VarValue, [System.EnvironmentVariableTarget]::Process)
+        } catch {
+            Write-Host "Warning: Could not set environment variable '$VarName'" -ForegroundColor Yellow
+            Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Yellow
+        }
     }
 }
 
@@ -164,12 +169,16 @@ try {
     # Restore original environment variables
     foreach ($VarName in $OriginalEnvVars.Keys) {
         $OriginalValue = $OriginalEnvVars[$VarName]
-        if ($null -eq $OriginalValue) {
-            # Variable didn't exist before, remove it
-            [System.Environment]::SetEnvironmentVariable($VarName, $null, 'Process')
-        } else {
-            # Restore original value
-            [System.Environment]::SetEnvironmentVariable($VarName, $OriginalValue, 'Process')
+        try {
+            if ($null -eq $OriginalValue) {
+                # Variable didn't exist before, remove it
+                [System.Environment]::SetEnvironmentVariable($VarName, $null, [System.EnvironmentVariableTarget]::Process)
+            } else {
+                # Restore original value
+                [System.Environment]::SetEnvironmentVariable($VarName, $OriginalValue, [System.EnvironmentVariableTarget]::Process)
+            }
+        } catch {
+            Write-Host "Warning: Could not restore environment variable '$VarName'" -ForegroundColor Yellow
         }
     }
 }
