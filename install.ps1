@@ -205,7 +205,6 @@ if (-not (Test-Path $ConfigFile)) {
         profiles = @{
             glm = "~/.ccs/glm.settings.json"
             son = "~/.ccs/sonnet.settings.json"
-            default = "~/.claude/settings.json"
         }
     }
 
@@ -230,16 +229,6 @@ if (-not (Test-Path $SonnetSettings)) {
     New-SonnetProfile -Provider $CurrentProvider
 } else {
     Write-Host "|  [OK] Sonnet profile exists: $SonnetSettings"
-}
-
-# Ensure default profile settings file exists
-$DefaultSettings = "$ClaudeDir\settings.json"
-if (-not (Test-Path $DefaultSettings)) {
-    New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
-    @{ env = @{} } | ConvertTo-Json -Depth 10 | Set-Content $DefaultSettings
-    Write-Host "|  [OK] Created default settings: $DefaultSettings"
-} else {
-    Write-Host "|  [OK] Default profile exists: $DefaultSettings"
 }
 
 Write-Host "└─"
@@ -282,15 +271,15 @@ if ($CurrentProvider -eq "claude") {
     Write-Host "   Quick start:"
     Write-Host "     ccs son       # Claude Sonnet (current)"
     Write-Host "     ccs glm       # GLM (after adding API key)"
-    Write-Host "     ccs           # Default profile"
+    Write-Host "     ccs           # Default (no profile)"
 } elseif ($CurrentProvider -eq "glm") {
     Write-Host "   Quick start:"
     Write-Host "     ccs glm       # GLM (current)"
     Write-Host "     ccs son       # Claude Sonnet"
-    Write-Host "     ccs           # Default profile"
+    Write-Host "     ccs           # Default (no profile)"
 } else {
     Write-Host "   Quick start:"
-    Write-Host "     ccs           # Default profile"
+    Write-Host "     ccs           # Default (no profile)"
     Write-Host "     ccs son       # Claude Sonnet"
     Write-Host "     ccs glm       # GLM (after adding API key)"
 }

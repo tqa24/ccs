@@ -12,6 +12,22 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Special case: "default" profile just runs claude directly (no profile switching)
+if ($Profile -eq "default") {
+    try {
+        if ($RemainingArgs) {
+            & claude @RemainingArgs
+        } else {
+            & claude
+        }
+        exit $LASTEXITCODE
+    } catch {
+        Write-Host "Error: Failed to execute claude" -ForegroundColor Red
+        Write-Host $_.Exception.Message
+        exit 1
+    }
+}
+
 # Config file location (supports environment variable override)
 $ConfigFile = if ($env:CCS_CONFIG) {
     $env:CCS_CONFIG
