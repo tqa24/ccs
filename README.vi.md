@@ -1,18 +1,97 @@
 # CCS - Claude Code Switch
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Language: Bash | PowerShell](https://img.shields.io/badge/Language-Bash%20%7C%20PowerShell-blue.svg)]()
-[![Platform: macOS | Linux | Windows](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)]()
+<table>
+<tr>
+<td width="70%">
+
+**Một lệnh, không downtime, đúng model cho từng tác vụ**
+
+Chuyển đổi giữa Claude Sonnet 4.5 và GLM 4.6 ngay lập tức. Ngừng hitting rate limits. Bắt đầu tối ưu chi phí.
+
+[![Install CCS](https://img.shields.io/badge/Install-CCS-C15F3C?style=for-the-badge&logo=linux&logoColor=white)](#installation)
+[![Version](https://img.shields.io/badge/version-2.2.3-141618?style=for-the-badge)](https://github.com/kaitranntt/ccs/releases)
+[![License](https://img.shields.io/badge/license-MIT-C15F3C?style=for-the-badge)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=for-the-badge)]()
 
 **Ngôn ngữ**: [English](README.md) | [Tiếng Việt](README.vi.md)
 
-> Chuyển đổi giữa Claude Sonnet 4.5 và GLM 4.6 ngay lập tức. Dùng đúng model cho từng tác vụ.
+</td>
+<td width="30%" align="center">
 
-**Vấn đề**: Bạn có cả Claude subscription và GLM Coding Plan. Hai tình huống xảy ra hàng ngày:
-1. **Rate limit**: Claude hết lượt giữa chừng project, phải tự tay sửa file `~/.claude/settings.json` để chuyển
-2. **Tối ưu công việc**: Planning phức tạp cần trí tuệ của Claude Sonnet 4.5, nhưng coding đơn giản thì GLM 4.6 vẫn làm tốt
+![CCS Logo](docs/assets/ccs-logo-medium.png)
 
-Chuyển đổi thủ công rất mất thời gian và dễ sai.
+</td>
+</tr>
+</table>
+
+---
+
+## 🚀 Bắt Đầu Nhanh
+
+### Phương Pháp Cài Đặt Chính
+
+**macOS / Linux**
+```bash
+curl -fsSL ccs.kaitran.ca/install | bash
+```
+
+**Windows PowerShell**
+```powershell
+irm ccs.kaitran.ca/install | iex
+```
+
+### Lần Chuyển Đổi Đầu Tiên
+
+```bash
+# Chuyển sang GLM cho tác vụ tối ưu chi phí
+ccs glm "Tạo REST API đơn giản"
+
+# Chuyển lại Claude cho tác vụ phức tạp
+ccs claude "Review thiết kế kiến trúc này"
+
+# Dùng GLM cho tất cả lệnh tiếp theo cho đến khi chuyển lại
+ccs glm
+ccs "Debug issue này"
+ccs "Viết unit tests"
+```
+
+### Cấu Hình (Tự Tạo)
+
+**~/.ccs/config.json**:
+```json
+{
+  "profiles": {
+    "glm": "~/.ccs/glm.settings.json",
+    "default": "~/.claude/settings.json"
+  }
+}
+```
+
+---
+
+## Điểm Đau Hàng Ngày Của Lập Trình Viên
+
+Bạn có cả Claude subscription và GLM Coding Plan. Hai tình huống xảy ra hàng ngày:
+
+1. **Hết Rate Limit**: Claude dừng giữa chừng project → bạn phải tự tay sửa `~/.claude/settings.json`
+2. **Lãng Phí Chi Phí**: Tác vụ đơn giản dùng Claude đắt tiền → GLM cũng làm tốt
+
+Chuyển đổi thủ công làm gián đoạn workflow của bạn. **CCS khắc phục ngay lập tức**.
+
+## Tại Sao CCS Thay Vì Chuyển Đổi Thủ Công?
+
+<div align="center">
+
+| Tính năng | Lợi ích | Giá trị cảm xúc |
+|-----------|---------|-----------------|
+| **Chuyển đổi tức thì** | Một lệnh, không sửa file | Tự tin, kiểm soát |
+| **Không downtime** | Không bao giờ gián đoạn workflow | Đáng tin cậy, nhất quán |
+| **Delegation thông minh** | Đúng model cho từng tác vụ tự động | Đơn giản, dễ dàng |
+| **Kiểm soát chi phí** | Dùng model đắt tiền chỉ khi cần | Hiệu quả, tiết kiệm |
+| **Đa nền tảng** | Hoạt động trên macOS, Linux, Windows | Linh hoạt, di động |
+| **Đáng tin cậy** | Bash/PowerShell thuần, không dependencies | Tin tưởng, an tâm |
+
+</div>
 
 **Giải pháp**:
 ```bash
@@ -24,38 +103,50 @@ ccs glm       # Tiếp tục làm việc với GLM
 
 Một lệnh. Không downtime. Không phải sửa file. Đúng model, đúng việc.
 
-## Bắt Đầu Nhanh
+---
 
-### Cài đặt:
+## 🏗️ Tổng Quan Kiến Trúc
 
-**macOS / Linux**:
-```bash
-curl -fsSL ccs.kaitran.ca/install | bash
+```mermaid
+graph TB
+    subgraph "Lệnh Người Dùng"
+        CMD[ccs glm]
+    end
+
+    subgraph "Xử Lý CCS"
+        CONFIG[Đọc ~/.ccs/config.json]
+        LOOKUP[Tìm profile → file settings]
+        VALIDATE[Kiểm tra file tồn tại]
+    end
+
+    subgraph "Claude CLI"
+        EXEC[claude --settings <path>]
+    end
+
+    subgraph "Phản Hồi API"
+        API[Claude hoặc GLM API]
+    end
+
+    CMD --> CONFIG
+    CONFIG --> LOOKUP
+    LOOKUP --> VALIDATE
+    VALIDATE --> EXEC
+    EXEC --> API
 ```
 
-**Windows PowerShell**:
-```powershell
-irm ccs.kaitran.ca/install | iex
-```
+---
 
-**~/.ccs/config.json** (tự động tạo khi cài đặt):
-```json
-{
-  "profiles": {
-    "glm": "~/.ccs/glm.settings.json",
-    "default": "~/.claude/settings.json"
-  }
-}
-```
+## ⚡ Tính Năng
 
-### Sử dụng:
-```bash
-ccs              # Dùng Claude subscription (mặc định)
-ccs glm          # Dùng GLM fallback
-ccs --version    # Hiển thị phiên bản CCS
-ccs --install    # Cài đặt lệnh và kỹ năng CCS vào ~/.claude/
-ccs --uninstall  # Gỡ bỏ lệnh và kỹ năng CCS khỏi ~/.claude/
-```
+### Chuyển Profile Ngay Lập Tức
+- **Một Lệnh**: `ccs glm` hoặc `ccs claude` - không cần sửa file config
+- **Phát Hiện Thông Minh**: Tự động dùng đúng model cho từng tác vụ
+- **Liên Tục**: Chuyển đổi hoạt động cho đến khi thay đổi lại
+
+### Không Gián Đoạn Workflow
+- **Không Downtime**: Chuyển đổi xảy ra ngay lập tức giữa các lệnh
+- **Bảo Toàn Context**: Workflow của bạn không bị gián đoạn
+- **Tích Hợp Liền Mạch**: Hoạt động chính xác như Claude CLI native
 
 ### Delegation Tác Vụ
 
@@ -85,13 +176,53 @@ ccs --uninstall  # Gỡ bỏ lệnh /ccs khỏi Claude CLI
 - ✅ Tích hợp liền mạch với workflows hiện có
 - ✅ Cài đặt và gỡ bỏ sạch sẽ khi cần
 
-## Triết Lý
+---
+
+## 💻 Ví Dụ Sử Dụng
+
+```bash
+ccs              # Dùng Claude subscription (mặc định)
+ccs glm          # Dùng GLM fallback
+ccs --version    # Hiển thị phiên bản CCS và vị trí cài đặt
+ccs --install    # Cài đặt lệnh và kỹ năng CCS vào ~/.claude/
+ccs --uninstall  # Gỡ bỏ lệnh và kỹ năng CCS khỏi ~/.claude/
+```
+
+---
+
+## 🎯 Triết Lý
 
 - **YAGNI**: Không có tính năng "phòng hờ"
 - **KISS**: Bash đơn giản, không phức tạp
 - **DRY**: Một nguồn chân lý duy nhất (config)
 
-## Gỡ Cài Đặt
+---
+
+## 🔧 Cài Đặt
+
+### Yêu Cầu Hệ Thống
+
+- **Node.js**: Không yêu cầu (bash/PowerShell thuần)
+- **Python**: Không yêu cầu
+- **Dependencies**: Chỉ `jq` để parse JSON (Unix systems)
+- **Claude CLI**: Phải cài đặt riêng
+- **API Keys**: Có sẵn Claude và GLM API keys hợp lệ
+
+### Kiểm Tra
+
+```bash
+# Kiểm tra cài đặt
+ccs --version
+
+# Kết quả mong đợi:
+# CCS v2.2.3
+# Installed at: ~/.local/bin/ccs (Unix) hoặc %USERPROFILE%\.ccs\ccs.ps1 (Windows)
+# Claude CLI: Found at /usr/local/bin/claude
+```
+
+---
+
+## 🗑️ Gỡ Cài Đặt
 
 **macOS / Linux**:
 ```bash
@@ -103,13 +234,35 @@ curl -fsSL ccs.kaitran.ca/uninstall | bash
 irm ccs.kaitran.ca/uninstall | iex
 ```
 
-**Tìm hiểu thêm**: Tài liệu đầy đủ có sẵn trong [docs/vi/](./docs/vi/)
-- [Hướng dẫn Cài đặt](./docs/vi/installation.vi.md)
-- [Cấu hình](./docs/vi/configuration.vi.md)
-- [Ví dụ Sử dụng](./docs/vi/usage.vi.md)
-- [Khắc phục Sự cố](./docs/vi/troubleshooting.vi.md)
-- [Đóng góp](./docs/vi/contributing.vi.md)
+---
+
+## 📖 Tài Liệu
+
+**Tài liệu đầy đủ trong [docs/](./docs/)**:
+- [Hướng dẫn Cài đặt](./docs/installation.md)
+- [Cấu hình](./docs/configuration.md)
+- [Ví dụ Sử dụng](./docs/usage.md)
+- [Khắc phục Sự cố](./docs/troubleshooting.md)
+- [Đóng góp](./docs/contributing.md)
 
 ---
 
-*Được tạo với ❤️ bởi [Kai Tran](https://github.com/kaitranntt)*
+## 🤝 Đóng Góp
+
+Chúng tôi chào mừng đóng góp! Xem [Hướng dẫn Đóng góp](./docs/contributing.md) để biết chi tiết.
+
+---
+
+## 📄 Giấy Phép
+
+CCS được cấp phép theo [Giấy phép MIT](LICENSE).
+
+---
+
+<div align="center">
+
+**Được tạo với ❤️ cho những lập trình viên hay hết rate limit**
+
+[⭐ Star repo này](https://github.com/kaitranntt/ccs) | [🐛 Báo cáo vấn đề](https://github.com/kaitranntt/ccs/issues) | [📖 Đọc tài liệu](./docs/)
+
+</div>
