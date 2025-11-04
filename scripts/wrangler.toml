@@ -5,3 +5,11 @@ workers_dev = true
 
 # CloudFlare Worker configuration for CCS installer
 # This worker serves platform-specific installation scripts
+
+# Production routes on ccs.kaitran.ca
+# Worker intercepts /install* and /uninstall* paths
+# All other paths pass through to Vercel origin (landing page)
+routes = [
+  { pattern = "ccs.kaitran.ca/install*", zone_name = "kaitran.ca" },
+  { pattern = "ccs.kaitran.ca/uninstall*", zone_name = "kaitran.ca" }
+]
