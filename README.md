@@ -191,35 +191,6 @@ graph LR
 - **Context Preservation**: Your workflow remains uninterrupted
 - **Seamless Integration**: Works exactly like native Claude CLI
 
-### Task Delegation
-
-> **🚧 Work in Progress**: This feature is experimental and not fully tested. Use with caution.
-
-CCS includes intelligent task delegation via the `/ccs` meta-command:
-
-**Install CCS commands:**
-```bash
-ccs --install    # Install /ccs command to Claude CLI
-```
-
-**Use task delegation:**
-```bash
-# After running ccs --install, you can use:
-/ccs glm /plan "add user authentication"
-/ccs glm /code "implement auth endpoints"
-/ccs glm /ask "explain this error"
-```
-
-**Remove when not needed:**
-```bash
-ccs --uninstall  # Remove /ccs command from Claude CLI
-```
-
-**Benefits**:
-- ✅ Save tokens by delegating simple tasks to cheaper models
-- ✅ Use right model for each task automatically
-- ✅ Seamless integration with existing workflows
-- ✅ Clean installation and removal when needed
 
 ---
 
@@ -229,8 +200,6 @@ ccs --uninstall  # Remove /ccs command from Claude CLI
 ccs              # Use Claude subscription (default)
 ccs glm          # Use GLM fallback
 ccs --version    # Show CCS version and install location
-ccs --install    # Install CCS commands and skills to ~/.claude/
-ccs --uninstall  # Remove CCS commands and skills from ~/.claude/
 ```
 
 ---

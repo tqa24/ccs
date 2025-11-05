@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Version (updated by scripts/bump-version.sh)
-CCS_VERSION="2.4.5"
+CCS_VERSION="2.4.6"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
 
@@ -52,9 +52,7 @@ show_help() {
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
   echo -e "  ${YELLOW}-v, --version${RESET}               Show version and installation info"
-  echo -e "  ${YELLOW}--install${RESET}                   Install CCS commands to Claude CLI"
-  echo -e "  ${YELLOW}--uninstall${RESET}                 Remove CCS commands from Claude CLI"
-  echo ""
+    echo ""
   echo -e "${CYAN}Configuration:${RESET}"
   echo -e "  Config File: ~/.ccs/config.json"
   echo -e "  Settings:    ~/.ccs/*.settings.json"
@@ -70,10 +68,7 @@ show_help() {
   echo -e "  # Use GLM with verbose output"
   echo -e "  ${YELLOW}ccs glm${RESET} --verbose \"Debug error\""
   echo ""
-  echo -e "  # Install CCS task delegation"
-  echo -e "  ${YELLOW}ccs${RESET} --install"
-  echo ""
-  echo -e "${YELLOW}Uninstall:${RESET}"
+    echo -e "${YELLOW}Uninstall:${RESET}"
   echo -e "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
   echo -e "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
   echo -e "  npm:          npm uninstall -g @kaitranntt/ccs"
@@ -122,8 +117,10 @@ Solutions:
 Restart your terminal after installation."
 }
 
-# Installation function for commands and skills
-install_commands_and_skills() {
+# WIP: .claude/ integration testing incomplete
+# Feature disabled until testing complete
+# install_commands_and_skills() {
+: <<'COMMENTED_OUT'
   # Try both possible locations for .claude directory
   local source_dir=""
   local possible_dirs=(
@@ -227,10 +224,13 @@ Solution:
   echo ""
   echo "You can now use the /ccs command in Claude CLI for task delegation."
   echo "Example: /ccs glm /plan 'add user authentication'"
-}
+COMMENTED_OUT
+# }
 
-# Uninstallation function for commands and skills
-uninstall_commands_and_skills() {
+# WIP: .claude/ integration testing incomplete
+# Feature disabled until testing complete
+# uninstall_commands_and_skills() {
+: <<'COMMENTED_OUT'
   local target_dir="$HOME/.claude"
   local removed_count=0
   local not_found_count=0
@@ -307,7 +307,8 @@ uninstall_commands_and_skills() {
   echo ""
   echo "The /ccs command is no longer available in Claude CLI."
   echo "To reinstall: ccs --install"
-}
+COMMENTED_OUT
+# }
 
 show_version() {
   echo -e "${BOLD}CCS (Claude Code Switch) v${CCS_VERSION}${RESET}"
@@ -344,14 +345,28 @@ fi
 
 # Special case: install command (check BEFORE profile detection)
 if [[ $# -gt 0 ]] && [[ "${1}" == "--install" ]]; then
-  install_commands_and_skills
-  exit $?
+  echo ""
+  echo "Feature not available"
+  echo ""
+  echo "The --install flag is currently under development."
+  echo ".claude/ integration testing is not complete."
+  echo ""
+  echo "For updates: https://github.com/kaitranntt/ccs/issues"
+  echo ""
+  exit 0
 fi
 
 # Special case: uninstall command (check BEFORE profile detection)
 if [[ $# -gt 0 ]] && [[ "${1}" == "--uninstall" ]]; then
-  uninstall_commands_and_skills
-  exit $?
+  echo ""
+  echo "Feature not available"
+  echo ""
+  echo "The --uninstall flag is currently under development."
+  echo ".claude/ integration testing is not complete."
+  echo ""
+  echo "For updates: https://github.com/kaitranntt/ccs/issues"
+  echo ""
+  exit 0
 fi
 
 # Smart profile detection: if first arg starts with '-', it's a flag not a profile

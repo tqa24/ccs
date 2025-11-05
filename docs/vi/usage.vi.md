@@ -77,8 +77,6 @@ ccs glm /code "implement feature"
 ```bash
 ccs --version    # Hiển thị thông tin phiên bản nâng cao với chi tiết cài đặt
 ccs --help       # Hiển thị tài liệu trợ giúp riêng của CCS
-ccs --install    # Cài đặt commands và skills CCS vào ~/.claude/
-ccs --uninstall  # Gỡ bỏ commands và skills CCS khỏi ~/.claude/
 ```
 
 **Ví Dụ Output `--version`**:
@@ -115,17 +113,19 @@ Uninstaller chính thức gỡ bỏ hoàn toàn CCS bao gồm cả cấu hình v
 
 ### Cài Đặt Commands và Skills
 
-Để sử dụng tính năng delegation tác vụ, bạn cần cài đặt commands và skills CCS vào thư mục Claude CLI:
+### 🚧 Tính Năng Đang Phát Triển
 
-```bash
-# Cài đặt commands và skills delegation CCS
-ccs --install
-```
+#### Tích hợp .claude/
 
-Điều này sẽ:
-- Copy lệnh `/ccs` vào `~/.claude/commands/ccs.md`
-- Copy skill `ccs-delegation` vào `~/.claude/skills/ccs-delegation/`
-- Bỏ qua file đã tồn tại (không ghi đè customization của bạn)
+Delegation tác vụ qua flags `--install` / `--uninstall` đang được phát triển.
+
+**Trạng Thái**: Testing chưa hoàn tất, không có sẵn trong release hiện tại
+
+**Implementation**: Chức năng cốt lõi đã có nhưng bị vô hiệu hóa pending testing
+
+**Timeline**: Chưa có ETA - theo dõi GitHub issues để cập nhật
+
+**Hiện Tại**: Sử dụng chuyển profile trực tiếp (`ccs glm`) để lựa chọn model
 
 **Ví Dụ Output**:
 ```

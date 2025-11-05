@@ -190,35 +190,6 @@ graph LR
 - **Bảo Toàn Context**: Workflow của bạn không bị gián đoạn
 - **Tích Hợp Liền Mạch**: Hoạt động chính xác như Claude CLI native
 
-### Delegation Tác Vụ
-
-> **🚧 Đang phát triển**: Tính năng này đang trong giai đoạn thử nghiệm và chưa được kiểm tra đầy đủ. Sử dụng với cẩn thận.
-
-CCS bao gồm delegation tác vụ thông minh qua meta-command `/ccs`:
-
-**Cài đặt lệnh CCS:**
-```bash
-ccs --install    # Cài đặt lệnh /ccs vào Claude CLI
-```
-
-**Sử dụng delegation tác vụ:**
-```bash
-# Sau khi chạy ccs --install, bạn có thể dùng:
-/ccs glm /plan "add user authentication"
-/ccs glm /code "implement auth endpoints"
-/ccs glm /ask "explain this error"
-```
-
-**Gỡ bỏ khi không cần:**
-```bash
-ccs --uninstall  # Gỡ bỏ lệnh /ccs khỏi Claude CLI
-```
-
-**Lợi ích**:
-- ✅ Tiết kiệm tokens bằng cách delegation tác vụ đơn giản cho model rẻ hơn
-- ✅ Dùng đúng model cho từng tác vụ tự động
-- ✅ Tích hợp liền mạch với workflows hiện có
-- ✅ Cài đặt và gỡ bỏ sạch sẽ khi cần
 
 ---
 
@@ -228,8 +199,6 @@ ccs --uninstall  # Gỡ bỏ lệnh /ccs khỏi Claude CLI
 ccs              # Dùng Claude subscription (mặc định)
 ccs glm          # Dùng GLM fallback
 ccs --version    # Hiển thị phiên bản CCS và vị trí cài đặt
-ccs --install    # Cài đặt lệnh và kỹ năng CCS vào ~/.claude/
-ccs --uninstall  # Gỡ bỏ lệnh và kỹ năng CCS khỏi ~/.claude/
 ```
 
 ---

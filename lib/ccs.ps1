@@ -104,9 +104,7 @@ function Show-Help {
     Write-ColorLine "Flags:" "Cyan"
     Write-ColorLine "  -h, --help                  Show this help message" "Yellow"
     Write-ColorLine "  -v, --version               Show version and installation info" "Yellow"
-    Write-ColorLine "  --install                   Install CCS commands to Claude CLI" "Yellow"
-    Write-ColorLine "  --uninstall                 Remove CCS commands from Claude CLI" "Yellow"
-    Write-Host ""
+        Write-Host ""
     Write-ColorLine "Configuration:" "Cyan"
     Write-Host "  Config File: ~/.ccs/config.json"
     Write-Host "  Settings:    ~/.ccs/*.settings.json"
@@ -122,10 +120,7 @@ function Show-Help {
     Write-Host "  # Use GLM with verbose output"
     Write-ColorLine "  ccs glm --verbose 'Debug error'" "Yellow"
     Write-Host ""
-    Write-Host "  # Install CCS task delegation"
-    Write-ColorLine "  ccs --install" "Yellow"
-    Write-Host ""
-    Write-ColorLine "Uninstall:" "Cyan"
+        Write-ColorLine "Uninstall:" "Cyan"
     Write-Host "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
     Write-Host "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
     Write-Host "  npm:          npm uninstall -g @kaitranntt/ccs"
@@ -139,7 +134,7 @@ function Show-Help {
 }
 
 # Version (updated by scripts/bump-version.sh)
-$CcsVersion = "2.4.5"
+$CcsVersion = "2.4.6"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\.ccs\config.json" }
 
@@ -230,13 +225,27 @@ if ($Help) {
 
 # Special case: install command (check BEFORE profile detection)
 if ($FirstArg -eq "--install") {
-    Write-Host "Installation not implemented in this test version" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Feature not available" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "The --install flag is currently under development."
+    Write-Host ".claude/ integration testing is not complete."
+    Write-Host ""
+    Write-Host "For updates: https://github.com/kaitranntt/ccs/issues"
+    Write-Host ""
     exit 0
 }
 
 # Special case: uninstall command (check BEFORE profile detection)
 if ($FirstArg -eq "--uninstall") {
-    Write-Host "Uninstallation not implemented in this test version" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Feature not available" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "The --uninstall flag is currently under development."
+    Write-Host ".claude/ integration testing is not complete."
+    Write-Host ""
+    Write-Host "For updates: https://github.com/kaitranntt/ccs/issues"
+    Write-Host ""
     exit 0
 }
 

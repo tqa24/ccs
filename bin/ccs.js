@@ -4,9 +4,9 @@
 const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
-const { error } = require('./helpers');
+const { error, colored } = require('./helpers');
 const { detectClaudeCli, showClaudeNotFoundError } = require('./claude-detector');
-const { getSettingsPath } = require('./config-manager');
+const { getSettingsPath, getConfigPath } = require('./config-manager');
 
 // Version (sync with package.json)
 const CCS_VERSION = require('../package.json').version;
@@ -26,42 +26,127 @@ function execClaude(claudeCli, args) {
 
 // Special command handlers
 function handleVersionCommand() {
-  console.log(`CCS (Claude Code Switch) version ${CCS_VERSION}`);
+  // Title
+  console.log(colored(`CCS (Claude Code Switch) v${CCS_VERSION}`, 'bold'));
+  console.log('');
 
-  // Show install location
-  const installLocation = process.argv[1];
-  if (installLocation) {
-    console.log(`Installed at: ${installLocation}`);
-  }
+  // Installation section
+  console.log(colored('Installation:', 'cyan'));
 
-  console.log('https://github.com/kaitranntt/ccs');
+  // Location
+  const installLocation = process.argv[1] || '(not found)';
+  console.log(`  ${colored('Location:', 'cyan')} ${installLocation}`);
+
+  // Config path
+  const configPath = getConfigPath();
+  console.log(`  ${colored('Config:', 'cyan')} ${configPath}`);
+  console.log('');
+
+  // Documentation
+  console.log(`${colored('Documentation:', 'cyan')} https://github.com/kaitranntt/ccs`);
+  console.log(`${colored('License:', 'cyan')} MIT`);
+  console.log('');
+
+  // Help hint
+  console.log(colored('Run \'ccs --help\' for usage information', 'yellow'));
+
   process.exit(0);
 }
 
-function handleHelpCommand(remainingArgs) {
-  const claudeCli = detectClaudeCli();
-  if (!claudeCli) {
-    showClaudeNotFoundError();
-    process.exit(1);
-  }
+function handleHelpCommand() {
+  // Title
+  console.log(colored('CCS (Claude Code Switch) - Instant profile switching for Claude CLI', 'bold'));
+  console.log('');
 
-  execClaude(claudeCli, ['--help', ...remainingArgs]);
+  // Usage
+  console.log(colored('Usage:', 'cyan'));
+  console.log(`  ${colored('ccs', 'yellow')} [profile] [claude-args...]`);
+  console.log(`  ${colored('ccs', 'yellow')} [flags]`);
+  console.log('');
+
+  // Description
+  console.log(colored('Description:', 'cyan'));
+  console.log('  Switch between Claude models instantly. Stop hitting rate limits.');
+  console.log('  Maps profile names to Claude settings files via ~/.ccs/config.json');
+  console.log('');
+
+  // Profile Switching
+  console.log(colored('Profile Switching:', 'cyan'));
+  console.log(`  ${colored('ccs', 'yellow')}                         Use default profile`);
+  console.log(`  ${colored('ccs glm', 'yellow')}                     Switch to GLM profile`);
+  console.log(`  ${colored('ccs glm', 'yellow')} "debug this code"   Switch to GLM and run command`);
+  console.log(`  ${colored('ccs glm', 'yellow')} --verbose           Switch to GLM with Claude flags`);
+  console.log('');
+
+  // Flags
+  console.log(colored('Flags:', 'cyan'));
+  console.log(`  ${colored('-h, --help', 'yellow')}                  Show this help message`);
+  console.log(`  ${colored('-v, --version', 'yellow')}               Show version and installation info`);
+  console.log('');
+
+  // Configuration
+  console.log(colored('Configuration:', 'cyan'));
+  console.log('  Config File: ~/.ccs/config.json');
+  console.log('  Settings:    ~/.ccs/*.settings.json');
+  console.log('  Environment: CCS_CONFIG (override config path)');
+  console.log('');
+
+  // Examples
+  console.log(colored('Examples:', 'cyan'));
+  console.log('  # Try without installing');
+  console.log(`  ${colored('npx @kaitranntt/ccs glm', 'yellow')} "write tests"`);
+  console.log('');
+  console.log('  # Use default Claude subscription');
+  console.log(`  ${colored('ccs', 'yellow')} "Review this architecture"`);
+  console.log('');
+  console.log('  # Switch to GLM for cost-effective tasks');
+  console.log(`  ${colored('ccs glm', 'yellow')} "Write unit tests"`);
+  console.log('');
+  console.log('  # Use GLM with verbose output');
+  console.log(`  ${colored('ccs glm', 'yellow')} --verbose "Debug error"`);
+  console.log('');
+
+  // Uninstall
+  console.log(colored('Uninstall:', 'yellow'));
+  console.log('  npm:          npm uninstall -g @kaitranntt/ccs');
+  console.log('  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash');
+  console.log('  Windows:      irm ccs.kaitran.ca/uninstall | iex');
+  console.log('');
+
+  // Documentation
+  console.log(colored('Documentation:', 'cyan'));
+  console.log(`  GitHub:  ${colored('https://github.com/kaitranntt/ccs', 'cyan')}`);
+  console.log('  Docs:    https://github.com/kaitranntt/ccs/blob/main/README.md');
+  console.log('  Issues:  https://github.com/kaitranntt/ccs/issues');
+  console.log('');
+
+  // License
+  console.log(`${colored('License:', 'cyan')} MIT`);
+
+  process.exit(0);
 }
 
 function handleInstallCommand() {
-  // Implementation for --install (copy commands/skills to ~/.claude)
-  console.log('[Installing CCS Commands and Skills]');
-  console.log('Feature not yet implemented in Node.js standalone');
-  console.log('Use traditional installer for now:');
-  console.log('  curl -fsSL ccs.kaitran.ca/install | bash');
+  console.log('');
+  console.log('Feature not available');
+  console.log('');
+  console.log('The --install flag is currently under development.');
+  console.log('.claude/ integration testing is not complete.');
+  console.log('');
+  console.log('For updates: https://github.com/kaitranntt/ccs/issues');
+  console.log('');
   process.exit(0);
 }
 
 function handleUninstallCommand() {
-  // Implementation for --uninstall (remove commands/skills from ~/.claude)
-  console.log('[Uninstalling CCS Commands and Skills]');
-  console.log('Feature not yet implemented in Node.js standalone');
-  console.log('Use traditional uninstaller for now');
+  console.log('');
+  console.log('Feature not available');
+  console.log('');
+  console.log('The --uninstall flag is currently under development.');
+  console.log('.claude/ integration testing is not complete.');
+  console.log('');
+  console.log('For updates: https://github.com/kaitranntt/ccs/issues');
+  console.log('');
   process.exit(0);
 }
 
@@ -88,8 +173,7 @@ function main() {
 
   // Special case: help command
   if (firstArg === '--help' || firstArg === '-h' || firstArg === 'help') {
-    const remainingArgs = args.slice(1);
-    handleHelpCommand(remainingArgs);
+    handleHelpCommand();
     return;
   }
 

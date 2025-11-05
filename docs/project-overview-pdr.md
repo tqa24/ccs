@@ -61,8 +61,8 @@ Provide developers with instant, zero-downtime switching between AI models, opti
 - **Acceptance Criteria**:
   - `ccs --version` displays version and installation location
   - `ccs --help` shows usage information
-  - `ccs --install` integrates with Claude Code commands
-  - `ccs --uninstall` removes Claude Code integration
+  - **WIP**: `ccs --install` integrates with Claude Code commands (testing incomplete)
+  - **WIP**: `ccs --uninstall` removes Claude Code integration (testing incomplete)
 
 #### FR-006: Error Handling
 **Requirement**: System shall provide clear, actionable error messages

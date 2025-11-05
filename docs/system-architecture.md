@@ -62,7 +62,7 @@ graph TB
 
 **Key Responsibilities**:
 - Argument parsing and profile detection
-- Special command handling (--version, --help, --install, --uninstall)
+- Special command handling (--version, --help) [--install/--uninstall WIP]
 - Unified process execution through `execClaude()`
 - Error propagation and exit code management
 

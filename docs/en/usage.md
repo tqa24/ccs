@@ -80,8 +80,6 @@ ccs glm /code "implement feature"
 ```bash
 ccs --version    # Show enhanced version info with installation details
 ccs --help       # Show CCS-specific help documentation
-ccs --install    # Install CCS commands and skills to ~/.claude/
-ccs --uninstall  # Remove CCS commands and skills from ~/.claude/
 ```
 
 **Example `--version` Output**:
@@ -121,19 +119,19 @@ The official uninstaller completely removes CCS including configs and PATH modif
 - Linux: `~/.local/bin/ccs`
 - Windows: `%USERPROFILE%\.ccs\ccs.ps1`
 
-### Installing Commands and Skills
+### 🚧 Features in Development
 
-To use the task delegation feature, you need to install the CCS commands and skills to your Claude CLI directory:
+#### .claude/ Integration
 
-```bash
-# Install CCS delegation commands and skills
-ccs --install
-```
+Task delegation via `--install` / `--uninstall` flags currently under development.
 
-This will:
-- Copy `/ccs` command to `~/.claude/commands/ccs.md`
-- Copy `ccs-delegation` skill to `~/.claude/skills/ccs-delegation/`
-- Skip existing files (won't overwrite your customizations)
+**Status**: Testing incomplete, not available in current release
+
+**Implementation**: Core functionality exists but disabled pending testing
+
+**Timeline**: No ETA - follow GitHub issues for updates
+
+**For Now**: Use direct profile switching (`ccs glm`) for model selection
 
 **Output Example**:
 ```

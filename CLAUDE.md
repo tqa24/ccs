@@ -220,7 +220,8 @@ Use `./scripts/bump-version.sh` to update all locations atomically.
 The `ccs` wrapper uses smart detection:
 - No args OR first arg starts with `-` → use default profile
 - First arg doesn't start with `-` → treat as profile name
-- Special flags handled BEFORE profile detection: `--version`, `-v`, `--help`, `-h`, `--install`
+- Special flags handled BEFORE profile detection: `--version`, `-v`, `--help`, `-h`
+- WIP: `--install` / `--uninstall` flags disabled pending .claude/ integration testing
 
 ### Installation Modes
 - **Git mode**: Running from cloned repository (symlinks executables)
@@ -297,7 +298,7 @@ The `.claude/` folder contains:
 - `/ccs` command: Meta-command for delegating tasks to different models
 - `ccs-delegation` skill: Intelligent task delegation patterns
 
-Install with: `ccs --install` (copies to `~/.claude/`)
+**WIP**: Installation via `ccs --install` disabled pending .claude/ integration testing
 
 ## Error Handling Philosophy
 

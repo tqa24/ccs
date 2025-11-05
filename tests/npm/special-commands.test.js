@@ -8,12 +8,12 @@ describe('integration: special commands', () => {
   it('shows version with --version', () => {
     const output = execSync(`node ${ccsPath} --version`, { encoding: 'utf8' });
     assert(output.includes('CCS (Claude Code Switch)'));
-    assert(/version \d+\.\d+\.\d+/.test(output));
+    assert(/v\d+\.\d+\.\d+/.test(output));
   });
 
   it('shows version with -v', () => {
     const output = execSync(`node ${ccsPath} -v`, { encoding: 'utf8' });
-    assert(output.includes('version'));
+    assert(/v\d+\.\d+\.\d+/.test(output));
   });
 
   it('shows help with --help', function() {
@@ -33,13 +33,15 @@ describe('integration: special commands', () => {
 
   it('handles --install command', () => {
     const output = execSync(`node ${ccsPath} --install`, { encoding: 'utf8' });
-    assert(output.includes('Installing CCS Commands and Skills'));
-    assert(output.includes('Feature not yet implemented'));
+    assert(output.includes('Feature not available'));
+    assert(output.includes('under development'));
+    assert(output.includes('.claude/ integration testing'));
   });
 
   it('handles --uninstall command', () => {
     const output = execSync(`node ${ccsPath} --uninstall`, { encoding: 'utf8' });
-    assert(output.includes('Uninstalling CCS Commands and Skills'));
-    assert(output.includes('Feature not yet implemented'));
+    assert(output.includes('Feature not available'));
+    assert(output.includes('under development'));
+    assert(output.includes('.claude/ integration testing'));
   });
 });

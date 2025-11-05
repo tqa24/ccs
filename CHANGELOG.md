@@ -4,6 +4,29 @@ All notable changes to CCS will be documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.6] - 2025-11-05
+
+### Changed
+- Help command shows CCS-specific content with npm adaptations (npx examples first)
+- Color detection improved for better cross-platform compatibility
+- Both `-v`/`--version` and `-h`/`--help` work identically to native installers
+
+### Fixed
+- **Color Detection**: Fixed TTY detection logic to properly disable colors when output is redirected
+
+### Technical Details
+- **Files Modified**: `bin/helpers.js` (color utilities), `bin/ccs.js` (version/help handlers)
+- **New Functions**: `getColors()`, `colored()` with dynamic TTY detection
+
+### Removed
+- **--install flag**: Temporarily removed from user-facing interfaces (WIP: .claude/ integration testing incomplete)
+- **--uninstall flag**: Temporarily removed from user-facing interfaces (WIP: testing incomplete)
+
+### Developer Notes
+- Implementation code preserved (commented) for future release
+- Test suites marked as skipped pending testing completion
+- `.claude/` directory content remains in repository
+
 ## [2.4.5] - 2025-11-05
 
 ### 📊 Performance Analysis

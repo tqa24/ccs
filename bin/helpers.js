@@ -4,16 +4,38 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Color formatting (TTY-aware)
-const useColors = process.stderr.isTTY && !process.env.NO_COLOR;
-const colors = useColors ? {
-  red: '\x1b[0;31m',
-  yellow: '\x1b[1;33m',
-  cyan: '\x1b[0;36m',
-  green: '\x1b[0;32m',
-  bold: '\x1b[1m',
-  reset: '\x1b[0m'
-} : { red: '', yellow: '', cyan: '', green: '', bold: '', reset: '' };
+// TTY-aware color detection (matches lib/ccs bash logic)
+function getColors() {
+  const forcedColors = process.env.FORCE_COLOR;
+  const noColor = process.env.NO_COLOR;
+  const isTTY = process.stdout.isTTY === true;  // Must be explicitly true
+
+  const useColors = forcedColors || (isTTY && !noColor);
+
+  if (useColors) {
+    return {
+      red: '\x1b[0;31m',
+      yellow: '\x1b[1;33m',
+      cyan: '\x1b[0;36m',
+      green: '\x1b[0;32m',
+      bold: '\x1b[1m',
+      reset: '\x1b[0m'
+    };
+  }
+
+  return { red: '', yellow: '', cyan: '', green: '', bold: '', reset: '' };
+}
+
+
+// Colors object (dynamic)
+const colors = getColors();
+
+// Helper: Apply color to text (returns plain text if colors disabled)
+function colored(text, colorName = 'reset') {
+  const currentColors = getColors();
+  const color = currentColors[colorName] || '';
+  return color ? `${color}${text}${currentColors.reset}` : text;
+}
 
 // Simple error formatting
 function error(message) {
@@ -44,6 +66,7 @@ function expandPath(pathStr) {
 
 module.exports = {
   colors,
+  colored,
   error,
   expandPath
 };
