@@ -13,10 +13,11 @@ const CCS_VERSION = require('../package.json').version;
 
 // Execute Claude CLI with unified spawn logic
 function execClaude(claudeCli, args) {
+  // Use shell only on Windows for .cmd/.bat compatibility
   const child = spawn(claudeCli, args, {
     stdio: 'inherit',
     windowsHide: true,
-    shell: true  // FIX: Enable shell for .cmd/.bat files on Windows
+    shell: process.platform === 'win32'
   });
   child.on('exit', (code, signal) => {
     if (signal) process.kill(process.pid, signal);

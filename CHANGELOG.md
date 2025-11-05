@@ -4,6 +4,18 @@ All notable changes to CCS will be documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.8] - 2025-11-05
+
+### Fixed
+- **Deprecation Warning**: Fixed Node.js DEP0190 warning by using platform-specific shell option (Windows only)
+- Improved cross-platform compatibility (shell only on Windows, direct spawn on macOS/Linux)
+
+### Technical Details
+- **Files Modified**: `bin/ccs.js` (execClaude function)
+- **Change**: Use `shell: process.platform === 'win32'` instead of `shell: true`
+- **Security**: No injection risk (array-based arguments, controlled inputs)
+- **Performance**: Better performance on Unix systems (no shell overhead)
+
 ## [2.4.7] - 2025-11-05
 
 ### Fixed
