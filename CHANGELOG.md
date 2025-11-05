@@ -4,6 +4,19 @@ All notable changes to CCS will be documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.9] - 2025-11-05
+
+### Fixed
+- **Deprecation Warning**: Fixed Node.js DEP0190 warning by using string concatenation when shell is needed (instead of args array with shell: true)
+- Conditional shell usage: only for .cmd/.bat/.ps1 files on Windows
+- Proper argument escaping for security
+
+### Technical Details
+- **Files Modified**: `bin/ccs.js` (execClaude function, escapeShellArg helper)
+- **Change**: When shell needed, pass single string instead of args array to avoid deprecation
+- **Security**: Arguments properly escaped with double quotes
+- **Performance**: No shell overhead on Unix or for .exe files on Windows
+
 ## [2.4.8] - 2025-11-05
 
 ### Fixed

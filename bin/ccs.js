@@ -11,14 +11,34 @@ const { getSettingsPath, getConfigPath } = require('./config-manager');
 // Version (sync with package.json)
 const CCS_VERSION = require('../package.json').version;
 
+// Helper: Escape arguments for shell execution
+function escapeShellArg(arg) {
+  // Windows: escape double quotes and wrap in double quotes
+  return '"' + String(arg).replace(/"/g, '""') + '"';
+}
+
 // Execute Claude CLI with unified spawn logic
 function execClaude(claudeCli, args) {
-  // Use shell only on Windows for .cmd/.bat compatibility
-  const child = spawn(claudeCli, args, {
-    stdio: 'inherit',
-    windowsHide: true,
-    shell: process.platform === 'win32'
-  });
+  const isWindows = process.platform === 'win32';
+  const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(claudeCli);
+
+  let child;
+  if (needsShell) {
+    // When shell needed: concatenate into string to avoid DEP0190 warning
+    const cmdString = [claudeCli, ...args].map(escapeShellArg).join(' ');
+    child = spawn(cmdString, {
+      stdio: 'inherit',
+      windowsHide: true,
+      shell: true
+    });
+  } else {
+    // When no shell needed: use array form (faster, no shell overhead)
+    child = spawn(claudeCli, args, {
+      stdio: 'inherit',
+      windowsHide: true
+    });
+  }
+
   child.on('exit', (code, signal) => {
     if (signal) process.kill(process.pid, signal);
     else process.exit(code || 0);
