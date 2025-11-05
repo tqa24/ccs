@@ -134,7 +134,7 @@ function Show-Help {
 }
 
 # Version (updated by scripts/bump-version.sh)
-$CcsVersion = "2.4.6"
+$CcsVersion = "2.4.7"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\.ccs\config.json" }
 

@@ -4,6 +4,18 @@ All notable changes to CCS will be documented here.
 
 Format based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.4.7] - 2025-11-05
+
+### Fixed
+- **Windows Spawn Error**: Fixed EINVAL error on Windows PowerShell by enabling shell option for spawning .cmd/.bat files
+- Cross-platform spawn compatibility maintained (works on Windows, macOS, Linux)
+
+### Technical Details
+- **Files Modified**: `bin/ccs.js` (execClaude function)
+- **Change**: Added `shell: true` to spawn options for cross-platform compatibility
+- **Security**: No injection risk (array-based arguments, controlled inputs)
+- **Performance**: Negligible overhead (~10-20ms)
+
 ## [2.4.6] - 2025-11-05
 
 ### Changed
