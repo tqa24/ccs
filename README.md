@@ -14,7 +14,7 @@ Switch between Claude Sonnet 4.5, GLM 4.6, and Kimi for Coding instantly. Stop h
 [![npm](https://img.shields.io/npm/v/@kaitranntt/ccs?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@kaitranntt/ccs)
 [![PoweredBy](https://img.shields.io/badge/PoweredBy-ClaudeKit-C15F3C?style=for-the-badge)](https://claudekit.cc?ref=HMNKXOHN)
 
-**Languages**: [English](README.md) | [Tiếng Việt](README.vi.md)
+**Languages**: [English](README.md) | [Tiếng Việt](README.vi.md) | [日本語](README.ja.md)
 
 </div>
 

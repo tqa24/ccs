@@ -13,7 +13,7 @@ Chuyển đổi giữa Claude Sonnet 4.5 và GLM 4.6 ngay lập tức. Ngừng h
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey?style=for-the-badge)]()
 [![PoweredBy](https://img.shields.io/badge/PoweredBy-ClaudeKit-C15F3C?style=for-the-badge)](https://claudekit.cc?ref=HMNKXOHN)
 
-**Ngôn ngữ**: [English](README.md) | [Tiếng Việt](README.vi.md)
+**Ngôn ngữ**: [English](README.md) | [Tiếng Việt](README.vi.md) | [日本語](README.ja.md)
 
 </div>
 
