@@ -51,53 +51,48 @@ CCS (Claude Code Switch): CLI wrapper for instant switching between multiple Cla
      - OpenAI tool_calls → Anthropic tool_use blocks
      - Streaming tool calls with input_json deltas
      - MCP tools execute correctly (no XML tag output)
-   - **Streaming mode** (default):
+   - **Streaming mode** (default with auto-fallback):
      - `SSEParser` parses incremental SSE events from Z.AI
      - `DeltaAccumulator` tracks content block state
      - `glmt-transformer.js` converts OpenAI deltas → Anthropic events
      - Real-time delivery to Claude CLI (TTFB <500ms)
-   - **Buffered mode** (`CCS_GLMT_STREAMING=disabled`):
-     - Waits for complete response
-     - Single transformation pass
-     - Higher latency (2-10s TTFB)
-6. Thinking blocks and tool calls appear in Claude Code UI (real-time or complete)
+     - Auto-fallback to buffered mode on streaming errors
+6. Thinking blocks and tool calls appear in Claude Code UI (real-time delivery)
 
 **Thinking parameter support**:
 - Claude CLI `thinking` parameter recognized and processed
-- Parameter precedence: Claude CLI `thinking` > message tags > default
+- Parameter precedence: Claude CLI `thinking` > message tags > keywords
 - `thinking.type`: 'enabled'/'disabled' controls reasoning blocks
-- `thinking.budget_tokens` mapped to effort levels:
-  - <= 2048: low effort
-  - <= 8192: medium effort
-  - > 8192: high effort
 - Input validation: logs warnings for invalid values
-- Backward compatible: control tags still work
+- Backward compatible: control tags and keywords work
 
 **Files**:
-- `bin/glmt-proxy.js` (463 lines): HTTP proxy server with streaming
-- `bin/glmt-transformer.js` (685 lines): Format conversion + delta handling + tool transformation + control mechanisms
-- `bin/locale-enforcer.js` (85 lines): Force English output (prevents Chinese responses)
-- `bin/budget-calculator.js` (109 lines): Thinking on/off based on task type + budget
-- `bin/task-classifier.js` (146 lines): Classify tasks (reasoning vs execution)
-- `bin/sse-parser.js` (97 lines): SSE stream parser
-- `bin/delta-accumulator.js` (156 lines): State tracking for streaming + tool calls + loop detection
+- `bin/glmt/glmt-proxy.js`: HTTP proxy server with streaming + auto-fallback
+- `bin/glmt/glmt-transformer.js`: Format conversion + delta handling + tool transformation + keyword detection
+- `bin/glmt/locale-enforcer.js`: Always enforces English output (prevents Chinese responses)
+- `bin/glmt/sse-parser.js`: SSE stream parser
+- `bin/glmt/delta-accumulator.js`: State tracking for streaming + tool calls + loop detection
 - `config/base-glmt.settings.json`: Template with Z.AI endpoint
-- `tests/glmt-transformer.test.js`: Unit tests (110 tests passing)
+- `tests/unit/glmt/glmt-transformer.test.js`: Unit tests (35 tests passing)
 
-**Control tags**:
+**Thinking control** (natural language):
+- `think` - Enable reasoning (low effort)
+- `think hard` - Enable reasoning (medium effort)
+- `think harder` - Enable reasoning (high effort)
+- `ultrathink` - Maximum reasoning depth (max effort)
+
+Example:
+```bash
+ccs glmt "think about the architecture before implementing"
+ccs glmt "ultrathink this complex algorithm optimization"
+```
+
+**Control tags** (advanced):
 - `<Thinking:On|Off>` - Enable/disable reasoning
-- `<Effort:Low|Medium|High>` - Control reasoning depth (deprecated - Z.AI only supports binary thinking)
+- `<Effort:Low|Medium|High>` - Control reasoning depth
 
 **Environment variables**:
-- `CCS_GLMT_STREAMING=disabled` - Force buffered mode
-- `CCS_GLMT_STREAMING=force` - Force streaming (override client)
-- `CCS_DEBUG_LOG=1` - Enable debug file logging
-- `CCS_GLMT_FORCE_ENGLISH=true` - Force English output (default: true)
-- `CCS_GLMT_THINKING_BUDGET=8192` - Control thinking on/off based on task type
-  - 0 or "unlimited": Always enable thinking
-  - 1-2048: Disable thinking (fast execution)
-  - 2049-8192: Enable for reasoning tasks only
-  - >8192: Always enable thinking
+- `CCS_DEBUG=1` - Enable debug file logging to ~/.ccs/logs/
 
 **Security limits** (DoS protection):
 - SSE buffer: 1MB max
@@ -107,11 +102,12 @@ CCS (Claude Code Switch): CLI wrapper for instant switching between multiple Cla
 
 **Confirmed working**: Z.AI (1498 reasoning chunks tested)
 
-**Control mechanisms** (v3.6):
-1. **Locale enforcement**: Injects "MUST respond in English" into system prompts to prevent Chinese output
-2. **Budget control**: Thinking on/off based on task type + budget (Z.AI only supports binary thinking, NOT effort levels)
-3. **Task classification**: Keywords-based (reasoning vs execution) - triggers thinking for problem-solving tasks
-4. **Loop detection**: Triggers after 3 consecutive thinking blocks with no tool calls (prevents unbounded planning loops)
+**Control mechanisms**:
+1. **Locale enforcement**: Always injects "MUST respond in English" into system prompts
+2. **Thinking keywords**: 4-tier system matching Anthropic's levels
+   - `think` (low) < `think hard` (medium) < `think harder` (high) < `ultrathink` (max)
+   - Priority: ultrathink wins when multiple keywords present
+3. **Loop detection**: Triggers after 3 consecutive thinking blocks with no tool calls (DoS protection)
 
 ### v3.1 Shared Data
 
@@ -373,32 +369,28 @@ All values = strings (not booleans/objects) to prevent PowerShell crashes.
 **No Thinking Blocks**:
 - Check Z.AI API plan supports reasoning_content
 - Verify `<Thinking:On>` tag not overridden
-- Check `CCS_GLMT_THINKING_BUDGET` value (default: 8192 - reasoning tasks only)
-- Set `CCS_GLMT_THINKING_BUDGET=0` or `CCS_GLMT_THINKING_BUDGET=unlimited` to always enable thinking
+- Try using "think" keywords in prompt: `ccs glmt "think about the solution"`
 - Test with `ccs glm` (no thinking) to isolate proxy issues
 
 **Chinese Output / Unexpected Language**:
-- Default: `CCS_GLMT_FORCE_ENGLISH=true` (enabled)
-- Disable: `export CCS_GLMT_FORCE_ENGLISH=false`
-- Locale enforcer injects "MUST respond in English" into system prompts
+- Locale enforcer always injects "MUST respond in English" into system prompts
+- If issues persist, check Z.AI API configuration
 
 **Unbounded Planning Loops**:
-- Loop detection triggers after 3 consecutive thinking blocks with no tool calls
-- Token waste mitigation: Budget control disables thinking for execution tasks
-- Override: Set `CCS_GLMT_THINKING_BUDGET=0` or `unlimited` to always enable
+- Loop detection triggers after 3 consecutive thinking blocks with no tool calls (auto-stops)
+- Use specific execution keywords: "fix", "implement", "debug" to avoid excessive planning
 
 **Tool Execution Issues**:
 - **MCP tools outputting XML**: Fixed in v3.5 - upgrade CCS
 - **Tool calls not recognized**: Ensure Z.AI API supports function calling
 - **Incomplete tool arguments**: Streaming tool calls require complete JSON accumulation
 - **Tool results not processed**: Check tool_result format matches Anthropic spec
-- Debug with `CCS_DEBUG_LOG=1` to inspect request/response transformation
+- Debug with `CCS_DEBUG=1` to inspect request/response transformation
 
 **Streaming Issues**:
 - Buffer errors: Hit DoS protection limits (1MB SSE, 10MB content)
-- Slow TTFB: Try disabling streaming: `CCS_GLMT_STREAMING=disabled`
+- Slow TTFB: Streaming auto-fallback to buffered mode on error
 - Incomplete reasoning: Z.AI may not support incremental delivery for all models
-- Fallback: Buffered mode always available
 
 **Debug Mode**:
 ```bash
@@ -406,12 +398,9 @@ All values = strings (not booleans/objects) to prevent PowerShell crashes.
 ccs glmt --verbose "test"
 
 # File logging
-export CCS_DEBUG_LOG=1
+export CCS_DEBUG=1
 ccs glmt --verbose "test"
 # Logs: ~/.ccs/logs/
-
-# Test streaming vs buffered
-CCS_GLMT_STREAMING=disabled ccs glmt "compare latency"
 ```
 
 ## Error Handling

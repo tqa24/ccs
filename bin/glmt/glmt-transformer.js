@@ -8,8 +8,6 @@ const os = require('os');
 const SSEParser = require('./sse-parser');
 const DeltaAccumulator = require('./delta-accumulator');
 const LocaleEnforcer = require('./locale-enforcer');
-const BudgetCalculator = require('./budget-calculator');
-const TaskClassifier = require('./task-classifier');
 
 /**
  * GlmtTransformer - Convert between Anthropic and OpenAI formats with thinking and tool support
@@ -33,10 +31,23 @@ const TaskClassifier = require('./task-classifier');
  *   <Effort:Low|Medium|High> - Control reasoning depth
  */
 class GlmtTransformer {
+  static _warnedDeprecation = false;
+
   constructor(config = {}) {
     this.defaultThinking = config.defaultThinking ?? true;
     this.verbose = config.verbose || false;
-    this.debugLog = config.debugLog ?? process.env.CCS_DEBUG_LOG === '1';
+
+    // Support both CCS_DEBUG and CCS_DEBUG_LOG (with deprecation warning)
+    const oldVar = process.env.CCS_DEBUG_LOG === '1';
+    const newVar = process.env.CCS_DEBUG === '1';
+    this.debugLog = config.debugLog ?? (newVar || oldVar);
+
+    // Show deprecation warning once
+    if (oldVar && !newVar && !GlmtTransformer._warnedDeprecation) {
+      console.warn('[glmt] Warning: CCS_DEBUG_LOG is deprecated, use CCS_DEBUG instead');
+      GlmtTransformer._warnedDeprecation = true;
+    }
+
     this.debugLogDir = config.debugLogDir || path.join(os.homedir(), '.ccs', 'logs');
     this.modelMaxTokens = {
       'GLM-4.6': 128000,
@@ -47,14 +58,8 @@ class GlmtTransformer {
     this.EFFORT_LOW_THRESHOLD = 2048;
     this.EFFORT_HIGH_THRESHOLD = 8192;
 
-    // Initialize locale enforcer
-    this.localeEnforcer = new LocaleEnforcer({
-      forceEnglish: process.env.CCS_GLMT_FORCE_ENGLISH !== 'false'
-    });
-
-    // Initialize budget calculator and task classifier
-    this.budgetCalculator = new BudgetCalculator();
-    this.taskClassifier = new TaskClassifier();
+    // Initialize locale enforcer (always enforce English)
+    this.localeEnforcer = new LocaleEnforcer();
   }
 
   /**
@@ -73,25 +78,15 @@ class GlmtTransformer {
       );
       const hasControlTags = this._hasThinkingTags(anthropicRequest.messages || []);
 
-      // 2. Classify task type for intelligent thinking control
-      const taskType = this.taskClassifier.classify(anthropicRequest.messages || []);
-      this.log(`Task classified as: ${taskType}`);
-
-      // 3. Check budget and decide if thinking should be enabled
-      const envBudget = process.env.CCS_GLMT_THINKING_BUDGET;
-      const shouldThink = this.budgetCalculator.shouldEnableThinking(taskType, envBudget);
-      this.log(`Budget decision: thinking=${shouldThink} (budget: ${envBudget || 'default'}, type: ${taskType})`);
-
-      // Apply budget-based thinking control ONLY if:
-      // - No Claude CLI thinking parameter AND
-      // - No control tags in messages AND
-      // - Budget env var is explicitly set
-      if (!anthropicRequest.thinking && !hasControlTags && envBudget) {
-        thinkingConfig.thinking = shouldThink;
-        this.log('Applied budget-based thinking control');
+      // 2. Detect "think" keywords in user prompts (Anthropic-style)
+      const keywordConfig = this._detectThinkKeywords(anthropicRequest.messages || []);
+      if (keywordConfig && !anthropicRequest.thinking && !hasControlTags) {
+        thinkingConfig.thinking = keywordConfig.thinking;
+        thinkingConfig.effort = keywordConfig.effort;
+        this.log(`Detected think keyword: ${keywordConfig.keyword}, effort=${keywordConfig.effort}`);
       }
 
-      // 4. Check anthropicRequest.thinking parameter (takes precedence over budget)
+      // 3. Check anthropicRequest.thinking parameter (takes precedence)
       // Claude CLI sends this when alwaysThinkingEnabled is configured
       if (anthropicRequest.thinking) {
         if (anthropicRequest.thinking.type === 'enabled') {
@@ -438,6 +433,50 @@ class GlmtTransformer {
       length: thinking.length,
       timestamp: Date.now()
     };
+  }
+
+  /**
+   * Detect Anthropic-style "think" keywords in user prompts
+   * Maps: "ultrathink" > "think harder" > "think hard" > "think"
+   * @param {Array} messages - Messages array
+   * @returns {Object|null} { thinking, effort, keyword } or null
+   * @private
+   */
+  _detectThinkKeywords(messages) {
+    if (!messages || messages.length === 0) return null;
+
+    // Extract text from user messages
+    const text = messages
+      .filter(m => m.role === 'user')
+      .map(m => {
+        if (typeof m.content === 'string') return m.content;
+        if (Array.isArray(m.content)) {
+          return m.content
+            .filter(block => block.type === 'text')
+            .map(block => block.text || '')
+            .join(' ');
+        }
+        return '';
+      })
+      .join(' ');
+
+    // Priority: ultrathink > think harder > think hard > think
+    // Effort levels: max > high > medium > low (matches Anthropic's 4-tier system)
+    // Use word boundaries to avoid matching "thinking", "rethink", etc.
+    if (/\bultrathink\b/i.test(text)) {
+      return { thinking: true, effort: 'max', keyword: 'ultrathink' };
+    }
+    if (/\bthink\s+harder\b/i.test(text)) {
+      return { thinking: true, effort: 'high', keyword: 'think harder' };
+    }
+    if (/\bthink\s+hard\b/i.test(text)) {
+      return { thinking: true, effort: 'medium', keyword: 'think hard' };
+    }
+    if (/\bthink\b/i.test(text)) {
+      return { thinking: true, effort: 'low', keyword: 'think' };
+    }
+
+    return null; // No keywords detected
   }
 
   /**

@@ -2,6 +2,32 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [3.4.3] - 2025-11-11
+
+### Added
+- Keyword thinking control: `think` < `think hard` < `think harder` < `ultrathink`
+- Streaming auto-fallback on error
+
+### Changed
+- YAGNI/KISS: Removed budget-calculator.js, task-classifier.js (-272 LOC)
+- `CCS_DEBUG_LOG` → `CCS_DEBUG` (backward compatible)
+
+### Removed
+- `CCS_GLMT_THINKING_BUDGET`, `CCS_GLMT_STREAMING`, `CCS_GLMT_FORCE_ENGLISH` env vars
+
+### Fixed
+- GLMT proxy path (glmt/glmt-proxy.js)
+- `ultrathink` effort: `high` → `max`
+
+---
+
+## [3.4.2] - 2025-11-11
+
+### Changed
+- Version bump for npm CI workaround
+
+---
+
 ## [3.4.1] - 2025-11-11
 
 ### Added

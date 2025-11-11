@@ -511,6 +511,100 @@ runner.test('handles invalid thinking type gracefully', () => {
   assertExists(thinkingConfig, 'thinkingConfig should exist');
 });
 
+// Test 28: Keyword detection - "think"
+runner.test('detects "think" keyword (low effort)', () => {
+  const transformer = new GlmtTransformer();
+  const result = transformer._detectThinkKeywords([
+    { role: 'user', content: 'think about the solution' }
+  ]);
+
+  assertEqual(result.thinking, true, 'thinking should be enabled');
+  assertEqual(result.effort, 'low', 'effort should be low');
+  assertEqual(result.keyword, 'think', 'keyword should be "think"');
+});
+
+// Test 29: Keyword detection - "think hard"
+runner.test('detects "think hard" keyword (medium effort)', () => {
+  const transformer = new GlmtTransformer();
+  const result = transformer._detectThinkKeywords([
+    { role: 'user', content: 'think hard about edge cases' }
+  ]);
+
+  assertEqual(result.thinking, true, 'thinking should be enabled');
+  assertEqual(result.effort, 'medium', 'effort should be medium');
+  assertEqual(result.keyword, 'think hard', 'keyword should be "think hard"');
+});
+
+// Test 30: Keyword detection - "think harder"
+runner.test('detects "think harder" keyword (high effort)', () => {
+  const transformer = new GlmtTransformer();
+  const result = transformer._detectThinkKeywords([
+    { role: 'user', content: 'think harder about edge cases' }
+  ]);
+
+  assertEqual(result.thinking, true, 'thinking should be enabled');
+  assertEqual(result.effort, 'high', 'effort should be high');
+  assertEqual(result.keyword, 'think harder', 'keyword should be "think harder"');
+});
+
+// Test 31: Keyword detection - "ultrathink"
+runner.test('detects "ultrathink" keyword (max effort)', () => {
+  const transformer = new GlmtTransformer();
+  const result = transformer._detectThinkKeywords([
+    { role: 'user', content: 'ultrathink this complex problem' }
+  ]);
+
+  assertEqual(result.thinking, true, 'thinking should be enabled');
+  assertEqual(result.effort, 'max', 'effort should be max');
+  assertEqual(result.keyword, 'ultrathink', 'keyword should be "ultrathink"');
+});
+
+// Test 32: Keyword detection - ignores "thinking" (not exact match)
+runner.test('ignores "thinking" word (not exact match)', () => {
+  const transformer = new GlmtTransformer();
+  const result = transformer._detectThinkKeywords([
+    { role: 'user', content: 'I am thinking about the solution' }
+  ]);
+
+  assertEqual(result, null, 'should return null for non-exact match');
+});
+
+// Test 33: Keyword detection - returns null when no keywords
+runner.test('returns null when no keywords present', () => {
+  const transformer = new GlmtTransformer();
+  const result = transformer._detectThinkKeywords([
+    { role: 'user', content: 'fix the bug quickly' }
+  ]);
+
+  assertEqual(result, null, 'should return null when no keywords found');
+});
+
+// Test 34: Keyword priority - ultrathink wins when multiple keywords present
+runner.test('ultrathink has highest priority when multiple keywords present', () => {
+  const transformer = new GlmtTransformer();
+  const result = transformer._detectThinkKeywords([
+    { role: 'user', content: 'think hard and think harder, or maybe ultrathink about this' }
+  ]);
+
+  assertEqual(result.thinking, true, 'thinking should be enabled');
+  assertEqual(result.effort, 'max', 'ultrathink should win with max effort');
+  assertEqual(result.keyword, 'ultrathink', 'keyword should be ultrathink');
+});
+
+// Test 35: Keyword detection integrates with transformRequest
+runner.test('keyword detection triggers thinking in transformRequest', () => {
+  const transformer = new GlmtTransformer();
+  const input = {
+    model: 'claude-sonnet-4.5',
+    messages: [{ role: 'user', content: 'think hard about this architecture problem' }]
+  };
+
+  const { thinkingConfig } = transformer.transformRequest(input);
+
+  assertEqual(thinkingConfig.thinking, true, 'keyword should enable thinking');
+  assertEqual(thinkingConfig.effort, 'medium', 'keyword should set medium effort');
+});
+
 // Run tests
 runner.run().then(success => {
   process.exit(success ? 0 : 1);

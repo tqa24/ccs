@@ -23,7 +23,7 @@ const DeltaAccumulator = require('./delta-accumulator');
  *
  * Debugging:
  * - Verbose: Pass --verbose to see request/response logs
- * - Debug: Set CCS_DEBUG_LOG=1 to write logs to ~/.ccs/logs/
+ * - Debug: Set CCS_DEBUG=1 to write logs to ~/.ccs/logs/
  *
  * Usage:
  *   const proxy = new GlmtProxy({ verbose: true });
@@ -33,7 +33,7 @@ class GlmtProxy {
   constructor(config = {}) {
     this.transformer = new GlmtTransformer({
       verbose: config.verbose,
-      debugLog: config.debugLog || process.env.CCS_DEBUG_LOG === '1'
+      debugLog: config.debugLog || process.env.CCS_DEBUG === '1' || process.env.CCS_DEBUG_LOG === '1'
     });
     // Use ANTHROPIC_BASE_URL from environment (set by settings.json) or fallback to Z.AI default
     this.upstreamUrl = process.env.ANTHROPIC_BASE_URL || 'https://api.z.ai/api/coding/paas/v4/chat/completions';
@@ -41,8 +41,6 @@ class GlmtProxy {
     this.port = null;
     this.verbose = config.verbose || false;
     this.timeout = config.timeout || 120000; // 120s default
-    this.streamingEnabled = process.env.CCS_GLMT_STREAMING !== 'disabled';
-    this.forceStreaming = process.env.CCS_GLMT_STREAMING === 'force';
   }
 
   /**
@@ -63,8 +61,7 @@ class GlmtProxy {
 
         // Info message (only show in verbose mode)
         if (this.verbose) {
-          const mode = this.streamingEnabled ? 'streaming mode' : 'buffered mode';
-          console.error(`[glmt] Proxy listening on port ${this.port} (${mode})`);
+          console.error(`[glmt] Proxy listening on port ${this.port} (streaming with auto-fallback)`);
         }
 
         // Debug mode notice
@@ -127,11 +124,21 @@ class GlmtProxy {
         this.log(`Request does NOT contain thinking parameter (will use message tags or default)`);
       }
 
-      // Branch: streaming or buffered
-      const useStreaming = (anthropicRequest.stream && this.streamingEnabled) || this.forceStreaming;
+      // Try streaming first (default), fallback to buffered on error
+      const useStreaming = anthropicRequest.stream !== false;
 
       if (useStreaming) {
-        await this._handleStreamingRequest(req, res, anthropicRequest, startTime);
+        try {
+          await this._handleStreamingRequest(req, res, anthropicRequest, startTime);
+        } catch (streamError) {
+          this.log(`Streaming failed: ${streamError.message}, retrying buffered mode`);
+          try {
+            await this._handleBufferedRequest(req, res, anthropicRequest, startTime);
+          } catch (bufferedError) {
+            // Both modes failed, propagate error
+            throw bufferedError;
+          }
+        }
       } else {
         await this._handleBufferedRequest(req, res, anthropicRequest, startTime);
       }
