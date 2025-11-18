@@ -63,44 +63,68 @@ function handleVersionCommand() {
   console.log(colored(`CCS (Claude Code Switch) v${CCS_VERSION}`, 'bold'));
   console.log('');
 
-  // Installation section
+  // Installation section with table-like formatting
   console.log(colored('Installation:', 'cyan'));
 
   // Location
   const installLocation = process.argv[1] || '(not found)';
-  console.log(`  ${colored('Location:', 'cyan')} ${installLocation}`);
+  console.log(`  ${colored('Location:'.padEnd(17), 'cyan')} ${installLocation}`);
+
+  // .ccs/ directory location
+  const ccsDir = path.join(os.homedir(), '.ccs');
+  console.log(`  ${colored('CCS Directory:'.padEnd(17), 'cyan')} ${ccsDir}`);
 
   // Config path
   const configPath = getConfigPath();
-  console.log(`  ${colored('Config:', 'cyan')} ${configPath}`);
+  console.log(`  ${colored('Config:'.padEnd(17), 'cyan')} ${configPath}`);
 
-  // Delegation status
-  const delegationRulesPath = path.join(os.homedir(), '.ccs', 'delegation-rules.json');
-  const delegationEnabled = fs.existsSync(delegationRulesPath);
+  // Profiles.json location
+  const profilesJson = path.join(os.homedir(), '.ccs', 'profiles.json');
+  console.log(`  ${colored('Profiles:'.padEnd(17), 'cyan')} ${profilesJson}`);
 
-  if (delegationEnabled) {
-    console.log(`  ${colored('Delegation:', 'cyan')} Enabled`);
+  // Delegation status - check multiple indicators
+  const delegationSessionsPath = path.join(os.homedir(), '.ccs', 'delegation-sessions.json');
+  const delegationConfigured = fs.existsSync(delegationSessionsPath);
 
-    // Check which profiles are delegation-ready
-    const readyProfiles = [];
-    const { DelegationValidator } = require('./utils/delegation-validator');
+  let readyProfiles = [];
 
-    for (const profile of ['glm', 'kimi']) {
-      const validation = DelegationValidator.validate(profile);
-      if (validation.valid) {
-        readyProfiles.push(profile);
+  // Check for profiles with valid API keys
+  for (const profile of ['glm', 'kimi']) {
+    const settingsPath = path.join(os.homedir(), '.ccs', `${profile}.settings.json`);
+    if (fs.existsSync(settingsPath)) {
+      try {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+        const apiKey = settings.env?.ANTHROPIC_AUTH_TOKEN;
+        if (apiKey && !apiKey.match(/YOUR_.*_API_KEY_HERE/) && !apiKey.match(/sk-test.*/)) {
+          readyProfiles.push(profile);
+        }
+      } catch (error) {
+        // Invalid JSON, skip
       }
     }
-
-    if (readyProfiles.length > 0) {
-      console.log(`  ${colored('Ready:', 'cyan')} ${readyProfiles.join(', ')}`);
-    } else {
-      console.log(`  ${colored('Ready:', 'cyan')} None (configure profiles first)`);
-    }
-  } else {
-    console.log(`  ${colored('Delegation:', 'cyan')} Not configured`);
   }
+
+  const hasValidApiKeys = readyProfiles.length > 0;
+  const delegationEnabled = delegationConfigured || hasValidApiKeys;
+
+  if (delegationEnabled) {
+    console.log(`  ${colored('Delegation:'.padEnd(17), 'cyan')} Enabled`);
+  } else {
+    console.log(`  ${colored('Delegation:'.padEnd(17), 'cyan')} Not configured`);
+  }
+
   console.log('');
+
+  // Ready Profiles section - make it more prominent
+  if (readyProfiles.length > 0) {
+    console.log(colored('Delegation Ready:', 'cyan'));
+    console.log(`  ${colored('✓', 'yellow')} ${readyProfiles.join(', ')} profiles are ready for delegation`);
+    console.log('');
+  } else if (delegationEnabled) {
+    console.log(colored('Delegation Ready:', 'cyan'));
+    console.log(`  ${colored('!', 'yellow')} Delegation configured but no valid API keys found`);
+    console.log('');
+  }
 
   // Documentation
   console.log(`${colored('Documentation:', 'cyan')} https://github.com/kaitranntt/ccs`);
@@ -143,7 +167,7 @@ function handleHelpCommand() {
 
   // Account Management
   console.log(colored('Account Management:', 'cyan'));
-  console.log(`  ${colored('ccs auth --help', 'yellow')}             Manage multiple Claude accounts`);
+  console.log(`  ${colored('ccs auth --help', 'yellow')}             Run multiple Claude accounts concurrently`);
   console.log('');
 
   // Delegation (inside Claude Code CLI)
@@ -156,14 +180,14 @@ function handleHelpCommand() {
   // Diagnostics
   console.log(colored('Diagnostics:', 'cyan'));
   console.log(`  ${colored('ccs doctor', 'yellow')}                  Run health check and diagnostics`);
-  console.log(`  ${colored('ccs update', 'yellow')}                  Re-install CCS items to ~/.claude/`);
+  console.log(`  ${colored('ccs sync', 'yellow')}                    Sync delegation commands and skills`);
   console.log('');
 
   // Flags
   console.log(colored('Flags:', 'cyan'));
   console.log(`  ${colored('-h, --help', 'yellow')}                  Show this help message`);
   console.log(`  ${colored('-v, --version', 'yellow')}               Show version and installation info`);
-  console.log(`  ${colored('--shell-completion', 'yellow')}          Install shell auto-completion`);
+  console.log(`  ${colored('-sc, --shell-completion', 'yellow')}     Install shell auto-completion`);
   console.log('');
 
   // Configuration
@@ -188,7 +212,7 @@ function handleHelpCommand() {
   console.log(`  ${colored('$ ccs', 'yellow')}                        # Use default account`);
   console.log(`  ${colored('$ ccs glm "implement API"', 'yellow')}    # Cost-optimized model`);
   console.log('');
-  console.log(`  For more: ${colored('https://github.com/kaitranntt/ccs#usage', 'cyan')}`);
+  console.log(`  For more: ${colored('https://github.com/kaitranntt/ccs/blob/main/README.md', 'cyan')}`);
   console.log('');
 
   // Uninstall
@@ -245,7 +269,7 @@ async function handleDoctorCommand() {
   process.exit(doctor.results.isHealthy() ? 0 : 1);
 }
 
-async function handleUpdateCommand() {
+async function handleSyncCommand() {
   // First, copy .claude/ directory from package to ~/.ccs/.claude/
   const ClaudeDirInstaller = require('./utils/claude-dir-installer');
   const installer = new ClaudeDirInstaller();
@@ -255,8 +279,8 @@ async function handleUpdateCommand() {
   const ClaudeSymlinkManager = require('./utils/claude-symlink-manager');
   const manager = new ClaudeSymlinkManager();
 
-  console.log('[i] Updating CCS items in ~/.claude/...');
-  manager.update();
+  console.log('[i] Syncing delegation commands and skills to ~/.claude/...');
+  manager.sync();
 
   process.exit(0);
 }
@@ -487,7 +511,7 @@ async function main() {
   }
 
   // Special case: shell completion installer
-  if (firstArg === '--shell-completion') {
+  if (firstArg === '--shell-completion' || firstArg === '-sc') {
     await handleShellCompletionCommand(args.slice(1));
     return;
   }
@@ -498,9 +522,9 @@ async function main() {
     return;
   }
 
-  // Special case: update command (re-install CCS symlinks)
-  if (firstArg === 'update' || firstArg === '--update') {
-    await handleUpdateCommand();
+  // Special case: sync command (sync delegation commands and skills to ~/.claude/)
+  if (firstArg === 'sync' || firstArg === '--sync') {
+    await handleSyncCommand();
     return;
   }
 

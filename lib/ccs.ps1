@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Version (updated by scripts/bump-version.sh)
-$CcsVersion = "4.1.4"
+$CcsVersion = "4.1.5"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\.ccs\config.json" }
 $ProfilesJson = "$env:USERPROFILE\.ccs\profiles.json"
@@ -212,65 +212,104 @@ function Show-Help {
 
     Write-ColorLine "CCS (Claude Code Switch) - Instant profile switching for Claude CLI" "White"
     Write-Host ""
+
     Write-ColorLine "Usage:" "Cyan"
     Write-ColorLine "  ccs [profile] [claude-args...]" "Yellow"
-    Write-ColorLine "  ccs auth <command> [options]" "Yellow"
     Write-ColorLine "  ccs [flags]" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Description:" "Cyan"
     Write-Host "  Switch between multiple Claude accounts and alternative models"
     Write-Host "  (GLM, Kimi) instantly. Run different Claude CLI sessions concurrently"
     Write-Host "  with auto-recovery. Zero downtime."
     Write-Host ""
+
     Write-ColorLine "Model Switching:" "Cyan"
     Write-ColorLine "  ccs                         Use default Claude account" "Yellow"
     Write-ColorLine "  ccs glm                     Switch to GLM 4.6 model" "Yellow"
     Write-ColorLine "  ccs glmt                    Switch to GLM with thinking mode" "Yellow"
+    Write-ColorLine "  ccs glmt --verbose          Enable debug logging" "Yellow"
     Write-ColorLine "  ccs kimi                    Switch to Kimi for Coding" "Yellow"
     Write-ColorLine "  ccs glm 'debug this code'   Use GLM and run command" "Yellow"
     Write-Host ""
-    Write-ColorLine "Examples:" "Cyan"
-    Write-ColorLine "  `$ ccs" "Yellow" -NoNewline
-    Write-Host "                        # Use default account"
-    Write-ColorLine "  `$ ccs glm `"implement API`"" "Yellow" -NoNewline
-    Write-Host "    # Cost-optimized model"
-    Write-Host ""
+
     Write-ColorLine "Account Management:" "Cyan"
-    Write-ColorLine "  ccs auth --help             Manage multiple Claude accounts" "Yellow"
+    Write-ColorLine "  ccs auth --help             Run multiple Claude accounts concurrently" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Delegation (inside Claude Code CLI):" "Cyan"
     Write-ColorLine "  /ccs:glm `"task`"             Delegate to GLM-4.6 for simple tasks" "Yellow"
     Write-ColorLine "  /ccs:kimi `"task`"            Delegate to Kimi for long context" "Yellow"
     Write-Host "  Save tokens by delegating simple tasks to cost-optimized models"
     Write-Host ""
+
     Write-ColorLine "Diagnostics:" "Cyan"
     Write-ColorLine "  ccs doctor                  Run health check and diagnostics" "Yellow"
+    Write-ColorLine "  ccs sync                    Sync delegation commands and skills" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Flags:" "Cyan"
     Write-ColorLine "  -h, --help                  Show this help message" "Yellow"
     Write-ColorLine "  -v, --version               Show version and installation info" "Yellow"
-    Write-ColorLine "  --shell-completion          Install shell auto-completion" "Yellow"
+    Write-ColorLine "  -sc, --shell-completion     Install shell auto-completion" "Yellow"
     Write-Host ""
+
     Write-ColorLine "Configuration:" "Cyan"
-    Write-Host "  Config:    ~/.ccs/config.json"
-    Write-Host "  Profiles:  ~/.ccs/profiles.json"
-    Write-Host "  Instances: ~/.ccs/instances/"
-    Write-Host "  Settings:  ~/.ccs/*.settings.json"
+    Write-Host "  Config File: ~/.ccs/config.json"
+    Write-Host "  Profiles:    ~/.ccs/profiles.json"
+    Write-Host "  Instances:   ~/.ccs/instances/"
+    Write-Host "  Settings:    ~/.ccs/*.settings.json"
+    Write-Host "  Environment: CCS_CONFIG (override config path)"
     Write-Host ""
+
     Write-ColorLine "Shared Data:" "Cyan"
-    Write-Host "  Commands:  ~/.ccs/shared/commands/"
-    Write-Host "  Skills:    ~/.ccs/shared/skills/"
+    Write-Host "  Commands:    ~/.ccs/shared/commands/"
+    Write-Host "  Skills:      ~/.ccs/shared/skills/"
+    Write-Host "  Agents:      ~/.ccs/shared/agents/"
     Write-Host "  Note: Commands, skills, and agents are symlinked across all profiles"
     Write-Host ""
+
+    Write-ColorLine "Examples:" "Cyan"
+    Write-ColorLine "  `$ ccs                        # Use default account" "Yellow"
+    Write-ColorLine "  `$ ccs glm `"implement API`"    # Cost-optimized model" "Yellow"
+    Write-Host ""
+    Write-ColorLine "  For more: https://github.com/kaitranntt/ccs/blob/main/README.md" "Cyan"
+    Write-Host ""
+
+    Write-ColorLine "Uninstall:" "Yellow"
+    Write-Host "  npm:          npm uninstall -g @kaitranntt/ccs"
+    Write-Host "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
+    Write-Host "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
+    Write-Host ""
+
     Write-ColorLine "Documentation:" "Cyan"
     Write-Host "  GitHub:  https://github.com/kaitranntt/ccs"
     Write-Host "  Docs:    https://github.com/kaitranntt/ccs/blob/main/README.md"
+    Write-Host "  Issues:  https://github.com/kaitranntt/ccs/issues"
     Write-Host ""
+
     Write-ColorLine "License: MIT" "Cyan"
 }
 
 function Show-Version {
     $UseColors = $env:FORCE_COLOR -or ([Console]::IsOutputRedirected -eq $false -and -not $env:NO_COLOR)
+
+    # Helper for aligned output
+    function Write-TableLine {
+        param(
+            [string]$Label,
+            [string]$Value,
+            [string]$Color = "Cyan"
+        )
+        if ($UseColors) {
+            $PaddedLabel = $Label.PadRight(17)
+            Write-Host "  $PaddedLabel " -ForegroundColor $Color -NoNewline
+            Write-Host $Value
+        } else {
+            $PaddedLabel = $Label.PadRight(17)
+            Write-Host "  $PaddedLabel $Value"
+        }
+    }
 
     # Title
     if ($UseColors) {
@@ -280,37 +319,90 @@ function Show-Version {
     }
     Write-Host ""
 
-    # Installation
+    # Installation section with table-like formatting
     if ($UseColors) { Write-Host "Installation:" -ForegroundColor Cyan }
     else { Write-Host "Installation:" }
 
-    # Location
+    # Location - prioritize script location over command location
+    $ScriptLocation = $MyInvocation.MyCommand.Path
     $InstallLocation = (Get-Command ccs -ErrorAction SilentlyContinue).Source
-    if ($InstallLocation) {
-        if ($UseColors) {
-            Write-Host "  Location: " -ForegroundColor Cyan -NoNewline
-            Write-Host $InstallLocation
-        } else {
-            Write-Host "  Location: $InstallLocation"
-        }
+
+    # Show script location if running from source
+    if ($ScriptLocation -and (Test-Path $ScriptLocation)) {
+        Write-TableLine "Location:" $ScriptLocation
+    } elseif ($InstallLocation) {
+        Write-TableLine "Location:" $InstallLocation
     } else {
-        if ($UseColors) {
-            Write-Host "  Location: " -ForegroundColor Cyan -NoNewline
-            Write-Host "(not found - run from current directory)" -ForegroundColor Gray
-        } else {
-            Write-Host "  Location: (not found - run from current directory)"
+        Write-TableLine "Location:" "(not found - run from current directory)"
+    }
+
+    # .ccs/ directory location
+    Write-TableLine "CCS Directory:" "$env:USERPROFILE\.ccs\"
+
+    # Config path
+    Write-TableLine "Config:" $ConfigFile
+
+    # Profiles.json location
+    Write-TableLine "Profiles:" $ProfilesJson
+
+    # Delegation status - check multiple indicators
+    $DelegationConfigured = $false
+    $ReadyProfiles = @()
+
+    # Check for delegation-sessions.json (primary indicator)
+    $DelegationSessions = "$env:USERPROFILE\.ccs\delegation-sessions.json"
+    if (Test-Path $DelegationSessions) {
+        $DelegationConfigured = $true
+    }
+
+    # Check for profiles with valid API keys (secondary indicator)
+    foreach ($profile in @("glm", "kimi")) {
+        $SettingsFile = "$env:USERPROFILE\.ccs\$profile.settings.json"
+        if (Test-Path $SettingsFile) {
+            try {
+                $Settings = Get-Content $SettingsFile -Raw | ConvertFrom-Json
+                $ApiKey = $Settings.env.ANTHROPIC_AUTH_TOKEN
+                if ($ApiKey -and $ApiKey -notmatch "YOUR_.*_API_KEY_HERE" -and $ApiKey -notmatch "sk-test.*") {
+                    $ReadyProfiles += $profile
+                    $DelegationConfigured = $true
+                }
+            } catch { }
         }
     }
 
-    # Config
-    if ($UseColors) {
-        Write-Host "  Config: " -ForegroundColor Cyan -NoNewline
-        Write-Host $ConfigFile
+    if ($DelegationConfigured) {
+        Write-TableLine "Delegation:" "Enabled"
     } else {
-        Write-Host "  Config: $ConfigFile"
+        Write-TableLine "Delegation:" "Not configured"
     }
 
     Write-Host ""
+
+    # Ready Profiles section - make it more prominent
+    if ($ReadyProfiles.Count -gt 0) {
+        if ($UseColors) { Write-Host "Delegation Ready:" -ForegroundColor Cyan }
+        else { Write-Host "Delegation Ready:" }
+
+        $ReadyProfilesStr = $ReadyProfiles -join ", "
+        if ($UseColors) {
+            Write-Host "  ✓ " -ForegroundColor Yellow -NoNewline
+            Write-Host "$ReadyProfilesStr profiles are ready for delegation"
+        } else {
+            Write-Host "  ! $ReadyProfilesStr profiles are ready for delegation"
+        }
+        Write-Host ""
+    } elseif ($DelegationConfigured) {
+        if ($UseColors) { Write-Host "Delegation Ready:" -ForegroundColor Cyan }
+        else { Write-Host "Delegation Ready:" }
+
+        if ($UseColors) {
+            Write-Host "  ! " -ForegroundColor Yellow -NoNewline
+            Write-Host "Delegation configured but no valid API keys found"
+        } else {
+            Write-Host "  ! Delegation configured but no valid API keys found"
+        }
+        Write-Host ""
+    }
 
     # Documentation
     if ($UseColors) {
@@ -845,11 +937,105 @@ function Get-ProfileType {
     }
 }
 
+# --- Sync Command ---
+
+function Sync-Run {
+    $CcsClaudeDir = "$env:USERPROFILE\.ccs\.claude"
+    $UserClaudeDir = "$env:USERPROFILE\.claude"
+
+    Write-Host "Syncing delegation commands and skills to ~/.claude/..." -ForegroundColor Cyan
+    Write-Host ""
+
+    # Check if source directory exists
+    if (-not (Test-Path $CcsClaudeDir)) {
+        Write-Host "[X] CCS .claude/ directory not found at $CcsClaudeDir" -ForegroundColor Red
+        Write-Host "Reinstall CCS: npm install -g @kaitranntt/ccs --force"
+        exit 1
+    }
+
+    # Create ~/.claude/ if missing
+    if (-not (Test-Path $UserClaudeDir)) {
+        Write-Host "[i] Creating ~/.claude/ directory" -ForegroundColor Cyan
+        New-Item -ItemType Directory -Path $UserClaudeDir -Force | Out-Null
+    }
+
+    # Items to symlink
+    $Items = @(
+        @{ Source = "commands\ccs"; Target = "commands\ccs"; Type = "Directory" }
+        @{ Source = "skills\ccs-delegation"; Target = "skills\ccs-delegation"; Type = "Directory" }
+        @{ Source = "agents\ccs-delegator.md"; Target = "agents\ccs-delegator.md"; Type = "File" }
+    )
+
+    $Installed = 0
+    $Skipped = 0
+
+    foreach ($Item in $Items) {
+        $SourcePath = Join-Path $CcsClaudeDir $Item.Source
+        $TargetPath = Join-Path $UserClaudeDir $Item.Target
+        $TargetDir = Split-Path -Parent $TargetPath
+
+        # Check source exists
+        if (-not (Test-Path $SourcePath)) {
+            Write-Host "[!] Source not found: $($Item.Source), skipping" -ForegroundColor Yellow
+            continue
+        }
+
+        # Create parent directory if needed
+        if (-not (Test-Path $TargetDir)) {
+            New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
+        }
+
+        # Check if already correct symlink
+        if (Test-Path $TargetPath) {
+            $ItemInfo = Get-Item $TargetPath -Force
+            if ($ItemInfo.LinkType -eq "SymbolicLink") {
+                $LinkTarget = $ItemInfo.Target
+                if ($LinkTarget -eq $SourcePath) {
+                    $Skipped++
+                    continue
+                }
+            }
+
+            # Backup existing file/directory
+            $Timestamp = Get-Date -Format "yyyy-MM-dd"
+            $BackupPath = "$TargetPath.backup-$Timestamp"
+            $Counter = 1
+
+            while (Test-Path $BackupPath) {
+                $BackupPath = "$TargetPath.backup-$Timestamp-$Counter"
+                $Counter++
+            }
+
+            Move-Item -Path $TargetPath -Destination $BackupPath -Force
+            Write-Host "[i] Backed up existing to $(Split-Path -Leaf $BackupPath)" -ForegroundColor Cyan
+        }
+
+        # Create symlink
+        try {
+            $SymlinkType = if ($Item.Type -eq "Directory") { "Junction" } else { "SymbolicLink" }
+            New-Item -ItemType $SymlinkType -Path $TargetPath -Target $SourcePath -Force -ErrorAction Stop | Out-Null
+            Write-Host "[OK] Installed $($Item.Target)" -ForegroundColor Green
+            $Installed++
+        } catch {
+            Write-Host "[X] Failed to install $($Item.Target): $($_.Exception.Message)" -ForegroundColor Red
+            if ($_.Exception.Message -match "privilege") {
+                Write-Host "[i] Run PowerShell as Administrator or enable Developer Mode" -ForegroundColor Yellow
+            }
+        }
+    }
+
+    Write-Host ""
+    Write-Host "✓ Update complete" -ForegroundColor Green
+    Write-Host "  Installed: $Installed"
+    Write-Host "  Already up-to-date: $Skipped"
+    Write-Host ""
+}
+
 # --- Auth Commands (Phase 3) ---
 
 function Show-AuthHelp {
     Write-Host ""
-    Write-Host "CCS Account Management" -ForegroundColor White
+    Write-Host "CCS Concurrent Account Management" -ForegroundColor White
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Cyan
     Write-Host "  ccs auth <command> [options]" -ForegroundColor Yellow
@@ -1314,7 +1500,7 @@ if ($Help) {
 }
 
 # Special case: shell completion installer
-if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq "--shell-completion") {
+if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "--shell-completion" -or $RemainingArgs[0] -eq "-sc")) {
     $CompletionArgs = if ($RemainingArgs.Count -gt 1) { $RemainingArgs[1..($RemainingArgs.Count-1)] } else { @() }
     $Result = Install-ShellCompletion $CompletionArgs
     exit $Result
@@ -1325,6 +1511,12 @@ if ($RemainingArgs.Count -gt 0 -and $RemainingArgs[0] -eq "auth") {
     $AuthArgs = if ($RemainingArgs.Count -gt 1) { $RemainingArgs[1..($RemainingArgs.Count-1)] } else { @() }
     Invoke-AuthCommands $AuthArgs
     exit $LASTEXITCODE
+}
+
+# Special case: sync command
+if ($RemainingArgs.Count -gt 0 -and ($RemainingArgs[0] -eq "sync" -or $RemainingArgs[0] -eq "--sync")) {
+    Sync-Run
+    exit 0
 }
 
 # Run auto-recovery before main logic

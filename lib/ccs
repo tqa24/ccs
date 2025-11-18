@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Version (updated by scripts/bump-version.sh)
-CCS_VERSION="4.1.4"
+CCS_VERSION="4.1.5"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
 readonly PROFILES_JSON="$HOME/.ccs/profiles.json"
@@ -165,65 +165,82 @@ find_similar_strings() {
 show_help() {
   echo -e "${BOLD}CCS (Claude Code Switch) - Instant profile switching for Claude CLI${RESET}"
   echo ""
+
   echo -e "${CYAN}Usage:${RESET}"
   echo -e "  ${YELLOW}ccs${RESET} [profile] [claude-args...]"
-  echo -e "  ${YELLOW}ccs auth${RESET} <command> [options]"
   echo -e "  ${YELLOW}ccs${RESET} [flags]"
   echo ""
+
   echo -e "${CYAN}Description:${RESET}"
   echo -e "  Switch between multiple Claude accounts and alternative models"
   echo -e "  (GLM, Kimi) instantly. Run different Claude CLI sessions concurrently"
   echo -e "  with auto-recovery. Zero downtime."
   echo ""
+
   echo -e "${CYAN}Model Switching:${RESET}"
   echo -e "  ${YELLOW}ccs${RESET}                         Use default Claude account"
   echo -e "  ${YELLOW}ccs glm${RESET}                     Switch to GLM 4.6 model"
   echo -e "  ${YELLOW}ccs glmt${RESET}                    Switch to GLM with thinking mode"
+  echo -e "  ${YELLOW}ccs glmt --verbose${RESET}          Enable debug logging"
   echo -e "  ${YELLOW}ccs kimi${RESET}                    Switch to Kimi for Coding"
   echo -e "  ${YELLOW}ccs glm${RESET} \"debug this code\"   Use GLM and run command"
   echo ""
+
   echo -e "${CYAN}Account Management:${RESET}"
-  echo -e "  ${YELLOW}ccs auth --help${RESET}             Manage multiple Claude accounts"
+  echo -e "  ${YELLOW}ccs auth --help${RESET}             Run multiple Claude accounts concurrently"
   echo ""
+
   echo -e "${CYAN}Delegation (inside Claude Code CLI):${RESET}"
   echo -e "  ${YELLOW}/ccs:glm \"task\"${RESET}             Delegate to GLM-4.6 for simple tasks"
   echo -e "  ${YELLOW}/ccs:kimi \"task\"${RESET}            Delegate to Kimi for long context"
   echo -e "  Save tokens by delegating simple tasks to cost-optimized models"
   echo ""
+
   echo -e "${CYAN}Diagnostics:${RESET}"
   echo -e "  ${YELLOW}ccs doctor${RESET}                  Run health check and diagnostics"
+  echo -e "  ${YELLOW}ccs sync${RESET}                    Sync delegation commands and skills"
   echo ""
+
   echo -e "${CYAN}Flags:${RESET}"
   echo -e "  ${YELLOW}-h, --help${RESET}                  Show this help message"
   echo -e "  ${YELLOW}-v, --version${RESET}               Show version and installation info"
-  echo -e "  ${YELLOW}--shell-completion${RESET}          Install shell auto-completion"
+  echo -e "  ${YELLOW}-sc, --shell-completion${RESET}     Install shell auto-completion"
   echo ""
+
   echo -e "${CYAN}Configuration:${RESET}"
-  echo -e "  Config:    ~/.ccs/config.json"
-  echo -e "  Profiles:  ~/.ccs/profiles.json"
-  echo -e "  Instances: ~/.ccs/instances/"
-  echo -e "  Settings:  ~/.ccs/*.settings.json"
+  echo -e "  Config File: ~/.ccs/config.json"
+  echo -e "  Profiles:    ~/.ccs/profiles.json"
+  echo -e "  Instances:   ~/.ccs/instances/"
+  echo -e "  Settings:    ~/.ccs/*.settings.json"
+  echo -e "  Environment: CCS_CONFIG (override config path)"
   echo ""
+
   echo -e "${CYAN}Shared Data:${RESET}"
-  echo -e "  Commands:  ~/.ccs/shared/commands/"
-  echo -e "  Skills:    ~/.ccs/shared/skills/"
+  echo -e "  Commands:    ~/.ccs/shared/commands/"
+  echo -e "  Skills:      ~/.ccs/shared/skills/"
+  echo -e "  Agents:      ~/.ccs/shared/agents/"
   echo -e "  Note: Commands, skills, and agents are symlinked across all profiles"
   echo ""
+
   echo -e "${CYAN}Examples:${RESET}"
   echo -e "  ${YELLOW}\$ ccs${RESET}                        # Use default account"
   echo -e "  ${YELLOW}\$ ccs glm \"implement API\"${RESET}    # Cost-optimized model"
   echo ""
-  echo -e "  For more: ${CYAN}https://github.com/kaitranntt/ccs#usage${RESET}"
+  echo -e "  For more: ${CYAN}https://github.com/kaitranntt/ccs/blob/main/README.md${RESET}"
   echo ""
+
   echo -e "${YELLOW}Uninstall:${RESET}"
-  echo "  npm:          npm uninstall -g @kaitranntt/ccs"
-  echo "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
-  echo "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
+  echo -e "  npm:          npm uninstall -g @kaitranntt/ccs"
+  echo -e "  macOS/Linux:  curl -fsSL ccs.kaitran.ca/uninstall | bash"
+  echo -e "  Windows:      irm ccs.kaitran.ca/uninstall | iex"
   echo ""
+
   echo -e "${CYAN}Documentation:${RESET}"
   echo -e "  GitHub:  ${CYAN}https://github.com/kaitranntt/ccs${RESET}"
   echo -e "  Docs:    https://github.com/kaitranntt/ccs/blob/main/README.md"
+  echo -e "  Issues:  https://github.com/kaitranntt/ccs/issues"
   echo ""
+
   echo -e "${CYAN}License:${RESET} MIT"
 }
 
@@ -480,6 +497,100 @@ doctor_run() {
   $has_errors && exit 1 || exit 0
 }
 
+# --- Sync Command ---
+
+sync_run() {
+  local ccs_claude_dir="$HOME/.ccs/.claude"
+  local user_claude_dir="$HOME/.claude"
+
+  echo -e "${CYAN}Syncing delegation commands and skills to ~/.claude/...${RESET}"
+  echo ""
+
+  # Check if source directory exists
+  if [[ ! -d "$ccs_claude_dir" ]]; then
+    msg_error "CCS .claude/ directory not found at $ccs_claude_dir"
+    echo "Reinstall CCS: npm install -g @kaitranntt/ccs --force"
+    exit 1
+  fi
+
+  # Create ~/.claude/ if missing
+  if [[ ! -d "$user_claude_dir" ]]; then
+    echo -e "${CYAN}[i]${RESET} Creating ~/.claude/ directory"
+    mkdir -p "$user_claude_dir"
+    chmod 700 "$user_claude_dir"
+  fi
+
+  # Items to symlink (source:target:type)
+  local items=(
+    "commands/ccs:commands/ccs:dir"
+    "skills/ccs-delegation:skills/ccs-delegation:dir"
+    "agents/ccs-delegator.md:agents/ccs-delegator.md:file"
+  )
+
+  local installed=0
+  local skipped=0
+
+  for item in "${items[@]}"; do
+    IFS=':' read -r source target type <<< "$item"
+    local source_path="$ccs_claude_dir/$source"
+    local target_path="$user_claude_dir/$target"
+    local target_dir="$(dirname "$target_path")"
+
+    # Check source exists
+    if [[ ! -e "$source_path" ]]; then
+      echo -e "${YELLOW}[!]${RESET} Source not found: $source, skipping"
+      continue
+    fi
+
+    # Create parent directory if needed
+    if [[ ! -d "$target_dir" ]]; then
+      mkdir -p "$target_dir"
+      chmod 700 "$target_dir"
+    fi
+
+    # Check if already correct symlink
+    if [[ -L "$target_path" ]]; then
+      local link_target="$(readlink "$target_path")"
+      local resolved_target="$(cd "$(dirname "$target_path")" && cd "$(dirname "$link_target")" && pwd)/$(basename "$link_target")"
+
+      if [[ "$resolved_target" == "$source_path" ]]; then
+        ((skipped++))
+        continue
+      fi
+    fi
+
+    # Backup existing file/directory
+    if [[ -e "$target_path" ]]; then
+      local timestamp="$(date +%Y-%m-%d)"
+      local backup_path="${target_path}.backup-${timestamp}"
+      local counter=1
+
+      while [[ -e "$backup_path" ]]; do
+        backup_path="${target_path}.backup-${timestamp}-${counter}"
+        ((counter++))
+      done
+
+      mv "$target_path" "$backup_path"
+      echo -e "${CYAN}[i]${RESET} Backed up existing to $(basename "$backup_path")"
+    fi
+
+    # Create symlink
+    ln -s "$source_path" "$target_path" 2>/dev/null
+    if [[ $? -eq 0 ]]; then
+      echo -e "${GREEN}[OK]${RESET} Installed $target"
+      ((installed++))
+    else
+      echo -e "${RED}[X]${RESET} Failed to install $target"
+    fi
+  done
+
+  echo ""
+  echo -e "${GREEN}✓ Update complete${RESET}"
+  echo "  Installed: $installed"
+  echo "  Already up-to-date: $skipped"
+  echo ""
+}
+
 # --- Claude CLI Detection Logic ---
 
 detect_claude_cli() {
@@ -509,49 +620,81 @@ Restart your terminal after installation."
 }
 
 show_version() {
+  # Title
   echo -e "${BOLD}CCS (Claude Code Switch) v${CCS_VERSION}${RESET}"
   echo ""
+
+  # Installation section with table-like formatting
   echo -e "${CYAN}Installation:${RESET}"
 
-  # Simple location - just show what 'command -v' returns
-  local location=$(command -v ccs 2>/dev/null || echo "(not installed)")
-  echo -e "  ${CYAN}Location:${RESET} ${location}"
+  # Location - prioritize script location over command location
+  local script_location="$(readlink -f "${BASH_SOURCE[0]}")"
+  local command_location=$(command -v ccs 2>/dev/null || echo "(not found)")
 
-  # Simple config display
-  local config="${CCS_CONFIG:-$HOME/.ccs/config.json}"
-  echo -e "  ${CYAN}Config:${RESET} ${config}"
-
-  # Delegation status
-  local delegation_rules="$HOME/.ccs/delegation-rules.json"
-  if [[ -f "$delegation_rules" ]]; then
-    echo -e "  ${CYAN}Delegation:${RESET} Enabled"
-
-    # Check which profiles are delegation-ready
-    local ready_profiles=()
-    for profile in glm kimi; do
-      local settings_file="$HOME/.ccs/profiles/$profile/settings.json"
-      if [[ -f "$settings_file" ]]; then
-        # Check if API key is configured (not a placeholder)
-        local api_key=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$settings_file" 2>/dev/null)
-        if [[ -n "$api_key" ]] && [[ ! "$api_key" =~ YOUR_.*_API_KEY_HERE ]]; then
-          ready_profiles+=("$profile")
-        fi
-      fi
-    done
-
-    if [[ ${#ready_profiles[@]} -gt 0 ]]; then
-      echo -e "  ${CYAN}Ready:${RESET} ${ready_profiles[*]}"
-    else
-      echo -e "  ${CYAN}Ready:${RESET} None (configure profiles first)"
-    fi
+  # Show script location if running from source
+  if [[ "$script_location" == *"ccs"* ]]; then
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Location:" "${script_location}"
   else
-    echo -e "  ${CYAN}Delegation:${RESET} Not configured"
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Location:" "${command_location}"
   fi
+
+  # .ccs/ directory location
+  printf "  ${CYAN}%-16s${RESET} %s\n" "CCS Directory:" "$HOME/.ccs/"
+
+  # Config path
+  printf "  ${CYAN}%-16s${RESET} %s\n" "Config:" "${CONFIG_FILE}"
+
+  # Profiles.json location
+  printf "  ${CYAN}%-16s${RESET} %s\n" "Profiles:" "${PROFILES_JSON}"
+
+  # Delegation status - check multiple indicators
+  local delegation_configured=false
+  local ready_profiles=()
+
+  # Check for delegation-sessions.json (primary indicator)
+  local delegation_sessions="$HOME/.ccs/delegation-sessions.json"
+  if [[ -f "$delegation_sessions" ]]; then
+    delegation_configured=true
+  fi
+
+  # Check for profiles with valid API keys (secondary indicator)
+  for profile in glm kimi; do
+    local settings_file="$HOME/.ccs/$profile.settings.json"
+    if [[ -f "$settings_file" ]]; then
+      # Check if API key is configured (not a placeholder)
+      local api_key=$(jq -r '.env.ANTHROPIC_AUTH_TOKEN // empty' "$settings_file" 2>/dev/null)
+      if [[ -n "$api_key" ]] && [[ ! "$api_key" =~ YOUR_.*_API_KEY_HERE ]] && [[ ! "$api_key" =~ sk-test.* ]]; then
+        ready_profiles+=("$profile")
+        delegation_configured=true
+      fi
+    fi
+  done
+
+  if $delegation_configured; then
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Delegation:" "Enabled"
+  else
+    printf "  ${CYAN}%-16s${RESET} %s\n" "Delegation:" "Not configured"
+  fi
+
   echo ""
 
+  # Ready Profiles section - make it more prominent
+  if [[ ${#ready_profiles[@]} -gt 0 ]]; then
+    echo -e "${CYAN}Delegation Ready:${RESET}"
+    echo "  ${YELLOW}✓${RESET} ${ready_profiles[*]} profiles are ready for delegation"
+    echo ""
+  elif $delegation_configured; then
+    echo -e "${CYAN}Delegation Ready:${RESET}"
+    echo "  ${YELLOW}!${RESET} Delegation configured but no valid API keys found"
+    echo ""
+  fi
+
+  # Documentation
   echo -e "${CYAN}Documentation:${RESET} https://github.com/kaitranntt/ccs"
   echo -e "${CYAN}License:${RESET} MIT"
   echo ""
+
+  # Help hint
   echo -e "${YELLOW}Run 'ccs --help' for usage information${RESET}"
 }
 
@@ -957,7 +1100,7 @@ detect_profile_type() {
 # --- Auth Commands (Phase 3) ---
 
 auth_help() {
-  echo -e "${BOLD}CCS Account Management${RESET}"
+  echo -e "${BOLD}CCS Concurrent Account Management${RESET}"
   echo ""
   echo -e "${CYAN}Usage:${RESET}"
   echo -e "  ${YELLOW}ccs auth${RESET} <command> [options]"
@@ -1509,7 +1652,7 @@ if [[ $# -gt 0 ]] && [[ "${1}" == "auth" ]]; then
 fi
 
 # Special case: shell completion installer
-if [[ $# -gt 0 ]] && [[ "${1}" == "--shell-completion" ]]; then
+if [[ $# -gt 0 ]] && [[ "${1}" == "--shell-completion" || "${1}" == "-sc" ]]; then
   install_shell_completion "$@"
   exit $?
 fi
@@ -1517,6 +1660,12 @@ fi
 # Special case: doctor command
 if [[ $# -gt 0 ]] && [[ "${1}" == "doctor" || "${1}" == "--doctor" ]]; then
   doctor_run
+  exit $?
+fi
+
+# Special case: sync command
+if [[ $# -gt 0 ]] && [[ "${1}" == "sync" || "${1}" == "--sync" ]]; then
+  sync_run
   exit $?
 fi
 
