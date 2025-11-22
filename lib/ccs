@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Version (updated by scripts/bump-version.sh)
-CCS_VERSION="4.3.2"
+CCS_VERSION="4.3.3"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly CONFIG_FILE="${CCS_CONFIG:-$HOME/.ccs/config.json}"
 readonly PROFILES_JSON="$HOME/.ccs/profiles.json"
@@ -191,8 +191,10 @@ show_help() {
   echo ""
 
   echo -e "${CYAN}Delegation (inside Claude Code CLI):${RESET}"
-  echo -e "  ${YELLOW}/ccs:glm \"task\"${RESET}             Delegate to GLM-4.6 for simple tasks"
-  echo -e "  ${YELLOW}/ccs:kimi \"task\"${RESET}            Delegate to Kimi for long context"
+  echo -e "  ${YELLOW}/ccs \"task\"${RESET}                Delegate task (auto-selects best profile)"
+  echo -e "  ${YELLOW}/ccs --glm \"task\"${RESET}           Force GLM-4.6 for simple tasks"
+  echo -e "  ${YELLOW}/ccs --kimi \"task\"${RESET}          Force Kimi for long context"
+  echo -e "  ${YELLOW}/ccs:continue \"follow-up\"${RESET}    Continue last delegation session"
   echo -e "  Save tokens by delegating simple tasks to cost-optimized models"
   echo ""
 

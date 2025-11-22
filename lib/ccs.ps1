@@ -12,7 +12,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Version (updated by scripts/bump-version.sh)
-$CcsVersion = "4.3.2"
+$CcsVersion = "4.3.3"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = if ($env:CCS_CONFIG) { $env:CCS_CONFIG } else { "$env:USERPROFILE\.ccs\config.json" }
 $ProfilesJson = "$env:USERPROFILE\.ccs\profiles.json"
@@ -238,8 +238,10 @@ function Show-Help {
     Write-Host ""
 
     Write-ColorLine "Delegation (inside Claude Code CLI):" "Cyan"
-    Write-ColorLine "  /ccs:glm `"task`"             Delegate to GLM-4.6 for simple tasks" "Yellow"
-    Write-ColorLine "  /ccs:kimi `"task`"            Delegate to Kimi for long context" "Yellow"
+    Write-ColorLine "  /ccs `"task`"                Delegate task (auto-selects best profile)" "Yellow"
+    Write-ColorLine "  /ccs --glm `"task`"           Force GLM-4.6 for simple tasks" "Yellow"
+    Write-ColorLine "  /ccs --kimi `"task`"          Force Kimi for long context" "Yellow"
+    Write-ColorLine "  /ccs:continue `"follow-up`"    Continue last delegation session" "Yellow"
     Write-Host "  Save tokens by delegating simple tasks to cost-optimized models"
     Write-Host ""
 

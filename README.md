@@ -322,7 +322,7 @@ graph LR
 ```plaintext
 ~/.ccs/
 ├── .claude/                 # CCS items (ships with package, v4.1)
-│   ├── commands/ccs/        # Delegation commands (/ccs:glm, /ccs:kimi)
+│   ├── commands/ccs/        # Delegation commands (/ccs, /ccs:continue)
 │   ├── skills/ccs-delegation/  # AI decision framework
 │   └── agents/ccs-delegator.md # Proactive delegation agent
 ├── shared/                  # Symlinks to ~/.claude/ (for profiles)
@@ -401,7 +401,7 @@ ccs --help       # Show all commands and options
 
 ### What is Delegation?
 
-CCS Delegation lets you **send tasks to alternative models** (`glm`, `kimi`) **from your main Claude session** using the `-p` flag or slash commands (`/ccs:glm`, `/ccs:kimi`).
+CCS Delegation lets you **send tasks to alternative models** (`glm`, `kimi`) **from your main Claude session** using the `-p` flag or intelligent slash commands (`/ccs`, `/ccs:continue`).
 
 **Why use it?**
 - **Token efficiency**: Simple tasks cost 81% less on GLM vs main Claude session
@@ -426,9 +426,10 @@ ccs glm:continue -p "run the tests and fix any failures"
 **Via Slash Commands** (inside Claude sessions):
 ```bash
 # In your main Claude session:
-/ccs:glm "refactor auth.js to use async/await"
-/ccs:kimi "find all deprecated API usages across codebase"
-/ccs:glm:continue "also update the README examples"
+/ccs "refactor auth.js to use async/await"           # Auto-selects best profile
+/ccs --glm "fix typo in documentation"               # Forces GLM profile
+/ccs --kimi "analyze entire architecture"            # Forces Kimi profile
+/ccs:continue "also update the README examples"      # Continues last session
 ```
 
 **Via Natural Language** (Claude auto-delegates):

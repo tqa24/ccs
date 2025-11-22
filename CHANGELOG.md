@@ -2,6 +2,36 @@
 
 Format: [Keep a Changelog](https://keepachangelog.com/)
 
+## [4.3.3] - 2025-11-21
+
+### ⚠️ BREAKING CHANGES
+
+- **CCS Delegation Commands Consolidated**: Replaced 4 hardcoded commands with 2 intelligent commands
+  - Old: `/ccs:glm`, `/ccs:kimi`, `/ccs:glm:continue`, `/ccs:kimi:continue`
+  - New: `/ccs` (auto-selects profile), `/ccs:continue` (auto-detects profile)
+  - Override with flags: `/ccs --glm "task"`, `/ccs --kimi "task"`
+
+### Changed
+- Updated `--help` text across Node.js, Bash, and PowerShell implementations
+- Updated delegation examples in README.md and workflow documentation
+- Fixed CCS Doctor health checks to validate new command files
+- Updated user configuration templates with new command syntax
+
+### Added
+- Intelligent profile selection based on task analysis (reasoning, long-context, cost-optimized)
+- Support for custom profiles without creating new commands
+- Enhanced session management with automatic profile detection
+
+### Migration
+| Old Command | New Command |
+|-------------|-------------|
+| `/ccs:glm "task"` | `/ccs "task"` (or `/ccs --glm "task"`) |
+| `/ccs:kimi "task"` | `/ccs "task"` (or `/ccs --kimi "task"`) |
+| `/ccs:glm:continue` | `/ccs:continue` |
+| `/ccs:kimi:continue` | `/ccs:continue` |
+
+---
+
 ## [4.1.5] - 2025-11-17
 
 ### Added

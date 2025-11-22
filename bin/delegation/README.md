@@ -25,7 +25,7 @@ Enhanced Claude Code delegation system for multi-model task delegation.
 
 ### Session Management
 - Persistence: `~/.ccs/delegation-sessions.json`
-- Resume via `/ccs:glm:continue` and `/ccs:kimi:continue`
+- Resume via `/ccs:continue` (auto-detects profile)
 - Auto-cleanup expired sessions (>30 days)
 - Cost aggregation across turns
 
@@ -91,12 +91,13 @@ Automatically applied as CLI flags:
 The delegation system is invoked via simple slash commands in `.claude/commands/ccs/`:
 
 ### Basic Commands
-- `/ccs:glm "task"` - Delegate to GLM-4.6
-- `/ccs:kimi "task"` - Delegate to Kimi (long-context)
+- `/ccs "task"` - Delegate task (auto-selects best profile)
+- `/ccs --glm "task"` - Force GLM-4.6 delegation
+- `/ccs --kimi "task"` - Force Kimi delegation (long-context)
 
-### Multi-Turn Commands
-- `/ccs:glm:continue "follow-up"` - Resume last GLM session
-- `/ccs:kimi:continue "follow-up"` - Resume last Kimi session
+### Session Continuation
+- `/ccs:continue "follow-up"` - Resume last delegation session (auto-detect profile)
+- `/ccs:continue --glm "follow-up"` - Resume with specific profile switch
 
 Each command directly invokes:
 ```bash
@@ -143,7 +144,8 @@ node tests/unit/delegation/result-formatter.test.js
 ## Architecture
 
 ```
-User → SlashCommand (/ccs:glm)
+User → SlashCommand (/ccs)
+  → ccs-delegation skill (auto-selects profile)
   → Directly invokes: claude -p
     → HeadlessExecutor (monitors execution)
       → SessionManager (load last session)

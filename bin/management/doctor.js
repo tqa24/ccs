@@ -364,12 +364,12 @@ class Doctor {
   checkDelegation() {
     const spinner = ora('Checking delegation').start();
 
-    // Check if delegation commands exist in ~/.ccs/.claude/commands/ccs/
-    const ccsClaudeCommandsDir = path.join(this.ccsDir, '.claude', 'commands', 'ccs');
-    const hasGlmCommand = fs.existsSync(path.join(ccsClaudeCommandsDir, 'glm.md'));
-    const hasKimiCommand = fs.existsSync(path.join(ccsClaudeCommandsDir, 'kimi.md'));
+    // Check if delegation commands exist in ~/.ccs/.claude/commands/
+    const ccsClaudeCommandsDir = path.join(this.ccsDir, '.claude', 'commands');
+    const hasCcsCommand = fs.existsSync(path.join(ccsClaudeCommandsDir, 'ccs.md'));
+    const hasContinueCommand = fs.existsSync(path.join(ccsClaudeCommandsDir, 'ccs', 'continue.md'));
 
-    if (!hasGlmCommand || !hasKimiCommand) {
+    if (!hasCcsCommand || !hasContinueCommand) {
       spinner.warn(`  ${'Delegation'.padEnd(26)}${colored('[!]', 'yellow')}  Not installed`);
       this.results.addCheck(
         'Delegation',

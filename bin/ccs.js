@@ -172,8 +172,10 @@ function handleHelpCommand() {
 
   // Delegation (inside Claude Code CLI)
   console.log(colored('Delegation (inside Claude Code CLI):', 'cyan'));
-  console.log(`  ${colored('/ccs:glm "task"', 'yellow')}             Delegate to GLM-4.6 for simple tasks`);
-  console.log(`  ${colored('/ccs:kimi "task"', 'yellow')}            Delegate to Kimi for long context`);
+  console.log(`  ${colored('/ccs "task"', 'yellow')}                Delegate task (auto-selects best profile)`);
+  console.log(`  ${colored('/ccs --glm "task"', 'yellow')}           Force GLM-4.6 for simple tasks`);
+  console.log(`  ${colored('/ccs --kimi "task"', 'yellow')}          Force Kimi for long context`);
+  console.log(`  ${colored('/ccs:continue "follow-up"', 'yellow')}    Continue last delegation session`);
   console.log('  Save tokens by delegating simple tasks to cost-optimized models');
   console.log('');
 

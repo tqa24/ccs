@@ -23,10 +23,10 @@ claude -p "prompt" --settings ~/.ccs/{profile}.settings.json --output-format str
 ## How It Works
 
 **Workflow:**
-1. User: `/ccs:glm "task"` in Claude Code session
+1. User: `/ccs "task"` in Claude Code session (auto-selects profile)
 2. CCS detects `-p` flag and routes to HeadlessExecutor
-3. HeadlessExecutor spawns: `claude -p "task" --settings ~/.ccs/glm.settings.json --output-format stream-json --permission-mode acceptEdits`
-4. Claude Code runs headless with GLM profile + enhanced flags
+3. HeadlessExecutor spawns: `claude -p "task" --settings ~/.ccs/[selected].settings.json --output-format stream-json --permission-mode acceptEdits`
+4. Claude Code runs headless with selected profile + enhanced flags
 5. Returns stream-JSON with session_id, cost, turns
 6. Real-time tool use visibility in TTY
 7. ResultFormatter displays formatted results with metadata
@@ -116,8 +116,9 @@ ccs glm:continue -p "run tests"
 
 Via slash commands:
 ```
-/ccs:glm "implement feature"
-/ccs:glm:continue "add tests"
+/ccs "implement feature"           # Auto-selects best profile
+/ccs --glm "implement feature"      # Forces GLM profile
+/ccs:continue "add tests"           # Continue last session
 ```
 
 **Session Storage:** `~/.ccs/delegation-sessions.json`

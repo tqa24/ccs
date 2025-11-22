@@ -195,11 +195,6 @@ jq '.glm.turns' ~/.ccs/delegation-sessions.json
 rm ~/.ccs/delegation-sessions.json  # Fresh start (loses all sessions)
 ```
 
-**Bypass delegation (use CLI directly):**
-```bash
-claude -p "task" --settings ~/.ccs/{profile}.settings.json
-```
-
 **Interactive mode (no -p flag):**
 ```bash
 ccs {profile}  # Opens interactive session

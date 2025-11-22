@@ -173,10 +173,8 @@ ccs work "task"
 ```
 .claude/
 ├── commands/ccs/       # Delegation slash commands
-│   ├── glm.md          # /ccs:glm "task"
-│   ├── kimi.md         # /ccs:kimi "task"
-│   ├── glm/continue.md # /ccs:glm:continue "task"
-│   └── kimi/continue.md# /ccs:kimi:continue "task"
+│   ├── ccs.md          # /ccs "task" (auto-select profile)
+│   └── ccs/continue.md # /ccs:continue "follow-up" (auto-detect profile)
 ├── skills/ccs-delegation/  # Auto-delegation skill
 │   ├── SKILL.md        # Skill definition
 │   ├── CLAUDE.md.template  # User CLAUDE.md snippet
@@ -194,7 +192,7 @@ ccs work "task"
 1. `npm install -g @kaitranntt/ccs`
 2. Postinstall: ClaudeDirInstaller copies `.claude/` → `~/.ccs/.claude/`
 3. Postinstall: ClaudeSymlinkManager creates selective symlinks → `~/.claude/`
-4. User can now use `/ccs:glm` and `/ccs:kimi` commands
+4. User can now use `/ccs` (auto-select) and `/ccs:continue` commands
 
 ## File Structure (v4.3.2)
 
