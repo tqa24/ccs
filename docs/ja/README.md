@@ -2,7 +2,7 @@
 
 # CCS - Claude Code Switch
 
-![CCS Logo](docs/assets/ccs-logo-medium.png)
+![CCS Logo](../../docs/assets/ccs-logo-medium.png)
 
 ### 1コマンド、ダウンタイムなし、複数アカウント
 
@@ -16,7 +16,7 @@
 [![npm](https://img.shields.io/npm/v/@kaitranntt/ccs?style=for-the-badge&logo=npm)](https://www.npmjs.com/package/@kaitranntt/ccs)
 [![PoweredBy](https://img.shields.io/badge/PoweredBy-ClaudeKit-C15F3C?style=for-the-badge)](https://claudekit.cc?ref=HMNKXOHN)
 
-**Languages**: [English](README.md) · [Tiếng Việt](README.vi.md) · [日本語](README.ja.md)
+**Languages**: [English](../../README.md) · [Tiếng Việt](../vi/README.md) · [日本語](README.md)
 
 </div>
 
