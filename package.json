@@ -50,7 +50,7 @@
   "scripts": {
     "build": "tsc && node scripts/add-shebang.js",
     "build:watch": "tsc --watch",
-    "prebuild": "rm -rf dist",
+    "prebuild": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "npm run build && npm run test:all",
     "test:all": "npm run test:unit && npm run test:npm",
     "test:unit": "npx mocha tests/shared/unit/**/*.test.js --timeout 5000",
