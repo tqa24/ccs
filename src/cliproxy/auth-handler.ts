@@ -121,9 +121,20 @@ export function getProviderTokenDir(provider: CLIProxyProvider): string {
 }
 
 /**
+ * Provider-specific auth file prefixes
+ * CLIProxyAPI names auth files with provider prefix (e.g., "antigravity-user@email.json")
+ */
+const PROVIDER_AUTH_PREFIXES: Record<CLIProxyProvider, string[]> = {
+  gemini: ['gemini-', 'google-'],
+  codex: ['codex-', 'openai-'],
+  agy: ['antigravity-', 'agy-'],
+};
+
+/**
  * Check if provider has valid authentication
  * CLIProxyAPI stores OAuth tokens as JSON files in the auth directory.
- * We check for any .json files that could contain tokens.
+ * Files are named with provider prefix (e.g., "antigravity-user@email.json").
+ * We MUST check for provider-specific files, not just any .json file.
  */
 export function isAuthenticated(provider: CLIProxyProvider): boolean {
   const tokenDir = getProviderTokenDir(provider);
@@ -132,13 +143,22 @@ export function isAuthenticated(provider: CLIProxyProvider): boolean {
     return false;
   }
 
-  // Check for any token files created by CLIProxyAPI
+  // Get valid prefixes for this provider
+  const validPrefixes = PROVIDER_AUTH_PREFIXES[provider] || [];
+
+  // Check for provider-specific token files
   try {
     const files = fs.readdirSync(tokenDir);
-    const tokenFiles = files.filter(
-      (f) => f.endsWith('.json') || f.endsWith('.token') || f === 'credentials'
-    );
-    return tokenFiles.length > 0;
+    const providerTokenFiles = files.filter((f) => {
+      // Must be a token-like file
+      if (!f.endsWith('.json') && !f.endsWith('.token') && f !== 'credentials') {
+        return false;
+      }
+      // Must have provider-specific prefix
+      const lowerFile = f.toLowerCase();
+      return validPrefixes.some((prefix) => lowerFile.startsWith(prefix));
+    });
+    return providerTokenFiles.length > 0;
   } catch {
     return false;
   }
@@ -152,11 +172,19 @@ export function getAuthStatus(provider: CLIProxyProvider): AuthStatus {
   let tokenFiles: string[] = [];
   let lastAuth: Date | undefined;
 
+  // Get valid prefixes for this provider
+  const validPrefixes = PROVIDER_AUTH_PREFIXES[provider] || [];
+
   if (fs.existsSync(tokenDir)) {
     const files = fs.readdirSync(tokenDir);
-    tokenFiles = files.filter(
-      (f) => f.endsWith('.json') || f.endsWith('.token') || f === 'credentials'
-    );
+    // Only include provider-specific files
+    tokenFiles = files.filter((f) => {
+      if (!f.endsWith('.json') && !f.endsWith('.token') && f !== 'credentials') {
+        return false;
+      }
+      const lowerFile = f.toLowerCase();
+      return validPrefixes.some((prefix) => lowerFile.startsWith(prefix));
+    });
 
     // Get most recent modification time
     for (const file of tokenFiles) {

@@ -8,7 +8,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/)
 - **CLIProxy OAuth Profiles**: Three new zero-config profiles powered by CLIProxyAPI
   - `ccs gemini` - Google Gemini via OAuth (zero config)
   - `ccs codex` - OpenAI Codex via OAuth (zero config)
-  - `ccs qwen` - Alibaba Qwen via OAuth (zero config)
+  - `ccs agy` - Antigravity (AGY) via OAuth (zero config)
 
 - **Download-on-Demand Binary**: CLIProxyAPI binary (~15MB) downloads automatically on first use
   - Supports 6 platforms: darwin/linux/windows × amd64/arm64
@@ -25,7 +25,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/)
 - **CLIProxy Diagnostics** in `ccs doctor`:
   - Binary installation status + version
   - Config file validation
-  - OAuth status per provider (gemini/codex/qwen)
+  - OAuth status per provider (gemini/codex/agy)
   - Port 8317 availability check
 
 - **Enhanced Error Messages** (`src/utils/error-manager.ts`):
@@ -44,7 +44,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/)
 
 ### Changed
 - **Profile Detection**: New priority order
-  1. CLIProxy profiles (gemini, codex, qwen)
+  1. CLIProxy profiles (gemini, codex, agy)
   2. Settings-based profiles (glm, glmt, kimi)
   3. Account-based profiles (work, personal)
   4. Default Claude CLI
@@ -57,7 +57,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/)
 - **Model Mappings**:
   - Gemini: gemini-2.0-flash (opus: thinking-exp, haiku: flash-lite)
   - Codex: gpt-4o (opus: o1, haiku: gpt-4o-mini)
-  - Qwen: qwen-max (sonnet: qwen-plus, haiku: qwen-turbo)
+  - Antigravity: agy (sonnet: agy-pro, haiku: agy-turbo)
 - **Storage**:
   - Binary: `~/.ccs/bin/cliproxyapi`
   - Tokens: `~/.ccs/cliproxy-auth/<provider>/`

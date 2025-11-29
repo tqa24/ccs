@@ -55,10 +55,10 @@ export function handleHelpCommand(): void {
     `  ${colored('ccs agy', 'yellow')}                      Antigravity (gemini-3-pro-preview)`
   );
   console.log('');
-  console.log(`  ${colored('ccs gemini --auth', 'yellow')}            Authenticate only`);
-  console.log(`  ${colored('ccs gemini --logout', 'yellow')}          Clear authentication`);
-  console.log(`  ${colored('ccs gemini --headless', 'yellow')}        Headless auth (for SSH)`);
-  console.log(`  ${colored('ccs gemini "explain code"', 'yellow')}    Use with prompt`);
+  console.log(`  ${colored('ccs <provider> --auth', 'yellow')}        Authenticate only`);
+  console.log(`  ${colored('ccs <provider> --logout', 'yellow')}      Clear authentication`);
+  console.log(`  ${colored('ccs <provider> --headless', 'yellow')}    Headless auth (for SSH)`);
+  console.log(`  ${colored('ccs codex "explain code"', 'yellow')}     Use with prompt`);
   console.log('');
 
   // ═══════════════════════════════════════════════════════════════════════════
