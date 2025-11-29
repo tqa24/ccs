@@ -46,6 +46,9 @@ export {
 export {
   generateConfig,
   getClaudeEnvVars,
+  getEffectiveEnvVars,
+  getProviderSettingsPath,
+  ensureProviderSettings,
   getProviderConfig,
   getModelMapping,
   getCliproxyDir,

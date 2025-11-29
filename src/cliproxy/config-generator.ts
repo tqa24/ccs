@@ -10,6 +10,11 @@ import * as path from 'path';
 import { getCcsDir } from '../utils/config-manager';
 import { CLIProxyProvider, ProviderConfig, ProviderModelMapping } from './types';
 
+/** Settings file structure for user overrides */
+interface ProviderSettings {
+  env: NodeJS.ProcessEnv;
+}
+
 /** Default CLIProxy port */
 export const CLIPROXY_DEFAULT_PORT = 8317;
 
@@ -193,7 +198,15 @@ export function deleteConfig(): void {
 }
 
 /**
- * Get environment variables for Claude CLI
+ * Get path to user settings file for provider
+ * Example: ~/.ccs/gemini.settings.json
+ */
+export function getProviderSettingsPath(provider: CLIProxyProvider): string {
+  return path.join(getCcsDir(), `${provider}.settings.json`);
+}
+
+/**
+ * Get environment variables for Claude CLI (bundled defaults)
  * Uses provider-specific endpoint (e.g., /api/provider/gemini) for explicit routing.
  * This enables concurrent gemini/codex usage - each session routes to its provider via URL path.
  */
@@ -212,4 +225,66 @@ export function getClaudeEnvVars(
     ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haikuModel || models.claudeModel,
   };
+}
+
+/**
+ * Get effective environment variables for provider
+ *
+ * Priority order:
+ * 1. User settings file (~/.ccs/{provider}.settings.json) if exists
+ * 2. Bundled defaults from PROVIDER_CONFIGS
+ *
+ * This allows users to customize model mappings without code changes.
+ * User takes full responsibility for custom settings.
+ */
+export function getEffectiveEnvVars(
+  provider: CLIProxyProvider,
+  port: number = CLIPROXY_DEFAULT_PORT
+): NodeJS.ProcessEnv {
+  const settingsPath = getProviderSettingsPath(provider);
+
+  // Check for user override file
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const content = fs.readFileSync(settingsPath, 'utf-8');
+      const settings: ProviderSettings = JSON.parse(content);
+
+      if (settings.env && typeof settings.env === 'object') {
+        // User override found - use their settings
+        // Note: User is responsible for correctness
+        return settings.env;
+      }
+    } catch {
+      // Invalid JSON or structure - fall through to defaults
+      // Silent fallback: don't spam errors for broken user files
+    }
+  }
+
+  // No override or invalid - use bundled defaults
+  return getClaudeEnvVars(provider, port);
+}
+
+/**
+ * Copy bundled settings template to user directory if not exists
+ * Called during installation/first run
+ */
+export function ensureProviderSettings(provider: CLIProxyProvider): void {
+  const settingsPath = getProviderSettingsPath(provider);
+
+  // Only create if doesn't exist (preserve user edits)
+  if (fs.existsSync(settingsPath)) {
+    return;
+  }
+
+  // Generate default settings from PROVIDER_CONFIGS
+  const envVars = getClaudeEnvVars(provider);
+  const settings: ProviderSettings = { env: envVars };
+
+  // Ensure directory exists
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+
+  // Write with restricted permissions
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', {
+    mode: 0o600,
+  });
 }

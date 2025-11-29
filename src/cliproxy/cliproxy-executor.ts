@@ -19,8 +19,9 @@ import { escapeShellArg } from '../utils/shell-executor';
 import { ensureCLIProxyBinary } from './binary-manager';
 import {
   generateConfig,
-  getClaudeEnvVars,
+  getEffectiveEnvVars,
   getProviderConfig,
+  ensureProviderSettings,
   CLIPROXY_DEFAULT_PORT,
 } from './config-generator';
 import { isAuthenticated } from './auth-handler';
@@ -154,12 +155,15 @@ export async function execClaudeWithCLIProxy(
     }
   }
 
-  // 4. Generate config file
+  // 4. Ensure user settings file exists (creates from defaults if not)
+  ensureProviderSettings(provider);
+
+  // 5. Generate config file
   log(`Generating config for ${provider}`);
   const configPath = generateConfig(provider, cfg.port);
   log(`Config written: ${configPath}`);
 
-  // 5. Spawn CLIProxyAPI binary
+  // 6. Spawn CLIProxyAPI binary
   const proxyArgs = ['--config', configPath];
 
   log(`Spawning: ${binaryPath} ${proxyArgs.join(' ')}`);
@@ -213,8 +217,9 @@ export async function execClaudeWithCLIProxy(
     throw new Error(`CLIProxy startup failed: ${err.message}`);
   }
 
-  // 6. Execute Claude CLI with proxied environment
-  const envVars = getClaudeEnvVars(provider, cfg.port);
+  // 7. Execute Claude CLI with proxied environment
+  // Uses user settings if ~/.ccs/{provider}.settings.json exists, else bundled defaults
+  const envVars = getEffectiveEnvVars(provider, cfg.port);
   const env = { ...process.env, ...envVars };
 
   log(`Claude env: ANTHROPIC_BASE_URL=${envVars.ANTHROPIC_BASE_URL}`);
@@ -244,7 +249,7 @@ export async function execClaudeWithCLIProxy(
     });
   }
 
-  // 7. Cleanup: kill proxy when Claude exits
+  // 8. Cleanup: kill proxy when Claude exits
   claude.on('exit', (code, signal) => {
     log(`Claude exited: code=${code}, signal=${signal}`);
     proxy.kill('SIGTERM');
