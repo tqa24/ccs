@@ -1,0 +1,2 @@
+# Run validation before commit (typecheck + lint + format + tests)
+bun run validate

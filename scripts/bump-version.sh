@@ -1,11 +1,45 @@
 #!/usr/bin/env bash
-# Bump CCS version
-# Usage: ./scripts/bump-version.sh [major|minor|patch]
+# =============================================================================
+# DEPRECATED: This script is kept for emergency manual releases only.
 #
-# v4.5.0+: Bootstrap architecture - shell scripts delegate to Node.js
-# Version is maintained in: VERSION, package.json, installers/*
+# Releases are now automated via semantic-release:
+#   - Merge to main  → stable release (npm @latest)
+#   - Merge to beta  → beta release (npm @beta)
+#
+# Version is determined automatically from conventional commits:
+#   - feat: commit   → MINOR bump (5.0.2 → 5.1.0)
+#   - fix: commit    → PATCH bump (5.0.2 → 5.0.3)
+#   - feat!: commit  → MAJOR bump (5.0.2 → 6.0.0)
+#
+# See: docs/version-management.md
+# =============================================================================
+#
+# Legacy usage (emergency only): ./scripts/bump-version.sh [major|minor|patch]
 
 set -euo pipefail
+
+# Show deprecation warning
+echo "============================================================="
+echo "[!] DEPRECATED: This script is for emergency use only."
+echo ""
+echo "    Releases are now automated via semantic-release."
+echo "    Simply merge to 'main' or 'beta' branch."
+echo ""
+echo "    Version is determined from conventional commits:"
+echo "      feat: commit   -> MINOR (5.0.2 -> 5.1.0)"
+echo "      fix: commit    -> PATCH (5.0.2 -> 5.0.3)"
+echo "      feat!: commit  -> MAJOR (5.0.2 -> 6.0.0)"
+echo "============================================================="
+echo ""
+
+# Require explicit confirmation
+read -p "Continue with manual bump? (y/N) " -n 1 -r
+echo
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    echo "Cancelled. Use conventional commits + merge to main instead."
+    exit 0
+fi
+echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CCS_DIR="$(dirname "$SCRIPT_DIR")"
@@ -69,17 +103,7 @@ echo "Note: lib/ccs and lib/ccs.ps1 are now bootstraps"
 echo "      (delegate to Node.js, no version hardcoded)"
 echo ""
 
-# Auto-confirm in non-interactive mode (CI, piped, etc.)
-if [[ ! -t 0 ]]; then
-    echo "[i] Non-interactive mode detected, proceeding..."
-else
-    read -p "Continue? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "Cancelled."
-        exit 0
-    fi
-fi
+# Already confirmed above in deprecation warning
 
 # Update VERSION file
 echo "$NEW_VERSION" > "$VERSION_FILE"

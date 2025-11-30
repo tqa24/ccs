@@ -94,24 +94,131 @@ Test on all platforms before submitting PR:
    ccs --invalid-flag     # Should pass through to Claude
    ```
 
+### Branching Strategy
+
+#### Branch Hierarchy
+
+```
+main (production) ← beta (integration) ← feat/* | fix/* | docs/*
+     ↑                    ↑
+     │                    └── All contributions merge here FIRST
+     │
+     └── Only: tested beta code OR hotfix/*
+```
+
+#### Branch Types
+
+| Branch | Purpose | PRs Target | Releases To |
+|--------|---------|------------|-------------|
+| `main` | Production | From `beta` only | npm `@latest` |
+| `beta` | Integration/testing | From `feat/*`, `fix/*` | npm `@beta` |
+| `feat/*` | New features | → `beta` | - |
+| `fix/*` | Bug fixes | → `beta` | - |
+| `docs/*` | Documentation | → `beta` | - |
+| `hotfix/*` | Critical fixes | → `main` directly | npm `@latest` |
+
+#### Branch Naming Convention
+
+```
+<type>/<short-description>
+
+# Examples:
+feat/oauth-token-refresh
+fix/doctor-missing-config
+docs/update-installation-guide
+hotfix/critical-security-fix
+```
+
+#### Development Workflow (Contributors)
+
+```bash
+# 1. Fork and clone
+git clone https://github.com/YOUR_USERNAME/ccs.git
+cd ccs
+
+# 2. Add upstream remote
+git remote add upstream https://github.com/kaitranntt/ccs.git
+
+# 3. ALWAYS start from latest BETA (not main!)
+git checkout beta
+git pull upstream beta
+
+# 4. Create feature branch FROM BETA
+git checkout -b feat/my-feature    # for features
+git checkout -b fix/bug-name       # for bug fixes
+git checkout -b docs/update-readme # for documentation
+
+# 5. Make changes with conventional commits
+git commit -m "feat(scope): add new feature"
+
+# 6. Push to your fork
+git push -u origin feat/my-feature
+
+# 7. Create PR targeting BETA (not main!)
+gh pr create --base beta --title "feat(scope): add new feature"
+# → After merge, your changes release to npm @beta for testing
+
+# 8. Maintainers will promote tested beta to main
+# → This triggers npm @latest release
+
+# 9. After PR merged, clean up
+git checkout beta
+git pull upstream beta
+git branch -d feat/my-feature
+```
+
+#### Hotfix Workflow (Critical Production Fixes Only)
+
+```bash
+# Only for critical bugs in production!
+# 1. Start from main
+git checkout main
+git pull upstream main
+
+# 2. Create hotfix branch
+git checkout -b hotfix/critical-bug
+
+# 3. Fix and commit
+git commit -m "fix: critical security vulnerability"
+
+# 4. PR directly to main (skip beta)
+gh pr create --base main --title "fix: critical security vulnerability"
+
+# 5. After merge, sync to beta
+# (Maintainers will handle this)
+```
+
+#### Rules
+
+- **NEVER** commit directly to `main` or `beta`
+- **ALWAYS** create branches from `beta` (not main)
+- **ALWAYS** target PRs to `beta` (not main)
+- **ONLY** `hotfix/*` branches target `main` directly
+- **DELETE** branches after merge
+
 ### Submission Process
 
 #### Before Submitting
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes
-4. Test on all platforms
-5. Ensure existing tests pass
+1. Ensure branch is from `beta` (not main)
+2. Ensure branch follows naming: `feat/*`, `fix/*`, `docs/*`
+3. Run `bun run validate` - must pass
+4. Rebase on latest beta: `git rebase beta`
+5. Test on all platforms if possible
 
 #### Pull Request Requirements
 
+- **Target `beta` branch** (not main!) - unless hotfix
 - Clear description of changes
 - Testing instructions if applicable
 - Link to relevant issues
-- Follow existing commit message style
+- **All commits MUST follow conventional format** (enforced by husky)
+- **Branch MUST follow naming convention** (`feat/*`, `fix/*`, etc.)
+- Run `bun run validate` before submitting
 
-#### Commit Message Style
+#### Commit Message Style (MANDATORY)
+
+**All commits MUST follow conventional commit format. Non-compliant commits are automatically rejected.**
 
 ```
 type(scope): description
@@ -121,11 +228,29 @@ type(scope): description
 [optional footer]
 ```
 
-Examples:
-```
-fix(installer): handle git worktree detection
-feat(config): support custom config location
-docs(readme): update installation instructions
+**Commit types that trigger releases:**
+| Type | Version Bump |
+|------|--------------|
+| `feat:` | MINOR (5.0.2 → 5.1.0) |
+| `fix:` | PATCH (5.0.2 → 5.0.3) |
+| `perf:` | PATCH |
+| `feat!:` | MAJOR (5.0.2 → 6.0.0) |
+
+**Commit types that DON'T trigger releases:**
+`docs:`, `style:`, `refactor:`, `test:`, `chore:`, `ci:`, `build:`
+
+**Examples:**
+```bash
+# Good - will be accepted
+git commit -m "fix(installer): handle git worktree detection"
+git commit -m "feat(config): support custom config location"
+git commit -m "docs(readme): update installation instructions"
+git commit -m "feat!: remove deprecated API"  # Breaking change
+
+# Bad - will be REJECTED by husky
+git commit -m "fixed bug"
+git commit -m "WIP"
+git commit -m "updated stuff"
 ```
 
 ### Development Setup
@@ -269,16 +394,49 @@ Be respectful, constructive, and focused on the project's philosophy of simplici
 - **[GitHub Issues](https://github.com/kaitranntt/ccs/issues)**: Track bugs, features, and discussions
 - **[VERSION](./VERSION)**: Current version number
 
-## 🎯 Release Process
+## 🎯 Release Process (FULLY AUTOMATED)
 
-**For maintainers:**
+**Releases are automated via semantic-release. DO NOT manually bump versions or create tags.**
 
-1. Bump version: `./scripts/bump-version.sh [major|minor|patch]`
-2. Update CHANGELOG if applicable
-3. Commit: `git commit -m "chore: bump version to X.Y.Z"`
-4. Tag: `git tag vX.Y.Z`
-5. Push: `git push origin main && git push origin vX.Y.Z`
-6. GitHub Actions will automatically publish to npm
+### How Releases Work
+
+1. **Write conventional commits** during development
+2. **Merge PR to `main`** (or push to `beta`)
+3. **CI automatically:**
+   - Analyzes commits since last release
+   - Determines version bump from commit types
+   - Updates CHANGELOG.md, VERSION, package.json
+   - Creates git tag
+   - Publishes to npm
+   - Creates GitHub release
+
+### Release Channels
+
+| Branch | npm Tag | Use Case |
+|--------|---------|----------|
+| `main` | `@latest` | Stable production releases |
+| `beta` | `@beta` | Pre-release testing |
+
+### Workflow
+
+```bash
+# Stable release
+git checkout -b feat/my-feature
+git commit -m "feat: add new feature"
+gh pr create --base main
+# → Merge PR → CI auto-releases to npm @latest
+
+# Beta release
+git checkout beta
+git merge feat/experimental
+git push origin beta
+# → CI auto-releases to npm @beta
+```
+
+**NEVER DO:**
+- `./scripts/bump-version.sh` (deprecated, emergency only)
+- `git tag vX.Y.Z` (tags are auto-created)
+- Manual `npm publish` (CI handles it)
 
 ## 📄 License
 
