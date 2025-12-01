@@ -20,6 +20,10 @@ interface InputOptions {
   validate?: (value: string) => string | null;
 }
 
+interface PasswordOptions {
+  mask?: string; // Character to show (default: '*')
+}
+
 export class InteractivePrompt {
   /**
    * Ask for confirmation
@@ -125,6 +129,80 @@ export class InteractivePrompt {
 
         resolve(value);
       });
+    });
+  }
+
+  /**
+   * Get password/secret input (masked)
+   */
+  static async password(message: string, options: PasswordOptions = {}): Promise<string> {
+    const { mask = '*' } = options;
+
+    // Non-TTY: error (passwords require interactive input)
+    if (!process.stdin.isTTY) {
+      throw new Error('Password input requires interactive TTY');
+    }
+
+    // Set raw mode BEFORE writing prompt to prevent any echo
+    if (process.stdin.setRawMode) {
+      process.stdin.setRawMode(true);
+    }
+
+    const promptText = `${message}: `;
+    process.stderr.write(promptText);
+
+    return new Promise((resolve) => {
+      let input = '';
+
+      const cleanup = (): void => {
+        if (process.stdin.setRawMode) {
+          process.stdin.setRawMode(false);
+        }
+        process.stdin.removeListener('data', onData);
+      };
+
+      const onData = (data: Buffer): void => {
+        // Convert buffer to string and process each character
+        const str = data.toString('utf8');
+
+        for (const char of str) {
+          const charCode = char.charCodeAt(0);
+
+          // Enter key (CR or LF)
+          if (charCode === 13 || charCode === 10) {
+            cleanup();
+            process.stderr.write('\n');
+            resolve(input);
+            return;
+          }
+
+          // Ctrl+C
+          if (charCode === 3) {
+            cleanup();
+            process.stderr.write('\n');
+            process.exit(130);
+          }
+
+          // Backspace (127 or 8)
+          if (charCode === 127 || charCode === 8) {
+            if (input.length > 0) {
+              input = input.slice(0, -1);
+              // Move cursor back, overwrite with space, move back again
+              process.stderr.write('\b \b');
+            }
+            continue;
+          }
+
+          // Regular printable character (ignore control chars and newlines in paste)
+          if (charCode >= 32) {
+            input += char;
+            process.stderr.write(mask);
+          }
+        }
+      };
+
+      process.stdin.on('data', onData);
+      process.stdin.resume();
     });
   }
 }
