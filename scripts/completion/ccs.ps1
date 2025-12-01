@@ -12,8 +12,10 @@
 Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
     param($commandName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
-    $commands = @('auth', 'doctor', 'sync', 'update', '--help', '--version', '--shell-completion', '-h', '-v', '-sc')
+    $commands = @('auth', 'profile', 'doctor', 'sync', 'update', '--help', '--version', '--shell-completion', '-h', '-v', '-sc')
     $authCommands = @('create', 'list', 'show', 'remove', 'default', '--help', '-h')
+    $profileCommands = @('create', 'list', 'remove', '--help', '-h')
+    $profileCreateFlags = @('--base-url', '--api-key', '--model', '--force', '--yes', '-y')
     $shellCompletionFlags = @('--bash', '--zsh', '--fish', '--powershell')
     $listFlags = @('--verbose', '--json')
     $removeFlags = @('--yes', '-y')
@@ -157,6 +159,60 @@ Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
                         )
                     }
                 }
+                'remove' {
+                    $removeFlags | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new(
+                            $_,
+                            $_,
+                            'ParameterValue',
+                            $_
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    # profile subcommand completion
+    if ($words[1] -eq 'profile') {
+        if ($position -eq 3) {
+            # profile subcommands
+            $profileCommands | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new(
+                    $_,
+                    $_,
+                    'ParameterValue',
+                    $_
+                )
+            }
+        } elseif ($position -eq 4) {
+            # Profile names or flags for profile subcommands
+            switch ($words[2]) {
+                'remove' {
+                    $options = (Get-CcsProfiles -Type settings) + $removeFlags
+                    $options | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new(
+                            $_,
+                            $_,
+                            'ParameterValue',
+                            $_
+                        )
+                    }
+                }
+                'create' {
+                    $profileCreateFlags | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new(
+                            $_,
+                            $_,
+                            'ParameterValue',
+                            $_
+                        )
+                    }
+                }
+            }
+        } elseif ($position -eq 5) {
+            # Flags after profile name
+            switch ($words[2]) {
                 'remove' {
                     $removeFlags | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
                         [System.Management.Automation.CompletionResult]::new(

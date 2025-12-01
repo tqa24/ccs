@@ -16,7 +16,7 @@
 # Color codes: 0;34=blue, 0;32=green, 0;33=yellow, 2;37=dim white
 # Pattern format: =(#b)(group1)(group2)==color_for_group1=color_for_group2
 # The leading '=' means no color for whole match, then each '=' assigns to each group
-zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|doctor|sync|update)([[:space:]]#--[[:space:]]#*)==0\;34=2\;37'
+zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|profile|doctor|sync|update)([[:space:]]#--[[:space:]]#*)==0\;34=2\;37'
 zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#--[[:space:]]#*)==0\;32=2\;37'
 zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#--[[:space:]]#*)==0\;33=2\;37'
 zstyle ':completion:*:*:ccs:*' group-name ''
@@ -33,6 +33,7 @@ _ccs() {
   # Define top-level commands (padded for alignment)
   commands=(
     'auth:Manage multiple Claude accounts'
+    'profile:Manage API profiles (create/remove)'
     'doctor:Run health check and diagnostics'
     'sync:Sync delegation commands and skills'
     'update:Update CCS to latest version'
@@ -90,6 +91,9 @@ _ccs() {
         auth)
           _ccs_auth
           ;;
+        profile)
+          _ccs_profile
+          ;;
         doctor)
           _arguments \
             '(- *)'{-h,--help}'[Show help for doctor command]'
@@ -104,6 +108,58 @@ _ccs() {
         *)
           # For profile names, complete with Claude CLI arguments
           _message 'Claude CLI arguments'
+          ;;
+      esac
+      ;;
+  esac
+}
+
+_ccs_profile() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  local -a profile_commands settings_profiles
+
+  # Define profile subcommands
+  profile_commands=(
+    'create:Create new API profile (interactive)'
+    'list:List all profiles'
+    'remove:Remove a profile'
+  )
+
+  # Load settings profiles for remove command
+  if [[ -f ~/.ccs/config.json ]]; then
+    settings_profiles=(${(f)"$(jq -r '.profiles | keys[]' ~/.ccs/config.json 2>/dev/null)"})
+  fi
+
+  _arguments -C \
+    '(- *)'{-h,--help}'[Show help for profile commands]' \
+    '1: :->subcommand' \
+    '*:: :->subargs'
+
+  case $state in
+    subcommand)
+      _describe -t profile-commands 'profile commands' profile_commands
+      ;;
+
+    subargs)
+      case $words[1] in
+        create)
+          _arguments \
+            '1:profile name:' \
+            '--base-url[API base URL]:url:' \
+            '--api-key[API key]:key:' \
+            '--model[Default model]:model:' \
+            '--force[Overwrite existing profile]' \
+            {--yes,-y}'[Skip prompts]'
+          ;;
+        list)
+          # No arguments
+          ;;
+        remove|delete|rm)
+          _arguments \
+            '1:profile:($settings_profiles)' \
+            {--yes,-y}'[Skip confirmation]'
           ;;
       esac
       ;;

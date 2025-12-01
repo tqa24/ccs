@@ -17,6 +17,7 @@ export async function handleShellCompletionCommand(args: string[]): Promise<void
 
   // Parse flags
   let targetShell: string | null = null;
+  const force = args.includes('--force') || args.includes('-f');
   if (args.includes('--bash')) targetShell = 'bash';
   else if (args.includes('--zsh')) targetShell = 'zsh';
   else if (args.includes('--fish')) targetShell = 'fish';
@@ -24,10 +25,13 @@ export async function handleShellCompletionCommand(args: string[]): Promise<void
 
   try {
     const installer = new ShellCompletionInstaller();
-    const result = installer.install(targetShell as 'bash' | 'zsh' | 'fish' | 'powershell' | null);
+    const result = installer.install(targetShell as 'bash' | 'zsh' | 'fish' | 'powershell' | null, {
+      force,
+    });
 
-    if (result.alreadyInstalled) {
+    if (result.alreadyInstalled && !force) {
       console.log(colored('[OK] Shell completion already installed', 'green'));
+      console.log(`    Use ${colored('--force', 'yellow')} to reinstall`);
       console.log('');
       return;
     }

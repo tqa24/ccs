@@ -18,7 +18,7 @@ _ccs_completion() {
 
   # Top-level completion (first argument)
   if [[ ${COMP_CWORD} -eq 1 ]]; then
-    local commands="auth doctor sync update"
+    local commands="auth profile doctor sync update"
     local flags="--help --version --shell-completion -h -v -sc"
     local profiles=""
 
@@ -43,6 +43,36 @@ _ccs_completion() {
     local auth_commands="create list show remove default --help -h"
     COMPREPLY=( $(compgen -W "${auth_commands}" -- ${cur}) )
     return 0
+  fi
+
+  # profile subcommands
+  if [[ ${prev} == "profile" ]]; then
+    local profile_commands="create list remove --help -h"
+    COMPREPLY=( $(compgen -W "${profile_commands}" -- ${cur}) )
+    return 0
+  fi
+
+  # Completion for profile subcommands
+  if [[ ${COMP_WORDS[1]} == "profile" ]]; then
+    case "${prev}" in
+      remove|delete|rm)
+        # Complete with settings profile names
+        if [[ -f ~/.ccs/config.json ]]; then
+          local profiles=$(jq -r '.profiles | keys[]' ~/.ccs/config.json 2>/dev/null || true)
+          COMPREPLY=( $(compgen -W "${profiles}" -- ${cur}) )
+        fi
+        return 0
+        ;;
+      create)
+        # Complete with create flags
+        COMPREPLY=( $(compgen -W "--base-url --api-key --model --force --yes -y" -- ${cur}) )
+        return 0
+        ;;
+      list)
+        # No flags for list
+        return 0
+        ;;
+    esac
   fi
 
   # Completion for auth subcommands that need profile names

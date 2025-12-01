@@ -92,7 +92,7 @@ export class ShellCompletionInstaller {
   /**
    * Install bash completion
    */
-  private installBash(): InstallResult {
+  private installBash(force = false): InstallResult {
     const rcFile = path.join(this.homeDir, '.bashrc');
     const completionPath = path.join(this.completionDir, 'ccs.bash');
 
@@ -108,7 +108,15 @@ export class ShellCompletionInstaller {
     if (fs.existsSync(rcFile)) {
       const content = fs.readFileSync(rcFile, 'utf8');
       if (content.includes(marker)) {
-        return { success: true, alreadyInstalled: true };
+        if (!force) {
+          return { success: true, alreadyInstalled: true };
+        }
+        // Force: completion files already updated by ensureCompletionFiles()
+        return {
+          success: true,
+          message: `Updated completion files in ${this.completionDir}`,
+          reload: 'source ~/.bashrc',
+        };
       }
     }
 
@@ -125,7 +133,7 @@ export class ShellCompletionInstaller {
   /**
    * Install zsh completion
    */
-  private installZsh(): InstallResult {
+  private installZsh(force = false): InstallResult {
     const rcFile = path.join(this.homeDir, '.zshrc');
     const completionPath = path.join(this.completionDir, 'ccs.zsh');
     const zshCompDir = path.join(this.homeDir, '.zsh', 'completion');
@@ -137,7 +145,7 @@ export class ShellCompletionInstaller {
     // Create zsh completion directory (with file conflict checking)
     this.ensureDirectory(zshCompDir);
 
-    // Copy to zsh completion directory
+    // Copy to zsh completion directory (always update for force)
     const destFile = path.join(zshCompDir, '_ccs');
     fs.copyFileSync(completionPath, destFile);
 
@@ -149,7 +157,15 @@ export class ShellCompletionInstaller {
     if (fs.existsSync(rcFile)) {
       const content = fs.readFileSync(rcFile, 'utf8');
       if (content.includes(marker)) {
-        return { success: true, alreadyInstalled: true };
+        if (!force) {
+          return { success: true, alreadyInstalled: true };
+        }
+        // Force: files already updated above
+        return {
+          success: true,
+          message: `Updated ${destFile}`,
+          reload: 'source ~/.zshrc',
+        };
       }
     }
 
@@ -166,7 +182,7 @@ export class ShellCompletionInstaller {
   /**
    * Install fish completion
    */
-  private installFish(): InstallResult {
+  private installFish(force = false): InstallResult {
     const completionPath = path.join(this.completionDir, 'ccs.fish');
     const fishCompDir = path.join(this.homeDir, '.config', 'fish', 'completions');
 
@@ -179,6 +195,12 @@ export class ShellCompletionInstaller {
 
     // Copy to fish completion directory (fish auto-loads from here)
     const destFile = path.join(fishCompDir, 'ccs.fish');
+
+    // Check if already installed
+    if (fs.existsSync(destFile) && !force) {
+      return { success: true, alreadyInstalled: true };
+    }
+
     fs.copyFileSync(completionPath, destFile);
 
     return {
@@ -191,7 +213,7 @@ export class ShellCompletionInstaller {
   /**
    * Install PowerShell completion
    */
-  private installPowerShell(): InstallResult {
+  private installPowerShell(force = false): InstallResult {
     const profilePath =
       process.env.PROFILE ||
       path.join(this.homeDir, 'Documents', 'PowerShell', 'Microsoft.PowerShell_profile.ps1');
@@ -213,7 +235,15 @@ export class ShellCompletionInstaller {
     if (fs.existsSync(profilePath)) {
       const content = fs.readFileSync(profilePath, 'utf8');
       if (content.includes(marker)) {
-        return { success: true, alreadyInstalled: true };
+        if (!force) {
+          return { success: true, alreadyInstalled: true };
+        }
+        // Force: completion files already updated by ensureCompletionFiles()
+        return {
+          success: true,
+          message: `Updated completion files in ${this.completionDir}`,
+          reload: '. $PROFILE',
+        };
       }
     }
 
@@ -230,8 +260,9 @@ export class ShellCompletionInstaller {
   /**
    * Install for detected or specified shell
    */
-  install(shell: ShellType = null): InstallResult {
+  install(shell: ShellType = null, options: { force?: boolean } = {}): InstallResult {
     const targetShell = shell || this.detectShell();
+    const { force = false } = options;
 
     if (!targetShell) {
       throw new Error(
@@ -239,19 +270,19 @@ export class ShellCompletionInstaller {
       );
     }
 
-    // Ensure completion files exist
+    // Ensure completion files exist (always copy latest)
     this.ensureCompletionFiles();
 
     // Install for target shell
     switch (targetShell) {
       case 'bash':
-        return this.installBash();
+        return this.installBash(force);
       case 'zsh':
-        return this.installZsh();
+        return this.installZsh(force);
       case 'fish':
-        return this.installFish();
+        return this.installFish(force);
       case 'powershell':
-        return this.installPowerShell();
+        return this.installPowerShell(force);
       default:
         throw new Error(`Unsupported shell: ${targetShell}`);
     }
