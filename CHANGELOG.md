@@ -1,3 +1,10 @@
+# [5.3.0-beta.4](https://github.com/kaitranntt/ccs/compare/v5.3.0-beta.3...v5.3.0-beta.4) (2025-12-01)
+
+
+### Bug Fixes
+
+* **cliproxy:** improve qwen oauth error handling ([#33](https://github.com/kaitranntt/ccs/issues/33)) ([1c3374f](https://github.com/kaitranntt/ccs/commit/1c3374f6a7e4440e299d49b58808c6454b4547c2)), closes [#29](https://github.com/kaitranntt/ccs/issues/29)
+
 # [5.3.0-beta.3](https://github.com/kaitranntt/ccs/compare/v5.3.0-beta.2...v5.3.0-beta.3) (2025-12-01)
 
 
