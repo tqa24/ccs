@@ -4,7 +4,7 @@
 #
 # Releases are now automated via semantic-release:
 #   - Merge to main  → stable release (npm @latest)
-#   - Merge to beta  → beta release (npm @beta)
+#   - Merge to dev   → dev release (npm @dev)
 #
 # Version is determined automatically from conventional commits:
 #   - feat: commit   → MINOR bump (5.0.2 → 5.1.0)
@@ -23,7 +23,7 @@ echo "============================================================="
 echo "[!] DEPRECATED: This script is for emergency use only."
 echo ""
 echo "    Releases are now automated via semantic-release."
-echo "    Simply merge to 'main' or 'beta' branch."
+echo "    Simply merge to 'main' or 'dev' branch."
 echo ""
 echo "    Version is determined from conventional commits:"
 echo "      feat: commit   -> MINOR (5.0.2 -> 5.1.0)"

@@ -9,14 +9,14 @@ CCS uses **semantic-release** for fully automated versioning and releases. Versi
 | Branch | npm Tag | Example | Description |
 |--------|---------|---------|-------------|
 | `main` | `@latest` | `5.1.0` | Stable production releases |
-| `beta` | `@beta` | `5.1.0-beta.1` | Pre-release testing |
+| `dev` | `@dev` | `5.1.0-dev.1` | Pre-release testing |
 
 ## How Releases Work
 
 ### Automatic Release (Default)
 
 1. **Write conventional commits** during development
-2. **Merge PR to `main`** (or push to `beta`)
+2. **Merge PR to `main`** (or push to `dev`)
 3. **CI automatically**:
    - Analyzes commits to determine version bump
    - Updates `CHANGELOG.md`
@@ -70,15 +70,15 @@ gh pr create --base main
 # 3. Merge PR → CI auto-releases to npm @latest
 ```
 
-### Beta Release
+### Dev Release
 
 ```bash
-# 1. Switch to beta branch
-git checkout beta
+# 1. Switch to dev branch
+git checkout dev
 git merge feat/experimental
 
-# 2. Push → CI auto-releases to npm @beta
-git push origin beta
+# 2. Push → CI auto-releases to npm @dev
+git push origin dev
 ```
 
 ### Installing Different Channels
@@ -87,11 +87,11 @@ git push origin beta
 # Stable (default)
 npm install -g @kaitranntt/ccs
 
-# Beta
-npm install -g @kaitranntt/ccs@beta
+# Dev
+npm install -g @kaitranntt/ccs@dev
 
 # Specific version
-npm install -g @kaitranntt/ccs@5.1.0-beta.1
+npm install -g @kaitranntt/ccs@5.1.0-dev.1
 ```
 
 ## Version Files
@@ -163,10 +163,10 @@ git commit --amend
 
 Check if commits include releasable types (`feat:`, `fix:`, `perf:`). Documentation-only commits (`docs:`) don't trigger releases.
 
-### Beta out of sync with main
+### Dev out of sync with main
 
 ```bash
-git checkout beta
+git checkout dev
 git rebase main
-git push --force-with-lease origin beta
+git push --force-with-lease origin dev
 ```

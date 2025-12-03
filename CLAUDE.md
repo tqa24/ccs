@@ -159,22 +159,22 @@ git commit -m "WIP"
 ### Branch Hierarchy
 
 ```
-main (production) ← beta (integration) ← feat/* | fix/* | docs/*
-     ↑                    ↑
-     │                    └── All development merges here FIRST
+main (production) ← dev (integration) ← feat/* | fix/* | docs/*
+     ↑                   ↑
+     │                   └── All development merges here FIRST
      │
-     └── Only receives: (1) Tested code from beta, (2) Hotfixes
+     └── Only receives: (1) Tested code from dev, (2) Hotfixes
 ```
 
 ### Branch Types
 
 | Branch | Purpose | Merges From | Releases To |
 |--------|---------|-------------|-------------|
-| `main` | Production-ready | `beta`, `hotfix/*` | npm `@latest` |
-| `beta` | Integration/staging | `feat/*`, `fix/*`, `docs/*` | npm `@beta` |
-| `feat/*` | New features | - | → `beta` |
-| `fix/*` | Bug fixes | - | → `beta` |
-| `docs/*` | Documentation | - | → `beta` |
+| `main` | Production-ready | `dev`, `hotfix/*` | npm `@latest` |
+| `dev` | Integration/staging | `feat/*`, `fix/*`, `docs/*` | npm `@dev` |
+| `feat/*` | New features | - | → `dev` |
+| `fix/*` | Bug fixes | - | → `dev` |
+| `docs/*` | Documentation | - | → `dev` |
 | `hotfix/*` | Critical production fixes | - | → `main` directly |
 
 ### Branch Naming Convention
@@ -189,34 +189,34 @@ docs/update-installation-guide
 hotfix/critical-auth-bug
 ```
 
-### Standard Development Workflow (Features/Fixes → Beta → Main)
+### Standard Development Workflow (Features/Fixes → Dev → Main)
 
 ```bash
-# 1. ALWAYS start from beta (integration branch)
-git checkout beta
-git pull origin beta
+# 1. ALWAYS start from dev (integration branch)
+git checkout dev
+git pull origin dev
 
-# 2. Create feature branch FROM BETA
+# 2. Create feature branch FROM DEV
 git checkout -b feat/my-feature
 
 # 3. Make changes with conventional commits
 git commit -m "feat(scope): add new feature"
 git commit -m "test(scope): add unit tests"
 
-# 4. Push and create PR to BETA (not main!)
+# 4. Push and create PR to DEV (not main!)
 git push -u origin feat/my-feature
-gh pr create --base beta --title "feat(scope): add new feature"
-# → Merge triggers npm @beta release for testing
+gh pr create --base dev --title "feat(scope): add new feature"
+# → Merge triggers npm @dev release for testing
 
-# 5. After testing in beta, promote to main (MUST use feat: or fix: prefix!)
-git checkout beta
-gh pr create --base main --title "feat(release): promote beta to main"
+# 5. After testing in dev, promote to main (MUST use feat: or fix: prefix!)
+git checkout dev
+gh pr create --base main --title "feat(release): promote dev to main"
 # → Merge triggers npm @latest release
 # WARNING: Using "chore:" will NOT trigger a release!
 
 # 6. Clean up
-git checkout beta
-git pull origin beta
+git checkout dev
+git pull origin dev
 git branch -d feat/my-feature
 ```
 
@@ -233,39 +233,39 @@ git checkout -b hotfix/critical-bug
 # 3. Fix and commit
 git commit -m "fix: critical authentication bypass"
 
-# 4. PR directly to main (skip beta)
+# 4. PR directly to main (skip dev)
 gh pr create --base main --title "fix: critical authentication bypass"
 # → Merge triggers immediate npm @latest release
 
-# 5. Sync hotfix back to beta
-git checkout beta
-git pull origin beta
+# 5. Sync hotfix back to dev
+git checkout dev
+git pull origin dev
 git merge main
-git push origin beta
+git push origin dev
 
 # 6. Clean up
 git branch -d hotfix/critical-bug
 ```
 
-### Keeping Beta in Sync with Main
+### Keeping Dev in Sync with Main
 
 ```bash
-# After any main release, sync to beta
-git checkout beta
-git pull origin beta
+# After any main release, sync to dev
+git checkout dev
+git pull origin dev
 git merge main
-git push origin beta
+git push origin dev
 ```
 
 ### Rules
 
-1. **NEVER commit directly to `main` or `beta`** - always use PRs
-2. **ALWAYS create feature branches from `beta`** (not main)
+1. **NEVER commit directly to `main` or `dev`** - always use PRs
+2. **ALWAYS create feature branches from `dev`** (not main)
 3. **Only `hotfix/*` branches go directly to `main`**
-4. **`beta` must always be up-to-date with `main`**
+4. **`dev` must always be up-to-date with `main`**
 5. **Delete feature branches after merge**
-6. **Test in `@beta` before promoting to `@latest`**
-7. **beta→main PRs MUST use `feat:` or `fix:` prefix** - `chore:` won't trigger npm release
+6. **Test in `@dev` before promoting to `@latest`**
+7. **dev→main PRs MUST use `feat:` or `fix:` prefix** - `chore:` won't trigger npm release
 
 ## Automated Releases (DO NOT MANUALLY TAG)
 
@@ -275,7 +275,7 @@ git push origin beta
 | Branch | npm Tag | When |
 |--------|---------|------|
 | `main` | `@latest` | Merge PR to main |
-| `beta` | `@beta` | Push to beta branch |
+| `dev` | `@dev` | Push to dev branch |
 
 ### What CI Does Automatically
 1. Analyzes commits since last release

@@ -99,22 +99,22 @@ Test on all platforms before submitting PR:
 #### Branch Hierarchy
 
 ```
-main (production) ← beta (integration) ← feat/* | fix/* | docs/*
-     ↑                    ↑
-     │                    └── All contributions merge here FIRST
+main (production) ← dev (integration) ← feat/* | fix/* | docs/*
+     ↑                   ↑
+     │                   └── All contributions merge here FIRST
      │
-     └── Only: tested beta code OR hotfix/*
+     └── Only: tested dev code OR hotfix/*
 ```
 
 #### Branch Types
 
 | Branch | Purpose | PRs Target | Releases To |
 |--------|---------|------------|-------------|
-| `main` | Production | From `beta` only | npm `@latest` |
-| `beta` | Integration/testing | From `feat/*`, `fix/*` | npm `@beta` |
-| `feat/*` | New features | → `beta` | - |
-| `fix/*` | Bug fixes | → `beta` | - |
-| `docs/*` | Documentation | → `beta` | - |
+| `main` | Production | From `dev` only | npm `@latest` |
+| `dev` | Integration/testing | From `feat/*`, `fix/*` | npm `@dev` |
+| `feat/*` | New features | → `dev` | - |
+| `fix/*` | Bug fixes | → `dev` | - |
+| `docs/*` | Documentation | → `dev` | - |
 | `hotfix/*` | Critical fixes | → `main` directly | npm `@latest` |
 
 #### Branch Naming Convention
@@ -139,11 +139,11 @@ cd ccs
 # 2. Add upstream remote
 git remote add upstream https://github.com/kaitranntt/ccs.git
 
-# 3. ALWAYS start from latest BETA (not main!)
-git checkout beta
-git pull upstream beta
+# 3. ALWAYS start from latest DEV (not main!)
+git checkout dev
+git pull upstream dev
 
-# 4. Create feature branch FROM BETA
+# 4. Create feature branch FROM DEV
 git checkout -b feat/my-feature    # for features
 git checkout -b fix/bug-name       # for bug fixes
 git checkout -b docs/update-readme # for documentation
@@ -154,16 +154,16 @@ git commit -m "feat(scope): add new feature"
 # 6. Push to your fork
 git push -u origin feat/my-feature
 
-# 7. Create PR targeting BETA (not main!)
-gh pr create --base beta --title "feat(scope): add new feature"
-# → After merge, your changes release to npm @beta for testing
+# 7. Create PR targeting DEV (not main!)
+gh pr create --base dev --title "feat(scope): add new feature"
+# → After merge, your changes release to npm @dev for testing
 
-# 8. Maintainers will promote tested beta to main
+# 8. Maintainers will promote tested dev to main
 # → This triggers npm @latest release
 
 # 9. After PR merged, clean up
-git checkout beta
-git pull upstream beta
+git checkout dev
+git pull upstream dev
 git branch -d feat/my-feature
 ```
 
@@ -181,18 +181,18 @@ git checkout -b hotfix/critical-bug
 # 3. Fix and commit
 git commit -m "fix: critical security vulnerability"
 
-# 4. PR directly to main (skip beta)
+# 4. PR directly to main (skip dev)
 gh pr create --base main --title "fix: critical security vulnerability"
 
-# 5. After merge, sync to beta
+# 5. After merge, sync to dev
 # (Maintainers will handle this)
 ```
 
 #### Rules
 
-- **NEVER** commit directly to `main` or `beta`
-- **ALWAYS** create branches from `beta` (not main)
-- **ALWAYS** target PRs to `beta` (not main)
+- **NEVER** commit directly to `main` or `dev`
+- **ALWAYS** create branches from `dev` (not main)
+- **ALWAYS** target PRs to `dev` (not main)
 - **ONLY** `hotfix/*` branches target `main` directly
 - **DELETE** branches after merge
 
@@ -200,15 +200,15 @@ gh pr create --base main --title "fix: critical security vulnerability"
 
 #### Before Submitting
 
-1. Ensure branch is from `beta` (not main)
+1. Ensure branch is from `dev` (not main)
 2. Ensure branch follows naming: `feat/*`, `fix/*`, `docs/*`
 3. Run `bun run validate` - must pass
-4. Rebase on latest beta: `git rebase beta`
+4. Rebase on latest dev: `git rebase dev`
 5. Test on all platforms if possible
 
 #### Pull Request Requirements
 
-- **Target `beta` branch** (not main!) - unless hotfix
+- **Target `dev` branch** (not main!) - unless hotfix
 - Clear description of changes
 - Testing instructions if applicable
 - Link to relevant issues
@@ -401,7 +401,7 @@ Be respectful, constructive, and focused on the project's philosophy of simplici
 ### How Releases Work
 
 1. **Write conventional commits** during development
-2. **Merge PR to `main`** (or push to `beta`)
+2. **Merge PR to `main`** (or push to `dev`)
 3. **CI automatically:**
    - Analyzes commits since last release
    - Determines version bump from commit types
@@ -415,7 +415,7 @@ Be respectful, constructive, and focused on the project's philosophy of simplici
 | Branch | npm Tag | Use Case |
 |--------|---------|----------|
 | `main` | `@latest` | Stable production releases |
-| `beta` | `@beta` | Pre-release testing |
+| `dev` | `@dev` | Pre-release testing |
 
 ### Workflow
 
@@ -426,11 +426,11 @@ git commit -m "feat: add new feature"
 gh pr create --base main
 # → Merge PR → CI auto-releases to npm @latest
 
-# Beta release
-git checkout beta
+# Dev release
+git checkout dev
 git merge feat/experimental
-git push origin beta
-# → CI auto-releases to npm @beta
+git push origin dev
+# → CI auto-releases to npm @dev
 ```
 
 **NEVER DO:**
