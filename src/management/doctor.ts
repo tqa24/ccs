@@ -6,7 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { spawn } from 'child_process';
-import { detectClaudeCli } from '../utils/claude-detector';
+import { getClaudeCliInfo } from '../utils/claude-detector';
+import { escapeShellArg } from '../utils/shell-executor';
 import { initUI, header, box, table, color, ok, fail, warn, info } from '../utils/ui';
 import packageJson from '../../package.json';
 import {
@@ -180,9 +181,9 @@ class Doctor {
   private async checkClaudeCli(): Promise<void> {
     const spinner = ora('Checking Claude CLI').start();
 
-    const claudeCli = detectClaudeCli();
+    const cliInfo = getClaudeCliInfo();
 
-    if (!claudeCli) {
+    if (!cliInfo) {
       spinner.fail();
       console.log(`  ${fail('Claude CLI'.padEnd(22))}  Not found in PATH`);
       this.results.addCheck(
@@ -195,13 +196,23 @@ class Doctor {
       return;
     }
 
+    const { path: claudeCli, needsShell } = cliInfo;
+
     // Try to execute claude --version
     try {
       const result = await new Promise<string>((resolve, reject) => {
-        const child = spawn(claudeCli, ['--version'], {
-          stdio: 'pipe',
-          timeout: 5000,
-        });
+        // When shell is needed (Windows .cmd/.bat files), concatenate into string
+        // to avoid DEP0190 warning about passing args with shell: true
+        const child = needsShell
+          ? spawn([claudeCli, '--version'].map(escapeShellArg).join(' '), {
+              stdio: 'pipe',
+              timeout: 5000,
+              shell: true,
+            })
+          : spawn(claudeCli, ['--version'], {
+              stdio: 'pipe',
+              timeout: 5000,
+            });
 
         let output = '';
         child.stdout?.on('data', (data: Buffer) => (output += data));
