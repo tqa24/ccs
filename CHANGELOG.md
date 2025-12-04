@@ -1,3 +1,10 @@
+## [5.4.4-dev.2](https://github.com/kaitranntt/ccs/compare/v5.4.4-dev.1...v5.4.4-dev.2) (2025-12-04)
+
+
+### Bug Fixes
+
+* **changelog:** restore full changelog history from main ([2e5b1f2](https://github.com/kaitranntt/ccs/commit/2e5b1f212abe5611c164cc84388002686175bc8b))
+
 ## [5.4.3](https://github.com/kaitranntt/ccs/compare/v5.4.2...v5.4.3) (2025-12-03)
 
 
