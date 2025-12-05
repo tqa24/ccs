@@ -11,7 +11,15 @@ import { InteractivePrompt } from '../utils/prompt';
 import { getProviderCatalog, supportsModelConfig, ModelEntry } from './model-catalog';
 import { getProviderSettingsPath, getClaudeEnvVars } from './config-generator';
 import { CLIProxyProvider } from './types';
-import { initUI, color, bold, dim, ok, info, header } from '../utils/ui';
+import { initUI, color, bold, dim, ok, info, warn, header } from '../utils/ui';
+
+/**
+ * Check if model is a Claude model routed via Antigravity
+ * These models don't support thinking toggle due to protocol limitations
+ */
+function isClaudeModel(modelId: string): boolean {
+  return modelId.includes('claude');
+}
 
 /** CCS directory */
 const CCS_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.ccs');
@@ -121,7 +129,9 @@ export async function configureProviderModel(
   const baseEnv = getClaudeEnvVars(provider);
 
   // Build settings with selected model
-  const settings = {
+  // For Claude models via Antigravity: disable thinking toggle (protocol limitation)
+  const isClaude = isClaudeModel(selectedModel);
+  const settings: Record<string, unknown> = {
     env: {
       ...baseEnv,
       ANTHROPIC_MODEL: selectedModel,
@@ -130,6 +140,12 @@ export async function configureProviderModel(
       // Keep haiku as-is from base config (usually flash model)
     },
   };
+
+  // Claude models via Antigravity don't support thinking toggle
+  // Google's protocol conversion layer doesn't properly handle tool schemas
+  if (isClaude) {
+    settings.alwaysThinkingEnabled = false;
+  }
 
   // Ensure CCS directory exists
   if (!fs.existsSync(CCS_DIR)) {
@@ -146,6 +162,14 @@ export async function configureProviderModel(
   console.error('');
   console.error(ok(`Model set to: ${bold(displayName)}`));
   console.error(dim(`     Config saved: ${settingsPath}`));
+
+  // Show warning for Claude models about thinking limitation
+  if (isClaude) {
+    console.error('');
+    console.error(warn('Claude models via Antigravity have limited thinking support.'));
+    console.error(dim('     Thinking toggle (Tab) disabled - Google protocol limitation.'));
+    console.error(dim('     See: https://github.com/router-for-me/CLIProxyAPI/issues/415'));
+  }
   console.error('');
 
   return true;
