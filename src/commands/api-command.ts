@@ -109,6 +109,7 @@ function apiExists(name: string): boolean {
 
 /**
  * Create settings.json file for API profile
+ * Includes all 4 model fields for proper Claude CLI integration
  */
 function createSettingsFile(name: string, baseUrl: string, apiKey: string, model: string): string {
   const ccsDir = getCcsDir();
@@ -119,6 +120,9 @@ function createSettingsFile(name: string, baseUrl: string, apiKey: string, model
       ANTHROPIC_BASE_URL: baseUrl,
       ANTHROPIC_AUTH_TOKEN: apiKey,
       ANTHROPIC_MODEL: model,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: model,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: model,
     },
   };
 

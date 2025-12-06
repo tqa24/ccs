@@ -40,9 +40,16 @@ export function hasUserSettings(provider: CLIProxyProvider): boolean {
 
 /**
  * Get current model from user settings
+ * @param provider CLIProxy provider
+ * @param customSettingsPath Optional custom settings path for CLIProxy variants
  */
-export function getCurrentModel(provider: CLIProxyProvider): string | undefined {
-  const settingsPath = getProviderSettingsPath(provider);
+export function getCurrentModel(
+  provider: CLIProxyProvider,
+  customSettingsPath?: string
+): string | undefined {
+  const settingsPath = customSettingsPath
+    ? customSettingsPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '')
+    : getProviderSettingsPath(provider);
   if (!fs.existsSync(settingsPath)) return undefined;
 
   try {
@@ -80,11 +87,13 @@ function formatModelDetailed(model: ModelEntry, isCurrent: boolean): string {
  *
  * @param provider CLIProxy provider (agy, gemini)
  * @param force Force reconfiguration even if settings exist
+ * @param customSettingsPath Optional custom settings path for CLIProxy variants
  * @returns true if configuration was performed, false if skipped
  */
 export async function configureProviderModel(
   provider: CLIProxyProvider,
-  force: boolean = false
+  force: boolean = false,
+  customSettingsPath?: string
 ): Promise<boolean> {
   // Check if provider supports model configuration
   if (!supportsModelConfig(provider)) {
@@ -94,7 +103,10 @@ export async function configureProviderModel(
   const catalog = getProviderCatalog(provider);
   if (!catalog) return false;
 
-  const settingsPath = getProviderSettingsPath(provider);
+  // Use custom settings path for CLIProxy variants, otherwise use default provider path
+  const settingsPath = customSettingsPath
+    ? customSettingsPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '')
+    : getProviderSettingsPath(provider);
 
   // Skip if already configured (unless --config flag)
   if (!force && fs.existsSync(settingsPath)) {
@@ -111,7 +123,7 @@ export async function configureProviderModel(
   }));
 
   // Find default index - use current model if configured, otherwise catalog default
-  const currentModel = getCurrentModel(provider);
+  const currentModel = getCurrentModel(provider, customSettingsPath);
   const targetModel = currentModel || catalog.defaultModel;
   const defaultIdx = catalog.models.findIndex((m) => m.id === targetModel);
   const safeDefaultIdx = defaultIdx >= 0 ? defaultIdx : 0;

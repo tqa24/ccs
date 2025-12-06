@@ -64,8 +64,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'gemini-3-pro-preview',
         name: 'Gemini 3 Pro',
-        tier: 'paid',
-        description: 'Google latest, requires paid Google account',
+        description: 'Google latest model via Antigravity',
       },
     ],
   },

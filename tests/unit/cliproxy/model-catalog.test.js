@@ -61,12 +61,13 @@ describe('Model Catalog', () => {
       assert.strictEqual(sonnet.name, 'Claude Sonnet 4.5');
     });
 
-    it('includes Gemini 3 Pro with paid tier', () => {
+    it('includes Gemini 3 Pro (free via Antigravity)', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const gem3 = MODEL_CATALOG.agy.models.find((m) => m.id === 'gemini-3-pro-preview');
       assert(gem3, 'Should include Gemini 3 Pro');
       assert.strictEqual(gem3.name, 'Gemini 3 Pro');
-      assert.strictEqual(gem3.tier, 'paid');
+      // AGY models are all free - no paid tier
+      assert.strictEqual(gem3.tier, undefined, 'AGY models should not have paid tier');
     });
 
     it('has 4 models total', () => {

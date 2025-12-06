@@ -125,8 +125,9 @@ export async function execClaudeWithCLIProxy(
   const forceConfig = args.includes('--config');
 
   // Handle --config: configure model selection and exit
+  // Pass customSettingsPath for CLIProxy variants to save to correct file
   if (forceConfig && supportsModelConfig(provider)) {
-    await configureProviderModel(provider, true);
+    await configureProviderModel(provider, true, cfg.customSettingsPath);
     process.exit(0);
   }
 
@@ -166,12 +167,13 @@ export async function execClaudeWithCLIProxy(
 
   // 4. First-run model configuration (interactive)
   // For supported providers, prompt user to select model on first run
+  // Pass customSettingsPath for CLIProxy variants
   if (supportsModelConfig(provider)) {
-    await configureProviderModel(provider, false); // false = only if not configured
+    await configureProviderModel(provider, false, cfg.customSettingsPath); // false = only if not configured
   }
 
   // 5. Check for known broken models and warn user
-  const currentModel = getCurrentModel(provider);
+  const currentModel = getCurrentModel(provider, cfg.customSettingsPath);
   if (currentModel && isModelBroken(provider, currentModel)) {
     const modelEntry = findModel(provider, currentModel);
     const issueUrl = getModelIssueUrl(provider, currentModel);

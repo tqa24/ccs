@@ -411,6 +411,24 @@ CCS resolves profiles in priority order:
 
 Usage: `ccs flash "quick task"` or `ccs pro "complex analysis"`
 
+Settings file format (`~/.ccs/gemini-flash.settings.json`):
+
+```json
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:8317/api/provider/gemini",
+    "ANTHROPIC_AUTH_TOKEN": "ccs-internal-managed",
+    "ANTHROPIC_MODEL": "gemini-2.5-flash",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "gemini-2.5-flash",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gemini-2.5-flash",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gemini-2.5-flash"
+  }
+}
+```
+
+> [!TIP]
+> Copy from `~/.ccs/gemini.settings.json` (auto-generated on first `ccs gemini` run) and modify `ANTHROPIC_MODEL` to your desired model.
+
 **Settings-based**: GLM, GLMT, Kimi, default
 - Uses `--settings` flag pointing to config files
 - GLMT: Embedded proxy for thinking mode support

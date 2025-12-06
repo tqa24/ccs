@@ -1,3 +1,10 @@
+# [5.9.0](https://github.com/kaitranntt/ccs/compare/v5.8.0...v5.9.0) (2025-12-06)
+
+
+### Features
+
+* **cliproxy:** add crud commands for variant profiles ([6427ecf](https://github.com/kaitranntt/ccs/commit/6427ecf5af4a9be40f39c2a64bf72ac4e861d349))
+
 # [5.8.0](https://github.com/kaitranntt/ccs/compare/v5.7.0...v5.8.0) (2025-12-05)
 
 
