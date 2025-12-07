@@ -4,6 +4,7 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { ConnectionIndicator } from '@/components/connection-indicator';
+import { LocalhostDisclaimer } from '@/components/localhost-disclaimer';
 import { Toaster } from 'sonner';
 import { queryClient } from '@/lib/query-client';
 import {
@@ -50,6 +51,7 @@ export default function App() {
           </Route>
         </Routes>
         <Toaster position="top-right" />
+        <LocalhostDisclaimer />
       </BrowserRouter>
     </QueryClientProvider>
   );

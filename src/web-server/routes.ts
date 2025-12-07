@@ -10,6 +10,7 @@ import * as path from 'path';
 import { getCcsDir, getConfigPath, loadConfig, loadSettings } from '../utils/config-manager';
 import { Config, Settings } from '../types/config';
 import { expandPath } from '../utils/helpers';
+import { runHealthChecks, fixHealthIssue } from './health-service';
 
 export const apiRoutes = Router();
 
@@ -292,6 +293,127 @@ apiRoutes.delete('/cliproxy/:name', (req: Request, res: Response): void => {
   res.json({ name, deleted: true });
 });
 
+// ==================== Settings (Phase 05) ====================
+
+/**
+ * Helper: Mask API keys in settings
+ */
+function maskApiKeys(settings: Settings): Settings {
+  if (!settings.env) return settings;
+
+  const masked = { ...settings, env: { ...settings.env } };
+  const sensitiveKeys = ['ANTHROPIC_AUTH_TOKEN', 'API_KEY', 'AUTH_TOKEN'];
+
+  for (const key of Object.keys(masked.env)) {
+    if (sensitiveKeys.some((sensitive) => key.includes(sensitive))) {
+      const value = masked.env[key];
+      if (value && value.length > 8) {
+        masked.env[key] =
+          value.slice(0, 4) + '*'.repeat(Math.max(0, value.length - 8)) + value.slice(-4);
+      }
+    }
+  }
+
+  return masked;
+}
+
+/**
+ * GET /api/settings/:profile - Get settings with masked API keys
+ */
+apiRoutes.get('/settings/:profile', (req: Request, res: Response): void => {
+  const { profile } = req.params;
+  const ccsDir = getCcsDir();
+  const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+
+  if (!fs.existsSync(settingsPath)) {
+    res.status(404).json({ error: 'Settings not found' });
+    return;
+  }
+
+  const stat = fs.statSync(settingsPath);
+  const settings = loadSettings(settingsPath);
+
+  // Mask API keys in response
+  const masked = maskApiKeys(settings);
+
+  res.json({
+    profile,
+    settings: masked,
+    mtime: stat.mtime.getTime(),
+    path: settingsPath,
+  });
+});
+
+/**
+ * GET /api/settings/:profile/raw - Get full settings (for editing)
+ */
+apiRoutes.get('/settings/:profile/raw', (req: Request, res: Response): void => {
+  const { profile } = req.params;
+  const ccsDir = getCcsDir();
+  const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+
+  if (!fs.existsSync(settingsPath)) {
+    res.status(404).json({ error: 'Settings not found' });
+    return;
+  }
+
+  const stat = fs.statSync(settingsPath);
+  const settings = loadSettings(settingsPath);
+
+  res.json({
+    profile,
+    settings,
+    mtime: stat.mtime.getTime(),
+    path: settingsPath,
+  });
+});
+
+/**
+ * PUT /api/settings/:profile - Update settings with conflict detection and backup
+ */
+apiRoutes.put('/settings/:profile', (req: Request, res: Response): void => {
+  const { profile } = req.params;
+  const { settings, expectedMtime } = req.body;
+  const ccsDir = getCcsDir();
+  const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+
+  if (!fs.existsSync(settingsPath)) {
+    res.status(404).json({ error: 'Settings not found' });
+    return;
+  }
+
+  // Conflict detection
+  const stat = fs.statSync(settingsPath);
+  if (expectedMtime && stat.mtime.getTime() !== expectedMtime) {
+    res.status(409).json({
+      error: 'File modified externally',
+      currentMtime: stat.mtime.getTime(),
+    });
+    return;
+  }
+
+  // Create backup
+  const backupDir = path.join(ccsDir, 'backups');
+  if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+  }
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(backupDir, `${profile}.${timestamp}.settings.json`);
+  fs.copyFileSync(settingsPath, backupPath);
+
+  // Write new settings atomically
+  const tempPath = settingsPath + '.tmp';
+  fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
+  fs.renameSync(tempPath, settingsPath);
+
+  const newStat = fs.statSync(settingsPath);
+  res.json({
+    profile,
+    mtime: newStat.mtime.getTime(),
+    backupPath,
+  });
+});
+
 // ==================== Accounts ====================
 
 /**
@@ -339,4 +461,28 @@ apiRoutes.post('/accounts/default', (req: Request, res: Response): void => {
   fs.writeFileSync(profilesPath, JSON.stringify(data, null, 2) + '\n');
 
   res.json({ default: name });
+});
+
+// ==================== Health (Phase 06) ====================
+
+/**
+ * GET /api/health - Run health checks
+ */
+apiRoutes.get('/health', (_req: Request, res: Response) => {
+  const report = runHealthChecks();
+  res.json(report);
+});
+
+/**
+ * POST /api/health/fix/:checkId - Fix a health issue
+ */
+apiRoutes.post('/health/fix/:checkId', (req: Request, res: Response): void => {
+  const { checkId } = req.params;
+  const result = fixHealthIssue(checkId);
+
+  if (result.success) {
+    res.json({ success: true, message: result.message });
+  } else {
+    res.status(400).json({ success: false, message: result.message });
+  }
 });

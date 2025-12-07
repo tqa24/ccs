@@ -1,11 +1,4 @@
-export function HomePage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Home</h1>
-      <p className="mt-4 text-muted-foreground">Welcome to CCS Config Dashboard</p>
-    </div>
-  );
-}
+export { HomePage } from './home';
 
 export { ApiPage } from './api';
 
@@ -27,29 +20,8 @@ export function AccountsPage() {
   );
 }
 
-export function SettingsPage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="mt-4 text-muted-foreground">Configure profile settings (Phase 05)</p>
-    </div>
-  );
-}
+export { SettingsPage } from './settings';
 
-export function HealthPage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Health</h1>
-      <p className="mt-4 text-muted-foreground">System health dashboard (Phase 06)</p>
-    </div>
-  );
-}
+export { HealthPage } from './health';
 
-export function SharedPage() {
-  return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Shared Data</h1>
-      <p className="mt-4 text-muted-foreground">Commands, skills, agents viewer (Phase 07)</p>
-    </div>
-  );
-}
+export { SharedPage } from './shared';

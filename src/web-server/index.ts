@@ -37,6 +37,14 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   const { apiRoutes } = await import('./routes');
   app.use('/api', apiRoutes);
 
+  // Shared data routes (Phase 07)
+  const { sharedRoutes } = await import('./shared-routes');
+  app.use('/api/shared', sharedRoutes);
+
+  // Overview routes (Phase 07)
+  const { overviewRoutes } = await import('./overview-routes');
+  app.use('/api/overview', overviewRoutes);
+
   // Static files (dist/ui/)
   const staticDir = options.staticDir || path.join(__dirname, '../../dist/ui');
   app.use(express.static(staticDir));

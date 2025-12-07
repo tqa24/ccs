@@ -4,7 +4,7 @@
  * React context provider for WebSocket connection.
  */
 
-import { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import { useWebSocket } from '@/hooks/use-websocket';
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';

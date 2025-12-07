@@ -184,6 +184,7 @@ Claude Code Profile & Model Switcher`.trim();
   printSubSection('Diagnostics', [
     ['ccs doctor', 'Run health check and diagnostics'],
     ['ccs config', 'Open web configuration dashboard'],
+    ['ccs config --port 3000', 'Use specific port'],
     ['ccs sync', 'Sync delegation commands and skills'],
     ['ccs update', 'Update CCS to latest version'],
     ['ccs update --force', 'Force reinstall current version'],
