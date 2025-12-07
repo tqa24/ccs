@@ -69,8 +69,7 @@
     "test:unit": "bun test tests/unit/",
     "test:npm": "bun test tests/npm/",
     "test:native": "bash tests/native/unix/edge-cases.sh",
-    "dev": "bun run ui:build && bun run build:server && bun dist/ccs.js config",
-    "ui:dev": "cd ui && bun run dev",
+    "dev": "bun run build:server && bun dist/ccs.js config --dev",
     "ui:build": "cd ui && bun run build",
     "ui:preview": "cd ui && bun run preview",
     "ui:validate": "cd ui && bun run validate",
@@ -97,18 +96,21 @@
     "@commitlint/config-conventional": "^20.0.0",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
+    "@tailwindcss/vite": "^4.1.17",
     "@types/chokidar": "^2.1.7",
     "@types/express": "^4.17.21",
     "@types/node": "^20.19.25",
     "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^8.48.0",
     "@typescript-eslint/parser": "^8.48.0",
+    "@vitejs/plugin-react": "^5.1.1",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "husky": "^9.1.7",
     "mocha": "^11.7.5",
     "prettier": "^3.6.2",
     "semantic-release": "^25.0.2",
-    "typescript": "5.3"
+    "typescript": "5.3",
+    "vite": "^7.2.4"
   }
 }

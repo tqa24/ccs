@@ -7,8 +7,11 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarHeader,
+  SidebarFooter,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { CcsLogo } from '@/components/ccs-logo';
+import { useSidebar } from '@/hooks/use-sidebar';
 
 const navItems = [
   { path: '/', icon: Home, label: 'Home' },
@@ -22,11 +25,12 @@ const navItems = [
 
 export function AppSidebar() {
   const location = useLocation();
+  const { state } = useSidebar();
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-4 border-b">
-        <CcsLogo size="sm" />
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="h-12 flex items-center justify-center">
+        <CcsLogo size="sm" showText={state === 'expanded'} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarMenu>
@@ -35,13 +39,16 @@ export function AppSidebar() {
               <SidebarMenuButton asChild isActive={location.pathname === item.path}>
                 <Link to={item.path}>
                   <item.icon className="w-4 h-4" />
-                  <span>{item.label}</span>
+                  <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
         </SidebarMenu>
       </SidebarContent>
+      <SidebarFooter className="p-4 border-t flex items-center justify-center">
+        <SidebarTrigger />
+      </SidebarFooter>
     </Sidebar>
   );
 }

@@ -3,6 +3,7 @@
  *
  * Express server with WebSocket support for real-time config management.
  * Single HTTP server handles REST API, static files, and WebSocket connections.
+ * In dev mode, integrates Vite for HMR.
  */
 
 import express from 'express';
@@ -14,6 +15,7 @@ import { setupWebSocket } from './websocket';
 export interface ServerOptions {
   port: number;
   staticDir?: string;
+  dev?: boolean;
 }
 
 export interface ServerInstance {
@@ -45,14 +47,25 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   const { overviewRoutes } = await import('./overview-routes');
   app.use('/api/overview', overviewRoutes);
 
-  // Static files (dist/ui/)
-  const staticDir = options.staticDir || path.join(__dirname, '../../dist/ui');
-  app.use(express.static(staticDir));
+  // Dev mode: use Vite middleware for HMR
+  if (options.dev) {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({
+      root: path.join(__dirname, '../../ui'),
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    // Production: serve static files from dist/ui/
+    const staticDir = options.staticDir || path.join(__dirname, '../ui');
+    app.use(express.static(staticDir));
 
-  // SPA fallback - return index.html for all non-API routes
-  app.get('*', (_req, res) => {
-    res.sendFile(path.join(staticDir, 'index.html'));
-  });
+    // SPA fallback - return index.html for all non-API routes
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(staticDir, 'index.html'));
+    });
+  }
 
   // WebSocket connection handler + file watcher
   const { cleanup } = setupWebSocket(wss);

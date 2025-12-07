@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { getCcsDir, getConfigPath } from '../utils/config-manager';
+import { isCLIProxyInstalled, getInstalledCliproxyVersion, getCLIProxyPath } from '../cliproxy';
 
 export interface HealthCheck {
   id: string;
@@ -67,7 +68,11 @@ export function runHealthChecks(): HealthReport {
 
 function checkClaudeCli(): HealthCheck {
   try {
-    const version = execSync('claude --version', { encoding: 'utf8', timeout: 5000 }).trim();
+    const version = execSync('claude --version', {
+      encoding: 'utf8',
+      timeout: 5000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
     return {
       id: 'claude-cli',
       name: 'Claude CLI',
@@ -157,23 +162,25 @@ function checkProfilesFile(): HealthCheck {
 }
 
 function checkCliproxy(): HealthCheck {
-  try {
-    execSync('cliproxy --version', { encoding: 'utf8', timeout: 5000 });
+  if (isCLIProxyInstalled()) {
+    const version = getInstalledCliproxyVersion();
+    const binaryPath = getCLIProxyPath();
     return {
       id: 'cliproxy',
       name: 'CLIProxy',
       status: 'ok',
-      message: 'Binary available',
-    };
-  } catch {
-    return {
-      id: 'cliproxy',
-      name: 'CLIProxy',
-      status: 'warning',
-      message: 'Not found (optional)',
-      details: 'Required for gemini/codex/agy providers',
+      message: `Installed: ${version}`,
+      details: binaryPath,
     };
   }
+
+  return {
+    id: 'cliproxy',
+    name: 'CLIProxy',
+    status: 'warning',
+    message: 'Not installed (optional)',
+    details: 'Required for gemini/codex/agy providers. Install: ccs cliproxy --latest',
+  };
 }
 
 function checkCcsDirectory(): HealthCheck {

@@ -2,7 +2,7 @@
  * Config Command Handler
  *
  * Launches web-based configuration dashboard.
- * Usage: ccs config [--port PORT]
+ * Usage: ccs config [--port PORT] [--dev]
  */
 
 import getPort from 'get-port';
@@ -13,6 +13,7 @@ import { initUI, header, ok, info } from '../utils/ui';
 
 interface ConfigOptions {
   port?: number;
+  dev?: boolean;
 }
 
 /**
@@ -32,6 +33,8 @@ function parseArgs(args: string[]): ConfigOptions {
         console.error('[X] Invalid port number');
         process.exit(1);
       }
+    } else if (arg === '--dev') {
+      result.dev = true;
     } else if (arg === '--help' || arg === '-h') {
       showHelp();
       process.exit(0);
@@ -52,11 +55,13 @@ function showHelp(): void {
   console.log('');
   console.log('Options:');
   console.log('  --port, -p PORT    Specify server port (default: auto-detect)');
+  console.log('  --dev              Development mode with Vite HMR');
   console.log('  --help, -h         Show this help message');
   console.log('');
   console.log('Examples:');
   console.log('  ccs config              Auto-detect available port');
   console.log('  ccs config --port 3000  Use specific port');
+  console.log('  ccs config --dev        Development mode with hot reload');
   console.log('');
 }
 
@@ -81,13 +86,20 @@ export async function handleConfigCommand(args: string[]): Promise<void> {
 
   try {
     // Start server
-    const { server, wss } = await startServer({ port });
+    const { server, wss } = await startServer({ port, dev: options.dev });
 
     // Setup graceful shutdown
     setupGracefulShutdown(server, wss);
 
     const url = `http://localhost:${port}`;
-    console.log(ok(`Dashboard: ${url}`));
+
+    if (options.dev) {
+      console.log(ok(`Dev Server: ${url}`));
+      console.log('');
+      console.log(info('HMR enabled - UI changes will hot-reload'));
+    } else {
+      console.log(ok(`Dashboard: ${url}`));
+    }
     console.log('');
 
     // Open browser
