@@ -11,7 +11,14 @@ import { getCcsDir, getConfigPath, loadConfig, loadSettings } from '../utils/con
 import { Config, Settings } from '../types/config';
 import { expandPath } from '../utils/helpers';
 import { runHealthChecks, fixHealthIssue } from './health-service';
-import { getAllAuthStatus, getOAuthConfig } from '../cliproxy/auth-handler';
+import { getAllAuthStatus, getOAuthConfig, initializeAccounts } from '../cliproxy/auth-handler';
+import {
+  getAllAccountsSummary,
+  getProviderAccounts,
+  setDefaultAccount as setDefaultAccountFn,
+  removeAccount as removeAccountFn,
+} from '../cliproxy/account-manager';
+import type { CLIProxyProvider } from '../cliproxy/types';
 
 export const apiRoutes = Router();
 
@@ -231,6 +238,7 @@ apiRoutes.get('/cliproxy', (_req: Request, res: Response) => {
     name,
     provider: variant.provider,
     settings: variant.settings,
+    account: variant.account || 'default', // Include account field
   }));
 
   res.json({ variants });
@@ -240,7 +248,7 @@ apiRoutes.get('/cliproxy', (_req: Request, res: Response) => {
  * POST /api/cliproxy - Create cliproxy variant
  */
 apiRoutes.post('/cliproxy', (req: Request, res: Response): void => {
-  const { name, provider, model } = req.body;
+  const { name, provider, model, account } = req.body;
 
   if (!name || !provider) {
     res.status(400).json({ error: 'Missing required fields: name, provider' });
@@ -263,10 +271,69 @@ apiRoutes.post('/cliproxy', (req: Request, res: Response): void => {
   // Create settings file for variant
   const settingsPath = createCliproxySettings(name, model);
 
-  config.cliproxy[name] = { provider, settings: settingsPath };
+  // Include account if specified (defaults to 'default' if not provided)
+  config.cliproxy[name] = {
+    provider,
+    settings: settingsPath,
+    ...(account && { account }),
+  };
   writeConfig(config);
 
-  res.status(201).json({ name, provider, settings: settingsPath });
+  res.status(201).json({ name, provider, settings: settingsPath, account: account || 'default' });
+});
+
+/**
+ * PUT /api/cliproxy/:name - Update cliproxy variant
+ */
+apiRoutes.put('/cliproxy/:name', (req: Request, res: Response): void => {
+  const { name } = req.params;
+  const { provider, account, model } = req.body;
+
+  const config = readConfigSafe();
+
+  if (!config.cliproxy?.[name]) {
+    res.status(404).json({ error: 'Variant not found' });
+    return;
+  }
+
+  const variant = config.cliproxy[name];
+
+  // Update fields if provided
+  if (provider) {
+    variant.provider = provider;
+  }
+  if (account !== undefined) {
+    if (account) {
+      variant.account = account;
+    } else {
+      delete variant.account; // Remove account to use default
+    }
+  }
+
+  // Update model in settings file if provided
+  if (model !== undefined) {
+    const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
+    if (fs.existsSync(settingsPath)) {
+      const settings = loadSettings(settingsPath);
+      if (model) {
+        settings.env = settings.env || {};
+        settings.env.ANTHROPIC_MODEL = model;
+      } else if (settings.env) {
+        delete settings.env.ANTHROPIC_MODEL;
+      }
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+    }
+  }
+
+  writeConfig(config);
+
+  res.json({
+    name,
+    provider: variant.provider,
+    account: variant.account || 'default',
+    settings: variant.settings,
+    updated: true,
+  });
 });
 
 /**
@@ -298,6 +365,9 @@ apiRoutes.delete('/cliproxy/:name', (req: Request, res: Response): void => {
  * GET /api/cliproxy/auth - Get auth status for built-in CLIProxy profiles
  */
 apiRoutes.get('/cliproxy/auth', (_req: Request, res: Response) => {
+  // Initialize accounts from existing tokens on first request
+  initializeAccounts();
+
   const statuses = getAllAuthStatus();
 
   const authStatus = statuses.map((status) => {
@@ -308,11 +378,96 @@ apiRoutes.get('/cliproxy/auth', (_req: Request, res: Response) => {
       authenticated: status.authenticated,
       lastAuth: status.lastAuth?.toISOString() || null,
       tokenFiles: status.tokenFiles.length,
+      accounts: status.accounts,
+      defaultAccount: status.defaultAccount,
     };
   });
 
   res.json({ authStatus });
 });
+
+// ==================== Account Management (Multi-Account Support) ====================
+
+/**
+ * GET /api/cliproxy/accounts - Get all accounts across all providers
+ */
+apiRoutes.get('/cliproxy/accounts', (_req: Request, res: Response) => {
+  // Initialize accounts from existing tokens
+  initializeAccounts();
+
+  const accounts = getAllAccountsSummary();
+  res.json({ accounts });
+});
+
+/**
+ * GET /api/cliproxy/accounts/:provider - Get accounts for a specific provider
+ */
+apiRoutes.get('/cliproxy/accounts/:provider', (req: Request, res: Response): void => {
+  const { provider } = req.params;
+
+  // Validate provider
+  const validProviders: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen', 'iflow'];
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  const accounts = getProviderAccounts(provider as CLIProxyProvider);
+  res.json({ provider, accounts });
+});
+
+/**
+ * POST /api/cliproxy/accounts/:provider/default - Set default account for provider
+ */
+apiRoutes.post('/cliproxy/accounts/:provider/default', (req: Request, res: Response): void => {
+  const { provider } = req.params;
+  const { accountId } = req.body;
+
+  if (!accountId) {
+    res.status(400).json({ error: 'Missing required field: accountId' });
+    return;
+  }
+
+  // Validate provider
+  const validProviders: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen', 'iflow'];
+  if (!validProviders.includes(provider as CLIProxyProvider)) {
+    res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  const success = setDefaultAccountFn(provider as CLIProxyProvider, accountId);
+
+  if (success) {
+    res.json({ provider, defaultAccount: accountId });
+  } else {
+    res.status(404).json({ error: 'Account not found' });
+  }
+});
+
+/**
+ * DELETE /api/cliproxy/accounts/:provider/:accountId - Remove an account
+ */
+apiRoutes.delete(
+  '/api/cliproxy/accounts/:provider/:accountId',
+  (req: Request, res: Response): void => {
+    const { provider, accountId } = req.params;
+
+    // Validate provider
+    const validProviders: CLIProxyProvider[] = ['gemini', 'codex', 'agy', 'qwen', 'iflow'];
+    if (!validProviders.includes(provider as CLIProxyProvider)) {
+      res.status(400).json({ error: `Invalid provider: ${provider}` });
+      return;
+    }
+
+    const success = removeAccountFn(provider as CLIProxyProvider, accountId);
+
+    if (success) {
+      res.json({ provider, accountId, deleted: true });
+    } else {
+      res.status(404).json({ error: 'Account not found' });
+    }
+  }
+);
 
 // ==================== Settings (Phase 05) ====================
 

@@ -41,14 +41,33 @@ export interface UpdateProfile {
 
 export interface Variant {
   name: string;
-  provider: 'gemini' | 'codex' | 'agy' | 'qwen';
+  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow';
   settings: string;
+  account?: string;
 }
 
 export interface CreateVariant {
   name: string;
-  provider: 'gemini' | 'codex' | 'agy' | 'qwen';
+  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow';
   model?: string;
+  account?: string;
+}
+
+export interface UpdateVariant {
+  provider?: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow';
+  model?: string;
+  account?: string;
+}
+
+/** OAuth account info for multi-account support */
+export interface OAuthAccount {
+  id: string;
+  email?: string;
+  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow';
+  isDefault: boolean;
+  tokenFile: string;
+  createdAt: string;
+  lastUsedAt?: string;
 }
 
 export interface AuthStatus {
@@ -57,7 +76,12 @@ export interface AuthStatus {
   authenticated: boolean;
   lastAuth: string | null;
   tokenFiles: number;
+  accounts: OAuthAccount[];
+  defaultAccount?: string;
 }
+
+/** Provider accounts summary */
+export type ProviderAccountsMap = Record<string, OAuthAccount[]>;
 
 export interface Account {
   name: string;
@@ -90,7 +114,25 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
+    update: (name: string, data: UpdateVariant) =>
+      request(`/cliproxy/${name}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
     delete: (name: string) => request(`/cliproxy/${name}`, { method: 'DELETE' }),
+    // Multi-account management
+    accounts: {
+      list: () => request<{ accounts: ProviderAccountsMap }>('/cliproxy/accounts'),
+      listByProvider: (provider: string) =>
+        request<{ provider: string; accounts: OAuthAccount[] }>(`/cliproxy/accounts/${provider}`),
+      setDefault: (provider: string, accountId: string) =>
+        request(`/cliproxy/accounts/${provider}/default`, {
+          method: 'POST',
+          body: JSON.stringify({ accountId }),
+        }),
+      remove: (provider: string, accountId: string) =>
+        request(`/cliproxy/accounts/${provider}/${accountId}`, { method: 'DELETE' }),
+    },
   },
   accounts: {
     list: () => request<{ accounts: Account[]; default: string | null }>('/accounts'),

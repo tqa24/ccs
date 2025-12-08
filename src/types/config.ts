@@ -21,6 +21,8 @@ export interface CLIProxyVariantConfig {
   provider: 'gemini' | 'codex' | 'agy' | 'qwen';
   /** Path to settings.json with custom model configuration */
   settings: string;
+  /** Account identifier for multi-account support (optional, defaults to 'default') */
+  account?: string;
 }
 
 /**

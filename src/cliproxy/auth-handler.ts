@@ -19,6 +19,14 @@ import { ProgressIndicator } from '../utils/progress-indicator';
 import { ensureCLIProxyBinary } from './binary-manager';
 import { generateConfig, getProviderAuthDir } from './config-generator';
 import { CLIProxyProvider } from './types';
+import {
+  AccountInfo,
+  discoverExistingAccounts,
+  getDefaultAccount,
+  getProviderAccounts,
+  registerAccount,
+  touchAccount,
+} from './account-manager';
 
 /**
  * OAuth callback ports used by CLIProxyAPI (hardcoded in binary)
@@ -118,6 +126,10 @@ export interface AuthStatus {
   tokenFiles: string[];
   /** When last authenticated (if known) */
   lastAuth?: Date;
+  /** Accounts registered for this provider (multi-account support) */
+  accounts: AccountInfo[];
+  /** Default account ID */
+  defaultAccount?: string;
 }
 
 /**
@@ -323,12 +335,18 @@ export function getAuthStatus(provider: CLIProxyProvider): AuthStatus {
     }
   }
 
+  // Get registered accounts for multi-account support
+  const accounts = getProviderAccounts(provider);
+  const defaultAccount = getDefaultAccount(provider);
+
   return {
     provider,
     authenticated: tokenFiles.length > 0,
     tokenDir,
     tokenFiles,
     lastAuth,
+    accounts,
+    defaultAccount: defaultAccount?.id,
   };
 }
 
@@ -384,11 +402,14 @@ export function clearAuth(provider: CLIProxyProvider): boolean {
 /**
  * Trigger OAuth flow for provider
  * Auto-detects headless environment and uses --no-browser flag accordingly
+ * @param provider - The CLIProxy provider to authenticate
+ * @param options - OAuth options
+ * @returns Account info if successful, null otherwise
  */
 export async function triggerOAuth(
   provider: CLIProxyProvider,
-  options: { verbose?: boolean; headless?: boolean } = {}
-): Promise<boolean> {
+  options: { verbose?: boolean; headless?: boolean; account?: string } = {}
+): Promise<AccountInfo | null> {
   const oauthConfig = getOAuthConfig(provider);
   const { verbose = false } = options;
 
@@ -451,7 +472,7 @@ export async function triggerOAuth(
     spinner.start();
   }
 
-  return new Promise<boolean>((resolve) => {
+  return new Promise<AccountInfo | null>((resolve) => {
     // Spawn CLIProxyAPI with auth flag (and --no-browser if headless)
     const authProcess = spawn(binaryPath, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -513,7 +534,7 @@ export async function triggerOAuth(
         console.error('  - Make sure a browser is available');
         console.error('  - Try running with --verbose for details');
       }
-      resolve(false);
+      resolve(null);
     }, timeoutMs);
 
     authProcess.on('exit', (code) => {
@@ -524,7 +545,10 @@ export async function triggerOAuth(
         if (isAuthenticated(provider)) {
           if (!headless) spinner.succeed(`Authenticated with ${oauthConfig.displayName}`);
           console.log('[OK] Authentication successful');
-          resolve(true);
+
+          // Register the account in accounts registry
+          const account = registerAccountFromToken(provider, tokenDir);
+          resolve(account);
         } else {
           if (!headless) spinner.fail('Authentication incomplete');
           console.error('[X] Token not found after authentication');
@@ -537,7 +561,7 @@ export async function triggerOAuth(
             console.error('    The OAuth flow may have been cancelled or callback port was in use');
             console.error(`    Try: pkill -f cli-proxy-api && ccs ${provider} --auth`);
           }
-          resolve(false);
+          resolve(null);
         }
       } else {
         if (!headless) spinner.fail('Authentication failed');
@@ -550,7 +574,7 @@ export async function triggerOAuth(
           console.error('');
           console.error('[i] No OAuth URL was displayed. Try with --verbose for details.');
         }
-        resolve(false);
+        resolve(null);
       }
     });
 
@@ -558,23 +582,75 @@ export async function triggerOAuth(
       clearTimeout(timeout);
       if (!headless) spinner.fail('Authentication error');
       console.error(`[X] Failed to start auth process: ${error.message}`);
-      resolve(false);
+      resolve(null);
     });
   });
 }
 
 /**
+ * Register account from newly created token file
+ * Scans auth directory for new token and extracts email
+ */
+function registerAccountFromToken(
+  provider: CLIProxyProvider,
+  tokenDir: string
+): AccountInfo | null {
+  try {
+    const files = fs.readdirSync(tokenDir);
+    const jsonFiles = files.filter((f) => f.endsWith('.json'));
+
+    // Find newest token file for this provider
+    let newestFile: string | null = null;
+    let newestMtime = 0;
+
+    for (const file of jsonFiles) {
+      const filePath = path.join(tokenDir, file);
+      if (!isTokenFileForProvider(filePath, provider)) continue;
+
+      const stats = fs.statSync(filePath);
+      if (stats.mtimeMs > newestMtime) {
+        newestMtime = stats.mtimeMs;
+        newestFile = file;
+      }
+    }
+
+    if (!newestFile) {
+      return null;
+    }
+
+    // Read token to extract email
+    const tokenPath = path.join(tokenDir, newestFile);
+    const content = fs.readFileSync(tokenPath, 'utf-8');
+    const data = JSON.parse(content);
+    const email = data.email || undefined;
+
+    // Register the account
+    return registerAccount(provider, newestFile, email);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Ensure provider is authenticated
  * Triggers OAuth flow if not authenticated
+ * @param provider - The CLIProxy provider
+ * @param options - Auth options including optional account
+ * @returns true if authenticated, false otherwise
  */
 export async function ensureAuth(
   provider: CLIProxyProvider,
-  options: { verbose?: boolean; headless?: boolean } = {}
+  options: { verbose?: boolean; headless?: boolean; account?: string } = {}
 ): Promise<boolean> {
   // Check if already authenticated
   if (isAuthenticated(provider)) {
     if (options.verbose) {
       console.error(`[auth] ${provider} already authenticated`);
+    }
+    // Touch the account to update last used time
+    const defaultAccount = getDefaultAccount(provider);
+    if (defaultAccount) {
+      touchAccount(provider, options.account || defaultAccount.id);
     }
     return true;
   }
@@ -583,7 +659,16 @@ export async function ensureAuth(
   const oauthConfig = getOAuthConfig(provider);
   console.log(`[i] ${oauthConfig.displayName} authentication required`);
 
-  return triggerOAuth(provider, options);
+  const account = await triggerOAuth(provider, options);
+  return account !== null;
+}
+
+/**
+ * Initialize accounts registry from existing tokens
+ * Should be called on startup to populate accounts from existing token files
+ */
+export function initializeAccounts(): void {
+  discoverExistingAccounts();
 }
 
 /**
