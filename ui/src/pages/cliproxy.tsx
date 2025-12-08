@@ -204,7 +204,7 @@ export function CliproxyPage() {
           </p>
         </div>
 
-        <Card>
+        <Card className="py-0 gap-0">
           <CardContent className="p-0">
             {authLoading ? (
               <div className="p-8 text-center text-muted-foreground">
