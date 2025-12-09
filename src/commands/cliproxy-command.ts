@@ -23,7 +23,8 @@ import {
   isCLIProxyInstalled,
   getCLIProxyPath,
 } from '../cliproxy';
-import { getAllAuthStatus, getOAuthConfig } from '../cliproxy/auth-handler';
+import { getAllAuthStatus, getOAuthConfig, triggerOAuth } from '../cliproxy/auth-handler';
+import { getProviderAccounts } from '../cliproxy/account-manager';
 import { CLIPROXY_FALLBACK_VERSION } from '../cliproxy/platform-detector';
 import { CLIPROXY_PROFILES, CLIProxyProfileName } from '../auth/profile-detector';
 import { getCcsDir, getConfigPath, loadConfig } from '../utils/config-manager';
@@ -53,6 +54,7 @@ interface CliproxyProfileArgs {
   name?: string;
   provider?: CLIProxyProfileName;
   model?: string;
+  account?: string;
   force?: boolean;
   yes?: boolean;
 }
@@ -70,6 +72,8 @@ function parseProfileArgs(args: string[]): CliproxyProfileArgs {
       result.provider = args[++i] as CLIProxyProfileName;
     } else if (arg === '--model' && args[i + 1]) {
       result.model = args[++i];
+    } else if (arg === '--account' && args[i + 1]) {
+      result.account = args[++i];
     } else if (arg === '--force') {
       result.force = true;
     } else if (arg === '--yes' || arg === '-y') {
@@ -136,7 +140,8 @@ function cliproxyVariantExists(name: string): boolean {
 function createCliproxySettingsFile(
   name: string,
   provider: CLIProxyProfileName,
-  model: string
+  model: string,
+  _account?: string
 ): string {
   const ccsDir = getCcsDir();
   const settingsPath = path.join(ccsDir, `${provider}-${name}.settings.json`);
@@ -170,7 +175,8 @@ function createCliproxySettingsFile(
 function addCliproxyVariant(
   name: string,
   provider: CLIProxyProfileName,
-  settingsPath: string
+  settingsPath: string,
+  account?: string
 ): void {
   const configPath = getConfigPath();
 
@@ -189,10 +195,16 @@ function addCliproxyVariant(
 
   // Use relative path with ~ for portability
   const relativePath = `~/.ccs/${path.basename(settingsPath)}`;
-  config.cliproxy[name] = {
+
+  // Build variant config with optional account
+  const variantConfig: { provider: string; settings: string; account?: string } = {
     provider,
     settings: relativePath,
   };
+  if (account) {
+    variantConfig.account = account;
+  }
+  config.cliproxy[name] = variantConfig;
 
   // Write config atomically
   const tempPath = configPath + '.tmp';
@@ -290,6 +302,103 @@ async function handleCreate(args: string[]): Promise<void> {
     process.exit(1);
   }
 
+  // Step 2.5: Account selection
+  let account = parsedArgs.account;
+  const providerAccounts = getProviderAccounts(provider as CLIProxyProvider);
+
+  if (!account) {
+    if (providerAccounts.length === 0) {
+      // No accounts - prompt to authenticate first
+      console.log('');
+      console.log(warn(`No accounts authenticated for ${provider}`));
+      console.log('');
+
+      const shouldAuth = await InteractivePrompt.confirm(`Authenticate with ${provider} now?`, {
+        default: true,
+      });
+
+      if (!shouldAuth) {
+        console.log('');
+        console.log(info('Run authentication first:'));
+        console.log(`  ${color(`ccs ${provider} --auth`, 'command')}`);
+        process.exit(0);
+      }
+
+      // Trigger OAuth inline
+      console.log('');
+      const newAccount = await triggerOAuth(provider as CLIProxyProvider, {
+        add: true,
+        verbose: args.includes('--verbose'),
+      });
+
+      if (!newAccount) {
+        console.log(fail('Authentication failed'));
+        process.exit(1);
+      }
+
+      account = newAccount.id;
+      console.log('');
+      console.log(ok(`Authenticated as ${newAccount.email || newAccount.id}`));
+    } else if (providerAccounts.length === 1) {
+      // Single account - auto-select
+      account = providerAccounts[0].id;
+    } else {
+      // Multiple accounts - show selector with "Add new" option
+      const ADD_NEW_ID = '__add_new__';
+
+      const accountOptions = [
+        ...providerAccounts.map((acc) => ({
+          id: acc.id,
+          label: `${acc.email || acc.id}${acc.isDefault ? ' (default)' : ''}`,
+        })),
+        {
+          id: ADD_NEW_ID,
+          label: color('[+ Add new account...]', 'info'),
+        },
+      ];
+
+      const defaultIdx = providerAccounts.findIndex((a) => a.isDefault);
+
+      const selectedAccount = await InteractivePrompt.selectFromList(
+        'Select account:',
+        accountOptions,
+        { defaultIndex: defaultIdx >= 0 ? defaultIdx : 0 }
+      );
+
+      if (selectedAccount === ADD_NEW_ID) {
+        // Add new account inline
+        console.log('');
+        const newAccount = await triggerOAuth(provider as CLIProxyProvider, {
+          add: true,
+          verbose: args.includes('--verbose'),
+        });
+
+        if (!newAccount) {
+          console.log(fail('Authentication failed'));
+          process.exit(1);
+        }
+
+        account = newAccount.id;
+        console.log('');
+        console.log(ok(`Authenticated as ${newAccount.email || newAccount.id}`));
+      } else {
+        account = selectedAccount;
+      }
+    }
+  } else {
+    // Validate provided account exists
+    const exists = providerAccounts.find((a) => a.id === account);
+    if (!exists) {
+      console.log(fail(`Account '${account}' not found for ${provider}`));
+      console.log('');
+      console.log('Available accounts:');
+      providerAccounts.forEach((a) => {
+        console.log(`  - ${a.email || a.id}${a.isDefault ? ' (default)' : ''}`);
+      });
+      process.exit(1);
+    }
+  }
+
   // Step 3: Model selection
   let model = parsedArgs.model;
   if (!model) {
@@ -323,8 +432,8 @@ async function handleCreate(args: string[]): Promise<void> {
   console.log(info('Creating CLIProxy variant...'));
 
   try {
-    const settingsPath = createCliproxySettingsFile(name, provider, model);
-    addCliproxyVariant(name, provider, settingsPath);
+    const settingsPath = createCliproxySettingsFile(name, provider, model, account);
+    addCliproxyVariant(name, provider, settingsPath, account);
 
     console.log('');
     console.log(
@@ -332,6 +441,7 @@ async function handleCreate(args: string[]): Promise<void> {
         `Variant:  ${name}\n` +
           `Provider: ${provider}\n` +
           `Model:    ${model}\n` +
+          (account ? `Account:  ${account}\n` : '') +
           `Settings: ~/.ccs/${path.basename(settingsPath)}`,
         'CLIProxy Variant Created'
       )
@@ -551,6 +661,7 @@ async function showHelp(): Promise<void> {
   const createOpts: [string, string][] = [
     ['--provider <name>', 'Provider (gemini, codex, agy, qwen)'],
     ['--model <model>', 'Model name'],
+    ['--account <id>', 'Account ID (email or default)'],
     ['--force', 'Overwrite existing variant'],
     ['--yes, -y', 'Skip confirmation prompts'],
   ];

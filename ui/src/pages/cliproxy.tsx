@@ -14,9 +14,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Check, X, User, ChevronDown, Star, Trash2 } from 'lucide-react';
+import { Plus, Check, X, User, ChevronDown, Star, Trash2, Sparkles } from 'lucide-react';
 import { CliproxyTable } from '@/components/cliproxy-table';
 import { CliproxyDialog } from '@/components/cliproxy-dialog';
+import { QuickSetupWizard } from '@/components/quick-setup-wizard';
 import {
   useCliproxy,
   useCliproxyAuth,
@@ -175,6 +176,7 @@ function ProviderRow({
 
 export function CliproxyPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const { data, isLoading } = useCliproxy();
   const { data: authData, isLoading: authLoading } = useCliproxyAuth();
   const setDefaultMutation = useSetDefaultAccount();
@@ -189,10 +191,16 @@ export function CliproxyPage() {
             Manage OAuth-based provider variants and multi-account configurations
           </p>
         </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Create Variant
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setWizardOpen(true)}>
+            <Sparkles className="w-4 h-4 mr-2" />
+            Quick Setup
+          </Button>
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Create Variant
+          </Button>
+        </div>
       </div>
 
       {/* Built-in Profiles with Account Management */}
@@ -245,6 +253,7 @@ export function CliproxyPage() {
       </div>
 
       <CliproxyDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
+      <QuickSetupWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
   );
 }
