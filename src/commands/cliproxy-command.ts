@@ -254,6 +254,7 @@ function removeCliproxyVariant(name: string): { provider: string; settings: stri
 
 /**
  * Add CLIProxy variant to unified config (config.yaml)
+ * Creates *.settings.json file and stores reference in config.yaml
  */
 function addCliproxyVariantUnified(
   name: string,
@@ -261,9 +262,37 @@ function addCliproxyVariantUnified(
   model: string,
   account?: string
 ): void {
+  const ccsDir = path.join(require('os').homedir(), '.ccs');
+  const settingsFile = `${provider}-${name}.settings.json`;
+  const settingsPath = path.join(ccsDir, settingsFile);
+
+  // Get base env vars from provider config
+  const baseEnv = getClaudeEnvVars(provider as CLIProxyProvider, CLIPROXY_DEFAULT_PORT);
+
+  // Create settings file with model override
+  const settings = {
+    env: {
+      ANTHROPIC_BASE_URL: baseEnv.ANTHROPIC_BASE_URL || '',
+      ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN || '',
+      ANTHROPIC_MODEL: model,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: model,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
+    },
+  };
+
+  // Ensure directory exists
+  if (!fs.existsSync(ccsDir)) {
+    fs.mkdirSync(ccsDir, { recursive: true });
+  }
+
+  // Write settings file
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+
+  // Update config.yaml with reference
   const config = loadOrCreateUnifiedConfig();
 
-  // Ensure cliproxy.variants section exists (preserving other fields)
+  // Ensure cliproxy.variants section exists
   if (!config.cliproxy) {
     config.cliproxy = {
       oauth_accounts: {},
@@ -275,11 +304,11 @@ function addCliproxyVariantUnified(
     config.cliproxy.variants = {};
   }
 
-  // Add variant
+  // Add variant with settings file reference
   config.cliproxy.variants[name] = {
     provider: provider as CLIProxyProvider,
-    model,
     account,
+    settings: `~/.ccs/${settingsFile}`,
   };
 
   saveUnifiedConfig(config);
@@ -288,7 +317,9 @@ function addCliproxyVariantUnified(
 /**
  * Remove CLIProxy variant from unified config
  */
-function removeCliproxyVariantUnified(name: string): { provider: string; model?: string } | null {
+function removeCliproxyVariantUnified(
+  name: string
+): { provider: string; settings?: string } | null {
   const config = loadOrCreateUnifiedConfig();
 
   if (!config.cliproxy?.variants || !(name in config.cliproxy.variants)) {
@@ -296,11 +327,19 @@ function removeCliproxyVariantUnified(name: string): { provider: string; model?:
   }
 
   const variant = config.cliproxy.variants[name];
-  delete config.cliproxy.variants[name];
 
+  // Delete the settings file if it exists
+  if (variant.settings) {
+    const settingsPath = variant.settings.replace(/^~/, require('os').homedir());
+    if (fs.existsSync(settingsPath)) {
+      fs.unlinkSync(settingsPath);
+    }
+  }
+
+  delete config.cliproxy.variants[name];
   saveUnifiedConfig(config);
 
-  return { provider: variant.provider, model: variant.model };
+  return { provider: variant.provider, settings: variant.settings };
 }
 
 /**
@@ -577,7 +616,7 @@ async function handleList(): Promise<void> {
       variantData = {};
       for (const name of variantNames) {
         const v = variants[name];
-        variantData[name] = { provider: v.provider, model: v.model };
+        variantData[name] = { provider: v.provider, settings: v.settings };
       }
     } else {
       const config = loadConfig();
@@ -596,17 +635,13 @@ async function handleList(): Promise<void> {
       // Build table data
       const rows: string[][] = variantNames.map((name) => {
         const variant = variantData[name];
-        const thirdCol = variant.model || variant.settings || '-';
-        return [name, variant.provider, thirdCol];
+        return [name, variant.provider, variant.settings || '-'];
       });
 
       // Print table
-      const headLabels = isUnifiedMode()
-        ? ['Variant', 'Provider', 'Model']
-        : ['Variant', 'Provider', 'Settings'];
       console.log(
         table(rows, {
-          head: headLabels,
+          head: ['Variant', 'Provider', 'Settings'],
           colWidths: [15, 12, 35],
         })
       );
@@ -642,7 +677,7 @@ async function handleRemove(args: string[]): Promise<void> {
     variantData = {};
     for (const name of variantNames) {
       const v = variants[name];
-      variantData[name] = { provider: v.provider, model: v.model };
+      variantData[name] = { provider: v.provider, settings: v.settings };
     }
   } else {
     const config = loadConfig();
@@ -695,12 +730,7 @@ async function handleRemove(args: string[]): Promise<void> {
   console.log('');
   console.log(`Variant '${color(name, 'command')}' will be removed.`);
   console.log(`  Provider: ${variant.provider}`);
-  if (isUnifiedMode()) {
-    console.log(`  Model: ${variant.model || '-'}`);
-    console.log('  Config: ~/.ccs/config.yaml');
-  } else {
-    console.log(`  Settings: ${variant.settings}`);
-  }
+  console.log(`  Settings: ${variant.settings || '-'}`);
   console.log('');
 
   const confirmed =

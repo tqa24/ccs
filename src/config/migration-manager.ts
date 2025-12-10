@@ -5,17 +5,19 @@
  * Features:
  * - Automatic backup before migration
  * - Rollback support
- * - Secret extraction and separation
+ * - Settings file reference preservation (*.settings.json)
  * - Cache file restructuring
+ *
+ * Design: Settings remain in *.settings.json files (matching Claude's pattern)
+ * while config.yaml stores references to these files.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../utils/config-manager';
 import type { ProfileConfig, AccountConfig, CLIProxyVariantConfig } from './unified-config-types';
-import { createEmptyUnifiedConfig, createEmptySecretsConfig } from './unified-config-types';
+import { createEmptyUnifiedConfig } from './unified-config-types';
 import { saveUnifiedConfig, hasUnifiedConfig } from './unified-config-loader';
-import { saveSecrets, isSecretKey } from './secrets-manager';
 
 const BACKUP_DIR_PREFIX = 'backup-v1-';
 
@@ -79,7 +81,6 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
 
     // 3. Build unified config
     const unifiedConfig = createEmptyUnifiedConfig();
-    const secrets = createEmptySecretsConfig();
 
     // Set default if exists
     if (oldProfiles?.default && typeof oldProfiles.default === 'string') {
@@ -111,14 +112,9 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
           variant.account = oldVariant.account as string;
         }
 
-        // Extract model from settings file if exists
+        // Keep reference to existing settings file
         if (oldVariant.settings) {
-          const settingsPath = expandPath(oldVariant.settings as string);
-          const settings = readJsonSafe(settingsPath);
-          const env = settings?.env as Record<string, string> | undefined;
-          if (env?.ANTHROPIC_MODEL) {
-            variant.model = env.ANTHROPIC_MODEL;
-          }
+          variant.settings = oldVariant.settings as string;
         }
 
         unifiedConfig.cliproxy.variants[name] = variant;
@@ -126,96 +122,47 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
       migratedFiles.push('config.json.cliproxy → config.yaml.cliproxy.variants');
     }
 
-    // 6. Migrate API profiles from config.json + settings files
+    // 6. Migrate API profiles from config.json
+    // Keep settings in *.settings.json files (matching Claude's ~/.claude/settings.json pattern)
+    // config.yaml only stores reference to the settings file
     if (oldConfig?.profiles) {
       for (const [name, settingsPath] of Object.entries(oldConfig.profiles)) {
-        const expandedPath = expandPath(settingsPath as string);
-        const settings = readJsonSafe(expandedPath);
+        const pathStr = settingsPath as string;
+        const expandedPath = expandPath(pathStr);
 
-        if (settings?.env) {
-          // Split env into config (non-secret) and secrets
-          const envConfig: Record<string, string> = {};
-          const envSecrets: Record<string, string> = {};
-
-          for (const [key, value] of Object.entries(settings.env)) {
-            if (isSecretKey(key)) {
-              envSecrets[key] = value as string;
-            } else {
-              envConfig[key] = value as string;
-            }
-          }
-
-          const profile: ProfileConfig = {
-            type: 'api',
-            env: envConfig,
-          };
-          unifiedConfig.profiles[name] = profile;
-
-          if (Object.keys(envSecrets).length > 0) {
-            secrets.profiles[name] = envSecrets;
-          }
-
-          migratedFiles.push(`${name}.settings.json → config.yaml.profiles.${name}`);
-        } else {
-          warnings.push(`Skipped ${name}: no env vars found in ${expandedPath}`);
+        // Verify settings file exists
+        if (!fs.existsSync(expandedPath)) {
+          warnings.push(`Skipped ${name}: settings file not found at ${pathStr}`);
+          continue;
         }
+
+        // Store reference to settings file (keep using ~ for portability)
+        const profile: ProfileConfig = {
+          type: 'api',
+          settings: pathStr,
+        };
+        unifiedConfig.profiles[name] = profile;
+        migratedFiles.push(`config.json.profiles.${name} → config.yaml (settings: ${pathStr})`);
       }
     }
 
     // 6b. Migrate built-in CLIProxy OAuth profile settings (gemini, codex, agy, qwen, iflow)
-    // These files contain user overrides like custom models or env vars (ANTHROPIC_MAX_TOKENS, etc.)
+    // Keep settings in *.settings.json files - only record reference in config.yaml
+    // This matches Claude's ~/.claude/settings.json pattern for user familiarity
     const builtInProviders = ['gemini', 'codex', 'agy', 'qwen', 'iflow'];
     for (const provider of builtInProviders) {
-      const settingsPath = path.join(ccsDir, `${provider}.settings.json`);
+      const settingsFile = `${provider}.settings.json`;
+      const settingsPath = path.join(ccsDir, settingsFile);
+
       if (fs.existsSync(settingsPath)) {
-        const settings = readJsonSafe(settingsPath);
-        const env = settings?.env as Record<string, string> | undefined;
-        if (env) {
-          // Extract user-configurable values (skip CCS-internal values)
-          const userEnv: Record<string, string> = {};
-          let userModel: string | undefined;
+        // Create variant with reference to settings file
+        const variant: CLIProxyVariantConfig = {
+          provider: provider as CLIProxyVariantConfig['provider'],
+          settings: `~/.ccs/${settingsFile}`,
+        };
 
-          for (const [key, value] of Object.entries(env)) {
-            // Skip internal CCS-managed values (these are auto-generated at runtime)
-            if (key === 'ANTHROPIC_AUTH_TOKEN' && value === 'ccs-internal-managed') continue;
-            if (key === 'ANTHROPIC_BASE_URL' && value.includes('127.0.0.1')) continue;
-            // Skip model tier settings that are derived from primary model
-            if (key === 'ANTHROPIC_DEFAULT_OPUS_MODEL') continue;
-            if (key === 'ANTHROPIC_DEFAULT_SONNET_MODEL') continue;
-            if (key === 'ANTHROPIC_DEFAULT_HAIKU_MODEL') continue;
-            // Skip secrets (should not be in CLIProxy settings anyway)
-            if (isSecretKey(key)) continue;
-
-            // Extract model separately
-            if (key === 'ANTHROPIC_MODEL') {
-              userModel = value;
-              continue;
-            }
-
-            // Keep other user-configurable env vars
-            userEnv[key] = value;
-          }
-
-          // Only create variant if there's user customization
-          if (userModel || Object.keys(userEnv).length > 0) {
-            const variant: CLIProxyVariantConfig = {
-              provider: provider as CLIProxyVariantConfig['provider'],
-            };
-
-            if (userModel) {
-              variant.model = userModel;
-            }
-
-            if (Object.keys(userEnv).length > 0) {
-              variant.env = userEnv;
-            }
-
-            unifiedConfig.cliproxy.variants[provider] = variant;
-            migratedFiles.push(
-              `${provider}.settings.json → config.yaml.cliproxy.variants.${provider}`
-            );
-          }
-        }
+        unifiedConfig.cliproxy.variants[provider] = variant;
+        migratedFiles.push(`${settingsFile} → config.yaml.cliproxy.variants.${provider}`);
       }
     }
 
@@ -240,14 +187,10 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
       }
     }
 
-    // 8. Write new configs (unless dry run)
+    // 8. Write new config (unless dry run)
+    // Note: Settings remain in *.settings.json files, config.yaml only stores references
     if (!dryRun) {
       saveUnifiedConfig(unifiedConfig);
-
-      if (Object.keys(secrets.profiles).length > 0) {
-        saveSecrets(secrets);
-        migratedFiles.push('secrets extracted → secrets.yaml');
-      }
     }
 
     return {

@@ -52,6 +52,22 @@ export interface ProfileNotFoundError extends Error {
 /**
  * Profile Detector Class
  */
+/**
+ * Load env vars from a settings file (*.settings.json).
+ * Expands ~ to home directory. Returns empty object on error.
+ */
+function loadSettingsFromFile(settingsPath: string): Record<string, string> {
+  const expandedPath = settingsPath.replace(/^~/, os.homedir());
+  try {
+    if (!fs.existsSync(expandedPath)) return {};
+    const content = fs.readFileSync(expandedPath, 'utf8');
+    const settings = JSON.parse(content) as { env?: Record<string, string> };
+    return settings.env || {};
+  } catch {
+    return {};
+  }
+}
+
 class ProfileDetector {
   private readonly configPath: string;
   private readonly profilesPath: string;
@@ -99,12 +115,14 @@ class ProfileDetector {
     // Check API profiles
     if (config.profiles?.[profileName]) {
       const profile = config.profiles[profileName];
-      // Merge with secrets
+      // Load env from settings file
+      const settingsEnv = loadSettingsFromFile(profile.settings);
+      // Merge with secrets (for backward compat with any extracted secrets)
       const secrets = getProfileSecrets(profileName);
       return {
         type: 'settings',
         name: profileName,
-        env: { ...profile.env, ...secrets },
+        env: { ...settingsEnv, ...secrets },
       };
     }
 

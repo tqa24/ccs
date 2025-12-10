@@ -10,6 +10,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import {
   initUI,
@@ -32,7 +33,7 @@ import {
   loadOrCreateUnifiedConfig,
   saveUnifiedConfig,
 } from '../config/unified-config-loader';
-import { setProfileSecrets, deleteAllProfileSecrets } from '../config/secrets-manager';
+import { deleteAllProfileSecrets } from '../config/secrets-manager';
 import { isUnifiedConfigEnabled } from '../config/feature-flags';
 
 interface ApiCommandArgs {
@@ -183,7 +184,9 @@ function updateConfig(name: string, _settingsPath: string): void {
 }
 
 /**
- * Create API profile in unified config (config.yaml + secrets.yaml)
+ * Create API profile in unified config
+ * Creates *.settings.json file and stores reference in config.yaml
+ * (matching Claude's ~/.claude/settings.json pattern)
  */
 function createApiProfileUnified(
   name: string,
@@ -191,13 +194,15 @@ function createApiProfileUnified(
   apiKey: string,
   model: string
 ): void {
-  const config = loadOrCreateUnifiedConfig();
+  const ccsDir = path.join(os.homedir(), '.ccs');
+  const settingsFile = `${name}.settings.json`;
+  const settingsPath = path.join(ccsDir, settingsFile);
 
-  // Add profile to config.yaml (non-sensitive data only)
-  config.profiles[name] = {
-    type: 'api',
+  // Create settings file with all env vars (matching Claude's pattern)
+  const settings = {
     env: {
       ANTHROPIC_BASE_URL: baseUrl,
+      ANTHROPIC_AUTH_TOKEN: apiKey,
       ANTHROPIC_MODEL: model,
       ANTHROPIC_DEFAULT_OPUS_MODEL: model,
       ANTHROPIC_DEFAULT_SONNET_MODEL: model,
@@ -205,12 +210,21 @@ function createApiProfileUnified(
     },
   };
 
-  saveUnifiedConfig(config);
+  // Ensure directory exists
+  if (!fs.existsSync(ccsDir)) {
+    fs.mkdirSync(ccsDir, { recursive: true });
+  }
 
-  // Store API key in secrets.yaml (sensitive data)
-  setProfileSecrets(name, {
-    ANTHROPIC_AUTH_TOKEN: apiKey,
-  });
+  // Write settings file
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+
+  // Store reference in config.yaml
+  const config = loadOrCreateUnifiedConfig();
+  config.profiles[name] = {
+    type: 'api',
+    settings: `~/.ccs/${settingsFile}`,
+  };
+  saveUnifiedConfig(config);
 }
 
 /**
@@ -218,9 +232,18 @@ function createApiProfileUnified(
  */
 function removeApiProfileUnified(name: string): void {
   const config = loadOrCreateUnifiedConfig();
+  const profile = config.profiles[name];
 
-  if (!config.profiles[name]) {
+  if (!profile) {
     throw new Error(`API profile not found: ${name}`);
+  }
+
+  // Delete the settings file if it exists
+  if (profile.settings) {
+    const settingsPath = profile.settings.replace(/^~/, os.homedir());
+    if (fs.existsSync(settingsPath)) {
+      fs.unlinkSync(settingsPath);
+    }
   }
 
   delete config.profiles[name];
@@ -232,7 +255,7 @@ function removeApiProfileUnified(name: string): void {
 
   saveUnifiedConfig(config);
 
-  // Remove secrets
+  // Remove any legacy secrets (backward compat)
   deleteAllProfileSecrets(name);
 }
 
@@ -416,13 +439,13 @@ async function handleList(): Promise<void> {
         console.log(subheader('CLIProxy Variants'));
         const cliproxyRows = variants.map((name) => {
           const variant = unifiedConfig.cliproxy?.variants[name];
-          return [name, variant?.provider || 'unknown', variant?.model || '-'];
+          return [name, variant?.provider || 'unknown', variant?.settings || '-'];
         });
 
         console.log(
           table(cliproxyRows, {
-            head: ['Variant', 'Provider', 'Model'],
-            colWidths: [15, 15, 20],
+            head: ['Variant', 'Provider', 'Settings'],
+            colWidths: [15, 15, 30],
           })
         );
         console.log('');

@@ -29,12 +29,15 @@ export interface AccountConfig {
 /**
  * API-based profile configuration.
  * Injects environment variables for alternative providers (GLM, Kimi, etc.).
+ *
+ * Settings are stored in separate *.settings.json files (matching Claude's pattern)
+ * to allow users to edit them directly without touching config.yaml.
  */
 export interface ProfileConfig {
   /** Profile type - currently only 'api' */
   type: 'api';
-  /** Environment variables (non-secret values only) */
-  env: Record<string, string>;
+  /** Path to settings file (e.g., "~/.ccs/glm.settings.json") */
+  settings: string;
 }
 
 /**
@@ -46,16 +49,17 @@ export type OAuthAccounts = Record<string, string>;
 /**
  * CLIProxy variant configuration.
  * User-defined variants of built-in OAuth providers.
+ *
+ * Settings are stored in separate *.settings.json files (matching Claude's pattern)
+ * to allow users to edit them directly without touching config.yaml.
  */
 export interface CLIProxyVariantConfig {
   /** Base provider to use */
   provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow';
   /** Account nickname (references oauth_accounts) */
   account?: string;
-  /** Model override (inline, no separate settings file) */
-  model?: string;
-  /** Additional env var overrides (ANTHROPIC_MAX_TOKENS, MAX_THINKING_TOKENS, etc.) */
-  env?: Record<string, string>;
+  /** Path to settings file (e.g., "~/.ccs/gemini-custom.settings.json") */
+  settings?: string;
 }
 
 /**
