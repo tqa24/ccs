@@ -25,7 +25,6 @@ export function ModelBreakdownChart({ data, isLoading, className }: ModelBreakdo
       name: item.model,
       value: item.tokens,
       cost: item.cost,
-      requests: item.requests,
       percentage: item.percentage,
       fill: getModelColor(item.model),
     }));
@@ -47,18 +46,18 @@ export function ModelBreakdownChart({ data, isLoading, className }: ModelBreakdo
     if (!active || !payload) return null;
 
     const payloadArray = payload as Array<{
-      payload: { name: string; value: number; cost: number; requests: number; percentage: number };
+      payload: { name: string; value: number; cost: number; percentage: number };
     }>;
     if (!payloadArray.length) return null;
 
-    const data = payloadArray[0].payload;
+    const item = payloadArray[0].payload;
     return (
       <div className="rounded-lg border bg-background p-2 shadow-lg text-xs">
-        <p className="font-medium mb-1">{data.name}</p>
+        <p className="font-medium mb-1">{item.name}</p>
         <p className="text-muted-foreground">
-          {formatNumber(data.value)} ({data.percentage.toFixed(1)}%)
+          {formatNumber(item.value)} ({item.percentage.toFixed(1)}%)
         </p>
-        <p className="text-muted-foreground">${data.cost.toFixed(4)}</p>
+        <p className="text-muted-foreground">${item.cost.toFixed(4)}</p>
       </div>
     );
   };
@@ -77,8 +76,8 @@ export function ModelBreakdownChart({ data, isLoading, className }: ModelBreakdo
             cy="50%"
             labelLine={false}
             label={renderLabel}
-            innerRadius={60}
-            outerRadius={80}
+            innerRadius={50}
+            outerRadius={70}
             paddingAngle={2}
             dataKey="value"
           >

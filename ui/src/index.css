@@ -30,6 +30,12 @@
   --popover: oklch(0.9635 0.0067 97.35); /* Match background */
   --popover-foreground: oklch(0.2 0.02 40); /* Match foreground */
 
+  --card: oklch(0.9635 0.0067 97.35); /* Match background */
+  --card-foreground: oklch(0.2 0.02 40); /* Match foreground */
+
+  --destructive: oklch(0.577 0.245 27.325); /* Red 600 */
+  --destructive-foreground: oklch(0.9635 0.0067 97.35); /* White */
+
   /* Sidebar colors - Light */
   --sidebar: oklch(0.9635 0.0067 97.35); /* Pampas */
   --sidebar-foreground: oklch(0.2 0.02 40);
@@ -69,6 +75,12 @@
   --popover: oklch(0.21 0.006 100); /* Match dark bg */
   --popover-foreground: oklch(0.9635 0.0067 97.35); /* Match dark fg */
 
+  --card: oklch(0.21 0.006 100); /* Match dark bg */
+  --card-foreground: oklch(0.9635 0.0067 97.35); /* Match dark fg */
+
+  --destructive: oklch(0.396 0.141 25.723); /* Red 900 */
+  --destructive-foreground: oklch(0.9635 0.0067 97.35); /* White */
+
   /* Sidebar Dark Theme */
   --sidebar: oklch(0.21 0.006 100); /* Match bg */
   --sidebar-foreground: oklch(0.9635 0.0067 97.35);
@@ -92,6 +104,14 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

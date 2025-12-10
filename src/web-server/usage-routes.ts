@@ -21,7 +21,15 @@ import {
   loadSessionData,
   loadAllUsageData,
 } from './data-aggregator';
-import type { DailyUsage, MonthlyUsage, SessionUsage } from './usage-types';
+import type {
+  DailyUsage,
+  MonthlyUsage,
+  SessionUsage,
+  Anomaly,
+  AnomalySummary,
+  TokenBreakdown,
+} from './usage-types';
+import { getModelPricing } from './model-pricing';
 import {
   readDiskCache,
   writeDiskCache,
@@ -607,6 +615,45 @@ function errorResponse(res: Response, error: unknown, defaultMessage: string): v
 }
 
 /**
+ * Calculate cost breakdown for token categories
+ * Uses weighted average pricing across models in the dataset
+ */
+function calculateTokenBreakdownCosts(dailyData: DailyUsage[]): TokenBreakdown {
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheCreationTokens = 0;
+  let cacheReadTokens = 0;
+  let inputCost = 0;
+  let outputCost = 0;
+  let cacheCreationCost = 0;
+  let cacheReadCost = 0;
+
+  for (const day of dailyData) {
+    for (const breakdown of day.modelBreakdowns) {
+      const pricing = getModelPricing(breakdown.modelName);
+
+      inputTokens += breakdown.inputTokens;
+      outputTokens += breakdown.outputTokens;
+      cacheCreationTokens += breakdown.cacheCreationTokens;
+      cacheReadTokens += breakdown.cacheReadTokens;
+
+      inputCost += (breakdown.inputTokens / 1_000_000) * pricing.inputPerMillion;
+      outputCost += (breakdown.outputTokens / 1_000_000) * pricing.outputPerMillion;
+      cacheCreationCost +=
+        (breakdown.cacheCreationTokens / 1_000_000) * pricing.cacheCreationPerMillion;
+      cacheReadCost += (breakdown.cacheReadTokens / 1_000_000) * pricing.cacheReadPerMillion;
+    }
+  }
+
+  return {
+    input: { tokens: inputTokens, cost: Math.round(inputCost * 100) / 100 },
+    output: { tokens: outputTokens, cost: Math.round(outputCost * 100) / 100 },
+    cacheCreation: { tokens: cacheCreationTokens, cost: Math.round(cacheCreationCost * 100) / 100 },
+    cacheRead: { tokens: cacheReadTokens, cost: Math.round(cacheReadCost * 100) / 100 },
+  };
+}
+
+/**
  * GET /api/usage/summary
  *
  * Returns usage summary data for quick dashboard display.
@@ -625,17 +672,23 @@ usageRoutes.get(
       // Calculate totals
       let totalInputTokens = 0;
       let totalOutputTokens = 0;
-      let totalCacheTokens = 0;
+      let totalCacheCreationTokens = 0;
+      let totalCacheReadTokens = 0;
       let totalCost = 0;
 
       for (const day of filtered) {
         totalInputTokens += day.inputTokens;
         totalOutputTokens += day.outputTokens;
-        totalCacheTokens += day.cacheCreationTokens + day.cacheReadTokens;
+        totalCacheCreationTokens += day.cacheCreationTokens;
+        totalCacheReadTokens += day.cacheReadTokens;
         totalCost += day.totalCost;
       }
 
       const totalTokens = totalInputTokens + totalOutputTokens;
+      const totalCacheTokens = totalCacheCreationTokens + totalCacheReadTokens;
+
+      // Calculate detailed token breakdown with costs
+      const tokenBreakdown = calculateTokenBreakdownCosts(filtered);
 
       res.json({
         success: true,
@@ -644,7 +697,10 @@ usageRoutes.get(
           totalInputTokens,
           totalOutputTokens,
           totalCacheTokens,
+          totalCacheCreationTokens,
+          totalCacheReadTokens,
           totalCost: Math.round(totalCost * 100) / 100,
+          tokenBreakdown,
           totalDays: filtered.length,
           averageTokensPerDay: filtered.length > 0 ? Math.round(totalTokens / filtered.length) : 0,
           averageCostPerDay:
@@ -710,14 +766,15 @@ usageRoutes.get(
       const dailyData = await getCachedDailyData();
       const filtered = filterByDateRange(dailyData, since, until);
 
-      // Aggregate model usage across all days
+      // Aggregate model usage across all days with detailed breakdown
       const modelMap = new Map<
         string,
         {
           model: string;
           inputTokens: number;
           outputTokens: number;
-          cacheTokens: number;
+          cacheCreationTokens: number;
+          cacheReadTokens: number;
           cost: number;
         }
       >();
@@ -728,13 +785,15 @@ usageRoutes.get(
             model: breakdown.modelName,
             inputTokens: 0,
             outputTokens: 0,
-            cacheTokens: 0,
+            cacheCreationTokens: 0,
+            cacheReadTokens: 0,
             cost: 0,
           };
 
           existing.inputTokens += breakdown.inputTokens;
           existing.outputTokens += breakdown.outputTokens;
-          existing.cacheTokens += breakdown.cacheCreationTokens + breakdown.cacheReadTokens;
+          existing.cacheCreationTokens += breakdown.cacheCreationTokens;
+          existing.cacheReadTokens += breakdown.cacheReadTokens;
           existing.cost += breakdown.cost;
 
           modelMap.set(breakdown.modelName, existing);
@@ -745,17 +804,46 @@ usageRoutes.get(
       const models = Array.from(modelMap.values());
       const totalTokens = models.reduce((sum, m) => sum + m.inputTokens + m.outputTokens, 0);
 
-      // Add percentage and sort by tokens
+      // Add percentage, cost breakdown, and I/O ratio
       const result = models
-        .map((m) => ({
-          ...m,
-          tokens: m.inputTokens + m.outputTokens,
-          cost: Math.round(m.cost * 100) / 100,
-          percentage:
-            totalTokens > 0
-              ? Math.round(((m.inputTokens + m.outputTokens) / totalTokens) * 1000) / 10
-              : 0,
-        }))
+        .map((m) => {
+          const pricing = getModelPricing(m.model);
+
+          // Calculate cost breakdown
+          const inputCost = (m.inputTokens / 1_000_000) * pricing.inputPerMillion;
+          const outputCost = (m.outputTokens / 1_000_000) * pricing.outputPerMillion;
+          const cacheCreationCost =
+            (m.cacheCreationTokens / 1_000_000) * pricing.cacheCreationPerMillion;
+          const cacheReadCost = (m.cacheReadTokens / 1_000_000) * pricing.cacheReadPerMillion;
+
+          // Calculate I/O ratio
+          const ioRatio = m.outputTokens > 0 ? m.inputTokens / m.outputTokens : 0;
+
+          return {
+            model: m.model,
+            tokens: m.inputTokens + m.outputTokens,
+            inputTokens: m.inputTokens,
+            outputTokens: m.outputTokens,
+            cacheCreationTokens: m.cacheCreationTokens,
+            cacheReadTokens: m.cacheReadTokens,
+            cacheTokens: m.cacheCreationTokens + m.cacheReadTokens,
+            cost: Math.round(m.cost * 100) / 100,
+            percentage:
+              totalTokens > 0
+                ? Math.round(((m.inputTokens + m.outputTokens) / totalTokens) * 1000) / 10
+                : 0,
+            costBreakdown: {
+              input: { tokens: m.inputTokens, cost: Math.round(inputCost * 100) / 100 },
+              output: { tokens: m.outputTokens, cost: Math.round(outputCost * 100) / 100 },
+              cacheCreation: {
+                tokens: m.cacheCreationTokens,
+                cost: Math.round(cacheCreationCost * 100) / 100,
+              },
+              cacheRead: { tokens: m.cacheReadTokens, cost: Math.round(cacheReadCost * 100) / 100 },
+            },
+            ioRatio: Math.round(ioRatio * 10) / 10,
+          };
+        })
         .sort((a, b) => b.tokens - a.tokens);
 
       res.json({
@@ -900,3 +988,187 @@ usageRoutes.get('/status', (_req: Request, res: Response) => {
     },
   });
 });
+
+// ============================================================================
+// ANOMALY DETECTION
+// ============================================================================
+
+/** Anomaly detection thresholds */
+const ANOMALY_THRESHOLDS = {
+  HIGH_INPUT_TOKENS: 10_000_000, // 10M tokens/day/model
+  HIGH_IO_RATIO: 100, // 100x input/output ratio
+  COST_SPIKE_MULTIPLIER: 2, // 2x average daily cost
+  HIGH_CACHE_READ_TOKENS: 1_000_000_000, // 1B cache read tokens
+};
+
+/**
+ * Detect anomalies in usage data
+ */
+function detectAnomalies(dailyData: DailyUsage[]): Anomaly[] {
+  const anomalies: Anomaly[] = [];
+
+  // Calculate average daily cost for spike detection
+  const totalCost = dailyData.reduce((sum, day) => sum + day.totalCost, 0);
+  const avgDailyCost = dailyData.length > 0 ? totalCost / dailyData.length : 0;
+  const costSpikeThreshold = avgDailyCost * ANOMALY_THRESHOLDS.COST_SPIKE_MULTIPLIER;
+
+  for (const day of dailyData) {
+    // Check for cost spikes
+    if (avgDailyCost > 0 && day.totalCost > costSpikeThreshold) {
+      const multiplier = Math.round((day.totalCost / avgDailyCost) * 10) / 10;
+      anomalies.push({
+        date: day.date,
+        type: 'cost_spike',
+        value: day.totalCost,
+        threshold: avgDailyCost,
+        message: `Cost ${multiplier}x above daily average ($${Math.round(day.totalCost)} vs $${Math.round(avgDailyCost)})`,
+      });
+    }
+
+    // Check per-model anomalies
+    for (const breakdown of day.modelBreakdowns) {
+      // High input tokens per model
+      if (breakdown.inputTokens > ANOMALY_THRESHOLDS.HIGH_INPUT_TOKENS) {
+        const multiplier =
+          Math.round((breakdown.inputTokens / ANOMALY_THRESHOLDS.HIGH_INPUT_TOKENS) * 10) / 10;
+        anomalies.push({
+          date: day.date,
+          type: 'high_input',
+          model: breakdown.modelName,
+          value: breakdown.inputTokens,
+          threshold: ANOMALY_THRESHOLDS.HIGH_INPUT_TOKENS,
+          message: `Input tokens ${multiplier}x above threshold (${formatTokenCount(breakdown.inputTokens)})`,
+        });
+      }
+
+      // High I/O ratio
+      if (breakdown.outputTokens > 0) {
+        const ioRatio = breakdown.inputTokens / breakdown.outputTokens;
+        if (ioRatio > ANOMALY_THRESHOLDS.HIGH_IO_RATIO) {
+          const multiplier = Math.round((ioRatio / ANOMALY_THRESHOLDS.HIGH_IO_RATIO) * 10) / 10;
+          anomalies.push({
+            date: day.date,
+            type: 'high_io_ratio',
+            model: breakdown.modelName,
+            value: ioRatio,
+            threshold: ANOMALY_THRESHOLDS.HIGH_IO_RATIO,
+            message: `I/O ratio ${multiplier}x above threshold (${Math.round(ioRatio)}:1)`,
+          });
+        }
+      }
+
+      // High cache read tokens
+      if (breakdown.cacheReadTokens > ANOMALY_THRESHOLDS.HIGH_CACHE_READ_TOKENS) {
+        const multiplier =
+          Math.round((breakdown.cacheReadTokens / ANOMALY_THRESHOLDS.HIGH_CACHE_READ_TOKENS) * 10) /
+          10;
+        anomalies.push({
+          date: day.date,
+          type: 'high_cache_read',
+          model: breakdown.modelName,
+          value: breakdown.cacheReadTokens,
+          threshold: ANOMALY_THRESHOLDS.HIGH_CACHE_READ_TOKENS,
+          message: `Cache reads ${multiplier}x above threshold (${formatTokenCount(breakdown.cacheReadTokens)})`,
+        });
+      }
+    }
+  }
+
+  // Sort by date descending
+  return anomalies.sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
+ * Format token count for human readability
+ */
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000_000) {
+    return `${(tokens / 1_000_000_000).toFixed(1)}B`;
+  } else if (tokens >= 1_000_000) {
+    return `${(tokens / 1_000_000).toFixed(1)}M`;
+  } else if (tokens >= 1_000) {
+    return `${(tokens / 1_000).toFixed(1)}K`;
+  }
+  return tokens.toString();
+}
+
+/**
+ * Summarize anomalies by type
+ */
+function summarizeAnomalies(anomalies: Anomaly[]): AnomalySummary {
+  const uniqueDates = new Set<string>();
+  let highInputDays = 0;
+  let highIoRatioDays = 0;
+  let costSpikeDays = 0;
+  let highCacheReadDays = 0;
+
+  // Track unique dates per anomaly type
+  const highInputDates = new Set<string>();
+  const highIoRatioDates = new Set<string>();
+  const costSpikeDates = new Set<string>();
+  const highCacheReadDates = new Set<string>();
+
+  for (const anomaly of anomalies) {
+    uniqueDates.add(anomaly.date);
+
+    switch (anomaly.type) {
+      case 'high_input':
+        highInputDates.add(anomaly.date);
+        break;
+      case 'high_io_ratio':
+        highIoRatioDates.add(anomaly.date);
+        break;
+      case 'cost_spike':
+        costSpikeDates.add(anomaly.date);
+        break;
+      case 'high_cache_read':
+        highCacheReadDates.add(anomaly.date);
+        break;
+    }
+  }
+
+  highInputDays = highInputDates.size;
+  highIoRatioDays = highIoRatioDates.size;
+  costSpikeDays = costSpikeDates.size;
+  highCacheReadDays = highCacheReadDates.size;
+
+  return {
+    totalAnomalies: anomalies.length,
+    highInputDays,
+    highIoRatioDays,
+    costSpikeDays,
+    highCacheReadDays,
+  };
+}
+
+/**
+ * GET /api/usage/insights
+ *
+ * Returns anomaly detection results for usage patterns.
+ * Query: ?since=YYYYMMDD&until=YYYYMMDD
+ */
+usageRoutes.get(
+  '/insights',
+  async (req: Request<object, object, object, UsageQuery>, res: Response) => {
+    try {
+      const since = validateDate(req.query.since);
+      const until = validateDate(req.query.until);
+
+      const dailyData = await getCachedDailyData();
+      const filtered = filterByDateRange(dailyData, since, until);
+
+      const anomalies = detectAnomalies(filtered);
+      const summary = summarizeAnomalies(anomalies);
+
+      res.json({
+        success: true,
+        data: {
+          anomalies,
+          summary,
+        },
+      });
+    } catch (error) {
+      errorResponse(res, error, 'Failed to fetch usage insights');
+    }
+  }
+);

@@ -7,39 +7,88 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
 // Types
+export interface TokenCategoryCost {
+  tokens: number;
+  cost: number;
+}
+
+export interface TokenBreakdown {
+  input: TokenCategoryCost;
+  output: TokenCategoryCost;
+  cacheCreation: TokenCategoryCost;
+  cacheRead: TokenCategoryCost;
+}
+
 export interface UsageSummary {
   totalTokens: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheTokens: number;
+  totalCacheCreationTokens: number;
+  totalCacheReadTokens: number;
   totalCost: number;
-  totalRequests: number;
-  averageTokensPerRequest: number;
-  dailyUsage: DailyUsage[];
+  tokenBreakdown: TokenBreakdown;
+  totalDays: number;
+  averageTokensPerDay: number;
+  averageCostPerDay: number;
 }
 
 export interface DailyUsage {
   date: string;
   tokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheTokens: number;
   cost: number;
-  requests: number;
+  modelsUsed: number;
 }
 
 export interface ModelUsage {
   model: string;
   tokens: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  cacheTokens: number;
   cost: number;
-  requests: number;
   percentage: number;
+  costBreakdown: TokenBreakdown;
+  ioRatio: number;
+}
+
+export type AnomalyType = 'high_input' | 'high_io_ratio' | 'cost_spike' | 'high_cache_read';
+
+export interface Anomaly {
+  date: string;
+  type: AnomalyType;
+  model?: string;
+  value: number;
+  threshold: number;
+  message: string;
+}
+
+export interface AnomalySummary {
+  totalAnomalies: number;
+  highInputDays: number;
+  highIoRatioDays: number;
+  costSpikeDays: number;
+  highCacheReadDays: number;
+}
+
+export interface UsageInsights {
+  anomalies: Anomaly[];
+  summary: AnomalySummary;
 }
 
 export interface Session {
-  id: string;
-  startTime: string;
-  endTime?: string;
-  duration?: number;
-  tokens: number;
+  sessionId: string;
+  projectPath: string;
+  inputTokens: number;
+  outputTokens: number;
   cost: number;
-  requests: number;
-  profile: string;
-  model: string;
+  lastActivity: string;
+  modelsUsed: string[];
 }
 
 export interface PaginatedSessions {
@@ -132,6 +181,14 @@ export const usageApi = {
   },
   /** Get cache status including last fetch timestamp */
   status: () => request<UsageStatus>('/usage/status'),
+  /** Get usage insights including anomaly detection */
+  insights: (options?: UsageQueryOptions) => {
+    const params = new URLSearchParams();
+    if (options?.startDate) params.append('since', formatDateForApi(options.startDate));
+    if (options?.endDate) params.append('until', formatDateForApi(options.endDate));
+    if (options?.profile) params.append('profile', options.profile);
+    return request<UsageInsights>(`/usage/insights?${params}`);
+  },
 };
 
 // Helper function to match existing API client pattern
@@ -202,5 +259,25 @@ export function useUsageStatus() {
     queryFn: () => usageApi.status(),
     staleTime: 10 * 1000, // 10 seconds - poll frequently for updates
     refetchInterval: 30 * 1000, // Auto-refetch every 30 seconds
+  });
+}
+
+/**
+ * Hook to get usage insights with anomaly detection
+ * Returns detected anomalies and summary statistics
+ */
+export function useUsageInsights(options?: UsageQueryOptions) {
+  return useQuery({
+    queryKey: ['usage', 'insights', options],
+    queryFn: () => usageApi.insights(options),
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useSessions(options?: UsageQueryOptions) {
+  return useQuery({
+    queryKey: ['usage', 'sessions', options],
+    queryFn: () => usageApi.sessions(options),
+    staleTime: 60 * 1000, // 1 minute
   });
 }
