@@ -120,10 +120,19 @@ ccs gemini --auth --add
 # Add with nickname for easy identification
 ccs gemini --auth --add --nickname work
 
-# List all accounts
+# Codex provider examples
+ccs codex --auth              # First account for Codex
+ccs codex --auth --add        # Add another Codex account
+ccs codex --auth --add --nickname work  # Named account
+
+# List all accounts (any provider)
+ccs gemini --accounts
+ccs codex --accounts
 ccs agy --accounts
 
 # Switch to a different account
+ccs gemini --use work
+ccs codex --use work
 ccs agy --use work
 ```
 
