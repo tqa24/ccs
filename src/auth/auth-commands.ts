@@ -16,6 +16,7 @@ import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import ProfileRegistry from './profile-registry';
+import { ProfileMetadata } from '../types';
 import { InstanceManager } from '../management/instance-manager';
 import {
   initUI,
@@ -285,8 +286,21 @@ class AuthCommands {
     const { verbose, json } = this.parseArgs(args);
 
     try {
-      const profiles = this.registry.getAllProfiles();
-      const defaultProfile = this.registry.getDefaultProfile();
+      // Get profiles from both legacy (profiles.json) and unified config (config.yaml)
+      const legacyProfiles = this.registry.getAllProfiles();
+      const unifiedAccounts = this.registry.getAllAccountsUnified();
+
+      // Merge profiles: unified config takes precedence
+      const profiles: Record<string, ProfileMetadata> = { ...legacyProfiles };
+      for (const [name, account] of Object.entries(unifiedAccounts)) {
+        profiles[name] = {
+          type: 'account',
+          created: account.created,
+          last_used: account.last_used,
+        };
+      }
+
+      const defaultProfile = this.registry.getDefaultUnified() ?? this.registry.getDefaultProfile();
       const profileNames = Object.keys(profiles);
 
       // JSON output mode
