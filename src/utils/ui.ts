@@ -301,6 +301,18 @@ export function infoBox(content: string, title?: string): string {
   });
 }
 
+/**
+ * Render warning box (yellow border)
+ */
+export function warnBox(content: string, title = 'WARNING'): string {
+  return box(content, {
+    title,
+    borderColor: 'yellow',
+    borderStyle: 'round',
+    padding: 1,
+  });
+}
+
 // =============================================================================
 // TABLE RENDERING
 // =============================================================================
@@ -613,6 +625,7 @@ export const ui = {
   box,
   errorBox,
   infoBox,
+  warnBox,
   table,
 
   // Progress
