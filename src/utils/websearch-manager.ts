@@ -612,9 +612,39 @@ export function getWebSearchHookEnv(): Record<string, string> {
     return env;
   }
 
-  // Pass simple config to hook
+  // Pass master switch
   env.CCS_WEBSEARCH_ENABLED = '1';
-  env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers?.gemini?.timeout || 55);
+
+  // Pass individual provider enabled states
+  // Hook will only use providers that are BOTH enabled AND installed
+  if (wsConfig.providers?.gemini?.enabled) {
+    env.CCS_WEBSEARCH_GEMINI = '1';
+    env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers.gemini.timeout || 55);
+  }
+
+  if (wsConfig.providers?.opencode?.enabled) {
+    env.CCS_WEBSEARCH_OPENCODE = '1';
+    if (wsConfig.providers.opencode.model) {
+      env.CCS_WEBSEARCH_OPENCODE_MODEL = wsConfig.providers.opencode.model;
+    }
+    // Use opencode timeout if no gemini timeout set
+    if (!env.CCS_WEBSEARCH_TIMEOUT) {
+      env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers.opencode.timeout || 60);
+    }
+  }
+
+  if (wsConfig.providers?.grok?.enabled) {
+    env.CCS_WEBSEARCH_GROK = '1';
+    // Use grok timeout if no other timeout set
+    if (!env.CCS_WEBSEARCH_TIMEOUT) {
+      env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers.grok.timeout || 55);
+    }
+  }
+
+  // Default timeout if none set
+  if (!env.CCS_WEBSEARCH_TIMEOUT) {
+    env.CCS_WEBSEARCH_TIMEOUT = '55';
+  }
 
   return env;
 }
