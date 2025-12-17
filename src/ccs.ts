@@ -14,6 +14,12 @@ import { detectClaudeCli } from './utils/claude-detector';
 import { getSettingsPath } from './utils/config-manager';
 import { ErrorManager } from './utils/error-manager';
 import { execClaudeWithCLIProxy, CLIProxyProvider } from './cliproxy';
+import {
+  ensureMcpWebSearch,
+  installWebSearchHook,
+  displayWebSearchStatus,
+  getWebSearchHookEnv,
+} from './utils/websearch-manager';
 
 // Import extracted command handlers
 import { handleVersionCommand } from './commands/version-command';
@@ -147,7 +153,8 @@ async function execClaudeWithProxy(
 
   const isWindows = process.platform === 'win32';
   const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(claudeCli);
-  const env = { ...process.env, ...envVars };
+  const webSearchEnv = getWebSearchHookEnv();
+  const env = { ...process.env, ...envVars, ...webSearchEnv };
 
   let claude: ChildProcess;
   if (needsShell) {
@@ -378,6 +385,14 @@ async function main(): Promise<void> {
       const customSettingsPath = profileInfo.settingsPath; // undefined for hardcoded profiles
       await execClaudeWithCLIProxy(claudeCli, provider, remainingArgs, { customSettingsPath });
     } else if (profileInfo.type === 'settings') {
+      // Settings-based profiles (glm, glmt, kimi) are third-party providers
+      // WebSearch is server-side tool - third-party providers have no access
+      ensureMcpWebSearch();
+      installWebSearchHook();
+
+      // Display WebSearch status (single line, equilibrium UX)
+      displayWebSearchStatus();
+
       // Check if this is GLMT profile (requires proxy)
       if (profileInfo.name === 'glmt') {
         // GLMT FLOW: Settings-based with embedded proxy for thinking support

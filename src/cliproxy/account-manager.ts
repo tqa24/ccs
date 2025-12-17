@@ -473,12 +473,14 @@ export function discoverExistingAccounts(): void {
       const stats = fs.statSync(filePath);
 
       // Register account with auto-generated nickname
+      // Use mtime as lastUsedAt (when token was last modified = last auth/refresh)
+      const lastModified = stats.mtime || stats.birthtime || new Date();
       providerAccounts.accounts[accountId] = {
         email,
         nickname: generateNickname(email),
         tokenFile: file,
         createdAt: stats.birthtime?.toISOString() || new Date().toISOString(),
-        lastUsedAt: stats.mtime?.toISOString(),
+        lastUsedAt: lastModified.toISOString(),
       };
     } catch {
       // Skip invalid files

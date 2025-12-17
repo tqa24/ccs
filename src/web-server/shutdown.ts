@@ -1,18 +1,16 @@
 /**
- * Graceful Shutdown Handler
+ * Shutdown Handler
  *
- * Handles SIGINT/SIGTERM signals to gracefully close WebSocket connections
- * and HTTP server before process exit.
+ * Handles SIGINT/SIGTERM signals to close server and exit immediately.
+ * No graceful waiting - config dashboard doesn't need it.
  */
 
 import { Server as HTTPServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { ok, info, warn } from '../utils/ui';
-
-const SHUTDOWN_TIMEOUT = 10_000; // 10 seconds
+import { ok } from '../utils/ui';
 
 /**
- * Setup graceful shutdown handlers for SIGINT and SIGTERM
+ * Setup shutdown handlers for SIGINT and SIGTERM
  */
 export function setupGracefulShutdown(
   server: HTTPServer,
@@ -20,24 +18,16 @@ export function setupGracefulShutdown(
   cleanup?: () => void
 ): void {
   const shutdown = () => {
-    console.log('\n' + info('Shutting down gracefully...'));
+    console.log('\n' + ok('Shutting down...'));
 
-    // Run cleanup first (closes file watchers + WebSocket clients)
+    // Run cleanup (closes file watchers + WebSocket clients)
     if (cleanup) {
       cleanup();
     }
 
-    // Close HTTP server
-    server.close(() => {
-      console.log(ok('Server closed'));
-      process.exit(0);
-    });
-
-    // Force shutdown if graceful shutdown takes too long
-    setTimeout(() => {
-      console.log(warn('Force shutdown (timeout exceeded)'));
-      process.exit(1);
-    }, SHUTDOWN_TIMEOUT);
+    // Close server and exit immediately
+    server.close();
+    process.exit(0);
   };
 
   process.on('SIGINT', shutdown);

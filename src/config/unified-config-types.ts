@@ -12,8 +12,9 @@
 /**
  * Unified config version.
  * Version 2 = YAML unified format
+ * Version 3 = WebSearch config with model configuration for Gemini/OpenCode
  */
-export const UNIFIED_CONFIG_VERSION = 2;
+export const UNIFIED_CONFIG_VERSION = 3;
 
 /**
  * Account configuration (formerly in profiles.json).
@@ -101,6 +102,83 @@ export interface PreferencesConfig {
 }
 
 /**
+ * Gemini CLI WebSearch configuration.
+ */
+export interface GeminiWebSearchConfig {
+  /** Enable Gemini CLI for WebSearch (default: true) */
+  enabled?: boolean;
+  /** Model to use (default: gemini-2.5-flash) */
+  model?: string;
+  /** Timeout in seconds (default: 55) */
+  timeout?: number;
+}
+
+/**
+ * Grok CLI WebSearch configuration.
+ */
+export interface GrokWebSearchConfig {
+  /** Enable Grok CLI for WebSearch (default: false - requires GROK_API_KEY) */
+  enabled?: boolean;
+  /** Timeout in seconds (default: 55) */
+  timeout?: number;
+}
+
+/**
+ * OpenCode CLI WebSearch configuration.
+ */
+export interface OpenCodeWebSearchConfig {
+  /** Enable OpenCode CLI for WebSearch (default: false) */
+  enabled?: boolean;
+  /** Model to use (default: opencode/grok-code) */
+  model?: string;
+  /** Timeout in seconds (default: 60) */
+  timeout?: number;
+}
+
+/**
+ * WebSearch providers configuration.
+ * Supports Gemini CLI, Grok CLI, and OpenCode.
+ */
+export interface WebSearchProvidersConfig {
+  /** Gemini CLI - uses google_web_search tool (FREE tier: 1000 req/day) */
+  gemini?: GeminiWebSearchConfig;
+  /** Grok CLI - xAI web search (requires GROK_API_KEY) */
+  grok?: GrokWebSearchConfig;
+  /** OpenCode - built-in web search (FREE via OpenCode Zen) */
+  opencode?: OpenCodeWebSearchConfig;
+}
+
+/**
+ * WebSearch configuration.
+ * Uses CLI tools (Gemini CLI, Grok CLI, OpenCode) for third-party profiles.
+ * Third-party providers don't have server-side WebSearch access.
+ */
+export interface WebSearchConfig {
+  /** Master switch - enable/disable WebSearch (default: true) */
+  enabled?: boolean;
+  /** Individual provider configurations */
+  providers?: WebSearchProvidersConfig;
+  // Legacy fields (deprecated, kept for backwards compatibility)
+  /** @deprecated Use providers.gemini instead */
+  gemini?: {
+    enabled?: boolean;
+    timeout?: number;
+  };
+  /** @deprecated Unused */
+  mode?: 'sequential' | 'parallel';
+  /** @deprecated Unused */
+  provider?: 'auto' | 'web-search-prime' | 'brave' | 'tavily';
+  /** @deprecated Unused */
+  fallback?: boolean;
+  /** @deprecated Unused */
+  webSearchPrimeUrl?: string;
+  /** @deprecated Unused */
+  selectedProviders?: string[];
+  /** @deprecated Unused */
+  customMcp?: unknown[];
+}
+
+/**
  * Main unified configuration structure.
  * Stored in ~/.ccs/config.yaml
  */
@@ -117,6 +195,8 @@ export interface UnifiedConfig {
   cliproxy: CLIProxyConfig;
   /** User preferences */
   preferences: PreferencesConfig;
+  /** WebSearch configuration */
+  websearch?: WebSearchConfig;
 }
 
 /**
@@ -153,6 +233,25 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
       theme: 'system',
       telemetry: false,
       auto_update: true,
+    },
+    websearch: {
+      enabled: true,
+      providers: {
+        gemini: {
+          enabled: true,
+          model: 'gemini-2.5-flash',
+          timeout: 55,
+        },
+        opencode: {
+          enabled: false,
+          model: 'opencode/grok-code',
+          timeout: 90,
+        },
+        grok: {
+          enabled: false,
+          timeout: 55,
+        },
+      },
     },
   };
 }

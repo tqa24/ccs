@@ -64,6 +64,7 @@ export function getConfigFormat(): 'yaml' | 'json' | 'none' {
 /**
  * Load unified config from YAML file.
  * Returns null if file doesn't exist or format check fails.
+ * Auto-upgrades config if version is outdated (regenerates comments).
  */
 export function loadUnifiedConfig(): UnifiedConfig | null {
   const yamlPath = getConfigYamlPath();
@@ -80,6 +81,22 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
     if (!isUnifiedConfig(parsed)) {
       console.error(`[!] Invalid config format in ${yamlPath}`);
       return null;
+    }
+
+    // Auto-upgrade if version is outdated (regenerates YAML with new comments and fields)
+    if ((parsed.version ?? 1) < UNIFIED_CONFIG_VERSION) {
+      // Merge with defaults to add new fields (e.g., model for websearch providers)
+      const upgraded = mergeWithDefaults(parsed);
+      upgraded.version = UNIFIED_CONFIG_VERSION;
+      try {
+        saveUnifiedConfig(upgraded);
+        if (process.env.CCS_DEBUG) {
+          console.error(`[i] Config upgraded to v${UNIFIED_CONFIG_VERSION}`);
+        }
+        return upgraded;
+      } catch {
+        // Ignore save errors during upgrade - config still works
+      }
     }
 
     return parsed;
@@ -115,6 +132,33 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
       ...defaults.preferences,
       ...partial.preferences,
     },
+    websearch: {
+      enabled: partial.websearch?.enabled ?? defaults.websearch?.enabled ?? true,
+      providers: {
+        gemini: {
+          enabled:
+            partial.websearch?.providers?.gemini?.enabled ??
+            partial.websearch?.gemini?.enabled ?? // Legacy fallback
+            true,
+          model: partial.websearch?.providers?.gemini?.model ?? 'gemini-2.5-flash',
+          timeout:
+            partial.websearch?.providers?.gemini?.timeout ??
+            partial.websearch?.gemini?.timeout ?? // Legacy fallback
+            55,
+        },
+        opencode: {
+          enabled: partial.websearch?.providers?.opencode?.enabled ?? false,
+          model: partial.websearch?.providers?.opencode?.model ?? 'opencode/grok-code',
+          timeout: partial.websearch?.providers?.opencode?.timeout ?? 90,
+        },
+        grok: {
+          enabled: partial.websearch?.providers?.grok?.enabled ?? false,
+          timeout: partial.websearch?.providers?.grok?.timeout ?? 55,
+        },
+      },
+      // Legacy fields (keep for backwards compatibility during read)
+      gemini: partial.websearch?.gemini,
+    },
   };
 }
 
@@ -149,8 +193,7 @@ function generateYamlHeader(): string {
 #
 # To customize a profile:
 #   1. Edit the *.settings.json file directly (e.g., ~/.ccs/glm.settings.json)
-#   2. The file format matches Claude's settings.json: { "env": { ... } }
-#
+#   2. The file format matches Claude's settings.json: { "env": { ... } }\n#
 # Structure:
 # ┌─────────────────────────────────────────────────────────────────────────────┐
 # │ profiles      - References to *.settings.json files for API providers       │
@@ -228,6 +271,37 @@ function generateYamlWithComments(config: UnifiedConfig): string {
   );
   lines.push('');
 
+  // WebSearch section
+  if (config.websearch) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# WebSearch: CLI-based web search for third-party profiles');
+    lines.push('# Dashboard (`ccs config`) is the source of truth for provider selection.');
+    lines.push('#');
+    lines.push('# Third-party providers (gemini, codex, agy, etc.) do not have access to');
+    lines.push("# Anthropic's WebSearch tool. These CLI tools provide fallback web search.");
+    lines.push('#');
+    lines.push('# Fallback chain: Gemini -> OpenCode -> Grok (tries in order until success)');
+    lines.push('#');
+    lines.push(
+      '# Gemini models: gemini-2.5-flash (default), gemini-2.5-pro, gemini-2.5-flash-lite'
+    );
+    lines.push(
+      '# OpenCode models: opencode/grok-code (default), opencode/gpt-4o, opencode/claude-3.5-sonnet'
+    );
+    lines.push('#');
+    lines.push('# Install commands:');
+    lines.push('#   gemini: npm i -g @google/gemini-cli (FREE - 1000 req/day)');
+    lines.push('#   opencode: curl -fsSL https://opencode.ai/install | bash (FREE via Zen)');
+    lines.push('#   grok: npm i -g @vibe-kit/grok-cli (requires GROK_API_KEY)');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml
+        .dump({ websearch: config.websearch }, { indent: 2, lineWidth: -1, quotingType: '"' })
+        .trim()
+    );
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 
@@ -291,4 +365,66 @@ export function getDefaultProfile(): string | undefined {
 
 export function setDefaultProfile(name: string): void {
   updateUnifiedConfig({ default: name });
+}
+
+/**
+ * Gemini CLI WebSearch configuration
+ */
+export interface GeminiWebSearchInfo {
+  enabled: boolean;
+  model: string;
+  timeout: number;
+}
+
+/**
+ * Get websearch configuration.
+ * Returns defaults if not configured.
+ * Supports Gemini CLI, OpenCode, and Grok CLI providers.
+ */
+export function getWebSearchConfig(): {
+  enabled: boolean;
+  providers?: {
+    gemini?: GeminiWebSearchInfo;
+    opencode?: { enabled?: boolean; model?: string; timeout?: number };
+    grok?: { enabled?: boolean; timeout?: number };
+  };
+  // Legacy fields (deprecated)
+  gemini?: { enabled?: boolean; timeout?: number };
+} {
+  const config = loadOrCreateUnifiedConfig();
+
+  // Build provider configs
+  const geminiConfig: GeminiWebSearchInfo = {
+    enabled:
+      config.websearch?.providers?.gemini?.enabled ?? config.websearch?.gemini?.enabled ?? true,
+    model: config.websearch?.providers?.gemini?.model ?? 'gemini-2.5-flash',
+    timeout:
+      config.websearch?.providers?.gemini?.timeout ?? config.websearch?.gemini?.timeout ?? 55,
+  };
+
+  const opencodeConfig = {
+    enabled: config.websearch?.providers?.opencode?.enabled ?? false,
+    model: config.websearch?.providers?.opencode?.model ?? 'opencode/grok-code',
+    timeout: config.websearch?.providers?.opencode?.timeout ?? 90,
+  };
+
+  const grokConfig = {
+    enabled: config.websearch?.providers?.grok?.enabled ?? false,
+    timeout: config.websearch?.providers?.grok?.timeout ?? 55,
+  };
+
+  // Auto-enable master switch if ANY provider is enabled
+  const anyProviderEnabled = geminiConfig.enabled || opencodeConfig.enabled || grokConfig.enabled;
+  const enabled = anyProviderEnabled && (config.websearch?.enabled ?? true);
+
+  return {
+    enabled,
+    providers: {
+      gemini: geminiConfig,
+      opencode: opencodeConfig,
+      grok: grokConfig,
+    },
+    // Legacy field for backwards compatibility
+    gemini: config.websearch?.gemini,
+  };
 }

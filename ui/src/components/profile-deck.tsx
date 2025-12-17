@@ -31,20 +31,17 @@ export function ProfileDeck() {
     );
   }
 
-  // Mock data for demonstration
-  const mockProfiles = profiles.map((profile, index: number) => ({
+  // Use real profile data directly
+  const normalizedProfiles = profiles.map((profile) => ({
     ...profile,
     configured: profile.configured ?? false, // Ensure configured is always boolean
-    isActive: index === 0, // First profile is active
-    lastUsed: index === 0 ? '2 hours ago' : index === 1 ? '1 day ago' : undefined,
-    model: index === 0 ? 'claude-3.5-sonnet' : index === 1 ? 'claude-3-haiku' : undefined,
   }));
 
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Profiles</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {mockProfiles.map((profile) => (
+        {normalizedProfiles.map((profile) => (
           <ProfileCard
             key={profile.name}
             profile={profile}

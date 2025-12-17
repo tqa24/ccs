@@ -1,31 +1,64 @@
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { StatCard } from '@/components/stat-card';
 import { HeroSection } from '@/components/hero-section';
-import { QuickCommands } from '@/components/quick-commands';
+import { AuthMonitor } from '@/components/auth-monitor';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Key,
-  Zap,
-  Users,
-  Activity,
-  Plus,
-  Stethoscope,
-  BookOpen,
-  FolderOpen,
-  AlertTriangle,
-  ArrowRight,
-} from 'lucide-react';
+import { Key, Zap, Users, Activity, AlertTriangle } from 'lucide-react';
 import { useOverview } from '@/hooks/use-overview';
 import { useSharedSummary } from '@/hooks/use-shared';
+import { cn } from '@/lib/utils';
+import type { LucideIcon } from 'lucide-react';
 
 const HEALTH_VARIANTS = {
   ok: 'success',
   warning: 'warning',
   error: 'error',
 } as const;
+
+type StatVariant = 'default' | 'success' | 'warning' | 'error' | 'accent';
+
+const variantStyles: Record<StatVariant, { iconBg: string; iconColor: string }> = {
+  default: { iconBg: 'bg-muted', iconColor: 'text-muted-foreground' },
+  success: { iconBg: 'bg-green-600/15', iconColor: 'text-green-700 dark:text-green-500' },
+  warning: { iconBg: 'bg-amber-500/15', iconColor: 'text-amber-700 dark:text-amber-400' },
+  error: { iconBg: 'bg-red-600/15', iconColor: 'text-red-700 dark:text-red-500' },
+  accent: { iconBg: 'bg-accent/15', iconColor: 'text-accent' },
+};
+
+function InlineStat({
+  title,
+  value,
+  icon: Icon,
+  variant = 'default',
+  onClick,
+}: {
+  title: string;
+  value: number | string;
+  icon: LucideIcon;
+  variant?: StatVariant;
+  onClick?: () => void;
+}) {
+  const styles = variantStyles[variant];
+
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex items-center gap-3 px-4 py-2.5 rounded-lg border bg-card/50',
+        'transition-all hover:bg-card hover:shadow-sm hover:-translate-y-0.5',
+        'active:scale-[0.98]'
+      )}
+    >
+      <div className={cn('flex items-center justify-center w-9 h-9 rounded-md', styles.iconBg)}>
+        <Icon className={cn('w-4 h-4', styles.iconColor)} />
+      </div>
+      <div className="text-left">
+        <p className="text-[10px] text-muted-foreground uppercase tracking-wider">{title}</p>
+        <p className={cn('text-lg font-bold font-mono leading-tight', styles.iconColor)}>{value}</p>
+      </div>
+    </button>
+  );
+}
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -35,8 +68,8 @@ export function HomePage() {
   if (isOverviewLoading || isSharedLoading) {
     return (
       <div className="p-6 space-y-6">
-        {/* Hero Skeleton */}
-        <div className="rounded-xl border p-6">
+        {/* Hero Row Skeleton */}
+        <div className="rounded-xl border p-6 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Skeleton className="h-12 w-12 rounded-lg" />
             <div>
@@ -44,41 +77,30 @@ export function HomePage() {
               <Skeleton className="h-4 w-[220px]" />
             </div>
           </div>
-        </div>
-
-        {/* Stats Skeleton */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="space-y-3 p-4 border rounded-xl">
-              <div className="flex items-center gap-4">
-                <Skeleton className="h-12 w-12 rounded-lg" />
-                <div className="flex-1">
-                  <Skeleton className="h-4 w-20 mb-2" />
-                  <Skeleton className="h-7 w-12" />
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Quick Actions Skeleton */}
-        <div className="border rounded-xl p-6 space-y-4">
-          <Skeleton className="h-6 w-[140px]" />
-          <div className="flex flex-wrap gap-3">
-            <Skeleton className="h-10 w-[140px] rounded-md" />
-            <Skeleton className="h-10 w-[120px] rounded-md" />
-            <Skeleton className="h-10 w-[150px] rounded-md" />
-          </div>
-        </div>
-
-        {/* Quick Commands Skeleton */}
-        <div className="border rounded-xl p-6 space-y-4">
-          <Skeleton className="h-6 w-[160px]" />
-          <div className="grid grid-cols-2 gap-2">
+          <div className="flex items-center gap-3">
             {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-14 rounded-lg" />
+              <Skeleton key={i} className="h-14 w-28 rounded-lg" />
             ))}
           </div>
+        </div>
+
+        {/* Auth Monitor Skeleton */}
+        <div className="border rounded-xl overflow-hidden">
+          <div className="px-4 py-2.5 border-b flex items-center justify-between">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="px-4 py-3 border-b">
+            <Skeleton className="h-2 w-full rounded-full" />
+          </div>
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="px-4 py-2.5 flex items-center gap-3 border-b last:border-b-0">
+              <Skeleton className="w-2.5 h-2.5 rounded-full" />
+              <Skeleton className="h-4 flex-1" />
+              <Skeleton className="h-1.5 w-24 rounded-full" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -90,13 +112,57 @@ export function HomePage() {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Hero Section */}
-      <HeroSection
-        version={overview?.version}
-        healthStatus={overview?.health?.status}
-        healthPassed={overview?.health?.passed}
-        healthTotal={overview?.health?.total}
-      />
+      {/* Hero Row: Logo/Title + Inline Stats */}
+      <div className="relative overflow-hidden rounded-xl border bg-gradient-to-br from-background via-background to-muted/30">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 opacity-[0.03] pointer-events-none">
+          <div
+            className="absolute inset-0"
+            style={{
+              backgroundImage: `radial-gradient(circle at 1px 1px, currentColor 1px, transparent 0)`,
+              backgroundSize: '24px 24px',
+            }}
+          />
+        </div>
+
+        {/* Single Row Layout */}
+        <div className="relative p-6 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          {/* Left: Logo + Title */}
+          <HeroSection version={overview?.version} />
+
+          {/* Right: Inline Stats */}
+          <div className="flex flex-wrap items-center gap-3">
+            <InlineStat
+              title="Profiles"
+              value={overview?.profiles ?? 0}
+              icon={Key}
+              variant="accent"
+              onClick={() => navigate('/api')}
+            />
+            <InlineStat
+              title="CLIProxy"
+              value={overview?.cliproxy ?? 0}
+              icon={Zap}
+              variant="accent"
+              onClick={() => navigate('/cliproxy')}
+            />
+            <InlineStat
+              title="Accounts"
+              value={overview?.accounts ?? 0}
+              icon={Users}
+              variant="default"
+              onClick={() => navigate('/accounts')}
+            />
+            <InlineStat
+              title="Health"
+              value={overview?.health ? `${overview.health.passed}/${overview.health.total}` : '-'}
+              icon={Activity}
+              variant={healthVariant}
+              onClick={() => navigate('/health')}
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Configuration Warning */}
       {shared?.symlinkStatus && !shared.symlinkStatus.valid && (
@@ -107,98 +173,8 @@ export function HomePage() {
         </Alert>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard
-          title="API Profiles"
-          value={overview?.profiles ?? 0}
-          icon={Key}
-          variant="accent"
-          subtitle="Settings-based"
-          onClick={() => navigate('/api')}
-        />
-        <StatCard
-          title="CLIProxy"
-          value={overview?.cliproxy ?? 0}
-          icon={Zap}
-          variant="accent"
-          subtitle={`${overview?.cliproxyProviders ?? 0} auth + ${overview?.cliproxyVariants ?? 0} custom`}
-          onClick={() => navigate('/cliproxy')}
-        />
-        <StatCard
-          title="Accounts"
-          value={overview?.accounts ?? 0}
-          icon={Users}
-          variant="default"
-          subtitle="Isolated instances"
-          onClick={() => navigate('/accounts')}
-        />
-        <StatCard
-          title="Health"
-          value={overview?.health ? `${overview.health.passed}/${overview.health.total}` : '-'}
-          icon={Activity}
-          variant={healthVariant}
-          subtitle="System checks"
-          onClick={() => navigate('/health')}
-        />
-      </div>
-
-      {/* Quick Actions */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button onClick={() => navigate('/api')} className="gap-2">
-            <Plus className="w-4 h-4" /> New Profile
-          </Button>
-          <Button variant="outline" onClick={() => navigate('/health')} className="gap-2">
-            <Stethoscope className="w-4 h-4" /> Run Doctor
-          </Button>
-          <Button variant="outline" asChild className="gap-2">
-            <a href="https://docs.ccs.kaitran.ca" target="_blank" rel="noopener noreferrer">
-              <BookOpen className="w-4 h-4" /> Documentation
-            </a>
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Quick Commands */}
-      <QuickCommands />
-
-      {/* Shared Data Summary */}
-      <Card className="group hover:border-primary/50 transition-colors">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <FolderOpen className="w-5 h-5 text-muted-foreground" />
-            Shared Data
-          </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate('/shared')}
-            className="gap-1 opacity-70 group-hover:opacity-100 transition-opacity"
-          >
-            View All <ArrowRight className="w-4 h-4" />
-          </Button>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-6 text-sm">
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
-              <span className="text-xl font-bold font-mono">{shared?.commands ?? 0}</span>
-              <span className="text-muted-foreground">Commands</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
-              <span className="text-xl font-bold font-mono">{shared?.skills ?? 0}</span>
-              <span className="text-muted-foreground">Skills</span>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50">
-              <span className="text-xl font-bold font-mono">{shared?.agents ?? 0}</span>
-              <span className="text-muted-foreground">Agents</span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Auth Monitor */}
+      <AuthMonitor />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/app-sidebar';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { GitHubLink } from '@/components/github-link';
+import { DocsLink } from '@/components/docs-link';
 import { ConnectionIndicator } from '@/components/connection-indicator';
 import { LocalhostDisclaimer } from '@/components/localhost-disclaimer';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,6 +27,7 @@ export function Layout() {
           <div className="font-semibold text-lg tracking-tight">CCS Config</div>
           <div className="flex items-center gap-2">
             <ConnectionIndicator />
+            <DocsLink />
             <GitHubLink />
             <ThemeToggle />
           </div>

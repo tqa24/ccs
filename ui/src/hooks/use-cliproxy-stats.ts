@@ -4,9 +4,25 @@
 
 import { useQuery } from '@tanstack/react-query';
 
+/** Per-account usage statistics */
+export interface AccountUsageStats {
+  /** Account email or identifier */
+  source: string;
+  /** Number of successful requests */
+  successCount: number;
+  /** Number of failed requests */
+  failureCount: number;
+  /** Total tokens used */
+  totalTokens: number;
+  /** Last request timestamp */
+  lastUsedAt?: string;
+}
+
 /** CLIProxy usage statistics */
 export interface CliproxyStats {
   totalRequests: number;
+  successCount: number;
+  failureCount: number;
   tokens: {
     input: number;
     output: number;
@@ -14,6 +30,8 @@ export interface CliproxyStats {
   };
   requestsByModel: Record<string, number>;
   requestsByProvider: Record<string, number>;
+  /** Per-account usage breakdown */
+  accountStats: Record<string, AccountUsageStats>;
   quotaExceededCount: number;
   retryCount: number;
   collectedAt: string;
@@ -67,9 +85,9 @@ export function useCliproxyStats(enabled = true) {
     queryKey: ['cliproxy-stats'],
     queryFn: fetchCliproxyStats,
     enabled,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 5000, // Refresh every 5 seconds for near-real-time updates
     retry: 1,
-    staleTime: 10000, // Consider data stale after 10 seconds
+    staleTime: 3000, // Consider data stale after 3 seconds
   });
 }
 

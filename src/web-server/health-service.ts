@@ -23,6 +23,7 @@ import { getPortProcess, isCLIProxyProcess } from '../utils/port-utils';
 import packageJson from '../../package.json';
 import { getEnvironmentDiagnostics } from '../management/environment-diagnostics';
 import { checkAuthCodePorts } from '../management/oauth-port-diagnostics';
+import { getWebSearchCliProviders, hasAnyWebSearchCli } from '../utils/websearch-manager';
 
 export interface HealthCheck {
   id: string;
@@ -134,6 +135,16 @@ export async function runHealthChecks(): Promise<HealthReport> {
     name: 'OAuth Readiness',
     icon: 'Key',
     checks: oauthReadinessChecks,
+  });
+
+  // Group 8: WebSearch CLI Providers
+  const websearchChecks: HealthCheck[] = [];
+  websearchChecks.push(...checkWebSearchClis());
+  groups.push({
+    id: 'websearch',
+    name: 'WebSearch',
+    icon: 'Search',
+    checks: websearchChecks,
   });
 
   // Flatten all checks for backward compatibility
@@ -814,6 +825,49 @@ async function checkOAuthPortsForDashboard(): Promise<HealthCheck[]> {
       fix: diag.recommendation || undefined,
     };
   });
+}
+
+// Check 18: WebSearch CLI Providers (Gemini CLI, Grok CLI)
+function checkWebSearchClis(): HealthCheck[] {
+  const providers = getWebSearchCliProviders();
+  const checks: HealthCheck[] = [];
+
+  for (const provider of providers) {
+    if (provider.installed) {
+      const freeTag = provider.freeTier ? ' (FREE)' : '';
+      checks.push({
+        id: `websearch-${provider.id}`,
+        name: provider.name,
+        status: 'ok',
+        message: `v${provider.version || 'unknown'}${freeTag}`,
+        details: provider.description,
+      });
+    } else {
+      const keyNote = provider.requiresApiKey ? ` (needs ${provider.apiKeyEnvVar})` : ' (FREE)';
+      checks.push({
+        id: `websearch-${provider.id}`,
+        name: provider.name,
+        status: 'info',
+        message: `Not installed${keyNote}`,
+        fix: provider.installCommand,
+        details: provider.description,
+      });
+    }
+  }
+
+  // Add summary check if no providers installed
+  if (!hasAnyWebSearchCli()) {
+    checks.push({
+      id: 'websearch-summary',
+      name: 'WebSearch Status',
+      status: 'warning',
+      message: 'No CLI tools installed',
+      fix: 'npm install -g @google/gemini-cli (FREE)',
+      details: 'Install a WebSearch CLI for real-time web access',
+    });
+  }
+
+  return checks;
 }
 
 /**

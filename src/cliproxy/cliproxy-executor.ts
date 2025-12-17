@@ -28,6 +28,7 @@ import {
 import { isAuthenticated } from './auth-handler';
 import { CLIProxyProvider, ExecutorConfig } from './types';
 import { configureProviderModel, getCurrentModel } from './model-config';
+import { getWebSearchHookEnv } from '../utils/websearch-manager';
 import { supportsModelConfig, isModelBroken, getModelIssueUrl, findModel } from './model-catalog';
 import {
   findAccountByQuery,
@@ -39,6 +40,11 @@ import {
 } from './account-manager';
 import { getPortCheckCommand, getCatCommand, killProcessOnPort } from '../utils/platform-commands';
 import { getPortProcess, isCLIProxyProcess } from '../utils/port-utils';
+import {
+  ensureMcpWebSearch,
+  installWebSearchHook,
+  displayWebSearchStatus,
+} from '../utils/websearch-manager';
 
 /** Default executor configuration */
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -111,6 +117,18 @@ export async function execClaudeWithCLIProxy(
       console.error(`[cliproxy] ${msg}`);
     }
   };
+
+  // Ensure MCP web-search is configured for third-party profiles
+  // WebSearch is a server-side tool executed by Anthropic's API
+  // Third-party providers don't have access, so we use MCP fallback
+  ensureMcpWebSearch();
+
+  // Install WebSearch hook for Gemini CLI + MCP fallback
+  // Hook intercepts WebSearch, tries Gemini CLI first, falls back to MCP
+  installWebSearchHook();
+
+  // Display WebSearch status (single line, equilibrium UX)
+  displayWebSearchStatus();
 
   // Validate provider
   const providerConfig = getProviderConfig(provider);
@@ -369,10 +387,14 @@ export async function execClaudeWithCLIProxy(
   // 7. Execute Claude CLI with proxied environment
   // Uses custom settings path (for variants), user settings, or bundled defaults
   const envVars = getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath);
-  const env = { ...process.env, ...envVars };
+  const webSearchEnv = getWebSearchHookEnv();
+  const env = { ...process.env, ...envVars, ...webSearchEnv };
 
   log(`Claude env: ANTHROPIC_BASE_URL=${envVars.ANTHROPIC_BASE_URL}`);
   log(`Claude env: ANTHROPIC_MODEL=${envVars.ANTHROPIC_MODEL}`);
+  if (Object.keys(webSearchEnv).length > 0) {
+    log(`Claude env: WebSearch config=${JSON.stringify(webSearchEnv)}`);
+  }
 
   // Filter out CCS-specific flags before passing to Claude CLI
   const ccsFlags = [
