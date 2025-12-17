@@ -83,14 +83,17 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
       return null;
     }
 
-    // Auto-upgrade if version is outdated (regenerates YAML with new comments)
+    // Auto-upgrade if version is outdated (regenerates YAML with new comments and fields)
     if ((parsed.version ?? 1) < UNIFIED_CONFIG_VERSION) {
-      parsed.version = UNIFIED_CONFIG_VERSION;
+      // Merge with defaults to add new fields (e.g., model for websearch providers)
+      const upgraded = mergeWithDefaults(parsed);
+      upgraded.version = UNIFIED_CONFIG_VERSION;
       try {
-        saveUnifiedConfig(parsed);
+        saveUnifiedConfig(upgraded);
         if (process.env.CCS_DEBUG) {
           console.error(`[i] Config upgraded to v${UNIFIED_CONFIG_VERSION}`);
         }
+        return upgraded;
       } catch {
         // Ignore save errors during upgrade - config still works
       }
@@ -137,6 +140,7 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
             partial.websearch?.providers?.gemini?.enabled ??
             partial.websearch?.gemini?.enabled ?? // Legacy fallback
             true,
+          model: partial.websearch?.providers?.gemini?.model ?? 'gemini-2.5-flash',
           timeout:
             partial.websearch?.providers?.gemini?.timeout ??
             partial.websearch?.gemini?.timeout ?? // Legacy fallback
@@ -277,12 +281,18 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push("# Anthropic's WebSearch tool. These CLI tools provide fallback web search.");
     lines.push('#');
     lines.push('# Fallback chain: Gemini -> OpenCode -> Grok (tries in order until success)');
-    lines.push('# providers:');
-    lines.push('#   gemini: Gemini CLI (FREE) - npm i -g @google/gemini-cli');
-    lines.push('#   opencode: OpenCode (FREE) - curl -fsSL https://opencode.ai/install | bash');
-    lines.push('#   grok: Grok CLI (paid) - npm i -g @vibe-kit/grok-cli (needs GROK_API_KEY)');
     lines.push('#');
-    lines.push('# enabled: Master switch - auto-disables when no providers enabled');
+    lines.push(
+      '# Gemini models: gemini-2.5-flash (default), gemini-2.5-pro, gemini-2.5-flash-lite'
+    );
+    lines.push(
+      '# OpenCode models: opencode/grok-code (default), opencode/gpt-4o, opencode/claude-3.5-sonnet'
+    );
+    lines.push('#');
+    lines.push('# Install commands:');
+    lines.push('#   gemini: npm i -g @google/gemini-cli (FREE - 1000 req/day)');
+    lines.push('#   opencode: curl -fsSL https://opencode.ai/install | bash (FREE via Zen)');
+    lines.push('#   grok: npm i -g @vibe-kit/grok-cli (requires GROK_API_KEY)');
     lines.push('# ----------------------------------------------------------------------------');
     lines.push(
       yaml
@@ -362,6 +372,7 @@ export function setDefaultProfile(name: string): void {
  */
 export interface GeminiWebSearchInfo {
   enabled: boolean;
+  model: string;
   timeout: number;
 }
 
@@ -386,6 +397,7 @@ export function getWebSearchConfig(): {
   const geminiConfig: GeminiWebSearchInfo = {
     enabled:
       config.websearch?.providers?.gemini?.enabled ?? config.websearch?.gemini?.enabled ?? true,
+    model: config.websearch?.providers?.gemini?.model ?? 'gemini-2.5-flash',
     timeout:
       config.websearch?.providers?.gemini?.timeout ?? config.websearch?.gemini?.timeout ?? 55,
   };

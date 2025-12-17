@@ -12,7 +12,7 @@
 /**
  * Unified config version.
  * Version 2 = YAML unified format
- * Version 3 = WebSearch config comments update
+ * Version 3 = WebSearch config with model configuration for Gemini/OpenCode
  */
 export const UNIFIED_CONFIG_VERSION = 3;
 
@@ -107,6 +107,8 @@ export interface PreferencesConfig {
 export interface GeminiWebSearchConfig {
   /** Enable Gemini CLI for WebSearch (default: true) */
   enabled?: boolean;
+  /** Model to use (default: gemini-2.5-flash) */
+  model?: string;
   /** Timeout in seconds (default: 55) */
   timeout?: number;
 }
@@ -237,6 +239,16 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
       providers: {
         gemini: {
           enabled: true,
+          model: 'gemini-2.5-flash',
+          timeout: 55,
+        },
+        opencode: {
+          enabled: false,
+          model: 'opencode/grok-code',
+          timeout: 90,
+        },
+        grok: {
+          enabled: false,
           timeout: 55,
         },
       },

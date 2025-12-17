@@ -654,6 +654,9 @@ export function getWebSearchHookEnv(): Record<string, string> {
   // Hook will only use providers that are BOTH enabled AND installed
   if (wsConfig.providers?.gemini?.enabled) {
     env.CCS_WEBSEARCH_GEMINI = '1';
+    if (wsConfig.providers.gemini.model) {
+      env.CCS_WEBSEARCH_GEMINI_MODEL = wsConfig.providers.gemini.model;
+    }
     env.CCS_WEBSEARCH_TIMEOUT = String(wsConfig.providers.gemini.timeout || 55);
   }
 

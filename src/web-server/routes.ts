@@ -1477,6 +1477,10 @@ apiRoutes.put('/websearch', (req: Request, res: Response): void => {
                 providers.gemini?.enabled ??
                 existingConfig.websearch?.providers?.gemini?.enabled ??
                 true,
+              model:
+                providers.gemini?.model ??
+                existingConfig.websearch?.providers?.gemini?.model ??
+                'gemini-2.5-flash',
               timeout:
                 providers.gemini?.timeout ??
                 existingConfig.websearch?.providers?.gemini?.timeout ??

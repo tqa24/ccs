@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
+import { Input } from '@/components/ui/input';
 import {
   Globe,
   RefreshCw,
@@ -20,22 +21,21 @@ import {
   GripVertical,
   Terminal,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { CodeEditor } from '@/components/code-editor';
 
 interface ProviderConfig {
   enabled?: boolean;
-  timeout?: number;
-}
-
-interface OpenCodeProviderConfig extends ProviderConfig {
   model?: string;
+  timeout?: number;
 }
 
 interface WebSearchProvidersConfig {
   gemini?: ProviderConfig;
   grok?: ProviderConfig;
-  opencode?: OpenCodeProviderConfig;
+  opencode?: ProviderConfig;
 }
 
 interface WebSearchConfig {
@@ -71,6 +71,13 @@ export function SettingsPage() {
   const [rawConfig, setRawConfig] = useState<string | null>(null);
   const [rawConfigLoading, setRawConfigLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  // Local model input state (to avoid saving on every keystroke)
+  const [geminiModelInput, setGeminiModelInput] = useState('');
+  const [opencodeModelInput, setOpencodeModelInput] = useState('');
+  // Collapsible install hints state
+  const [showGeminiHint, setShowGeminiHint] = useState(false);
+  const [showOpencodeHint, setShowOpencodeHint] = useState(false);
+  const [showGrokHint, setShowGrokHint] = useState(false);
 
   // Load config and status on mount
   useEffect(() => {
@@ -78,6 +85,14 @@ export function SettingsPage() {
     fetchStatus();
     fetchRawConfig();
   }, []);
+
+  // Sync local model inputs when config changes
+  useEffect(() => {
+    if (config) {
+      setGeminiModelInput(config.providers?.gemini?.model ?? 'gemini-2.5-flash');
+      setOpencodeModelInput(config.providers?.opencode?.model ?? 'opencode/grok-code');
+    }
+  }, [config]);
 
   const fetchConfig = async () => {
     try {
@@ -235,6 +250,40 @@ export function SettingsPage() {
     });
   };
 
+  // Save Gemini model on blur (only if changed)
+  const saveGeminiModel = () => {
+    const currentModel = config?.providers?.gemini?.model ?? 'gemini-2.5-flash';
+    if (geminiModelInput !== currentModel) {
+      const providers = config?.providers || {};
+      saveConfig({
+        providers: {
+          ...providers,
+          gemini: {
+            ...providers.gemini,
+            model: geminiModelInput,
+          },
+        },
+      });
+    }
+  };
+
+  // Save OpenCode model on blur (only if changed)
+  const saveOpencodeModel = () => {
+    const currentModel = config?.providers?.opencode?.model ?? 'opencode/grok-code';
+    if (opencodeModelInput !== currentModel) {
+      const providers = config?.providers || {};
+      saveConfig({
+        providers: {
+          ...providers,
+          opencode: {
+            ...providers.opencode,
+            model: opencodeModelInput,
+          },
+        },
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="h-[calc(100vh-100px)] flex items-center justify-center">
@@ -313,201 +362,264 @@ export function SettingsPage() {
 
                   {/* Gemini CLI Provider */}
                   <div
-                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                      isGeminiEnabled
-                        ? 'border-primary/50 bg-primary/5'
-                        : 'border-border bg-background'
+                    className={`rounded-lg border transition-colors ${
+                      isGeminiEnabled ? 'border-primary border-l-4' : 'border-border'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Terminal
-                        className={`w-5 h-5 ${isGeminiEnabled ? 'text-primary' : 'text-muted-foreground'}`}
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-mono font-medium">gemini</p>
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
-                            FREE
-                          </span>
-                          {status?.geminiCli?.installed ? (
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3">
+                        <Terminal
+                          className={`w-5 h-5 ${isGeminiEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-mono font-medium">gemini</p>
                             <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
-                              installed
+                              FREE
                             </span>
-                          ) : (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
-                              not installed
-                            </span>
-                          )}
+                            {status?.geminiCli?.installed ? (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                                installed
+                              </span>
+                            ) : (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
+                                not installed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            Google Gemini CLI (1000 req/day free)
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          Google Gemini CLI (1000 req/day free)
-                        </p>
                       </div>
+                      <Switch
+                        checked={isGeminiEnabled}
+                        onCheckedChange={toggleGemini}
+                        disabled={saving || !status?.geminiCli?.installed}
+                      />
                     </div>
-                    <Switch
-                      checked={isGeminiEnabled}
-                      onCheckedChange={toggleGemini}
-                      disabled={saving || !status?.geminiCli?.installed}
-                    />
-                  </div>
-
-                  {/* Gemini Installation hint when not installed */}
-                  {!status?.geminiCli?.installed && !statusLoading && (
-                    <div className="p-4 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20">
-                      <p className="text-sm font-medium text-amber-800 dark:text-amber-200 mb-2">
-                        Gemini CLI not installed
-                      </p>
-                      <p className="text-sm text-amber-700 dark:text-amber-300 mb-3">
-                        Install globally (FREE tier available):
-                      </p>
-                      <code className="text-sm bg-amber-100 dark:bg-amber-900/40 px-2 py-1 rounded font-mono">
-                        npm install -g @google/gemini-cli
-                      </code>
-                      <div className="mt-3">
-                        <a
-                          href="https://github.com/google-gemini/gemini-cli"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-amber-700 dark:text-amber-300 hover:underline inline-flex items-center gap-1"
+                    {/* Model input when enabled */}
+                    {isGeminiEnabled && (
+                      <div className="px-4 pb-4 pt-0">
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-muted-foreground whitespace-nowrap">
+                            Model:
+                          </label>
+                          <Input
+                            value={geminiModelInput}
+                            onChange={(e) => setGeminiModelInput(e.target.value)}
+                            onBlur={saveGeminiModel}
+                            placeholder="gemini-2.5-flash"
+                            className="h-8 text-sm font-mono"
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {/* Installation hint when not installed - inside card */}
+                    {!status?.geminiCli?.installed && !statusLoading && (
+                      <div className="px-4 pb-4 pt-0 border-t border-border/50">
+                        <button
+                          onClick={() => setShowGeminiHint(!showGeminiHint)}
+                          className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400 hover:underline w-full py-2"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                          View documentation
-                        </a>
+                          {showGeminiHint ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                          How to install Gemini CLI
+                        </button>
+                        {showGeminiHint && (
+                          <div className="mt-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900/20 text-sm">
+                            <p className="text-amber-700 dark:text-amber-300 mb-2">
+                              Install globally (FREE tier available):
+                            </p>
+                            <code className="text-sm bg-amber-100 dark:bg-amber-900/40 px-2 py-1 rounded font-mono block mb-2">
+                              npm install -g @google/gemini-cli
+                            </code>
+                            <a
+                              href="https://github.com/google-gemini/gemini-cli"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-amber-700 dark:text-amber-300 hover:underline inline-flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              View documentation
+                            </a>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* OpenCode CLI Provider */}
                   <div
-                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                      isOpenCodeEnabled
-                        ? 'border-primary/50 bg-primary/5'
-                        : 'border-border bg-background'
+                    className={`rounded-lg border transition-colors ${
+                      isOpenCodeEnabled ? 'border-primary border-l-4' : 'border-border'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Terminal
-                        className={`w-5 h-5 ${isOpenCodeEnabled ? 'text-primary' : 'text-muted-foreground'}`}
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-mono font-medium">opencode</p>
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
-                            FREE
-                          </span>
-                          {status?.opencodeCli?.installed ? (
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3">
+                        <Terminal
+                          className={`w-5 h-5 ${isOpenCodeEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-mono font-medium">opencode</p>
                             <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
-                              installed
+                              FREE
                             </span>
-                          ) : (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
-                              not installed
-                            </span>
-                          )}
+                            {status?.opencodeCli?.installed ? (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                                installed
+                              </span>
+                            ) : (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
+                                not installed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            OpenCode (web search via Zen)
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          OpenCode (web search via Zen)
-                        </p>
                       </div>
+                      <Switch
+                        checked={isOpenCodeEnabled}
+                        onCheckedChange={toggleOpenCode}
+                        disabled={saving || !status?.opencodeCli?.installed}
+                      />
                     </div>
-                    <Switch
-                      checked={isOpenCodeEnabled}
-                      onCheckedChange={toggleOpenCode}
-                      disabled={saving || !status?.opencodeCli?.installed}
-                    />
-                  </div>
-
-                  {/* OpenCode Installation hint when not installed */}
-                  {!status?.opencodeCli?.installed && !statusLoading && (
-                    <div className="p-4 rounded-lg border border-purple-200 bg-purple-50 dark:border-purple-900/50 dark:bg-purple-900/20">
-                      <p className="text-sm font-medium text-purple-800 dark:text-purple-200 mb-2">
-                        OpenCode not installed
-                      </p>
-                      <p className="text-sm text-purple-700 dark:text-purple-300 mb-3">
-                        Install globally (FREE tier available):
-                      </p>
-                      <code className="text-sm bg-purple-100 dark:bg-purple-900/40 px-2 py-1 rounded font-mono">
-                        curl -fsSL https://opencode.ai/install | bash
-                      </code>
-                      <div className="mt-3">
-                        <a
-                          href="https://github.com/sst/opencode"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-purple-700 dark:text-purple-300 hover:underline inline-flex items-center gap-1"
+                    {/* Model input when enabled */}
+                    {isOpenCodeEnabled && (
+                      <div className="px-4 pb-4 pt-0">
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-muted-foreground whitespace-nowrap">
+                            Model:
+                          </label>
+                          <Input
+                            value={opencodeModelInput}
+                            onChange={(e) => setOpencodeModelInput(e.target.value)}
+                            onBlur={saveOpencodeModel}
+                            placeholder="opencode/grok-code"
+                            className="h-8 text-sm font-mono"
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    {/* Installation hint when not installed - inside card */}
+                    {!status?.opencodeCli?.installed && !statusLoading && (
+                      <div className="px-4 pb-4 pt-0 border-t border-border/50">
+                        <button
+                          onClick={() => setShowOpencodeHint(!showOpencodeHint)}
+                          className="flex items-center gap-2 text-sm text-purple-600 dark:text-purple-400 hover:underline w-full py-2"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                          View documentation
-                        </a>
+                          {showOpencodeHint ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                          How to install OpenCode
+                        </button>
+                        {showOpencodeHint && (
+                          <div className="mt-2 p-3 rounded-md bg-purple-50 dark:bg-purple-900/20 text-sm">
+                            <p className="text-purple-700 dark:text-purple-300 mb-2">
+                              Install globally (FREE tier available):
+                            </p>
+                            <code className="text-sm bg-purple-100 dark:bg-purple-900/40 px-2 py-1 rounded font-mono block mb-2">
+                              curl -fsSL https://opencode.ai/install | bash
+                            </code>
+                            <a
+                              href="https://github.com/sst/opencode"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-purple-700 dark:text-purple-300 hover:underline inline-flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              View documentation
+                            </a>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Grok CLI Provider */}
                   <div
-                    className={`flex items-center justify-between p-4 rounded-lg border transition-colors ${
-                      isGrokEnabled
-                        ? 'border-primary/50 bg-primary/5'
-                        : 'border-border bg-background'
+                    className={`rounded-lg border transition-colors ${
+                      isGrokEnabled ? 'border-primary border-l-4' : 'border-border'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Terminal
-                        className={`w-5 h-5 ${isGrokEnabled ? 'text-primary' : 'text-muted-foreground'}`}
-                      />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-mono font-medium">grok</p>
-                          <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 font-medium">
-                            GROK_API_KEY
-                          </span>
-                          {status?.grokCli?.installed ? (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
-                              installed
+                    <div className="flex items-center justify-between p-4">
+                      <div className="flex items-center gap-3">
+                        <Terminal
+                          className={`w-5 h-5 ${isGrokEnabled ? 'text-primary' : 'text-muted-foreground'}`}
+                        />
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="font-mono font-medium">grok</p>
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-600 font-medium">
+                              GROK_API_KEY
                             </span>
-                          ) : (
-                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
-                              not installed
-                            </span>
-                          )}
+                            {status?.grokCli?.installed ? (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
+                                installed
+                              </span>
+                            ) : (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
+                                not installed
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">
+                            xAI Grok CLI (web + X search)
+                          </p>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          xAI Grok CLI (web + X search)
-                        </p>
                       </div>
+                      <Switch
+                        checked={isGrokEnabled}
+                        onCheckedChange={toggleGrok}
+                        disabled={saving || !status?.grokCli?.installed}
+                      />
                     </div>
-                    <Switch
-                      checked={isGrokEnabled}
-                      onCheckedChange={toggleGrok}
-                      disabled={saving || !status?.grokCli?.installed}
-                    />
-                  </div>
-
-                  {/* Grok Installation hint when not installed */}
-                  {!status?.grokCli?.installed && !statusLoading && (
-                    <div className="p-4 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/20">
-                      <p className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">
-                        Grok CLI not installed
-                      </p>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                        Install globally (requires xAI API key):
-                      </p>
-                      <code className="text-sm bg-blue-100 dark:bg-blue-900/40 px-2 py-1 rounded font-mono">
-                        npm install -g @vibe-kit/grok-cli
-                      </code>
-                      <div className="mt-3">
-                        <a
-                          href="https://github.com/superagent-ai/grok-cli"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-700 dark:text-blue-300 hover:underline inline-flex items-center gap-1"
+                    {/* Installation hint when not installed - inside card */}
+                    {!status?.grokCli?.installed && !statusLoading && (
+                      <div className="px-4 pb-4 pt-0 border-t border-border/50">
+                        <button
+                          onClick={() => setShowGrokHint(!showGrokHint)}
+                          className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline w-full py-2"
                         >
-                          <ExternalLink className="w-3 h-3" />
-                          View documentation
-                        </a>
+                          {showGrokHint ? (
+                            <ChevronUp className="w-4 h-4" />
+                          ) : (
+                            <ChevronDown className="w-4 h-4" />
+                          )}
+                          How to install Grok CLI
+                        </button>
+                        {showGrokHint && (
+                          <div className="mt-2 p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 text-sm">
+                            <p className="text-blue-700 dark:text-blue-300 mb-2">
+                              Install globally (requires xAI API key):
+                            </p>
+                            <code className="text-sm bg-blue-100 dark:bg-blue-900/40 px-2 py-1 rounded font-mono block mb-2">
+                              npm install -g @vibe-kit/grok-cli
+                            </code>
+                            <a
+                              href="https://github.com/superagent-ai/grok-cli"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-700 dark:text-blue-300 hover:underline inline-flex items-center gap-1"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              View documentation
+                            </a>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </ScrollArea>
