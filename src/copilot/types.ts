@@ -36,6 +36,12 @@ export interface CopilotStatus {
 }
 
 /**
+ * Copilot plan tier for model availability.
+ * Based on GitHub Copilot plans.
+ */
+export type CopilotPlanTier = 'free' | 'pro' | 'pro+' | 'business' | 'enterprise';
+
+/**
  * Copilot model information.
  */
 export interface CopilotModel {
@@ -45,6 +51,12 @@ export interface CopilotModel {
   provider: 'openai' | 'anthropic';
   /** Whether this is the default model */
   isDefault?: boolean;
+  /** Minimum plan tier required (free = available to all) */
+  minPlan?: CopilotPlanTier;
+  /** Premium request multiplier (0 = free, higher = more expensive) */
+  multiplier?: number;
+  /** Whether this model is in preview */
+  preview?: boolean;
 }
 
 /**

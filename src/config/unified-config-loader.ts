@@ -325,7 +325,7 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('# Setup: npx copilot-api auth (authenticate with GitHub)');
     lines.push('# Usage: ccs copilot (switch to copilot profile)');
     lines.push('#');
-    lines.push('# Models: claude-opus-4-5-20250514, claude-sonnet-4-20250514, gpt-4.1, o3');
+    lines.push('# Models: claude-sonnet-4.5, claude-opus-4.5, gpt-5.1, gemini-2.5-pro');
     lines.push('# Account types: individual, business, enterprise');
     lines.push('# ----------------------------------------------------------------------------');
     lines.push(
