@@ -195,6 +195,84 @@ Without Developer Mode, CCS falls back to copying directories.
 
 <br>
 
+## Remote Proxy
+
+Connect to a remote CLIProxyAPI server (Docker, Kubernetes, or another machine) instead of using the local binary.
+
+### Configuration
+
+Configure via dashboard (**Settings → Proxy** tab) or `~/.ccs/config.yaml`:
+
+```yaml
+proxy:
+  remote:
+    enabled: true
+    host: "192.168.1.100"        # Remote server hostname/IP
+    port: 8317                    # Default CLIProxy port
+    protocol: http                # http or https
+    auth-token: ""                # Optional auth token
+  fallback:
+    enabled: true                 # Fallback to local if remote unreachable
+    auto-start: true              # Auto-start local proxy on fallback
+  local:
+    port: 8317
+    auto-start: true
+```
+
+### CLI Flags
+
+Override config for one-time use:
+
+| Flag | Description |
+|------|-------------|
+| `--proxy-host <host>` | Remote proxy hostname/IP |
+| `--proxy-port <port>` | Proxy port (default: 8317) |
+| `--proxy-protocol <proto>` | Protocol: `http` or `https` |
+| `--proxy-auth-token <token>` | Auth token for remote proxy |
+| `--local-proxy` | Force local mode, ignore remote config |
+| `--remote-only` | Fail if remote unreachable (no fallback) |
+
+```bash
+# One-time remote connection
+ccs gemini --proxy-host 192.168.1.100 --proxy-port 8317
+
+# Force local mode
+ccs gemini --local-proxy
+
+# Strict remote mode (no fallback)
+ccs gemini --proxy-host remote.example.com --remote-only
+```
+
+### Environment Variables
+
+For CI/CD and automation:
+
+| Variable | Description |
+|----------|-------------|
+| `CCS_PROXY_HOST` | Remote proxy hostname |
+| `CCS_PROXY_PORT` | Proxy port |
+| `CCS_PROXY_PROTOCOL` | Protocol (`http`/`https`) |
+| `CCS_PROXY_AUTH_TOKEN` | Auth token |
+| `CCS_PROXY_FALLBACK_ENABLED` | Enable local fallback (`1`/`0`) |
+
+```bash
+# Docker example
+export CCS_PROXY_HOST="cliproxy-container"
+export CCS_PROXY_PORT="8317"
+ccs gemini "implement feature"
+```
+
+### Priority Resolution
+
+Configuration sources are merged with this priority (highest first):
+
+1. **CLI flags** — One-time overrides
+2. **Environment variables** — CI/CD automation
+3. **config.yaml** — Persistent settings
+4. **Defaults** — Local mode, port 8317
+
+<br>
+
 ## WebSearch
 
 Third-party profiles (Gemini, Codex, GLM, etc.) cannot use Anthropic's native WebSearch. CCS automatically configures MCP-based web search as a fallback.

@@ -241,6 +241,25 @@ Claude Code Profile & Model Switcher`.trim();
     ['ccs cliproxy --latest', 'Update to latest version'],
   ]);
 
+  // CLI Proxy configuration flags (new)
+  printSubSection('CLI Proxy Configuration', [
+    ['--proxy-host <host>', 'Remote proxy hostname/IP'],
+    ['--proxy-port <port>', 'Proxy port (default: 8317)'],
+    ['--proxy-protocol <proto>', 'Protocol: http or https (default: http)'],
+    ['--proxy-auth-token <token>', 'Auth token for remote proxy'],
+    ['--local-proxy', 'Force local mode, ignore remote config'],
+    ['--remote-only', 'Fail if remote unreachable (no fallback)'],
+  ]);
+
+  // CLI Proxy env vars
+  printSubSection('CLI Proxy Environment Variables', [
+    ['CCS_PROXY_HOST', 'Remote proxy hostname'],
+    ['CCS_PROXY_PORT', 'Proxy port'],
+    ['CCS_PROXY_PROTOCOL', 'Protocol (http/https)'],
+    ['CCS_PROXY_AUTH_TOKEN', 'Auth token'],
+    ['CCS_PROXY_FALLBACK_ENABLED', 'Enable local fallback (1/0)'],
+  ]);
+
   // CLI Proxy paths
   console.log(subheader('CLI Proxy:'));
   console.log(`  Binary:      ${color('~/.ccs/cliproxy/bin/cli-proxy-api', 'path')}`);
