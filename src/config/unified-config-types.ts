@@ -14,8 +14,9 @@
  * Version 2 = YAML unified format
  * Version 3 = WebSearch config with model configuration for Gemini/OpenCode
  * Version 4 = Copilot API integration (GitHub Copilot proxy)
+ * Version 5 = Remote proxy configuration (connect to remote CLIProxyAPI)
  */
-export const UNIFIED_CONFIG_VERSION = 4;
+export const UNIFIED_CONFIG_VERSION = 5;
 
 /**
  * Account configuration (formerly in profiles.json).
@@ -186,6 +187,56 @@ export interface CopilotConfig {
 }
 
 /**
+ * Remote proxy configuration.
+ * Connect to a remote CLIProxyAPI instance instead of spawning local binary.
+ */
+export interface ProxyRemoteConfig {
+  /** Enable remote proxy mode (default: false = local mode) */
+  enabled: boolean;
+  /** Remote proxy hostname or IP (empty = not configured) */
+  host: string;
+  /** Remote proxy port (default: 8317) */
+  port: number;
+  /** Protocol for remote connection */
+  protocol: 'http' | 'https';
+  /** Auth token for remote proxy (optional, sent as header) */
+  auth_token: string;
+}
+
+/**
+ * Fallback configuration when remote proxy is unreachable.
+ */
+export interface ProxyFallbackConfig {
+  /** Enable fallback to local proxy (default: true) */
+  enabled: boolean;
+  /** Auto-start local proxy without prompting (default: false = prompt user) */
+  auto_start: boolean;
+}
+
+/**
+ * Local proxy configuration.
+ */
+export interface ProxyLocalConfig {
+  /** Local proxy port (default: 8317) */
+  port: number;
+  /** Auto-start local binary (default: true) */
+  auto_start: boolean;
+}
+
+/**
+ * Proxy configuration section.
+ * Controls whether CCS uses local or remote CLIProxyAPI instance.
+ */
+export interface ProxyConfig {
+  /** Remote proxy settings */
+  remote: ProxyRemoteConfig;
+  /** Fallback behavior when remote is unreachable */
+  fallback: ProxyFallbackConfig;
+  /** Local proxy settings */
+  local: ProxyLocalConfig;
+}
+
+/**
  * Global environment variables configuration.
  * These env vars are injected into ALL non-Claude subscription profiles.
  * Useful for disabling telemetry, bug commands, error reporting, etc.
@@ -242,7 +293,7 @@ export interface WebSearchConfig {
  * Stored in ~/.ccs/config.yaml
  */
 export interface UnifiedConfig {
-  /** Config version (4 for copilot support) */
+  /** Config version (5 for remote proxy support) */
   version: number;
   /** Default profile name to use when none specified */
   default?: string;
@@ -260,6 +311,8 @@ export interface UnifiedConfig {
   global_env?: GlobalEnvConfig;
   /** Copilot API configuration (GitHub Copilot proxy) */
   copilot?: CopilotConfig;
+  /** Proxy configuration for remote/local CLIProxyAPI */
+  proxy?: ProxyConfig;
 }
 
 /**
@@ -287,6 +340,28 @@ export const DEFAULT_COPILOT_CONFIG: CopilotConfig = {
   rate_limit: null,
   wait_on_limit: true,
   model: 'gpt-4.1', // Free tier compatible
+};
+
+/**
+ * Default proxy configuration.
+ * Local mode by default - remote must be explicitly enabled.
+ */
+export const DEFAULT_PROXY_CONFIG: ProxyConfig = {
+  remote: {
+    enabled: false,
+    host: '',
+    port: 8317,
+    protocol: 'http',
+    auth_token: '',
+  },
+  fallback: {
+    enabled: true,
+    auto_start: false,
+  },
+  local: {
+    port: 8317,
+    auto_start: true,
+  },
 };
 
 /**
@@ -336,6 +411,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
       env: { ...DEFAULT_GLOBAL_ENV },
     },
     copilot: { ...DEFAULT_COPILOT_CONFIG },
+    proxy: { ...DEFAULT_PROXY_CONFIG },
   };
 }
 

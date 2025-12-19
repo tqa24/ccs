@@ -187,3 +187,28 @@ export interface ProviderConfig {
   /** Whether OAuth is required */
   requiresOAuth: boolean;
 }
+
+/**
+ * Resolved proxy configuration after merging CLI > ENV > config.yaml > defaults.
+ * Used by executor to determine local vs remote proxy mode.
+ */
+export interface ResolvedProxyConfig {
+  /** Proxy mode: 'local' spawns CLIProxyAPI locally, 'remote' connects to external server */
+  mode: 'local' | 'remote';
+  /** Remote proxy hostname/IP (only for remote mode) */
+  host?: string;
+  /** Proxy port (default: 8317) */
+  port: number;
+  /** Protocol for remote connection (default: http) */
+  protocol: 'http' | 'https';
+  /** Auth token for remote proxy authentication */
+  authToken?: string;
+  /** Enable fallback to local when remote unreachable (default: true) */
+  fallbackEnabled: boolean;
+  /** Auto-start local proxy if not running (default: true) */
+  autoStartLocal: boolean;
+  /** --remote-only flag: fail if remote unreachable, no fallback */
+  remoteOnly: boolean;
+  /** --local-proxy flag: force local mode, ignore remote config */
+  forceLocal: boolean;
+}
