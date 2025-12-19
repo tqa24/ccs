@@ -1,3 +1,54 @@
+## [6.6.0](https://github.com/kaitranntt/ccs/compare/v6.5.0...v6.6.0) (2025-12-19)
+
+### ⚠ BREAKING CHANGES
+
+* Native shell installers (curl/irm) no longer work.
+Use `npm install -g @kaitranntt/ccs` instead.
+
+### Features
+
+* **ci:** add Discord notifications for releases ([ee76d66](https://github.com/kaitranntt/ccs/commit/ee76d663aec59a86a236156dbc163d0d291c0446))
+* **ci:** add semantic-release for dev branch with rich Discord notifications ([0f590c8](https://github.com/kaitranntt/ccs/commit/0f590c80d689c39cea7c94937ed398941dddb533))
+* **cleanup:** add age-based error log cleanup ([45207b4](https://github.com/kaitranntt/ccs/commit/45207b4e7f92c09d7464dd5c954718254ddfd43a))
+* **cliproxy:** add getRemoteEnvVars for remote proxy mode ([f4a50d0](https://github.com/kaitranntt/ccs/commit/f4a50d006c1f6bd284fe743f9a322540763e1848))
+* **cliproxy:** add proxy config resolver with CLI flag support ([68a93f0](https://github.com/kaitranntt/ccs/commit/68a93f0500f396ebcc65cc133c1a444ae5a0f220))
+* **cliproxy:** add remote proxy client for health checks ([30d564c](https://github.com/kaitranntt/ccs/commit/30d564cda66a54c2ac12788559624cb0736cdeb3))
+* **cliproxy:** integrate remote proxy mode in executor ([bd1ff2f](https://github.com/kaitranntt/ccs/commit/bd1ff2f059d01d4371b2230d4902bc5ab210055e))
+* **cliproxy:** set WRITABLE_PATH for log storage in ~/.ccs/cliproxy/ ([6b9396f](https://github.com/kaitranntt/ccs/commit/6b9396fbc6d464bc3e3d6d3bb639e70fe5306074))
+* **config:** add proxy configuration types and schema ([eff2e2d](https://github.com/kaitranntt/ccs/commit/eff2e2d29f3f227c05103c252823fb9e040b6e49))
+* **config:** add proxy section to unified config loader ([1971744](https://github.com/kaitranntt/ccs/commit/197174441f6eeca5e3c98e88af43d91ee081f734))
+* **dashboard:** add error log viewer for CLIProxy diagnostics ([5b3d565](https://github.com/kaitranntt/ccs/commit/5b3d56548a8dfb2e6bb22e14b13f0fb038f2d1fb)), closes [#132](https://github.com/kaitranntt/ccs/issues/132)
+* **global-env:** add global environment variables injection for third-party profiles ([5d34326](https://github.com/kaitranntt/ccs/commit/5d343260c7307c2d7ac8da92eb5f94c7f764d08c))
+* **ui:** add absolute path copy for error logs ([5d4f49e](https://github.com/kaitranntt/ccs/commit/5d4f49e4bb6f9748efa89e96c342dfae3e35d02b))
+* **ui:** add Proxy settings tab to dashboard ([9a9ef98](https://github.com/kaitranntt/ccs/commit/9a9ef98542bb766087b711fc39e928e347ad9b86))
+* **ui:** add Stop and Restart buttons to ProxyStatusWidget ([c9ad0b0](https://github.com/kaitranntt/ccs/commit/c9ad0b077934ae8418d4e97b9b02a09044ff898b))
+* **ui:** add version sync timestamp to ProxyStatusWidget ([d43079b](https://github.com/kaitranntt/ccs/commit/d43079b72414d7b841a35a934ea39a91527f4172))
+* **ui:** redesign error logs monitor with split view layout ([8f47b87](https://github.com/kaitranntt/ccs/commit/8f47b8775f2c2493c05ee2be861ca3f8667cfc0e))
+* **ui:** show CLIProxyAPI update availability in dashboard ([96762a9](https://github.com/kaitranntt/ccs/commit/96762a9f6ee096570b2fe6136a4431e6ce1d1a47))
+* **web-server:** add proxy configuration API routes ([8decdfb](https://github.com/kaitranntt/ccs/commit/8decdfb515075b772970de7c85b34c31baf93754))
+
+### Bug Fixes
+
+* **ci:** remove deprecated installer references from dev-release workflow ([4b969b6](https://github.com/kaitranntt/ccs/commit/4b969b6870aae6b5859b9a1be0cf98b9d537ce00))
+* **ci:** remove sync-version.js that depends on deleted VERSION file ([18729c9](https://github.com/kaitranntt/ccs/commit/18729c9983ecd1f9d857b0de2753e99c675c624a))
+* **cliproxy:** prevent misleading update message when proxy is running ([2adc272](https://github.com/kaitranntt/ccs/commit/2adc272f278b1d80d160ad4d6e1f35e3b61cb156)), closes [#143](https://github.com/kaitranntt/ccs/issues/143)
+* **error-logs-monitor:** properly handle status loading state ([1ef625e](https://github.com/kaitranntt/ccs/commit/1ef625ee863c517a5fbba21f16cf991bb77be7d7))
+* **profiles:** prevent env var inheritance for settings-based profiles ([903bc10](https://github.com/kaitranntt/ccs/commit/903bc10fea11694474f772356f301b8e4b37298e))
+
+### Documentation
+
+* **cliproxy:** add remote proxy documentation ([196422c](https://github.com/kaitranntt/ccs/commit/196422cee1f7410d385581f2a28df3faa87d68e3))
+
+### Styles
+
+* **ui:** use sidebar accent colors for proxy update button ([eeb6913](https://github.com/kaitranntt/ccs/commit/eeb6913d96fe1a9a0d8721627a07c7f772b67b88))
+* **ui:** widen cliproxy sidebar from w-64 to w-80 ([248d970](https://github.com/kaitranntt/ccs/commit/248d970cba8671b7c20dc99f8d1a70e4fe113605))
+
+### Code Refactoring
+
+* remove deprecated native shell installers ([126cffc](https://github.com/kaitranntt/ccs/commit/126cffc6dcf434abeee883a4109d3705cdb92a67))
+* rename proxy to cliproxy_server and update API routes ([8d8d4c2](https://github.com/kaitranntt/ccs/commit/8d8d4c248ad890413d5c4e7e72f9f2a16305f74f))
+
 ## [6.6.0-dev.4](https://github.com/kaitranntt/ccs/compare/v6.6.0-dev.3...v6.6.0-dev.4) (2025-12-19)
 
 ### Bug Fixes
