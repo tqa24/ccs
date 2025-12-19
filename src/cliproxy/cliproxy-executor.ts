@@ -21,14 +21,17 @@ import { ensureCLIProxyBinary } from './binary-manager';
 import {
   generateConfig,
   getEffectiveEnvVars,
+  getRemoteEnvVars,
   getProviderConfig,
   ensureProviderSettings,
   CLIPROXY_DEFAULT_PORT,
   getCliproxyWritablePath,
 } from './config-generator';
+import { checkRemoteProxy } from './remote-proxy-client';
 import { isAuthenticated } from './auth-handler';
 import { CLIProxyProvider, ExecutorConfig } from './types';
 import { configureProviderModel, getCurrentModel } from './model-config';
+import { resolveProxyConfig, PROXY_CLI_FLAGS } from './proxy-config-resolver';
 import { getWebSearchHookEnv } from '../utils/websearch-manager';
 import { supportsModelConfig, isModelBroken, getModelIssueUrl, findModel } from './model-catalog';
 import {
@@ -126,6 +129,22 @@ export async function execClaudeWithCLIProxy(
     }
   };
 
+  // 0. Resolve proxy configuration (CLI > ENV > config.yaml > defaults)
+  // This filters proxy flags from args and returns resolved config
+  const { config: proxyConfig, remainingArgs: argsWithoutProxy } = resolveProxyConfig(args);
+
+  // Use resolved port from proxy config (overrides ExecutorConfig)
+  if (proxyConfig.port !== CLIPROXY_DEFAULT_PORT) {
+    cfg.port = proxyConfig.port;
+  }
+
+  log(`Proxy mode: ${proxyConfig.mode}`);
+  if (proxyConfig.mode === 'remote') {
+    log(`Remote host: ${proxyConfig.host}:${proxyConfig.port} (${proxyConfig.protocol})`);
+  }
+
+  // Note: proxyConfig is available for Phase 4 (remote mode integration)
+
   // Ensure MCP web-search is configured for third-party profiles
   // WebSearch is a server-side tool executed by Anthropic's API
   // Third-party providers don't have access, so we use MCP fallback
@@ -142,39 +161,102 @@ export async function execClaudeWithCLIProxy(
   const providerConfig = getProviderConfig(provider);
   log(`Provider: ${providerConfig.displayName}`);
 
-  // 1. Ensure binary exists (downloads if needed)
-  const spinner = new ProgressIndicator('Preparing CLIProxy');
-  spinner.start();
+  // Check remote proxy if configured (before binary download)
+  let useRemoteProxy = false;
+  if (proxyConfig.mode === 'remote' && proxyConfig.host) {
+    const status = await checkRemoteProxy({
+      host: proxyConfig.host,
+      port: proxyConfig.port,
+      protocol: proxyConfig.protocol,
+      authToken: proxyConfig.authToken,
+      timeout: 2000,
+      allowSelfSigned: proxyConfig.protocol === 'https',
+    });
 
-  let binaryPath: string;
-  try {
-    binaryPath = await ensureCLIProxyBinary(verbose);
-    spinner.succeed('CLIProxy binary ready');
-  } catch (error) {
-    spinner.fail('Failed to prepare CLIProxy');
-    throw error;
+    if (status.reachable) {
+      useRemoteProxy = true;
+      console.log(
+        ok(
+          `Connected to remote proxy at ${proxyConfig.host}:${proxyConfig.port} (${status.latencyMs}ms)`
+        )
+      );
+    } else {
+      console.error(warn(`Remote proxy unreachable: ${status.error}`));
+
+      if (proxyConfig.remoteOnly) {
+        throw new Error('Remote proxy unreachable and --remote-only specified');
+      }
+
+      if (proxyConfig.fallbackEnabled) {
+        if (proxyConfig.autoStartLocal) {
+          console.log(info('Falling back to local proxy...'));
+        } else {
+          // Prompt user for fallback (only in TTY)
+          if (process.stdin.isTTY) {
+            const readline = await import('readline');
+            const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+            const answer = await new Promise<string>((resolve) => {
+              rl.question('Start local proxy instead? [Y/n] ', resolve);
+            });
+            rl.close();
+            if (answer.toLowerCase() === 'n') {
+              throw new Error('Remote proxy unreachable and user declined fallback');
+            }
+          }
+          console.log(info('Starting local proxy...'));
+        }
+      } else {
+        throw new Error('Remote proxy unreachable and fallback disabled');
+      }
+    }
   }
 
-  // 2. Handle special flags
-  const forceAuth = args.includes('--auth');
-  const forceHeadless = args.includes('--headless');
-  const forceLogout = args.includes('--logout');
-  const forceConfig = args.includes('--config');
-  const addAccount = args.includes('--add');
-  const showAccounts = args.includes('--accounts');
+  // Variables for local proxy mode
+  let binaryPath: string | undefined;
+  let sessionId: string | undefined;
+
+  // 1. Ensure binary exists (downloads if needed) - SKIP for remote mode
+  if (!useRemoteProxy) {
+    const spinner = new ProgressIndicator('Preparing CLIProxy');
+    spinner.start();
+
+    try {
+      binaryPath = await ensureCLIProxyBinary(verbose);
+      spinner.succeed('CLIProxy binary ready');
+    } catch (error) {
+      spinner.fail('Failed to prepare CLIProxy');
+      throw error;
+    }
+  }
+
+  // 2. Handle special flags (use argsWithoutProxy - proxy flags already stripped)
+  const forceAuth = argsWithoutProxy.includes('--auth');
+  const forceHeadless = argsWithoutProxy.includes('--headless');
+  const forceLogout = argsWithoutProxy.includes('--logout');
+  const forceConfig = argsWithoutProxy.includes('--config');
+  const addAccount = argsWithoutProxy.includes('--add');
+  const showAccounts = argsWithoutProxy.includes('--accounts');
 
   // Parse --use <account> flag
   let useAccount: string | undefined;
-  const useIdx = args.indexOf('--use');
-  if (useIdx !== -1 && args[useIdx + 1] && !args[useIdx + 1].startsWith('-')) {
-    useAccount = args[useIdx + 1];
+  const useIdx = argsWithoutProxy.indexOf('--use');
+  if (
+    useIdx !== -1 &&
+    argsWithoutProxy[useIdx + 1] &&
+    !argsWithoutProxy[useIdx + 1].startsWith('-')
+  ) {
+    useAccount = argsWithoutProxy[useIdx + 1];
   }
 
   // Parse --nickname <name> flag
   let setNickname: string | undefined;
-  const nicknameIdx = args.indexOf('--nickname');
-  if (nicknameIdx !== -1 && args[nicknameIdx + 1] && !args[nicknameIdx + 1].startsWith('-')) {
-    setNickname = args[nicknameIdx + 1];
+  const nicknameIdx = argsWithoutProxy.indexOf('--nickname');
+  if (
+    nicknameIdx !== -1 &&
+    argsWithoutProxy[nicknameIdx + 1] &&
+    !argsWithoutProxy[nicknameIdx + 1].startsWith('-')
+  ) {
+    setNickname = argsWithoutProxy[nicknameIdx + 1];
   }
 
   // Handle --accounts: list accounts and exit
@@ -306,122 +388,135 @@ export async function execClaudeWithCLIProxy(
   // 6. Ensure user settings file exists (creates from defaults if not)
   ensureProviderSettings(provider);
 
-  // 6. Generate config file
-  log(`Generating config for ${provider}`);
-  const configPath = generateConfig(provider, cfg.port);
-  log(`Config written: ${configPath}`);
-
-  // 6a. Pre-flight check: handle existing proxy or port conflicts
-  // Clean up orphaned sessions first (from crashed proxies)
-  cleanupOrphanedSessions(cfg.port);
-
-  // Check if there's an existing healthy proxy we can reuse
-  const existingProxy = getExistingProxy(cfg.port);
+  // Local proxy mode: generate config, spawn proxy, track session
   let proxy: ChildProcess | null = null;
-  let sessionId: string;
 
-  if (existingProxy) {
-    // Reuse existing proxy - another CCS session started it
-    log(`Reusing existing CLIProxy on port ${cfg.port} (PID ${existingProxy.pid})`);
-    sessionId = registerSession(cfg.port, existingProxy.pid);
-    console.log(
-      info(`Joined existing CLIProxy (${existingProxy.sessions.length + 1} sessions active)`)
-    );
-  } else {
-    // No existing proxy - check if port is free
-    const portProcess = await getPortProcess(cfg.port);
-    if (portProcess) {
-      if (isCLIProxyProcess(portProcess)) {
-        // CLIProxy on port but no session lock - likely orphaned/zombie
-        // Only kill if no active sessions registered
-        if (!hasActiveSessions()) {
-          log(`Found zombie CLIProxy on port ${cfg.port} (PID ${portProcess.pid}), killing...`);
-          const killed = killProcessOnPort(cfg.port, verbose);
-          if (killed) {
-            console.log(info(`Cleaned up zombie CLIProxy process`));
-            // Wait a bit for port to be released
-            await new Promise((r) => setTimeout(r, 500));
+  if (!useRemoteProxy) {
+    // 6. Generate config file
+    log(`Generating config for ${provider}`);
+    const configPath = generateConfig(provider, cfg.port);
+    log(`Config written: ${configPath}`);
+
+    // 6a. Pre-flight check: handle existing proxy or port conflicts
+    // Clean up orphaned sessions first (from crashed proxies)
+    cleanupOrphanedSessions(cfg.port);
+
+    // Check if there's an existing healthy proxy we can reuse
+    const existingProxy = getExistingProxy(cfg.port);
+
+    if (existingProxy) {
+      // Reuse existing proxy - another CCS session started it
+      log(`Reusing existing CLIProxy on port ${cfg.port} (PID ${existingProxy.pid})`);
+      sessionId = registerSession(cfg.port, existingProxy.pid);
+      console.log(
+        info(`Joined existing CLIProxy (${existingProxy.sessions.length + 1} sessions active)`)
+      );
+    } else {
+      // No existing proxy - check if port is free
+      const portProcess = await getPortProcess(cfg.port);
+      if (portProcess) {
+        if (isCLIProxyProcess(portProcess)) {
+          // CLIProxy on port but no session lock - likely orphaned/zombie
+          // Only kill if no active sessions registered
+          if (!hasActiveSessions()) {
+            log(`Found zombie CLIProxy on port ${cfg.port} (PID ${portProcess.pid}), killing...`);
+            const killed = killProcessOnPort(cfg.port, verbose);
+            if (killed) {
+              console.log(info(`Cleaned up zombie CLIProxy process`));
+              // Wait a bit for port to be released
+              await new Promise((r) => setTimeout(r, 500));
+            }
+          } else {
+            // Active sessions exist but getExistingProxy returned null - something's wrong
+            // Try to connect anyway
+            log(`CLIProxy on port ${cfg.port} has active sessions, attempting to join...`);
           }
         } else {
-          // Active sessions exist but getExistingProxy returned null - something's wrong
-          // Try to connect anyway
-          log(`CLIProxy on port ${cfg.port} has active sessions, attempting to join...`);
+          // Non-CLIProxy process blocking the port - warn user
+          console.error('');
+          console.error(
+            warn(
+              `Port ${cfg.port} is blocked by ${portProcess.processName} (PID ${portProcess.pid})`
+            )
+          );
+          console.error('');
+          console.error('To fix this, close the blocking application or run:');
+          console.error(`  ${getPortCheckCommand(cfg.port)}`);
+          console.error('');
+          throw new Error(`Port ${cfg.port} is in use by another application`);
         }
-      } else {
-        // Non-CLIProxy process blocking the port - warn user
-        console.error('');
-        console.error(
-          warn(`Port ${cfg.port} is blocked by ${portProcess.processName} (PID ${portProcess.pid})`)
-        );
-        console.error('');
-        console.error('To fix this, close the blocking application or run:');
-        console.error(`  ${getPortCheckCommand(cfg.port)}`);
-        console.error('');
-        throw new Error(`Port ${cfg.port} is in use by another application`);
       }
+
+      // 6b. Spawn CLIProxyAPI binary (only if not reusing existing proxy)
+      // Use detached mode so proxy persists after terminal closes
+      const configPath = generateConfig(provider, cfg.port);
+      const proxyArgs = ['--config', configPath];
+
+      log(`Spawning: ${binaryPath} ${proxyArgs.join(' ')}`);
+
+      proxy = spawn(binaryPath as string, proxyArgs, {
+        stdio: ['ignore', 'ignore', 'ignore'],
+        detached: true, // Persist after parent terminal closes
+        env: {
+          ...process.env,
+          WRITABLE_PATH: getCliproxyWritablePath(), // Logs stored in ~/.ccs/cliproxy/logs/
+        },
+      });
+
+      // Unref so parent process can exit independently
+      proxy.unref();
+
+      // Handle proxy errors (only fires if spawn itself fails)
+      proxy.on('error', (error) => {
+        console.error(fail(`CLIProxy spawn error: ${error.message}`));
+      });
+
+      // 7. Wait for proxy readiness via TCP polling
+      const readySpinner = new ProgressIndicator(`Waiting for CLIProxy on port ${cfg.port}`);
+      readySpinner.start();
+
+      try {
+        await waitForProxyReady(cfg.port, cfg.timeout, cfg.pollInterval);
+        readySpinner.succeed(`CLIProxy ready on port ${cfg.port}`);
+      } catch (error) {
+        readySpinner.fail('CLIProxy startup failed');
+        proxy.kill('SIGTERM');
+
+        const err = error as Error;
+        console.error('');
+        console.error(fail('CLIProxy failed to start'));
+        console.error('');
+        console.error('Possible causes:');
+        console.error(`  1. Port ${cfg.port} already in use`);
+        console.error('  2. Binary crashed on startup');
+        console.error('  3. Invalid configuration');
+        console.error('');
+        console.error('Troubleshooting:');
+        console.error(`  - Check port: ${getPortCheckCommand(cfg.port)}`);
+        console.error('  - Run with --verbose for detailed logs');
+        console.error(`  - View config: ${getCatCommand(configPath)}`);
+        console.error('  - Try: ccs doctor --fix');
+        console.error('');
+
+        throw new Error(`CLIProxy startup failed: ${err.message}`);
+      }
+
+      // Register this session with the new proxy
+      sessionId = registerSession(cfg.port, proxy.pid as number);
+      log(`Registered session ${sessionId} with new proxy (PID ${proxy.pid})`);
     }
-
-    // 6b. Spawn CLIProxyAPI binary (only if not reusing existing proxy)
-    // Use detached mode so proxy persists after terminal closes
-    const proxyArgs = ['--config', configPath];
-
-    log(`Spawning: ${binaryPath} ${proxyArgs.join(' ')}`);
-
-    proxy = spawn(binaryPath, proxyArgs, {
-      stdio: ['ignore', 'ignore', 'ignore'],
-      detached: true, // Persist after parent terminal closes
-      env: {
-        ...process.env,
-        WRITABLE_PATH: getCliproxyWritablePath(), // Logs stored in ~/.ccs/cliproxy/logs/
-      },
-    });
-
-    // Unref so parent process can exit independently
-    proxy.unref();
-
-    // Handle proxy errors (only fires if spawn itself fails)
-    proxy.on('error', (error) => {
-      console.error(fail(`CLIProxy spawn error: ${error.message}`));
-    });
-
-    // 7. Wait for proxy readiness via TCP polling
-    const readySpinner = new ProgressIndicator(`Waiting for CLIProxy on port ${cfg.port}`);
-    readySpinner.start();
-
-    try {
-      await waitForProxyReady(cfg.port, cfg.timeout, cfg.pollInterval);
-      readySpinner.succeed(`CLIProxy ready on port ${cfg.port}`);
-    } catch (error) {
-      readySpinner.fail('CLIProxy startup failed');
-      proxy.kill('SIGTERM');
-
-      const err = error as Error;
-      console.error('');
-      console.error(fail('CLIProxy failed to start'));
-      console.error('');
-      console.error('Possible causes:');
-      console.error(`  1. Port ${cfg.port} already in use`);
-      console.error('  2. Binary crashed on startup');
-      console.error('  3. Invalid configuration');
-      console.error('');
-      console.error('Troubleshooting:');
-      console.error(`  - Check port: ${getPortCheckCommand(cfg.port)}`);
-      console.error('  - Run with --verbose for detailed logs');
-      console.error(`  - View config: ${getCatCommand(configPath)}`);
-      console.error('  - Try: ccs doctor --fix');
-      console.error('');
-
-      throw new Error(`CLIProxy startup failed: ${err.message}`);
-    }
-
-    // Register this session with the new proxy
-    sessionId = registerSession(cfg.port, proxy.pid as number);
-    log(`Registered session ${sessionId} with new proxy (PID ${proxy.pid})`);
   }
 
   // 7. Execute Claude CLI with proxied environment
-  // Uses custom settings path (for variants), user settings, or bundled defaults
-  const envVars = getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath);
+  // Use remote or local env vars based on mode
+  const envVars = useRemoteProxy
+    ? getRemoteEnvVars(provider, {
+        host: proxyConfig.host ?? 'localhost',
+        port: proxyConfig.port,
+        protocol: proxyConfig.protocol,
+        authToken: proxyConfig.authToken,
+      })
+    : getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath);
   const webSearchEnv = getWebSearchHookEnv();
   const env = {
     ...process.env,
@@ -437,6 +532,7 @@ export async function execClaudeWithCLIProxy(
   }
 
   // Filter out CCS-specific flags before passing to Claude CLI
+  // Note: Proxy flags (--proxy-host, etc.) already stripped by resolveProxyConfig()
   const ccsFlags = [
     '--auth',
     '--headless',
@@ -446,12 +542,15 @@ export async function execClaudeWithCLIProxy(
     '--accounts',
     '--use',
     '--nickname',
+    // Proxy flags are handled by resolveProxyConfig, but list for documentation
+    ...PROXY_CLI_FLAGS,
   ];
-  const claudeArgs = args.filter((arg, idx) => {
+  const claudeArgs = argsWithoutProxy.filter((arg, idx) => {
     // Filter out CCS flags
     if (ccsFlags.includes(arg)) return false;
     // Filter out value after --use or --nickname
-    if (args[idx - 1] === '--use' || args[idx - 1] === '--nickname') return false;
+    if (argsWithoutProxy[idx - 1] === '--use' || argsWithoutProxy[idx - 1] === '--nickname')
+      return false;
     return true;
   });
 
@@ -475,14 +574,16 @@ export async function execClaudeWithCLIProxy(
     });
   }
 
-  // 8. Cleanup: unregister session when Claude exits
+  // 8. Cleanup: unregister session when Claude exits (local mode only)
   // Proxy persists by default - use 'ccs cliproxy stop' to kill manually
   claude.on('exit', (code, signal) => {
     log(`Claude exited: code=${code}, signal=${signal}`);
 
-    // Unregister this session (proxy keeps running for persistence)
-    unregisterSession(sessionId);
-    log(`Session ${sessionId} unregistered, proxy persists for other sessions or future use`);
+    // Unregister this session (proxy keeps running for persistence) - only for local mode
+    if (sessionId) {
+      unregisterSession(sessionId);
+      log(`Session ${sessionId} unregistered, proxy persists for other sessions or future use`);
+    }
 
     if (signal) {
       process.kill(process.pid, signal as NodeJS.Signals);
@@ -494,8 +595,10 @@ export async function execClaudeWithCLIProxy(
   claude.on('error', (error) => {
     console.error(fail(`Claude CLI error: ${error}`));
 
-    // Unregister session, proxy keeps running
-    unregisterSession(sessionId);
+    // Unregister session, proxy keeps running (local mode only)
+    if (sessionId) {
+      unregisterSession(sessionId);
+    }
     process.exit(1);
   });
 
@@ -503,8 +606,10 @@ export async function execClaudeWithCLIProxy(
   const cleanup = () => {
     log('Parent signal received, cleaning up');
 
-    // Unregister session, proxy keeps running
-    unregisterSession(sessionId);
+    // Unregister session, proxy keeps running (local mode only)
+    if (sessionId) {
+      unregisterSession(sessionId);
+    }
     claude.kill('SIGTERM');
   };
 
