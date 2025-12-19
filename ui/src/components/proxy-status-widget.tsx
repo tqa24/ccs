@@ -31,6 +31,17 @@ function formatUptime(startedAt?: string): string {
   return `${minutes}m`;
 }
 
+function formatTimeAgo(timestamp?: number): string {
+  if (!timestamp) return '';
+  const diff = Date.now() - timestamp;
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  return `${hours}h ago`;
+}
+
 export function ProxyStatusWidget() {
   const { data: status, isLoading } = useProxyStatus();
   const { data: updateCheck } = useCliproxyUpdateCheck();
@@ -165,6 +176,18 @@ export function ProxyStatusWidget() {
             )}
             Start
           </Button>
+        </div>
+      )}
+
+      {/* Version sync indicator */}
+      {updateCheck?.currentVersion && (
+        <div className="mt-2 pt-2 border-t border-muted flex items-center justify-between text-[10px] text-muted-foreground/70">
+          <span>v{updateCheck.currentVersion}</span>
+          {updateCheck.checkedAt && (
+            <span title={new Date(updateCheck.checkedAt).toLocaleString()}>
+              Synced {formatTimeAgo(updateCheck.checkedAt)}
+            </span>
+          )}
         </div>
       )}
     </div>

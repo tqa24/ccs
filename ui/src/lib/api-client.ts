@@ -196,6 +196,7 @@ export interface CliproxyUpdateCheckResult {
   currentVersion: string;
   latestVersion: string;
   fromCache: boolean;
+  checkedAt: number; // Unix timestamp of last check
 }
 
 // API

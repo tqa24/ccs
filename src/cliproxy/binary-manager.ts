@@ -59,6 +59,7 @@ interface UpdateCheckResult {
   currentVersion: string;
   latestVersion: string;
   fromCache: boolean;
+  checkedAt: number; // Unix timestamp of last check
 }
 
 /** Default configuration */
@@ -172,19 +173,21 @@ export class BinaryManager {
     const currentVersion = this.getInstalledVersion();
 
     // Try cache first
-    const cachedVersion = this.getCachedLatestVersion();
-    if (cachedVersion) {
-      this.log(`Using cached version: ${cachedVersion}`);
+    const cache = this.getVersionCache();
+    if (cache) {
+      this.log(`Using cached version: ${cache.latestVersion}`);
       return {
-        hasUpdate: this.isNewerVersion(cachedVersion, currentVersion),
+        hasUpdate: this.isNewerVersion(cache.latestVersion, currentVersion),
         currentVersion,
-        latestVersion: cachedVersion,
+        latestVersion: cache.latestVersion,
         fromCache: true,
+        checkedAt: cache.checkedAt,
       };
     }
 
     // Fetch from GitHub API
     const latestVersion = await this.fetchLatestVersion();
+    const now = Date.now();
     this.cacheLatestVersion(latestVersion);
 
     return {
@@ -192,6 +195,7 @@ export class BinaryManager {
       currentVersion,
       latestVersion,
       fromCache: false,
+      checkedAt: now,
     };
   }
 
@@ -287,9 +291,9 @@ export class BinaryManager {
   }
 
   /**
-   * Get cached latest version if still valid
+   * Get version cache data if still valid
    */
-  private getCachedLatestVersion(): string | null {
+  private getVersionCache(): VersionCache | null {
     const cachePath = this.getVersionCachePath();
     if (!fs.existsSync(cachePath)) {
       return null;
@@ -301,7 +305,7 @@ export class BinaryManager {
 
       // Check if cache is still valid
       if (Date.now() - cache.checkedAt < VERSION_CACHE_DURATION_MS) {
-        return cache.latestVersion;
+        return cache;
       }
 
       // Cache expired
@@ -1001,6 +1005,7 @@ export interface CliproxyUpdateCheckResult {
   currentVersion: string;
   latestVersion: string;
   fromCache: boolean;
+  checkedAt: number; // Unix timestamp of last check
 }
 
 /**
