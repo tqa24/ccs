@@ -153,3 +153,17 @@ jobs:
           git add VERSION package.json
           git commit -m "chore(release): ${{ steps.bump.outputs.new }} [skip ci]"
           git push origin dev
+
+      - name: Notify Discord
+        if: success()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VERSION: ${{ steps.bump.outputs.new }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL not set, skipping notification"
+            exit 0
+          fi
+          curl -s -X POST "$DISCORD_WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"CCS Dev Release\",\"embeds\":[{\"title\":\"Dev Release $VERSION\",\"url\":\"https://www.npmjs.com/package/@kaitranntt/ccs/v/$VERSION\",\"color\":15638323,\"description\":\"Pre-release version available for testing.\",\"footer\":{\"text\":\"npm i @kaitranntt/ccs@dev\"}}]}"
