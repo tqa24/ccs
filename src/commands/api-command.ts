@@ -33,6 +33,8 @@ import {
   removeApiProfile,
   getApiProfileNames,
   isUsingUnifiedConfig,
+  isOpenRouterUrl,
+  pickOpenRouterModel,
   type ModelMapping,
 } from '../api/services';
 
@@ -130,6 +132,31 @@ async function handleCreate(args: string[]): Promise<void> {
     }
   }
 
+  // OpenRouter detection: offer interactive model picker
+  let openRouterModel: string | undefined;
+  let openRouterTierMapping: { opus?: string; sonnet?: string; haiku?: string } | undefined;
+
+  if (isOpenRouterUrl(baseUrl) && !parsedArgs.model) {
+    console.log('');
+    console.log(info('OpenRouter detected!'));
+
+    const useInteractive = await InteractivePrompt.confirm('Browse models interactively?', {
+      default: true,
+    });
+
+    if (useInteractive) {
+      const selection = await pickOpenRouterModel();
+
+      if (selection) {
+        openRouterModel = selection.model;
+        openRouterTierMapping = selection.tierMapping;
+      }
+    }
+
+    console.log('');
+    console.log(dim('Note: For OpenRouter, ANTHROPIC_API_KEY should be empty.'));
+  }
+
   // Step 3: API Key
   let apiKey = parsedArgs.apiKey;
   if (!apiKey) {
@@ -142,7 +169,7 @@ async function handleCreate(args: string[]): Promise<void> {
 
   // Step 4: Model configuration
   const defaultModel = 'claude-sonnet-4-5-20250929';
-  let model = parsedArgs.model;
+  let model = parsedArgs.model || openRouterModel;
   if (!model && !parsedArgs.yes) {
     model = await InteractivePrompt.input('Default model (ANTHROPIC_MODEL)', {
       default: defaultModel,
@@ -151,12 +178,13 @@ async function handleCreate(args: string[]): Promise<void> {
   model = model || defaultModel;
 
   // Step 5: Model mapping for Opus/Sonnet/Haiku
-  let opusModel = model;
-  let sonnetModel = model;
-  let haikuModel = model;
+  let opusModel = openRouterTierMapping?.opus || model;
+  let sonnetModel = openRouterTierMapping?.sonnet || model;
+  let haikuModel = openRouterTierMapping?.haiku || model;
   const isCustomModel = model !== defaultModel;
+  const hasOpenRouterTierMapping = openRouterTierMapping !== undefined;
 
-  if (!parsedArgs.yes) {
+  if (!parsedArgs.yes && !hasOpenRouterTierMapping) {
     let wantCustomMapping = isCustomModel;
 
     if (!isCustomModel) {
