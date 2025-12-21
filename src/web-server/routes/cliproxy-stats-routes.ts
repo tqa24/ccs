@@ -19,10 +19,9 @@ import { checkCliproxyUpdate } from '../../cliproxy/binary-manager';
 const router = Router();
 
 /**
- * GET /api/cliproxy/stats - Get CLIProxyAPI usage statistics
- * Returns: CliproxyStats or error if proxy not running
+ * Shared handler for stats/usage endpoint
  */
-router.get('/stats', async (_req: Request, res: Response): Promise<void> => {
+const handleStatsRequest = async (_req: Request, res: Response): Promise<void> => {
   try {
     // Check if proxy is running first
     const running = await isCliproxyRunning();
@@ -48,7 +47,18 @@ router.get('/stats', async (_req: Request, res: Response): Promise<void> => {
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
-});
+};
+
+/**
+ * GET /api/cliproxy/stats - Get CLIProxyAPI usage statistics
+ * Returns: CliproxyStats or error if proxy not running
+ */
+router.get('/stats', handleStatsRequest);
+
+/**
+ * GET /api/cliproxy/usage - Alias for /stats (frontend compatibility)
+ */
+router.get('/usage', handleStatsRequest);
 
 /**
  * GET /api/cliproxy/status - Check CLIProxyAPI running status

@@ -9,6 +9,7 @@ import { Router } from 'express';
 
 // Import domain routers
 import profileRoutes from './profile-routes';
+import accountRoutes from './account-routes';
 import configRoutes from './config-routes';
 import healthRoutes from './health-routes';
 import providerRoutes from './provider-routes';
@@ -28,7 +29,7 @@ export const apiRoutes = Router();
 // Profile CRUD, settings management, presets, accounts
 apiRoutes.use('/profiles', profileRoutes);
 apiRoutes.use('/settings', settingsRoutes);
-apiRoutes.use('/accounts', profileRoutes);
+apiRoutes.use('/accounts', accountRoutes);
 
 // ==================== Unified Config ====================
 // Config format, migration

@@ -1,13 +1,11 @@
 /**
- * Profile Routes - CRUD operations for user profiles and accounts
+ * Profile Routes - CRUD operations for user profiles
  *
  * Uses unified config (config.yaml) when available, falls back to legacy (config.json).
+ * Note: Account routes have been moved to account-routes.ts
  */
 
 import { Router, Request, Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
-import { getCcsDir } from '../../utils/config-manager';
 import { isReservedName, RESERVED_PROFILE_NAMES } from '../../config/reserved-names';
 import { createApiProfile, removeApiProfile } from '../../api/services/profile-writer';
 import { apiProfileExists, listApiProfiles } from '../../api/services/profile-reader';
@@ -20,15 +18,19 @@ const router = Router();
 /**
  * GET /api/profiles - List all profiles
  */
-router.get('/', (_req: Request, res: Response) => {
-  const result = listApiProfiles();
-  // Map isConfigured -> configured for UI compatibility
-  const profiles = result.profiles.map((p) => ({
-    name: p.name,
-    settingsPath: p.settingsPath,
-    configured: p.isConfigured,
-  }));
-  res.json({ profiles });
+router.get('/', (_req: Request, res: Response): void => {
+  try {
+    const result = listApiProfiles();
+    // Map isConfigured -> configured for UI compatibility
+    const profiles = result.profiles.map((p) => ({
+      name: p.name,
+      settingsPath: p.settingsPath,
+      configured: p.isConfigured,
+    }));
+    res.json({ profiles });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
 });
 
 /**
@@ -115,54 +117,6 @@ router.delete('/:name', (req: Request, res: Response): void => {
   }
 
   res.json({ name, deleted: true });
-});
-
-// ==================== Accounts ====================
-
-/**
- * GET /api/accounts - List accounts from profiles.json
- */
-router.get('/accounts', (_req: Request, res: Response): void => {
-  const profilesPath = path.join(getCcsDir(), 'profiles.json');
-
-  if (!fs.existsSync(profilesPath)) {
-    res.json({ accounts: [], default: null });
-    return;
-  }
-
-  const data = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
-  const accounts = Object.entries(data.profiles || {}).map(([name, meta]) => {
-    const metadata = meta as Record<string, unknown>;
-    return {
-      name,
-      ...metadata,
-    };
-  });
-
-  res.json({ accounts, default: data.default || null });
-});
-
-/**
- * POST /api/accounts/default - Set default account
- */
-router.post('/accounts/default', (req: Request, res: Response): void => {
-  const { name } = req.body;
-
-  if (!name) {
-    res.status(400).json({ error: 'Missing required field: name' });
-    return;
-  }
-
-  const profilesPath = path.join(getCcsDir(), 'profiles.json');
-
-  const data = fs.existsSync(profilesPath)
-    ? JSON.parse(fs.readFileSync(profilesPath, 'utf8'))
-    : { profiles: {} };
-
-  data.default = name;
-  fs.writeFileSync(profilesPath, JSON.stringify(data, null, 2) + '\n');
-
-  res.json({ default: name });
 });
 
 export default router;
