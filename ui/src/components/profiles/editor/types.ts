@@ -16,4 +16,5 @@ export interface SettingsResponse {
 export interface ProfileEditorProps {
   profileName: string;
   onDelete?: () => void;
+  onHasChangesUpdate?: (hasChanges: boolean) => void;
 }

@@ -37,6 +37,8 @@ export function ApiPage() {
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
   const [createMode, setCreateMode] = useState<'normal' | 'openrouter'>('normal');
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [editorHasChanges, setEditorHasChanges] = useState(false);
+  const [pendingSwitch, setPendingSwitch] = useState<string | null>(null);
 
   // Prefetch OpenRouter models when page loads (lazy - won't block render)
   useOpenRouterModels();
@@ -71,7 +73,21 @@ export function ApiPage() {
   // Handle create success
   const handleCreateSuccess = (name: string) => {
     setCreateDialogOpen(false);
-    setSelectedProfile(name);
+    // Use the same unsaved changes check as profile selection
+    if (editorHasChanges && selectedProfile !== null) {
+      setPendingSwitch(name);
+    } else {
+      setSelectedProfile(name);
+    }
+  };
+
+  // Handle profile selection with unsaved changes check
+  const handleProfileSelect = (name: string) => {
+    if (editorHasChanges && selectedProfile !== name) {
+      setPendingSwitch(name);
+    } else {
+      setSelectedProfile(name);
+    }
   };
 
   return (
@@ -168,9 +184,7 @@ export function ApiPage() {
                     key={profile.name}
                     profile={profile}
                     isSelected={selectedProfile === profile.name}
-                    onSelect={() => {
-                      setSelectedProfile(profile.name);
-                    }}
+                    onSelect={() => handleProfileSelect(profile.name)}
                     onDelete={() => setDeleteConfirm(profile.name)}
                   />
                 ))}
@@ -208,6 +222,7 @@ export function ApiPage() {
             <ProfileEditor
               profileName={selectedProfileData.name}
               onDelete={() => setDeleteConfirm(selectedProfileData.name)}
+              onHasChangesUpdate={setEditorHasChanges}
             />
           ) : (
             <OpenRouterQuickStart
@@ -241,6 +256,20 @@ export function ApiPage() {
         variant="destructive"
         onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
         onCancel={() => setDeleteConfirm(null)}
+      />
+
+      {/* Unsaved Changes Confirmation */}
+      <ConfirmDialog
+        open={!!pendingSwitch}
+        title="Unsaved Changes"
+        description={`You have unsaved changes in "${selectedProfile}". Discard and switch to "${pendingSwitch}"?`}
+        confirmText="Discard & Switch"
+        variant="destructive"
+        onConfirm={() => {
+          setSelectedProfile(pendingSwitch);
+          setPendingSwitch(null);
+        }}
+        onCancel={() => setPendingSwitch(null)}
       />
     </div>
   );

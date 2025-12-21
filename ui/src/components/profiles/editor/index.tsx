@@ -4,7 +4,7 @@
  */
 
 /* eslint-disable react-refresh/only-export-components */
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -16,7 +16,7 @@ import { FriendlyUISection } from './friendly-ui-section';
 import { RawEditorSection } from './raw-editor-section';
 import type { ProfileEditorProps, Settings, SettingsResponse } from './types';
 
-export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
+export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: ProfileEditorProps) {
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [conflictDialog, setConflictDialog] = useState(false);
   const [rawJsonEdits, setRawJsonEdits] = useState<string | null>(null);
@@ -99,6 +99,11 @@ export function ProfileEditor({ profileName, onDelete }: ProfileEditorProps) {
     if (rawJsonEdits !== null) return rawJsonEdits !== JSON.stringify(settings, null, 2);
     return Object.keys(localEdits).length > 0;
   }, [rawJsonEdits, localEdits, settings]);
+
+  // Notify parent of hasChanges state
+  useEffect(() => {
+    onHasChangesUpdate?.(computedHasChanges);
+  }, [computedHasChanges, onHasChangesUpdate]);
 
   // Save mutation
   const saveMutation = useMutation({
