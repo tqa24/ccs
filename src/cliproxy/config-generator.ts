@@ -56,7 +56,7 @@ const PROVIDER_DISPLAY_NAMES: Record<CLIProxyProvider, string> = {
   qwen: 'Qwen Code',
   iflow: 'iFlow',
   kiro: 'Kiro (AWS)',
-  copilot: 'GitHub Copilot',
+  ghcp: 'GitHub Copilot (OAuth)',
 };
 
 /**
