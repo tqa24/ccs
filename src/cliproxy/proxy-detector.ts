@@ -73,12 +73,25 @@ export async function detectRunningProxy(
     // Proxy is running and responsive
     // Try to get PID from session lock if available
     const lock = getExistingProxy(port);
-    log(`HTTP check passed, proxy healthy (PID: ${lock?.pid ?? 'unknown'})`);
+    let pid = lock?.pid;
+
+    // If no PID from session lock, try port-process detection
+    // This handles orphaned proxies (running but no sessions.json)
+    if (!pid) {
+      log('No PID from session lock, checking port process...');
+      const portProcess = await getPortProcess(port);
+      if (portProcess) {
+        pid = portProcess.pid;
+        log(`Got PID from port process: ${pid}`);
+      }
+    }
+
+    log(`HTTP check passed, proxy healthy (PID: ${pid ?? 'unknown'})`);
     return {
       running: true,
       verified: true,
       method: 'http',
-      pid: lock?.pid,
+      pid,
       sessionCount: lock?.sessions?.length,
     };
   }

@@ -424,13 +424,17 @@ export async function execClaudeWithCLIProxy(
       if (proxyStatus.running && proxyStatus.verified) {
         // Healthy proxy found - join it
         if (proxyStatus.pid) {
-          sessionId = reclaimOrphanedProxy(cfg.port, proxyStatus.pid) ?? undefined;
+          sessionId = reclaimOrphanedProxy(cfg.port, proxyStatus.pid, verbose) ?? undefined;
         }
         if (sessionId) {
           console.log(info(`Joined existing CLIProxy on port ${cfg.port} (${proxyStatus.method})`));
         } else {
-          // Failed to register session, but proxy is running - continue anyway
-          log(`Failed to register session but proxy is healthy, continuing...`);
+          // Failed to register session - proxy is running but we can't track it
+          // This happens when port-process detection fails (permissions, platform issues)
+          console.log(
+            info(`Using existing CLIProxy on port ${cfg.port} (session tracking unavailable)`)
+          );
+          log(`PID=${proxyStatus.pid ?? 'unknown'}, session registration skipped`);
         }
         return; // Exit lock early, skip spawning
       }
@@ -441,7 +445,7 @@ export async function execClaudeWithCLIProxy(
         const becameHealthy = await waitForProxyHealthy(cfg.port, cfg.timeout);
         if (becameHealthy) {
           if (proxyStatus.pid) {
-            sessionId = reclaimOrphanedProxy(cfg.port, proxyStatus.pid) ?? undefined;
+            sessionId = reclaimOrphanedProxy(cfg.port, proxyStatus.pid, verbose) ?? undefined;
           }
           console.log(info(`Joined CLIProxy after startup wait`));
           return; // Exit lock early
@@ -459,7 +463,7 @@ export async function execClaudeWithCLIProxy(
         // Last resort: try HTTP health check (handles Windows PID-XXXXX case)
         const isActuallyOurs = await waitForProxyHealthy(cfg.port, 1000);
         if (isActuallyOurs) {
-          sessionId = reclaimOrphanedProxy(cfg.port, proxyStatus.blocker.pid) ?? undefined;
+          sessionId = reclaimOrphanedProxy(cfg.port, proxyStatus.blocker.pid, verbose) ?? undefined;
           console.log(info(`Reclaimed CLIProxy with unrecognized process name`));
           return;
         }
