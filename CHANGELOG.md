@@ -1,3 +1,9 @@
+## [7.5.0](https://github.com/kaitranntt/ccs/compare/v7.4.0...v7.5.0) (2025-12-22)
+
+### Features
+
+* **glm:** add GLM 4.7 model support ([a827b73](https://github.com/kaitranntt/ccs/commit/a827b73eef72f58705a6ebced0cf8620dda09399)), closes [#179](https://github.com/kaitranntt/ccs/issues/179)
+
 ## [7.4.0](https://github.com/kaitranntt/ccs/compare/v7.3.0...v7.4.0) (2025-12-22)
 
 ### Features
