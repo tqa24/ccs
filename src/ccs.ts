@@ -448,16 +448,17 @@ async function main(): Promise<void> {
 
   if (recovered) {
     recovery.showRecoveryHints();
+  }
 
-    // First-time install: offer setup wizard for interactive users
-    // Skip if headless, CI, or non-TTY environment
-    const { isFirstTimeInstall } = await import('./commands/setup-command');
-    if (process.stdout.isTTY && !process.env['CI'] && isFirstTimeInstall()) {
-      console.log('');
-      console.log(info('First-time install detected. Run `ccs setup` for guided configuration.'));
-      console.log('    Or use `ccs config` for the web dashboard.');
-      console.log('');
-    }
+  // First-time install: offer setup wizard for interactive users
+  // Check independently of recovery status (user may have empty config.yaml)
+  // Skip if headless, CI, or non-TTY environment
+  const { isFirstTimeInstall } = await import('./commands/setup-command');
+  if (process.stdout.isTTY && !process.env['CI'] && isFirstTimeInstall()) {
+    console.log('');
+    console.log(info('First-time install detected. Run `ccs setup` for guided configuration.'));
+    console.log('    Or use `ccs config` for the web dashboard.');
+    console.log('');
   }
 
   // Detect profile

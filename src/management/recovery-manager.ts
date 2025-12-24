@@ -9,7 +9,11 @@ import * as path from 'path';
 import * as os from 'os';
 import { info } from '../utils/ui';
 import { createEmptyUnifiedConfig, UNIFIED_CONFIG_VERSION } from '../config/unified-config-types';
-import { saveUnifiedConfig, hasUnifiedConfig } from '../config/unified-config-loader';
+import {
+  saveUnifiedConfig,
+  hasUnifiedConfig,
+  loadUnifiedConfig,
+} from '../config/unified-config-loader';
 
 /**
  * Get CCS home directory (respects CCS_HOME env for test isolation)
@@ -55,9 +59,15 @@ class RecoveryManager {
    * This is the primary config format (YAML unified config)
    */
   ensureConfigYaml(): boolean {
-    // Skip if config.yaml already exists
+    // Skip if config.yaml already exists AND is valid
     if (hasUnifiedConfig()) {
-      return false;
+      // Verify it's loadable (not corrupted)
+      const loaded = loadUnifiedConfig();
+      if (loaded !== null) {
+        return false; // Config exists and is valid
+      }
+      // Config exists but is corrupted - will be recreated below
+      this.recovered.push('Detected corrupted ~/.ccs/config.yaml');
     }
 
     // Check for legacy config.json - if exists, let autoMigrate handle it
@@ -75,14 +85,20 @@ class RecoveryManager {
       saveUnifiedConfig(config);
       this.recovered.push('Created ~/.ccs/config.yaml');
       return true;
-    } catch (_e) {
+    } catch (_saveErr) {
       // Fallback: create minimal config.json for backward compat
-      const fallbackConfig = { profiles: {} };
-      const tmpPath = `${legacyConfigPath}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
-      fs.renameSync(tmpPath, legacyConfigPath);
-      this.recovered.push('Created ~/.ccs/config.json (fallback)');
-      return true;
+      try {
+        const fallbackConfig = { profiles: {} };
+        const tmpPath = `${legacyConfigPath}.tmp`;
+        fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
+        fs.renameSync(tmpPath, legacyConfigPath);
+        this.recovered.push('Created ~/.ccs/config.json (fallback)');
+        return true;
+      } catch (_fallbackErr) {
+        // Both writes failed - log but don't crash
+        this.recovered.push('Failed to create config file (permission issue?)');
+        return false;
+      }
     }
   }
 

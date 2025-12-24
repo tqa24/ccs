@@ -16,10 +16,19 @@ import * as readline from 'readline';
 import { initUI, header, ok, info, warn } from '../utils/ui';
 import {
   loadOrCreateUnifiedConfig,
+  loadUnifiedConfig,
   saveUnifiedConfig,
   hasUnifiedConfig,
 } from '../config/unified-config-loader';
 import { DEFAULT_CLIPROXY_SERVER_CONFIG } from '../config/unified-config-types';
+
+/** Custom error for user cancellation (Ctrl+C) */
+class UserCancelledError extends Error {
+  constructor() {
+    super('Setup cancelled by user');
+    this.name = 'UserCancelledError';
+  }
+}
 
 /**
  * Create readline interface for interactive prompts
@@ -33,15 +42,23 @@ function createReadline(): readline.Interface {
 
 /**
  * Prompt user for input with optional default value
+ * Handles Ctrl+C gracefully by rejecting with UserCancelledError
  */
 async function prompt(
   rl: readline.Interface,
   question: string,
   defaultValue?: string
 ): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const displayQuestion = defaultValue ? `${question} [${defaultValue}]: ` : `${question}: `;
+
+    const onClose = () => {
+      reject(new UserCancelledError());
+    };
+
+    rl.once('close', onClose);
     rl.question(displayQuestion, (answer) => {
+      rl.removeListener('close', onClose);
       resolve(answer.trim() || defaultValue || '');
     });
   });
@@ -102,8 +119,18 @@ export function isFirstTimeInstall(): boolean {
     return true;
   }
 
-  // Config exists - check if it's meaningfully configured
-  const config = loadOrCreateUnifiedConfig();
+  // Try loading config directly to detect corruption
+  const loaded = loadUnifiedConfig();
+  if (loaded === null) {
+    // Config exists but is corrupted/invalid - don't treat as first-time
+    // User should fix or delete the file, or use --force
+    console.log(warn('Warning: ~/.ccs/config.yaml exists but appears corrupted'));
+    console.log(info('  Run `ccs setup --force` to reset, or `ccs doctor` to diagnose'));
+    return false;
+  }
+
+  // Config exists and is valid - check if it's meaningfully configured
+  const config = loaded;
 
   // Check for any meaningful configuration
   const hasProfiles = Object.keys(config.profiles || {}).length > 0;
@@ -136,11 +163,15 @@ async function configureRemoteProxy(rl: readline.Interface): Promise<{
   console.log('  Example: your-server.example.com');
   console.log('');
 
-  // Host
-  const host = await prompt(rl, 'Remote host (hostname or IP)');
+  // Host - with protocol stripping
+  let host = await prompt(rl, 'Remote host (hostname or IP)');
   if (!host) {
     throw new Error('Host is required for remote proxy mode');
   }
+  // Strip protocol if user included it (common mistake)
+  host = host.replace(/^https?:\/\//, '');
+  // Strip trailing slashes
+  host = host.replace(/\/+$/, '');
 
   // Protocol
   const protocol = (await selectOption(rl, 'Protocol:', [
@@ -148,10 +179,19 @@ async function configureRemoteProxy(rl: readline.Interface): Promise<{
     { label: 'HTTP', value: 'http', description: 'Unencrypted connection' },
   ])) as 'http' | 'https';
 
-  // Port (optional)
+  // Port (optional) - with validation
   const defaultPort = protocol === 'https' ? '443' : '80';
   const portStr = await prompt(rl, `Port (leave empty for default ${defaultPort})`);
-  const port = portStr ? parseInt(portStr, 10) : undefined;
+  let port: number | undefined;
+  if (portStr) {
+    const parsed = parseInt(portStr, 10);
+    if (isNaN(parsed) || parsed < 1 || parsed > 65535 || !Number.isInteger(parsed)) {
+      console.log(warn(`Invalid port "${portStr}", using default: ${defaultPort}`));
+      port = undefined; // Use default
+    } else {
+      port = parsed;
+    }
+  }
 
   // Auth token
   console.log('');
@@ -319,6 +359,21 @@ async function runSetupWizard(force: boolean = false): Promise<void> {
     }
 
     console.log(info('Configuration saved to: ~/.ccs/config.yaml'));
+    console.log('');
+  } catch (err) {
+    // Handle user cancellation gracefully
+    if (err instanceof UserCancelledError) {
+      console.log('');
+      console.log(info('Setup cancelled.'));
+      console.log('  Run `ccs setup` when ready to configure.');
+      console.log('');
+      return;
+    }
+    // Handle other errors with user-friendly message
+    const message = err instanceof Error ? err.message : String(err);
+    console.log('');
+    console.log(warn(`Setup failed: ${message}`));
+    console.log(info('  Run `ccs setup` to try again.'));
     console.log('');
   } finally {
     rl.close();

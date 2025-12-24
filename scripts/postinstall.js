@@ -93,7 +93,15 @@ function createConfigFiles() {
     const ccsDir = path.join(homedir, '.ccs');
 
     // Create ~/.ccs/ directory if missing
-    if (!fs.existsSync(ccsDir)) {
+    if (fs.existsSync(ccsDir)) {
+      // Check if it's a file instead of directory (edge case)
+      const stats = fs.statSync(ccsDir);
+      if (!stats.isDirectory()) {
+        console.error('[X] ~/.ccs exists but is not a directory');
+        console.error('    Remove or rename it: mv ~/.ccs ~/.ccs.bak');
+        process.exit(1);
+      }
+    } else {
       fs.mkdirSync(ccsDir, { recursive: true, mode: 0o755 });
       console.log('[OK] Created directory: ~/.ccs/');
     }
@@ -149,8 +157,22 @@ function createConfigFiles() {
     if (!fs.existsSync(configYamlPath)) {
       // Check for legacy config.json - autoMigrate() in ccs.ts will handle migration
       if (fs.existsSync(legacyConfigPath)) {
-        console.log('[OK] Legacy config.json found - will migrate to config.yaml on first run');
-      } else {
+        // Validate legacy config.json before assuming migration will work
+        try {
+          const content = fs.readFileSync(legacyConfigPath, 'utf8');
+          JSON.parse(content);
+          console.log('[OK] Legacy config.json found - will migrate to config.yaml on first run');
+        } catch {
+          console.warn('[!] Legacy config.json is corrupted/invalid');
+          console.warn('    Backup: mv ~/.ccs/config.json ~/.ccs/config.json.bak');
+          console.warn('    Creating fresh config.yaml instead');
+          // Fall through to create new config.yaml
+          fs.renameSync(legacyConfigPath, `${legacyConfigPath}.bak`);
+        }
+      }
+
+      // Create config.yaml if it doesn't exist (and legacy wasn't valid)
+      if (!fs.existsSync(configYamlPath) && !fs.existsSync(legacyConfigPath)) {
         // Try to use unified config loader if dist is available
         try {
           const { saveUnifiedConfig } = require('../dist/config/unified-config-loader');
@@ -163,42 +185,58 @@ function createConfigFiles() {
           console.log('[OK] Created config: ~/.ccs/config.yaml');
         } catch (loaderErr) {
           // Dist not built yet (fresh clone) - create minimal config.yaml manually
-          const yaml = require('js-yaml');
-          const config = {
-            version: '2.0',
-            profiles: {},
-            accounts: {},
-            cliproxy: {
-              variants: {},
-              oauth_accounts: {}
-            },
-            cliproxy_server: {
-              local: {
-                port: 8317,
-                auto_start: true
-              }
-            }
-          };
-
+          // Wrap js-yaml require in try-catch in case it's not available
+          let yaml;
           try {
-            const yamlContent = yaml.dump(config, {
-              indent: 2,
-              lineWidth: -1,
-              noRefs: true,
-              sortKeys: false
-            });
-            const tmpPath = `${configYamlPath}.tmp`;
-            fs.writeFileSync(tmpPath, yamlContent, 'utf8');
-            fs.renameSync(tmpPath, configYamlPath);
-            console.log('[OK] Created config: ~/.ccs/config.yaml');
-          } catch (yamlErr) {
-            // Final fallback: create legacy config.json
-            console.warn('[!] YAML write failed, creating legacy config.json');
+            yaml = require('js-yaml');
+          } catch {
+            // js-yaml not available - fallback to JSON
+            console.warn('[!] js-yaml not available, creating legacy config.json');
             const fallbackConfig = { profiles: {} };
             const tmpPath = `${legacyConfigPath}.tmp`;
             fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
             fs.renameSync(tmpPath, legacyConfigPath);
             console.log('[OK] Created config: ~/.ccs/config.json (fallback)');
+            yaml = null;
+          }
+
+          if (yaml) {
+            const config = {
+              version: '2.0',
+              profiles: {},
+              accounts: {},
+              cliproxy: {
+                variants: {},
+                oauth_accounts: {}
+              },
+              cliproxy_server: {
+                local: {
+                  port: 8317,
+                  auto_start: true
+                }
+              }
+            };
+
+            try {
+              const yamlContent = yaml.dump(config, {
+                indent: 2,
+                lineWidth: -1,
+                noRefs: true,
+                sortKeys: false
+              });
+              const tmpPath = `${configYamlPath}.tmp`;
+              fs.writeFileSync(tmpPath, yamlContent, 'utf8');
+              fs.renameSync(tmpPath, configYamlPath);
+              console.log('[OK] Created config: ~/.ccs/config.yaml');
+            } catch (yamlErr) {
+              // Final fallback: create legacy config.json
+              console.warn('[!] YAML write failed, creating legacy config.json');
+              const fallbackConfig = { profiles: {} };
+              const tmpPath = `${legacyConfigPath}.tmp`;
+              fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
+              fs.renameSync(tmpPath, legacyConfigPath);
+              console.log('[OK] Created config: ~/.ccs/config.json (fallback)');
+            }
           }
         }
       }
@@ -206,10 +244,10 @@ function createConfigFiles() {
       console.log('[OK] Config exists: ~/.ccs/config.yaml (preserved)');
     }
 
-    // Handle legacy config.json migrations (for users upgrading)
-    if (fs.existsSync(legacyConfigPath) && !fs.existsSync(configYamlPath)) {
-      // Migration will happen via autoMigrate() in ccs.ts on first run
-      console.log('[i] Legacy config.json will be migrated to config.yaml on first run');
+    // Warn if both config files exist (user may want to clean up)
+    if (fs.existsSync(legacyConfigPath) && fs.existsSync(configYamlPath)) {
+      console.log('[!] Both config.yaml and config.json exist');
+      console.log('    config.json will be ignored - consider removing it');
     }
 
     // NOTE: GLM, GLMT, and Kimi profiles are NO LONGER auto-created during install
