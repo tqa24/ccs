@@ -19,19 +19,25 @@ describe('npm postinstall', () => {
     }
   });
 
-  it('creates config.json', () => {
+  it('creates config.yaml (primary format)', () => {
     execSync(`node "${postinstallScript}"`, {
       stdio: 'ignore',
       env: { ...process.env, CCS_HOME: testEnv.testHome }
     });
 
-    assert(testEnv.fileExists('config.json'), 'config.json should be created');
+    // config.yaml is now the primary format (v6.x+)
+    assert(testEnv.fileExists('config.yaml'), 'config.yaml should be created');
 
-    const config = testEnv.readFile('config.json', true);
-    assert(config.profiles, 'config.json should have profiles');
+    // Read YAML config and verify structure
+    const yaml = require('js-yaml');
+    const configContent = testEnv.readFile('config.yaml', false);
+    const config = yaml.load(configContent);
+
+    assert(config.profiles !== undefined, 'config.yaml should have profiles');
     assert(typeof config.profiles === 'object', 'profiles should be an object');
     // Profiles are now empty by default - users create via presets
     assert.deepStrictEqual(config.profiles, {}, 'profiles should be empty by default');
+    assert(config.version, 'config.yaml should have version');
   });
 
   it('does NOT auto-create glm.settings.json (v6.0 - use presets instead)', () => {
@@ -49,24 +55,30 @@ describe('npm postinstall', () => {
 
   it('is idempotent', () => {
     const env = { ...process.env, CCS_HOME: testEnv.testHome };
+    const yaml = require('js-yaml');
 
     // Run postinstall first time
     execSync(`node "${postinstallScript}"`, { stdio: 'ignore', env });
 
-    // Create custom config
+    // Create custom config.yaml to test preservation
     const customConfig = {
+      version: '2.0',
       profiles: {
         custom: '~/.custom.json',
         glm: '~/.ccs/glm.settings.json'
-      }
+      },
+      accounts: {},
+      cliproxy: { variants: {}, oauth_accounts: {} }
     };
-    testEnv.createFile('config.json', customConfig);
+    const yamlContent = yaml.dump(customConfig, { indent: 2 });
+    testEnv.createFile('config.yaml', yamlContent);
 
     // Run postinstall again
     execSync(`node "${postinstallScript}"`, { stdio: 'ignore', env });
 
     // Verify custom config preserved
-    const config = testEnv.readFile('config.json', true);
+    const configContent = testEnv.readFile('config.yaml', false);
+    const config = yaml.load(configContent);
     assert(config.profiles.custom, 'Custom profile should be preserved');
     assert.strictEqual(config.profiles.custom, '~/.custom.json');
   });
@@ -97,7 +109,7 @@ describe('npm postinstall', () => {
 
     // Verify existing file still exists and new files are created
     assert(testEnv.fileExists('existing.txt'), 'Existing files should be preserved');
-    assert(testEnv.fileExists('config.json'), 'config.json should be created');
+    assert(testEnv.fileExists('config.yaml'), 'config.yaml should be created');
     // GLM/GLMT/Kimi are no longer auto-created
     assert(!testEnv.fileExists('glm.settings.json'), 'glm.settings.json should NOT be auto-created');
   });

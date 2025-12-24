@@ -213,6 +213,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
 
   // Diagnostics
   printSubSection('Diagnostics', [
+    ['ccs setup', 'First-time setup wizard'],
     ['ccs doctor', 'Run health check and diagnostics'],
     ['ccs cleanup', 'Remove old CLIProxy logs'],
     ['ccs config', 'Open web configuration dashboard'],

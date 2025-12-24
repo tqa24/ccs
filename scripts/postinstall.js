@@ -68,24 +68,13 @@ function validateConfiguration() {
     errors.push('~/.ccs/ directory not found');
   }
 
-  // Check required files (GLM/GLMT/Kimi are now optional - created via presets)
-  const requiredFiles = [
-    { path: path.join(ccsDir, 'config.json'), name: 'config.json' }
-  ];
+  // Check for config file - prefer config.yaml, fallback to config.json
+  const configYaml = path.join(ccsDir, 'config.yaml');
+  const configJson = path.join(ccsDir, 'config.json');
+  const hasConfig = fs.existsSync(configYaml) || fs.existsSync(configJson);
 
-  for (const file of requiredFiles) {
-    if (!fs.existsSync(file.path)) {
-      errors.push(`${file.name} not found`);
-      continue;
-    }
-
-    // Validate JSON syntax
-    try {
-      const content = fs.readFileSync(file.path, 'utf8');
-      JSON.parse(content);
-    } catch (e) {
-      errors.push(`${file.name} has invalid JSON: ${e.message}`);
-    }
+  if (!hasConfig) {
+    errors.push('config.yaml (or config.json) not found');
   }
 
   // Check ~/.claude/settings.json (warning only, not critical)
@@ -104,7 +93,15 @@ function createConfigFiles() {
     const ccsDir = path.join(homedir, '.ccs');
 
     // Create ~/.ccs/ directory if missing
-    if (!fs.existsSync(ccsDir)) {
+    if (fs.existsSync(ccsDir)) {
+      // Check if it's a file instead of directory (edge case)
+      const stats = fs.statSync(ccsDir);
+      if (!stats.isDirectory()) {
+        console.error('[X] ~/.ccs exists but is not a directory');
+        console.error('    Remove or rename it: mv ~/.ccs ~/.ccs.bak');
+        process.exit(1);
+      }
+    } else {
       fs.mkdirSync(ccsDir, { recursive: true, mode: 0o755 });
       console.log('[OK] Created directory: ~/.ccs/');
     }
@@ -150,62 +147,107 @@ function createConfigFiles() {
     // Users can run "ccs sync" to install CCS commands/skills to ~/.claude/
     // This gives users control over when to modify their Claude configuration
 
-    // Create config.json if missing
+    // Create config.yaml if missing (primary format)
     // NOTE: gemini/codex profiles NOT included - they are added on-demand when user
     // runs `ccs gemini` or `ccs codex` for first time (requires OAuth auth first)
     // NOTE: GLM/GLMT/Kimi profiles are now created via UI/CLI presets, not auto-created
-    const configPath = path.join(ccsDir, 'config.json');
-    if (!fs.existsSync(configPath)) {
-      // NOTE: No 'default' entry - when no profile specified, CCS passes through
-      // to Claude's native auth without --settings flag. This prevents env var
-      // pollution from affecting the default profile.
-      // Profiles are empty by default - users create via `ccs api create --preset` or UI
-      const config = {
-        profiles: {}
-      };
+    const configYamlPath = path.join(ccsDir, 'config.yaml');
+    const legacyConfigPath = path.join(ccsDir, 'config.json');
 
-      // Atomic write: temp file → rename
-      const tmpPath = `${configPath}.tmp`;
-      fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
-      fs.renameSync(tmpPath, configPath);
-
-      console.log('[OK] Created config: ~/.ccs/config.json');
-    } else {
-      // Update existing config (migration for older versions)
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      // Ensure profiles object exists
-      if (!config.profiles) {
-        config.profiles = {};
-      }
-      let configUpdated = false;
-
-      // Migration: Add glmt if missing (v3.x)
-      if (!config.profiles.glmt) {
-        config.profiles.glmt = '~/.ccs/glmt.settings.json';
-        configUpdated = true;
-      }
-
-      // Migration: Remove 'default' entry pointing to ~/.claude/settings.json (v5.4.0)
-      // This entry caused the default profile to pass --settings flag, which could
-      // pick up stale env vars (ANTHROPIC_BASE_URL) from previous profile sessions.
-      // Fix: Let CCS pass through to Claude's native auth without --settings flag.
-      if (config.profiles.default === '~/.claude/settings.json') {
-        delete config.profiles.default;
-        configUpdated = true;
-        console.log('[OK] Removed legacy default profile (now uses native Claude auth)');
-      }
-
-      // NOTE: gemini/codex profiles added on-demand, not during migration
-      if (configUpdated) {
-        const tmpPath = `${configPath}.tmp`;
-        fs.writeFileSync(tmpPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
-        fs.renameSync(tmpPath, configPath);
-        if (!config.profiles.glmt) {
-          console.log('[OK] Updated config with glmt profile');
+    if (!fs.existsSync(configYamlPath)) {
+      // Check for legacy config.json - autoMigrate() in ccs.ts will handle migration
+      if (fs.existsSync(legacyConfigPath)) {
+        // Validate legacy config.json before assuming migration will work
+        try {
+          const content = fs.readFileSync(legacyConfigPath, 'utf8');
+          JSON.parse(content);
+          console.log('[OK] Legacy config.json found - will migrate to config.yaml on first run');
+        } catch {
+          console.warn('[!] Legacy config.json is corrupted/invalid');
+          console.warn('    Backup: mv ~/.ccs/config.json ~/.ccs/config.json.bak');
+          console.warn('    Creating fresh config.yaml instead');
+          // Fall through to create new config.yaml
+          fs.renameSync(legacyConfigPath, `${legacyConfigPath}.bak`);
         }
-      } else {
-        console.log('[OK] Config exists: ~/.ccs/config.json (preserved)');
       }
+
+      // Create config.yaml if it doesn't exist (and legacy wasn't valid)
+      if (!fs.existsSync(configYamlPath) && !fs.existsSync(legacyConfigPath)) {
+        // Try to use unified config loader if dist is available
+        try {
+          const { saveUnifiedConfig } = require('../dist/config/unified-config-loader');
+          const { createEmptyUnifiedConfig, UNIFIED_CONFIG_VERSION } = require('../dist/config/unified-config-types');
+
+          const config = createEmptyUnifiedConfig();
+          config.version = UNIFIED_CONFIG_VERSION;
+          saveUnifiedConfig(config);
+
+          console.log('[OK] Created config: ~/.ccs/config.yaml');
+        } catch (loaderErr) {
+          // Dist not built yet (fresh clone) - create minimal config.yaml manually
+          // Wrap js-yaml require in try-catch in case it's not available
+          let yaml;
+          try {
+            yaml = require('js-yaml');
+          } catch {
+            // js-yaml not available - fallback to JSON
+            console.warn('[!] js-yaml not available, creating legacy config.json');
+            const fallbackConfig = { profiles: {} };
+            const tmpPath = `${legacyConfigPath}.tmp`;
+            fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
+            fs.renameSync(tmpPath, legacyConfigPath);
+            console.log('[OK] Created config: ~/.ccs/config.json (fallback)');
+            yaml = null;
+          }
+
+          if (yaml) {
+            const config = {
+              version: '2.0',
+              profiles: {},
+              accounts: {},
+              cliproxy: {
+                variants: {},
+                oauth_accounts: {}
+              },
+              cliproxy_server: {
+                local: {
+                  port: 8317,
+                  auto_start: true
+                }
+              }
+            };
+
+            try {
+              const yamlContent = yaml.dump(config, {
+                indent: 2,
+                lineWidth: -1,
+                noRefs: true,
+                sortKeys: false
+              });
+              const tmpPath = `${configYamlPath}.tmp`;
+              fs.writeFileSync(tmpPath, yamlContent, 'utf8');
+              fs.renameSync(tmpPath, configYamlPath);
+              console.log('[OK] Created config: ~/.ccs/config.yaml');
+            } catch (yamlErr) {
+              // Final fallback: create legacy config.json
+              console.warn('[!] YAML write failed, creating legacy config.json');
+              const fallbackConfig = { profiles: {} };
+              const tmpPath = `${legacyConfigPath}.tmp`;
+              fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
+              fs.renameSync(tmpPath, legacyConfigPath);
+              console.log('[OK] Created config: ~/.ccs/config.json (fallback)');
+            }
+          }
+        }
+      }
+    } else {
+      console.log('[OK] Config exists: ~/.ccs/config.yaml (preserved)');
+    }
+
+    // Warn if both config files exist (user may want to clean up)
+    if (fs.existsSync(legacyConfigPath) && fs.existsSync(configYamlPath)) {
+      console.log('[!] Both config.yaml and config.json exist');
+      console.log('    config.json will be ignored - consider removing it');
     }
 
     // NOTE: GLM, GLMT, and Kimi profiles are NO LONGER auto-created during install

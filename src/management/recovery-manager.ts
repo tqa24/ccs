@@ -8,6 +8,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { info } from '../utils/ui';
+import { createEmptyUnifiedConfig, UNIFIED_CONFIG_VERSION } from '../config/unified-config-types';
+import {
+  saveUnifiedConfig,
+  hasUnifiedConfig,
+  loadUnifiedConfig,
+} from '../config/unified-config-loader';
 
 /**
  * Get CCS home directory (respects CCS_HOME env for test isolation)
@@ -49,37 +55,51 @@ class RecoveryManager {
   }
 
   /**
-   * Ensure ~/.ccs/config.json exists with defaults
+   * Ensure ~/.ccs/config.yaml exists with defaults
+   * This is the primary config format (YAML unified config)
    */
-  ensureConfigJson(): boolean {
-    const configPath = path.join(this.ccsDir, 'config.json');
-
-    // Check if exists and valid
-    if (fs.existsSync(configPath)) {
-      try {
-        const content = fs.readFileSync(configPath, 'utf8');
-        JSON.parse(content); // Validate JSON
-        return false; // No recovery needed
-      } catch (_e) {
-        // Corrupted - backup and recreate
-        const backupPath = `${configPath}.backup.${Date.now()}`;
-        fs.renameSync(configPath, backupPath);
-        this.recovered.push(`Backed up corrupted config.json to ${path.basename(backupPath)}`);
+  ensureConfigYaml(): boolean {
+    // Skip if config.yaml already exists AND is valid
+    if (hasUnifiedConfig()) {
+      // Verify it's loadable (not corrupted)
+      const loaded = loadUnifiedConfig();
+      if (loaded !== null) {
+        return false; // Config exists and is valid
       }
+      // Config exists but is corrupted - will be recreated below
+      this.recovered.push('Detected corrupted ~/.ccs/config.yaml');
     }
 
-    // Create default config (matches postinstall.js)
-    // NOTE: Empty profiles - users create profiles via `ccs api create` or UI
-    const defaultConfig = {
-      profiles: {},
-    };
+    // Check for legacy config.json - if exists, let autoMigrate handle it
+    const legacyConfigPath = path.join(this.ccsDir, 'config.json');
+    if (fs.existsSync(legacyConfigPath)) {
+      // Legacy config exists - autoMigrate() in ccs.ts will handle migration
+      return false;
+    }
 
-    const tmpPath = `${configPath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(defaultConfig, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, configPath);
+    // Create fresh config.yaml with defaults
+    const config = createEmptyUnifiedConfig();
+    config.version = UNIFIED_CONFIG_VERSION;
 
-    this.recovered.push('Created ~/.ccs/config.json');
-    return true;
+    try {
+      saveUnifiedConfig(config);
+      this.recovered.push('Created ~/.ccs/config.yaml');
+      return true;
+    } catch (_saveErr) {
+      // Fallback: create minimal config.json for backward compat
+      try {
+        const fallbackConfig = { profiles: {} };
+        const tmpPath = `${legacyConfigPath}.tmp`;
+        fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
+        fs.renameSync(tmpPath, legacyConfigPath);
+        this.recovered.push('Created ~/.ccs/config.json (fallback)');
+        return true;
+      } catch (_fallbackErr) {
+        // Both writes failed - log but don't crash
+        this.recovered.push('Failed to create config file (permission issue?)');
+        return false;
+      }
+    }
   }
 
   /**
@@ -281,8 +301,8 @@ class RecoveryManager {
     this.ensureSharedDirectories();
     this.ensureClaudeSettings();
 
-    // Config files (core only - no GLM/GLMT/Kimi auto-creation)
-    this.ensureConfigJson();
+    // Config files - use YAML as primary format
+    this.ensureConfigYaml();
 
     // Shell completions
     this.ensureShellCompletions();
