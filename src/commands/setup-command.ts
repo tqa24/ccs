@@ -93,10 +93,31 @@ async function selectOption(
 }
 
 /**
- * Check if this is a first-time install (no config exists)
+ * Check if this is a first-time install (config exists but is empty/unconfigured)
+ * Returns true if user should be prompted to run setup wizard
  */
 export function isFirstTimeInstall(): boolean {
-  return !hasUnifiedConfig();
+  // No config at all → definitely first time
+  if (!hasUnifiedConfig()) {
+    return true;
+  }
+
+  // Config exists - check if it's meaningfully configured
+  const config = loadOrCreateUnifiedConfig();
+
+  // Check for any meaningful configuration
+  const hasProfiles = Object.keys(config.profiles || {}).length > 0;
+  const hasAccounts = Object.keys(config.accounts || {}).length > 0;
+  const hasVariants = Object.keys(config.cliproxy?.variants || {}).length > 0;
+  const hasOAuthAccounts = Object.keys(config.cliproxy?.oauth_accounts || {}).length > 0;
+  const hasRemoteProxy =
+    config.cliproxy_server?.remote?.enabled && config.cliproxy_server?.remote?.host;
+
+  // If any of these exist, user has configured something
+  const isConfigured =
+    hasProfiles || hasAccounts || hasVariants || hasOAuthAccounts || hasRemoteProxy;
+
+  return !isConfigured;
 }
 
 /**
