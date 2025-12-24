@@ -15,9 +15,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../utils/config-manager';
+import { expandPath } from '../utils/helpers';
 import type { ProfileConfig, AccountConfig, CLIProxyVariantConfig } from './unified-config-types';
 import { createEmptyUnifiedConfig } from './unified-config-types';
-import { saveUnifiedConfig, hasUnifiedConfig } from './unified-config-loader';
+import { saveUnifiedConfig, hasUnifiedConfig, loadUnifiedConfig } from './unified-config-loader';
 import { infoBox, warn } from '../utils/ui';
 
 const BACKUP_DIR_PREFIX = 'backup-v1-';
@@ -42,6 +43,47 @@ export function needsMigration(): boolean {
   const hasNewConfig = hasUnifiedConfig();
 
   return hasOldConfig && !hasNewConfig;
+}
+
+/**
+ * Check if there are legacy profiles that haven't been migrated to config.yaml.
+ * This catches the case where config.yaml exists but is empty/missing profiles
+ * that are still in config.json.
+ *
+ * Used by autoMigrate() to trigger inline migration when needed.
+ * (Fix for issue #195 - GLM auth persistence regression)
+ */
+export function needsProfileMigration(): boolean {
+  const ccsDir = getCcsDir();
+  const configJsonPath = path.join(ccsDir, 'config.json');
+
+  // No legacy config → nothing to migrate
+  if (!fs.existsSync(configJsonPath)) {
+    return false;
+  }
+
+  const legacyConfig = readJsonSafe(configJsonPath);
+  const unifiedConfig = loadUnifiedConfig();
+
+  // No legacy profiles → nothing to migrate
+  if (!legacyConfig?.profiles || typeof legacyConfig.profiles !== 'object') {
+    return false;
+  }
+
+  // No unified config → needs full migration (handled by needsMigration)
+  if (!unifiedConfig) {
+    return false;
+  }
+
+  // Check if any legacy profile is missing from unified config
+  const legacyProfiles = legacyConfig.profiles as Record<string, unknown>;
+  for (const profileName of Object.keys(legacyProfiles)) {
+    if (!unifiedConfig.profiles[profileName]) {
+      return true; // Found unmigrated profile
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -271,13 +313,6 @@ function readJsonSafe(filePath: string): Record<string, unknown> | null {
 }
 
 /**
- * Expand ~ to home directory in path.
- */
-function expandPath(p: string): string {
-  return p.replace(/^~/, process.env.HOME || '');
-}
-
-/**
  * Move file if it exists. Returns true if moved, false if source didn't exist.
  */
 function moveIfExists(from: string, to: string): boolean {
@@ -326,6 +361,9 @@ async function performBackup(srcDir: string, backupDir: string): Promise<void> {
  * Auto-migrate on first run after update.
  * Silent if already migrated or no config exists.
  * Shows friendly message with backup location on success.
+ *
+ * Also handles inline profile migration when config.yaml exists but is missing
+ * profiles from config.json (Fix for issue #195).
  */
 export async function autoMigrate(): Promise<void> {
   // Skip in test environment
@@ -333,30 +371,100 @@ export async function autoMigrate(): Promise<void> {
     return;
   }
 
-  // Skip if no migration needed
-  if (!needsMigration()) {
+  // Check if full migration is needed (no config.yaml exists)
+  if (needsMigration()) {
+    const result = await migrate(false);
+
+    if (result.success) {
+      console.log('');
+      console.log(infoBox('Migrated to unified config (config.yaml)', 'SUCCESS'));
+      console.log(`  Backup: ${result.backupPath}`);
+      console.log(`  Items:  ${result.migratedFiles.length} migrated`);
+      if (result.warnings.length > 0) {
+        for (const warning of result.warnings) {
+          console.log(warn(warning));
+        }
+      }
+      console.log(`  Rollback: ccs migrate --rollback ${result.backupPath}`);
+      console.log('');
+    } else {
+      console.log('');
+      console.log(infoBox('Migration failed - using legacy config', 'WARNING'));
+      console.log(`  Error: ${result.error}`);
+      console.log('  Retry: ccs migrate');
+      console.log('');
+    }
     return;
   }
 
-  const result = await migrate(false);
-
-  if (result.success) {
-    console.log('');
-    console.log(infoBox('Migrated to unified config (config.yaml)', 'SUCCESS'));
-    console.log(`  Backup: ${result.backupPath}`);
-    console.log(`  Items:  ${result.migratedFiles.length} migrated`);
-    if (result.warnings.length > 0) {
-      for (const warning of result.warnings) {
-        console.log(warn(warning));
-      }
+  // Check if inline profile migration is needed (config.yaml exists but missing profiles)
+  if (needsProfileMigration()) {
+    const result = await migrateProfilesToUnified();
+    if (result.success && result.migratedFiles.length > 0) {
+      console.log('');
+      console.log(infoBox('Migrated legacy profiles to config.yaml', 'SUCCESS'));
+      console.log(`  Profiles: ${result.migratedFiles.join(', ')}`);
+      console.log('');
     }
-    console.log(`  Rollback: ccs migrate --rollback ${result.backupPath}`);
-    console.log('');
-  } else {
-    console.log('');
-    console.log(infoBox('Migration failed - using legacy config', 'WARNING'));
-    console.log(`  Error: ${result.error}`);
-    console.log('  Retry: ccs migrate');
-    console.log('');
+  }
+}
+
+/**
+ * Migrate only profiles from config.json to existing config.yaml.
+ * Used when config.yaml exists but is missing profiles.
+ */
+async function migrateProfilesToUnified(): Promise<MigrationResult> {
+  const ccsDir = getCcsDir();
+  const migratedFiles: string[] = [];
+  const warnings: string[] = [];
+
+  try {
+    const oldConfig = readJsonSafe(path.join(ccsDir, 'config.json'));
+    const unifiedConfig = loadUnifiedConfig();
+
+    if (!oldConfig?.profiles || !unifiedConfig) {
+      return { success: true, migratedFiles, warnings };
+    }
+
+    let modified = false;
+
+    // Migrate API profiles from config.json
+    for (const [name, settingsPath] of Object.entries(oldConfig.profiles)) {
+      // Skip if already in unified config
+      if (unifiedConfig.profiles[name]) {
+        continue;
+      }
+
+      const pathStr = settingsPath as string;
+      const expandedPath = expandPath(pathStr);
+
+      // Verify settings file exists
+      if (!fs.existsSync(expandedPath)) {
+        warnings.push(`Skipped ${name}: settings file not found at ${pathStr}`);
+        continue;
+      }
+
+      // Store reference to settings file
+      unifiedConfig.profiles[name] = {
+        type: 'api',
+        settings: pathStr,
+      };
+      migratedFiles.push(name);
+      modified = true;
+    }
+
+    // Save if modified
+    if (modified) {
+      saveUnifiedConfig(unifiedConfig);
+    }
+
+    return { success: true, migratedFiles, warnings };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+      migratedFiles,
+      warnings,
+    };
   }
 }
