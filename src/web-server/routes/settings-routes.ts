@@ -8,6 +8,15 @@ import * as path from 'path';
 import { getCcsDir, loadSettings } from '../../utils/config-manager';
 import { isSensitiveKey, maskSensitiveValue } from '../../utils/sensitive-keys';
 import { listVariants } from '../../cliproxy/services/variant-service';
+import {
+  generateSecureToken,
+  maskToken,
+  getAuthSummary,
+  setGlobalApiKey,
+  setGlobalManagementSecret,
+  resetAuthToDefaults,
+} from '../../cliproxy';
+import { regenerateConfig } from '../../cliproxy/config-generator';
 import type { Settings } from '../../types/config';
 
 const router = Router();
@@ -253,6 +262,144 @@ router.delete('/:profile/presets/:name', (req: Request, res: Response): void => 
     fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
 
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==================== Auth Tokens ====================
+
+/**
+ * GET /api/settings/auth/tokens - Get current auth token status (masked)
+ */
+router.get('/auth/tokens', (_req: Request, res: Response): void => {
+  try {
+    const summary = getAuthSummary();
+
+    res.json({
+      apiKey: {
+        value: maskToken(summary.apiKey.value),
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: maskToken(summary.managementSecret.value),
+        isCustom: summary.managementSecret.isCustom,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/settings/auth/tokens/raw - Get current auth tokens unmasked
+ * NOTE: Sensitive endpoint - no caching, localhost only
+ */
+router.get('/auth/tokens/raw', (_req: Request, res: Response): void => {
+  try {
+    // Prevent caching of sensitive data
+    res.setHeader('Cache-Control', 'no-store');
+
+    const summary = getAuthSummary();
+
+    res.json({
+      apiKey: {
+        value: summary.apiKey.value,
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: summary.managementSecret.value,
+        isCustom: summary.managementSecret.isCustom,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * PUT /api/settings/auth/tokens - Update auth tokens
+ */
+router.put('/auth/tokens', (req: Request, res: Response): void => {
+  try {
+    const { apiKey, managementSecret } = req.body;
+
+    if (apiKey !== undefined) {
+      setGlobalApiKey(apiKey || undefined);
+    }
+
+    if (managementSecret !== undefined) {
+      setGlobalManagementSecret(managementSecret || undefined);
+    }
+
+    // Regenerate CLIProxy config to apply changes
+    regenerateConfig();
+
+    const summary = getAuthSummary();
+    res.json({
+      success: true,
+      apiKey: {
+        value: maskToken(summary.apiKey.value),
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: maskToken(summary.managementSecret.value),
+        isCustom: summary.managementSecret.isCustom,
+      },
+      message: 'Restart CLIProxy to apply changes',
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/settings/auth/tokens/regenerate-secret - Generate new management secret
+ */
+router.post('/auth/tokens/regenerate-secret', (_req: Request, res: Response): void => {
+  try {
+    const newSecret = generateSecureToken(32);
+    setGlobalManagementSecret(newSecret);
+
+    // Regenerate CLIProxy config to apply changes
+    regenerateConfig();
+
+    res.json({
+      success: true,
+      managementSecret: {
+        value: maskToken(newSecret),
+        isCustom: true,
+      },
+      message: 'Restart CLIProxy to apply changes',
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/settings/auth/tokens/reset - Reset auth tokens to defaults
+ */
+router.post('/auth/tokens/reset', (_req: Request, res: Response): void => {
+  try {
+    resetAuthToDefaults();
+
+    // Regenerate CLIProxy config to apply changes
+    regenerateConfig();
+
+    const summary = getAuthSummary();
+    res.json({
+      success: true,
+      apiKey: {
+        value: maskToken(summary.apiKey.value),
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: maskToken(summary.managementSecret.value),
+        isCustom: summary.managementSecret.isCustom,
+      },
+      message: 'Tokens reset to defaults. Restart CLIProxy to apply.',
+    });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
