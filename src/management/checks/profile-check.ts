@@ -11,7 +11,7 @@ import { HealthCheck, IHealthChecker, createSpinner } from './types';
 const ora = createSpinner();
 
 /**
- * Check profile configurations in config.json
+ * Check profile configurations in config.yaml (preferred) or config.json (legacy)
  */
 export class ProfilesChecker implements IHealthChecker {
   name = 'Profiles';
@@ -23,47 +23,102 @@ export class ProfilesChecker implements IHealthChecker {
 
   run(results: HealthCheck): void {
     const spinner = ora('Checking profiles').start();
-    const configPath = path.join(this.ccsDir, 'config.json');
+    const configYamlPath = path.join(this.ccsDir, 'config.yaml');
+    const configJsonPath = path.join(this.ccsDir, 'config.json');
 
-    if (!fs.existsSync(configPath)) {
-      spinner.info();
-      console.log(`  ${info('Profiles'.padEnd(22))}  config.json not found`);
-      return;
-    }
+    const yamlExists = fs.existsSync(configYamlPath);
+    const jsonExists = fs.existsSync(configJsonPath);
 
-    try {
-      const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-
-      if (!config.profiles || typeof config.profiles !== 'object') {
+    // Check config.yaml first (preferred format)
+    if (yamlExists) {
+      try {
+        const yaml = require('js-yaml');
+        const content = fs.readFileSync(configYamlPath, 'utf8');
+        const config = yaml.load(content) as Record<string, unknown>;
+        this.validateProfiles(config, 'config.yaml', spinner, results);
+        return;
+      } catch (e) {
         spinner.fail();
-        console.log(`  ${fail('Profiles'.padEnd(22))}  Missing profiles object`);
+        console.log(
+          `  ${fail('Profiles'.padEnd(22))}  Invalid config.yaml: ${(e as Error).message}`
+        );
         results.addCheck(
           'Profiles',
           'error',
-          'config.json missing profiles object',
-          'Run: npm install -g @kaitranntt/ccs --force',
-          { status: 'ERROR', info: 'Missing profiles object' }
+          `Invalid config.yaml: ${(e as Error).message}`,
+          undefined,
+          {
+            status: 'ERROR',
+            info: (e as Error).message,
+          }
         );
         return;
       }
-
-      const profileCount = Object.keys(config.profiles).length;
-      const profileNames = Object.keys(config.profiles).join(', ');
-
-      spinner.succeed();
-      console.log(`  ${ok('Profiles'.padEnd(22))}  ${profileCount} configured (${profileNames})`);
-      results.addCheck('Profiles', 'success', `${profileCount} profiles configured`, undefined, {
-        status: 'OK',
-        info: `${profileCount} configured (${profileNames.length > 30 ? profileNames.substring(0, 27) + '...' : profileNames})`,
-      });
-    } catch (e) {
-      spinner.fail();
-      console.log(`  ${fail('Profiles'.padEnd(22))}  ${(e as Error).message}`);
-      results.addCheck('Profiles', 'error', (e as Error).message, undefined, {
-        status: 'ERROR',
-        info: (e as Error).message,
-      });
     }
+
+    // Fallback to config.json (legacy format)
+    if (jsonExists) {
+      try {
+        const config = JSON.parse(fs.readFileSync(configJsonPath, 'utf8'));
+        this.validateProfiles(config, 'config.json', spinner, results);
+        return;
+      } catch (e) {
+        spinner.fail();
+        console.log(
+          `  ${fail('Profiles'.padEnd(22))}  Invalid config.json: ${(e as Error).message}`
+        );
+        results.addCheck(
+          'Profiles',
+          'error',
+          `Invalid config.json: ${(e as Error).message}`,
+          undefined,
+          {
+            status: 'ERROR',
+            info: (e as Error).message,
+          }
+        );
+        return;
+      }
+    }
+
+    // Neither exists
+    spinner.info();
+    console.log(
+      `  ${info('Profiles'.padEnd(22))}  No config file found (config.yaml or config.json)`
+    );
+  }
+
+  /**
+   * Validate profiles object from parsed config
+   */
+  private validateProfiles(
+    config: Record<string, unknown>,
+    configFileName: string,
+    spinner: ReturnType<ReturnType<typeof ora>['start']>,
+    results: HealthCheck
+  ): void {
+    if (!config.profiles || typeof config.profiles !== 'object') {
+      spinner.fail();
+      console.log(`  ${fail('Profiles'.padEnd(22))}  Missing profiles object in ${configFileName}`);
+      results.addCheck(
+        'Profiles',
+        'error',
+        `${configFileName} missing profiles object`,
+        'Run: npm install -g @kaitranntt/ccs --force',
+        { status: 'ERROR', info: 'Missing profiles object' }
+      );
+      return;
+    }
+
+    const profileCount = Object.keys(config.profiles as object).length;
+    const profileNames = Object.keys(config.profiles as object).join(', ');
+
+    spinner.succeed();
+    console.log(`  ${ok('Profiles'.padEnd(22))}  ${profileCount} configured (${profileNames})`);
+    results.addCheck('Profiles', 'success', `${profileCount} profiles configured`, undefined, {
+      status: 'OK',
+      info: `${profileCount} configured (${profileNames.length > 30 ? profileNames.substring(0, 27) + '...' : profileNames})`,
+    });
   }
 }
 

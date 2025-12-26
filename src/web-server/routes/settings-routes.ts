@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { getCcsDir, loadSettings } from '../../utils/config-manager';
 import { isSensitiveKey, maskSensitiveValue } from '../../utils/sensitive-keys';
@@ -33,7 +34,7 @@ function resolveSettingsPath(profileOrVariant: string): string {
   const variant = variants[profileOrVariant];
   if (variant?.settings) {
     // Variant settings path (e.g., ~/.ccs/agy-g3.settings.json)
-    return variant.settings.replace(/^~/, process.env.HOME || '');
+    return variant.settings.replace(/^~/, os.homedir());
   }
 
   // Regular profile settings

@@ -5,6 +5,7 @@
  * Supports both unified config (config.yaml) and legacy JSON format.
  */
 
+import * as os from 'os';
 import * as path from 'path';
 import { CLIProxyProfileName } from '../../auth/profile-detector';
 import { CLIProxyProvider } from '../types';
@@ -177,7 +178,7 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
 
     // Update model in settings file if provided
     if (updates.model !== undefined && existing.settings) {
-      const settingsPath = existing.settings.replace(/^~/, process.env.HOME || '');
+      const settingsPath = existing.settings.replace(/^~/, os.homedir());
       updateSettingsModel(settingsPath, updates.model);
     }
 
