@@ -4,12 +4,42 @@
 
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { getCcsDir, loadSettings } from '../../utils/config-manager';
 import { isSensitiveKey, maskSensitiveValue } from '../../utils/sensitive-keys';
+import { listVariants } from '../../cliproxy/services/variant-service';
+import {
+  generateSecureToken,
+  maskToken,
+  getAuthSummary,
+  setGlobalApiKey,
+  setGlobalManagementSecret,
+  resetAuthToDefaults,
+} from '../../cliproxy';
+import { regenerateConfig } from '../../cliproxy/config-generator';
 import type { Settings } from '../../types/config';
 
 const router = Router();
+
+/**
+ * Helper: Resolve settings path for profile or variant
+ * Variants have settings paths in config, regular profiles use {name}.settings.json
+ */
+function resolveSettingsPath(profileOrVariant: string): string {
+  const ccsDir = getCcsDir();
+
+  // Check if this is a variant
+  const variants = listVariants();
+  const variant = variants[profileOrVariant];
+  if (variant?.settings) {
+    // Variant settings path (e.g., ~/.ccs/agy-g3.settings.json)
+    return variant.settings.replace(/^~/, os.homedir());
+  }
+
+  // Regular profile settings
+  return path.join(ccsDir, `${profileOrVariant}.settings.json`);
+}
 
 /**
  * Helper: Mask API keys in settings
@@ -34,8 +64,7 @@ function maskApiKeys(settings: Settings): Settings {
 router.get('/:profile', (req: Request, res: Response): void => {
   try {
     const { profile } = req.params;
-    const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+    const settingsPath = resolveSettingsPath(profile);
 
     if (!fs.existsSync(settingsPath)) {
       res.status(404).json({ error: 'Settings not found' });
@@ -63,8 +92,7 @@ router.get('/:profile', (req: Request, res: Response): void => {
 router.get('/:profile/raw', (req: Request, res: Response): void => {
   try {
     const { profile } = req.params;
-    const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+    const settingsPath = resolveSettingsPath(profile);
 
     if (!fs.existsSync(settingsPath)) {
       res.status(404).json({ error: 'Settings not found' });
@@ -93,7 +121,7 @@ router.put('/:profile', (req: Request, res: Response): void => {
     const { profile } = req.params;
     const { settings, expectedMtime } = req.body;
     const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+    const settingsPath = resolveSettingsPath(profile);
 
     const fileExists = fs.existsSync(settingsPath);
 
@@ -151,8 +179,7 @@ router.put('/:profile', (req: Request, res: Response): void => {
 router.get('/:profile/presets', (req: Request, res: Response): void => {
   try {
     const { profile } = req.params;
-    const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+    const settingsPath = resolveSettingsPath(profile);
 
     if (!fs.existsSync(settingsPath)) {
       res.json({ presets: [] });
@@ -179,11 +206,11 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
       return;
     }
 
-    const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+    const settingsPath = resolveSettingsPath(profile);
 
     // Create settings file if it doesn't exist
     if (!fs.existsSync(settingsPath)) {
+      fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
       fs.writeFileSync(settingsPath, JSON.stringify({ env: {}, presets: [] }, null, 2) + '\n');
     }
 
@@ -205,7 +232,11 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
     };
 
     settings.presets.push(preset);
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+
+    // Atomic write: temp file + rename
+    const tempPath = settingsPath + '.tmp';
+    fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
+    fs.renameSync(tempPath, settingsPath);
 
     res.status(201).json({ preset });
   } catch (error) {
@@ -219,8 +250,7 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
 router.delete('/:profile/presets/:name', (req: Request, res: Response): void => {
   try {
     const { profile, name } = req.params;
-    const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
+    const settingsPath = resolveSettingsPath(profile);
 
     if (!fs.existsSync(settingsPath)) {
       res.status(404).json({ error: 'Settings not found' });
@@ -234,9 +264,151 @@ router.delete('/:profile/presets/:name', (req: Request, res: Response): void => 
     }
 
     settings.presets = settings.presets.filter((p) => p.name !== name);
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+
+    // Atomic write: temp file + rename
+    const tempPath = settingsPath + '.tmp';
+    fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
+    fs.renameSync(tempPath, settingsPath);
 
     res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==================== Auth Tokens ====================
+
+/**
+ * GET /api/settings/auth/tokens - Get current auth token status (masked)
+ */
+router.get('/auth/tokens', (_req: Request, res: Response): void => {
+  try {
+    const summary = getAuthSummary();
+
+    res.json({
+      apiKey: {
+        value: maskToken(summary.apiKey.value),
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: maskToken(summary.managementSecret.value),
+        isCustom: summary.managementSecret.isCustom,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/settings/auth/tokens/raw - Get current auth tokens unmasked
+ * NOTE: Sensitive endpoint - no caching, localhost only
+ */
+router.get('/auth/tokens/raw', (_req: Request, res: Response): void => {
+  try {
+    // Prevent caching of sensitive data
+    res.setHeader('Cache-Control', 'no-store');
+
+    const summary = getAuthSummary();
+
+    res.json({
+      apiKey: {
+        value: summary.apiKey.value,
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: summary.managementSecret.value,
+        isCustom: summary.managementSecret.isCustom,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * PUT /api/settings/auth/tokens - Update auth tokens
+ */
+router.put('/auth/tokens', (req: Request, res: Response): void => {
+  try {
+    const { apiKey, managementSecret } = req.body;
+
+    if (apiKey !== undefined) {
+      setGlobalApiKey(apiKey || undefined);
+    }
+
+    if (managementSecret !== undefined) {
+      setGlobalManagementSecret(managementSecret || undefined);
+    }
+
+    // Regenerate CLIProxy config to apply changes
+    regenerateConfig();
+
+    const summary = getAuthSummary();
+    res.json({
+      success: true,
+      apiKey: {
+        value: maskToken(summary.apiKey.value),
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: maskToken(summary.managementSecret.value),
+        isCustom: summary.managementSecret.isCustom,
+      },
+      message: 'Restart CLIProxy to apply changes',
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/settings/auth/tokens/regenerate-secret - Generate new management secret
+ */
+router.post('/auth/tokens/regenerate-secret', (_req: Request, res: Response): void => {
+  try {
+    const newSecret = generateSecureToken(32);
+    setGlobalManagementSecret(newSecret);
+
+    // Regenerate CLIProxy config to apply changes
+    regenerateConfig();
+
+    res.json({
+      success: true,
+      managementSecret: {
+        value: maskToken(newSecret),
+        isCustom: true,
+      },
+      message: 'Restart CLIProxy to apply changes',
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/settings/auth/tokens/reset - Reset auth tokens to defaults
+ */
+router.post('/auth/tokens/reset', (_req: Request, res: Response): void => {
+  try {
+    resetAuthToDefaults();
+
+    // Regenerate CLIProxy config to apply changes
+    regenerateConfig();
+
+    const summary = getAuthSummary();
+    res.json({
+      success: true,
+      apiKey: {
+        value: maskToken(summary.apiKey.value),
+        isCustom: summary.apiKey.isCustom,
+      },
+      managementSecret: {
+        value: maskToken(summary.managementSecret.value),
+        isCustom: summary.managementSecret.isCustom,
+      },
+      message: 'Tokens reset to defaults. Restart CLIProxy to apply.',
+    });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

@@ -2,16 +2,52 @@
  * Profile Health Checks
  *
  * Check profiles, instances, and delegation.
+ * Supports both legacy (config.json) and unified (config.yaml) modes.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { isUnifiedMode, loadUnifiedConfig } from '../../config/unified-config-loader';
 import type { HealthCheck } from './types';
 
 /**
- * Check profiles configuration
+ * Check profiles configuration (API profiles from config.json or config.yaml)
  */
 export function checkProfiles(ccsDir: string): HealthCheck {
+  // Check unified config first
+  if (isUnifiedMode()) {
+    const config = loadUnifiedConfig();
+    if (!config) {
+      return {
+        id: 'profiles',
+        name: 'Profiles',
+        status: 'info',
+        message: 'config.yaml not loaded',
+      };
+    }
+
+    const profileCount = Object.keys(config.profiles || {}).length;
+    const profileNames = Object.keys(config.profiles || {}).join(', ');
+
+    if (profileCount === 0) {
+      return {
+        id: 'profiles',
+        name: 'Profiles',
+        status: 'ok',
+        message: 'No API profiles (unified mode)',
+      };
+    }
+
+    return {
+      id: 'profiles',
+      name: 'Profiles',
+      status: 'ok',
+      message: `${profileCount} configured (unified)`,
+      details: profileNames.length > 40 ? profileNames.substring(0, 37) + '...' : profileNames,
+    };
+  }
+
+  // Legacy mode: check config.json
   const configPath = path.join(ccsDir, 'config.json');
 
   if (!fs.existsSync(configPath)) {

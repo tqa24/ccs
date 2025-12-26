@@ -332,6 +332,42 @@ export class ProfileRegistry {
     config.accounts[name].last_used = new Date().toISOString();
     saveUnifiedConfig(config);
   }
+
+  // ==========================================
+  // DRY Helper Methods (consolidated logic)
+  // ==========================================
+
+  /**
+   * Get all profiles merged from both legacy and unified config.
+   * Unified config takes precedence for duplicate names.
+   * DRY helper to consolidate merge logic used in multiple places.
+   */
+  getAllProfilesMerged(): Record<string, ProfileMetadata> {
+    const legacyProfiles = this.getAllProfiles();
+    const unifiedAccounts = this.getAllAccountsUnified();
+
+    // Start with legacy profiles
+    const merged: Record<string, ProfileMetadata> = { ...legacyProfiles };
+
+    // Override with unified config accounts (takes precedence)
+    for (const [name, account] of Object.entries(unifiedAccounts)) {
+      merged[name] = {
+        type: 'account',
+        created: account.created,
+        last_used: account.last_used,
+      };
+    }
+
+    return merged;
+  }
+
+  /**
+   * Get resolved default profile from unified config first, fallback to legacy.
+   * DRY helper to consolidate default resolution logic.
+   */
+  getDefaultResolved(): string | null {
+    return this.getDefaultUnified() ?? this.getDefaultProfile();
+  }
 }
 
 export default ProfileRegistry;

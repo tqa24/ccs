@@ -15,8 +15,9 @@
  * Version 3 = WebSearch config with model configuration for Gemini/OpenCode
  * Version 4 = Copilot API integration (GitHub Copilot proxy)
  * Version 5 = Remote proxy configuration (connect to remote CLIProxyAPI)
+ * Version 6 = Customizable auth tokens (API key and management secret)
  */
-export const UNIFIED_CONFIG_VERSION = 5;
+export const UNIFIED_CONFIG_VERSION = 6;
 
 /**
  * Account configuration (formerly in profiles.json).
@@ -63,6 +64,21 @@ export interface CLIProxyVariantConfig {
   account?: string;
   /** Path to settings file (e.g., "~/.ccs/gemini-custom.settings.json") */
   settings?: string;
+  /** Unique port for variant isolation (8318-8417) */
+  port?: number;
+  /** Per-variant auth override (optional) */
+  auth?: CLIProxyAuthConfig;
+}
+
+/**
+ * CLIProxy authentication configuration.
+ * Allows customization of API key and management secret for CLIProxyAPI.
+ */
+export interface CLIProxyAuthConfig {
+  /** API key for CCS-managed requests (default: 'ccs-internal-managed') */
+  api_key?: string;
+  /** Management secret for Control Panel login (default: 'ccs') */
+  management_secret?: string;
 }
 
 /**
@@ -91,6 +107,8 @@ export interface CLIProxyConfig {
   logging?: CLIProxyLoggingConfig;
   /** Kiro: disable incognito browser mode (use normal browser to save credentials) */
   kiro_no_incognito?: boolean;
+  /** Global auth configuration for CLIProxyAPI */
+  auth?: CLIProxyAuthConfig;
 }
 
 /**

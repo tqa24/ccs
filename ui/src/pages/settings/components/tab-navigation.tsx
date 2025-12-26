@@ -4,7 +4,7 @@
  */
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Globe, Settings2, Server } from 'lucide-react';
+import { Globe, Settings2, Server, KeyRound } from 'lucide-react';
 import type { SettingsTab } from '../types';
 
 interface TabNavigationProps {
@@ -27,6 +27,10 @@ export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
         <TabsTrigger value="proxy" className="flex-1 gap-2">
           <Server className="w-4 h-4" />
           Proxy
+        </TabsTrigger>
+        <TabsTrigger value="auth" className="flex-1 gap-2">
+          <KeyRound className="w-4 h-4" />
+          Auth
         </TabsTrigger>
       </TabsList>
     </Tabs>

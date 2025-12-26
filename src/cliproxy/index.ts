@@ -135,3 +135,16 @@ export { detectRunningProxy, waitForProxyHealthy, reclaimOrphanedProxy } from '.
 // Startup lock (prevents race conditions between CCS processes)
 export type { LockResult } from './startup-lock';
 export { acquireStartupLock, withStartupLock } from './startup-lock';
+
+// Auth token manager (customizable API key and management secret)
+export {
+  generateSecureToken,
+  maskToken,
+  getEffectiveApiKey,
+  getEffectiveManagementSecret,
+  setGlobalApiKey,
+  setGlobalManagementSecret,
+  setVariantApiKey,
+  resetAuthToDefaults,
+  getAuthSummary,
+} from './auth-token-manager';

@@ -142,6 +142,17 @@ export function fixHealthIssue(checkId: string): { success: boolean; message: st
       return { success: true, message: 'Created ~/.ccs directory' };
 
     case 'config-file': {
+      // Use appropriate config based on unified mode
+      const { isUnifiedMode } = require('../config/unified-config-loader');
+      if (isUnifiedMode()) {
+        const {
+          loadOrCreateUnifiedConfig,
+          saveUnifiedConfig,
+        } = require('../config/unified-config-loader');
+        const config = loadOrCreateUnifiedConfig();
+        saveUnifiedConfig(config);
+        return { success: true, message: 'Created/updated config.yaml' };
+      }
       const configPath = getConfigPath();
       fs.mkdirSync(path.dirname(configPath), { recursive: true });
       fs.writeFileSync(configPath, JSON.stringify({ profiles: {} }, null, 2) + '\n');
@@ -149,6 +160,12 @@ export function fixHealthIssue(checkId: string): { success: boolean; message: st
     }
 
     case 'profiles-file': {
+      // Use appropriate storage based on unified mode
+      const { isUnifiedMode: isUnified } = require('../config/unified-config-loader');
+      if (isUnified()) {
+        // In unified mode, accounts are stored in config.yaml
+        return { success: true, message: 'Accounts stored in config.yaml (unified mode)' };
+      }
       const profilesPath = path.join(ccsDir, 'profiles.json');
       fs.mkdirSync(ccsDir, { recursive: true });
       fs.writeFileSync(profilesPath, JSON.stringify({ profiles: {} }, null, 2) + '\n');

@@ -5,12 +5,11 @@
  */
 
 import { Router, Request, Response } from 'express';
-import * as fs from 'fs';
-import * as path from 'path';
-import { getCcsDir, loadConfig } from '../utils/config-manager';
+import { loadConfig } from '../utils/config-manager';
 import { runHealthChecks } from './health-service';
 import { getAllAuthStatus, initializeAccounts } from '../cliproxy/auth-handler';
 import { getVersion } from '../utils/version';
+import ProfileRegistry from '../auth/profile-registry';
 
 export const overviewRoutes = Router();
 
@@ -64,12 +63,16 @@ overviewRoutes.get('/', async (_req: Request, res: Response) => {
 
 function getAccountCount(): number {
   try {
-    const profilesPath = path.join(getCcsDir(), 'profiles.json');
+    const registry = new ProfileRegistry();
 
-    if (!fs.existsSync(profilesPath)) return 0;
+    // Merge legacy (profiles.json) and unified (config.yaml) accounts
+    const legacyProfiles = registry.getAllProfiles();
+    const unifiedAccounts = registry.getAllAccountsUnified();
 
-    const data = JSON.parse(fs.readFileSync(profilesPath, 'utf8'));
-    return Object.keys(data.profiles || {}).length;
+    // Count unique accounts (unified takes precedence for duplicates)
+    const allNames = new Set([...Object.keys(legacyProfiles), ...Object.keys(unifiedAccounts)]);
+
+    return allNames.size;
   } catch {
     return 0;
   }

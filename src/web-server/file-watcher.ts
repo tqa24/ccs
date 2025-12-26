@@ -22,7 +22,8 @@ export function createFileWatcher(onChange: FileChangeCallback): FSWatcher {
 
   const watcher = chokidar.watch(
     [
-      path.join(ccsDir, 'config.json'),
+      path.join(ccsDir, 'config.json'), // Legacy config
+      path.join(ccsDir, 'config.yaml'), // Unified config
       path.join(ccsDir, '*.settings.json'),
       path.join(ccsDir, 'profiles.json'),
       path.join(ccsDir, 'cliproxy', 'sessions.json'), // Proxy session tracking
@@ -41,7 +42,7 @@ export function createFileWatcher(onChange: FileChangeCallback): FSWatcher {
     const basename = path.basename(filePath);
     let type: FileChangeEvent['type'];
 
-    if (basename === 'config.json') {
+    if (basename === 'config.json' || basename === 'config.yaml') {
       type = 'config-changed';
     } else if (basename === 'profiles.json') {
       type = 'profiles-changed';

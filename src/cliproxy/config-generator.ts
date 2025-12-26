@@ -16,6 +16,7 @@ import { warn } from '../utils/ui';
 import { CLIProxyProvider, ProviderConfig, ProviderModelMapping } from './types';
 import { getModelMappingFromConfig, getEnvVarsFromConfig } from './base-config-loader';
 import { loadOrCreateUnifiedConfig, getGlobalEnvConfig } from '../config/unified-config-loader';
+import { getEffectiveApiKey, getEffectiveManagementSecret } from './auth-token-manager';
 
 /** Settings file structure for user overrides */
 interface ProviderSettings {
@@ -117,10 +118,21 @@ export function getAuthDir(): string {
 }
 
 /**
- * Get config file path
+ * Get config file path for a specific port.
+ * Default port uses config.yaml, others use config-{port}.yaml.
+ */
+export function getConfigPathForPort(port: number): string {
+  if (port === CLIPROXY_DEFAULT_PORT) {
+    return path.join(getCliproxyDir(), 'config.yaml');
+  }
+  return path.join(getCliproxyDir(), `config-${port}.yaml`);
+}
+
+/**
+ * Get config file path (default port)
  */
 export function getConfigPath(): string {
-  return path.join(getCliproxyDir(), 'config.yaml');
+  return getConfigPathForPort(CLIPROXY_DEFAULT_PORT);
 }
 
 /**
@@ -161,8 +173,12 @@ function generateUnifiedConfigContent(
   // Get logging settings from user config (disabled by default)
   const { loggingToFile, requestLog } = getLoggingSettings();
 
+  // Get effective auth tokens (respects user customization)
+  const effectiveApiKey = getEffectiveApiKey();
+  const effectiveSecret = getEffectiveManagementSecret();
+
   // Build api-keys section with internal key + preserved user keys
-  const allApiKeys = [CCS_INTERNAL_API_KEY, ...userApiKeys];
+  const allApiKeys = [effectiveApiKey, ...userApiKeys];
   const apiKeysYaml = allApiKeys.map((key) => `  - "${key}"`).join('\n');
 
   // Unified config with enhanced CLIProxyAPI features
@@ -208,7 +224,7 @@ usage-statistics-enabled: true
 # Remote management API for CCS dashboard integration
 remote-management:
   allow-remote: true
-  secret-key: "${CCS_CONTROL_PANEL_SECRET}"
+  secret-key: "${effectiveSecret}"
   disable-control-panel: false
 
 # =============================================================================
@@ -250,7 +266,7 @@ export function generateConfig(
   provider: CLIProxyProvider,
   port: number = CLIPROXY_DEFAULT_PORT
 ): string {
-  const configPath = getConfigPath();
+  const configPath = getConfigPathForPort(port);
 
   // Ensure provider auth directory exists
   const authDir = getProviderAuthDir(provider);
@@ -320,7 +336,7 @@ export function parseUserApiKeys(content: string): string[] {
  * @returns Path to new config file
  */
 export function regenerateConfig(port: number = CLIPROXY_DEFAULT_PORT): string {
-  const configPath = getConfigPath();
+  const configPath = getConfigPathForPort(port);
 
   // Preserve user settings from existing config
   let effectivePort = port;
@@ -383,20 +399,27 @@ export function configNeedsRegeneration(): boolean {
 }
 
 /**
- * Check if config exists for provider
+ * Check if config exists for port
  */
-export function configExists(): boolean {
-  return fs.existsSync(getConfigPath());
+export function configExists(port: number = CLIPROXY_DEFAULT_PORT): boolean {
+  return fs.existsSync(getConfigPathForPort(port));
 }
 
 /**
- * Delete config file
+ * Delete config file for specific port
  */
-export function deleteConfig(): void {
-  const configPath = getConfigPath();
+export function deleteConfigForPort(port: number): void {
+  const configPath = getConfigPathForPort(port);
   if (fs.existsSync(configPath)) {
     fs.unlinkSync(configPath);
   }
+}
+
+/**
+ * Delete config file (default port)
+ */
+export function deleteConfig(): void {
+  deleteConfigForPort(CLIPROXY_DEFAULT_PORT);
 }
 
 /**
@@ -425,7 +448,7 @@ export function getClaudeEnvVars(
   const coreEnvVars = {
     // Provider-specific endpoint - routes to correct provider via URL path
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}/api/provider/${provider}`,
-    ANTHROPIC_AUTH_TOKEN: CCS_INTERNAL_API_KEY,
+    ANTHROPIC_AUTH_TOKEN: getEffectiveApiKey(),
     ANTHROPIC_MODEL: models.claudeModel,
     ANTHROPIC_DEFAULT_OPUS_MODEL: models.opusModel || models.claudeModel,
     ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnetModel || models.claudeModel,
@@ -692,7 +715,7 @@ export function getRemoteEnvVars(
     ...userEnvVars,
     // Always override URL and auth token with remote config
     ANTHROPIC_BASE_URL: baseUrl,
-    ANTHROPIC_AUTH_TOKEN: remoteConfig.authToken || CCS_INTERNAL_API_KEY,
+    ANTHROPIC_AUTH_TOKEN: remoteConfig.authToken || getEffectiveApiKey(),
   };
 
   return env;

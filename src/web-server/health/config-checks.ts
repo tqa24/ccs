@@ -1,18 +1,58 @@
 /**
  * Configuration Health Checks
  *
- * Check config.json, settings files, and Claude settings.
+ * Check config.json, config.yaml, settings files, and Claude settings.
+ * Supports both legacy (config.json) and unified (config.yaml) modes.
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { getConfigPath } from '../../utils/config-manager';
+import { isUnifiedMode, hasUnifiedConfig } from '../../config/unified-config-loader';
 import type { HealthCheck } from './types';
 
 /**
- * Check config.json file
+ * Check config file (config.json or config.yaml based on mode)
  */
 export function checkConfigFile(): HealthCheck {
+  // In unified mode, check config.yaml
+  if (isUnifiedMode() || hasUnifiedConfig()) {
+    const ccsDir = path.join(os.homedir(), '.ccs');
+    const yamlPath = path.join(ccsDir, 'config.yaml');
+
+    if (!fs.existsSync(yamlPath)) {
+      return {
+        id: 'config-file',
+        name: 'config.yaml',
+        status: 'warning',
+        message: 'Not found (unified mode)',
+        details: yamlPath,
+        fixable: true,
+      };
+    }
+
+    try {
+      fs.readFileSync(yamlPath, 'utf8');
+      return {
+        id: 'config-file',
+        name: 'config.yaml',
+        status: 'ok',
+        message: 'Valid (unified mode)',
+        details: yamlPath,
+      };
+    } catch {
+      return {
+        id: 'config-file',
+        name: 'config.yaml',
+        status: 'error',
+        message: 'Cannot read file',
+        details: yamlPath,
+      };
+    }
+  }
+
+  // Legacy mode: check config.json
   const configPath = getConfigPath();
 
   if (!fs.existsSync(configPath)) {

@@ -154,89 +154,6 @@ class RecoveryManager {
   }
 
   /**
-   * Ensure GLM settings file exists
-   */
-  ensureGlmSettings(): boolean {
-    const settingsPath = path.join(this.ccsDir, 'glm.settings.json');
-    if (fs.existsSync(settingsPath)) return false;
-
-    const settings = {
-      env: {
-        ANTHROPIC_BASE_URL: 'https://api.z.ai/api/anthropic',
-        ANTHROPIC_AUTH_TOKEN: 'YOUR_GLM_API_KEY_HERE',
-        ANTHROPIC_MODEL: 'glm-4.6',
-        ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.6',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.6',
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.6',
-      },
-    };
-
-    const tmpPath = `${settingsPath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, settingsPath);
-    this.recovered.push('Created ~/.ccs/glm.settings.json');
-    return true;
-  }
-
-  /**
-   * Ensure GLMT settings file exists
-   */
-  ensureGlmtSettings(): boolean {
-    const settingsPath = path.join(this.ccsDir, 'glmt.settings.json');
-    if (fs.existsSync(settingsPath)) return false;
-
-    const settings = {
-      env: {
-        ANTHROPIC_BASE_URL: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
-        ANTHROPIC_AUTH_TOKEN: 'YOUR_GLM_API_KEY_HERE',
-        ANTHROPIC_MODEL: 'glm-4.6',
-        ANTHROPIC_DEFAULT_OPUS_MODEL: 'glm-4.6',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'glm-4.6',
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'glm-4.6',
-        ANTHROPIC_TEMPERATURE: '0.2',
-        ANTHROPIC_MAX_TOKENS: '65536',
-        MAX_THINKING_TOKENS: '32768',
-        ENABLE_STREAMING: 'true',
-        ANTHROPIC_SAFE_MODE: 'false',
-        API_TIMEOUT_MS: '3000000',
-      },
-      alwaysThinkingEnabled: true,
-    };
-
-    const tmpPath = `${settingsPath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, settingsPath);
-    this.recovered.push('Created ~/.ccs/glmt.settings.json');
-    return true;
-  }
-
-  /**
-   * Ensure Kimi settings file exists
-   */
-  ensureKimiSettings(): boolean {
-    const settingsPath = path.join(this.ccsDir, 'kimi.settings.json');
-    if (fs.existsSync(settingsPath)) return false;
-
-    const settings = {
-      env: {
-        ANTHROPIC_BASE_URL: 'https://api.kimi.com/coding/',
-        ANTHROPIC_AUTH_TOKEN: 'YOUR_KIMI_API_KEY_HERE',
-        ANTHROPIC_MODEL: 'kimi-k2-thinking-turbo',
-        ANTHROPIC_DEFAULT_OPUS_MODEL: 'kimi-k2-thinking-turbo',
-        ANTHROPIC_DEFAULT_SONNET_MODEL: 'kimi-k2-thinking-turbo',
-        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'kimi-k2-thinking-turbo',
-      },
-      alwaysThinkingEnabled: true,
-    };
-
-    const tmpPath = `${settingsPath}.tmp`;
-    fs.writeFileSync(tmpPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-    fs.renameSync(tmpPath, settingsPath);
-    this.recovered.push('Created ~/.ccs/kimi.settings.json');
-    return true;
-  }
-
-  /**
    * Install shell completion files
    */
   ensureShellCompletions(): boolean {
@@ -326,23 +243,6 @@ class RecoveryManager {
     console.log('');
     console.log(info('Auto-recovery completed:'));
     this.recovered.forEach((msg) => console.log(`    - ${msg}`));
-
-    // Show API key hints if created profile settings
-    const createdGlm = this.recovered.some((msg) => msg.includes('glm.settings.json'));
-    const createdKimi = this.recovered.some((msg) => msg.includes('kimi.settings.json'));
-
-    if (createdGlm || createdKimi) {
-      console.log('');
-      console.log(info('Configure API keys:'));
-      if (createdGlm) {
-        console.log('    GLM: Edit ~/.ccs/glm.settings.json');
-        console.log('          Get key from: https://api.z.ai');
-      }
-      if (createdKimi) {
-        console.log('    Kimi: Edit ~/.ccs/kimi.settings.json');
-        console.log('          Get key from: https://www.kimi.com/coding');
-      }
-    }
 
     // Show login hint if created Claude settings
     if (this.recovered.some((msg) => msg.includes('~/.claude/settings.json'))) {

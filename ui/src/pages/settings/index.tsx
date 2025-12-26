@@ -18,6 +18,7 @@ import type { SettingsTab } from './types';
 const WebSearchSection = lazy(() => import('./sections/websearch'));
 const GlobalEnvSection = lazy(() => import('./sections/globalenv-section'));
 const ProxySection = lazy(() => import('./sections/proxy'));
+const AuthSection = lazy(() => import('./sections/auth-section'));
 
 // Inner component that uses context
 function SettingsPageInner() {
@@ -57,6 +58,7 @@ function SettingsPageInner() {
               {activeTab === 'websearch' && <WebSearchSection />}
               {activeTab === 'globalenv' && <GlobalEnvSection />}
               {activeTab === 'proxy' && <ProxySection />}
+              {activeTab === 'auth' && <AuthSection />}
             </Suspense>
           </div>
         </Panel>

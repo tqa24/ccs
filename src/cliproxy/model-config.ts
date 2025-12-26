@@ -6,6 +6,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { InteractivePrompt } from '../utils/prompt';
 import { getProviderCatalog, supportsModelConfig, ModelEntry } from './model-catalog';
@@ -14,7 +15,7 @@ import { CLIProxyProvider } from './types';
 import { initUI, color, bold, dim, ok, info, header } from '../utils/ui';
 
 /** CCS directory */
-const CCS_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '', '.ccs');
+const CCS_DIR = path.join(os.homedir(), '.ccs');
 
 /**
  * Check if provider has user settings configured
@@ -34,7 +35,7 @@ export function getCurrentModel(
   customSettingsPath?: string
 ): string | undefined {
   const settingsPath = customSettingsPath
-    ? customSettingsPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '')
+    ? customSettingsPath.replace(/^~/, os.homedir())
     : getProviderSettingsPath(provider);
   if (!fs.existsSync(settingsPath)) return undefined;
 
@@ -93,7 +94,7 @@ export async function configureProviderModel(
 
   // Use custom settings path for CLIProxy variants, otherwise use default provider path
   const settingsPath = customSettingsPath
-    ? customSettingsPath.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '')
+    ? customSettingsPath.replace(/^~/, os.homedir())
     : getProviderSettingsPath(provider);
 
   // Skip if already configured (unless --config flag)

@@ -5,13 +5,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { ok, fail, warn } from '../../utils/ui';
+import { ok, fail, warn, info } from '../../utils/ui';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
 
 const ora = createSpinner();
 
 /**
- * Check CCS config files exist and are valid JSON
+ * Check CCS config files exist and are valid
+ * - Prefers config.yaml (v2) over config.json (legacy)
+ * - Settings files are optional (only checked if profile exists)
  */
 export class ConfigFilesChecker implements IHealthChecker {
   name = 'Config Files';
@@ -22,63 +24,139 @@ export class ConfigFilesChecker implements IHealthChecker {
   }
 
   run(results: HealthCheck): void {
-    const files = [
-      { path: path.join(this.ccsDir, 'config.json'), name: 'config.json', key: 'config.json' },
-      {
-        path: path.join(this.ccsDir, 'glm.settings.json'),
-        name: 'glm.settings.json',
-        key: 'GLM Settings',
-        profile: 'glm',
-      },
-      {
-        path: path.join(this.ccsDir, 'kimi.settings.json'),
-        name: 'kimi.settings.json',
-        key: 'Kimi Settings',
-        profile: 'kimi',
-      },
-    ];
-
     const { DelegationValidator } = require('../../utils/delegation-validator');
 
-    for (const file of files) {
-      const spinner = ora(`Checking ${file.name}`).start();
+    // Check main config file (yaml preferred, json fallback)
+    this.checkMainConfig(results);
 
-      if (!fs.existsSync(file.path)) {
+    // Check optional settings files (only if profile exists in config)
+    this.checkOptionalSettingsFiles(results, DelegationValidator);
+  }
+
+  /**
+   * Check main configuration file (config.yaml preferred, config.json fallback)
+   */
+  private checkMainConfig(results: HealthCheck): void {
+    const configYamlPath = path.join(this.ccsDir, 'config.yaml');
+    const configJsonPath = path.join(this.ccsDir, 'config.json');
+
+    const yamlExists = fs.existsSync(configYamlPath);
+    const jsonExists = fs.existsSync(configJsonPath);
+
+    // Check config.yaml first (preferred format)
+    if (yamlExists) {
+      const spinner = ora('Checking config.yaml').start();
+      try {
+        const yaml = require('js-yaml');
+        const content = fs.readFileSync(configYamlPath, 'utf8');
+        yaml.load(content);
+        spinner.succeed();
+        console.log(`  ${ok('config.yaml'.padEnd(22))}  Valid`);
+        results.addCheck('config.yaml', 'success', undefined, undefined, {
+          status: 'OK',
+          info: 'Valid',
+        });
+
+        // Inform if legacy config.json also exists (purely informational, not a check)
+        if (jsonExists) {
+          console.log(`  ${info('config.json'.padEnd(22))}  Legacy (ignored)`);
+        }
+        return;
+      } catch (e) {
         spinner.fail();
-        console.log(`  ${fail(file.name.padEnd(22))}  Not found`);
+        console.log(`  ${fail('config.yaml'.padEnd(22))}  Invalid YAML`);
         results.addCheck(
-          file.name,
+          'config.yaml',
           'error',
-          `${file.name} not found`,
-          'Run: npm install -g @kaitranntt/ccs --force',
-          { status: 'ERROR', info: 'Not found' }
+          `Invalid YAML: ${(e as Error).message}`,
+          `Backup and recreate: mv ${configYamlPath} ${configYamlPath}.backup && npm install -g @kaitranntt/ccs --force`,
+          { status: 'ERROR', info: 'Invalid YAML' }
         );
+        return;
+      }
+    }
+
+    // Fallback to config.json (legacy format)
+    if (jsonExists) {
+      const spinner = ora('Checking config.json').start();
+      try {
+        const content = fs.readFileSync(configJsonPath, 'utf8');
+        JSON.parse(content);
+        spinner.succeed();
+        console.log(`  ${ok('config.json'.padEnd(22))}  Valid (legacy)`);
+        results.addCheck('config.json', 'success', undefined, undefined, {
+          status: 'OK',
+          info: 'Valid (legacy)',
+        });
+      } catch (e) {
+        spinner.fail();
+        console.log(`  ${fail('config.json'.padEnd(22))}  Invalid JSON`);
+        results.addCheck(
+          'config.json',
+          'error',
+          `Invalid JSON: ${(e as Error).message}`,
+          `Backup and recreate: mv ${configJsonPath} ${configJsonPath}.backup && npm install -g @kaitranntt/ccs --force`,
+          { status: 'ERROR', info: 'Invalid JSON' }
+        );
+      }
+      return;
+    }
+
+    // Neither exists - error
+    const spinner = ora('Checking config').start();
+    spinner.fail();
+    console.log(`  ${fail('config.yaml'.padEnd(22))}  Not found`);
+    results.addCheck(
+      'config.yaml',
+      'error',
+      'No configuration file found (config.yaml or config.json)',
+      'Run: npm install -g @kaitranntt/ccs --force',
+      { status: 'ERROR', info: 'Not found' }
+    );
+  }
+
+  /**
+   * Check optional settings files (only if corresponding profile is configured)
+   * These files are NOT required - they're only created when user configures a profile
+   */
+  private checkOptionalSettingsFiles(
+    results: HealthCheck,
+    DelegationValidator: { validate: (profile: string) => { valid: boolean; error?: string } }
+  ): void {
+    // Settings files to check (only if profile exists)
+    const settingsFiles = [
+      { name: 'glm.settings.json', profile: 'glm', displayName: 'GLM Settings' },
+      { name: 'kimi.settings.json', profile: 'kimi', displayName: 'Kimi Settings' },
+    ];
+
+    for (const file of settingsFiles) {
+      const filePath = path.join(this.ccsDir, file.name);
+      const exists = fs.existsSync(filePath);
+
+      if (!exists) {
+        // Not an error - these are optional files
+        // Only show info if user might expect them
         continue;
       }
 
-      // Validate JSON
+      // File exists - validate it
+      const spinner = ora(`Checking ${file.name}`).start();
       try {
-        const content = fs.readFileSync(file.path, 'utf8');
+        const content = fs.readFileSync(filePath, 'utf8');
         JSON.parse(content);
 
-        // Extract useful info based on file type
-        let fileInfo = 'Valid';
+        // Check if API key is properly configured
+        const validation = DelegationValidator.validate(file.profile);
+
+        let fileInfo = 'Valid JSON';
         let status: 'OK' | 'WARN' = 'OK';
 
-        if (file.profile) {
-          // For settings files, check if API key is configured
-          const validation = DelegationValidator.validate(file.profile);
-
-          if (validation.valid) {
-            fileInfo = 'Key configured';
-            status = 'OK';
-          } else if (validation.error && validation.error.includes('placeholder')) {
-            fileInfo = 'Placeholder key';
-            status = 'WARN';
-          } else {
-            fileInfo = 'Valid JSON';
-            status = 'OK';
-          }
+        if (validation.valid) {
+          fileInfo = 'Key configured';
+          status = 'OK';
+        } else if (validation.error && validation.error.includes('placeholder')) {
+          fileInfo = 'Placeholder key';
+          status = 'WARN';
         }
 
         if (status === 'WARN') {
@@ -100,7 +178,7 @@ export class ConfigFilesChecker implements IHealthChecker {
           file.name,
           'error',
           `Invalid JSON: ${(e as Error).message}`,
-          `Backup and recreate: mv ${file.path} ${file.path}.backup && npm install -g @kaitranntt/ccs --force`,
+          `Backup and recreate: mv ${filePath} ${filePath}.backup`,
           { status: 'ERROR', info: 'Invalid JSON' }
         );
       }
