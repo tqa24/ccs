@@ -294,13 +294,19 @@ async function main(): Promise<void> {
   // Auto-recovery for missing configuration (BEFORE any early-exit commands)
   // This ensures ALL commands benefit from auto-recovery, not just profile-switching flow
   // Recovery is safe to run early - it only creates missing files with safe defaults
-  const RecoveryManagerModule = await import('./management/recovery-manager');
-  const RecoveryManager = RecoveryManagerModule.default;
-  const recovery = new RecoveryManager();
-  const recovered = recovery.recoverAll();
+  // Wrapped in try-catch to prevent blocking --version/--help on permission errors
+  try {
+    const RecoveryManagerModule = await import('./management/recovery-manager');
+    const RecoveryManager = RecoveryManagerModule.default;
+    const recovery = new RecoveryManager();
+    const recovered = recovery.recoverAll();
 
-  if (recovered) {
-    recovery.showRecoveryHints();
+    if (recovered) {
+      recovery.showRecoveryHints();
+    }
+  } catch (err) {
+    // Recovery is best-effort - don't block basic CLI functionality
+    console.warn('[!] Recovery failed:', (err as Error).message);
   }
 
   // Special case: version command (check BEFORE profile detection)
