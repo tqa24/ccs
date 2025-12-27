@@ -331,6 +331,12 @@ export const api = {
           method: 'POST',
           body: JSON.stringify({ nickname }),
         }),
+      /** Import Kiro token from Kiro IDE (Kiro only) */
+      kiroImport: () =>
+        request<{ success: boolean; account: OAuthAccount | null; error?: string }>(
+          '/cliproxy/auth/kiro/import',
+          { method: 'POST' }
+        ),
     },
     // Error logs
     errorLogs: {

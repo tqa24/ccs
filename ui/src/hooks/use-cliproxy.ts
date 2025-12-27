@@ -136,6 +136,27 @@ export function useStartAuth() {
   });
 }
 
+// Kiro IDE import hook (alternative auth path when OAuth callback fails)
+export function useKiroImport() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.cliproxy.auth.kiroImport(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      if (data.account) {
+        toast.success(`Imported Kiro account: ${data.account.email || data.account.id}`);
+      } else {
+        toast.success('Kiro token imported');
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
 // Stats and models hooks for Overview tab
 export function useCliproxyStats() {
   return useQuery({

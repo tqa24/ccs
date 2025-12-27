@@ -2,6 +2,7 @@
  * Add Account Dialog Component
  * Triggers OAuth flow server-side to add another account to a provider
  * Applies default preset when adding first account
+ * For Kiro: Also shows "Import from IDE" option as fallback
  */
 
 import { useState } from 'react';
@@ -15,8 +16,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, ExternalLink, User } from 'lucide-react';
-import { useStartAuth } from '@/hooks/use-cliproxy';
+import { Loader2, ExternalLink, User, Download } from 'lucide-react';
+import { useStartAuth, useKiroImport } from '@/hooks/use-cliproxy';
 import { applyDefaultPreset } from '@/lib/preset-utils';
 import { toast } from 'sonner';
 
@@ -38,6 +39,10 @@ export function AddAccountDialog({
 }: AddAccountDialogProps) {
   const [nickname, setNickname] = useState('');
   const startAuthMutation = useStartAuth();
+  const kiroImportMutation = useKiroImport();
+
+  const isKiro = provider === 'kiro';
+  const isPending = startAuthMutation.isPending || kiroImportMutation.isPending;
 
   const handleStartAuth = () => {
     startAuthMutation.mutate(
@@ -60,8 +65,24 @@ export function AddAccountDialog({
     );
   };
 
+  const handleKiroImport = () => {
+    kiroImportMutation.mutate(undefined, {
+      onSuccess: async () => {
+        // Apply default preset if this is the first account
+        if (isFirstAccount) {
+          const result = await applyDefaultPreset('kiro');
+          if (result.success && result.presetName) {
+            toast.success(`Applied "${result.presetName}" preset`);
+          }
+        }
+        setNickname('');
+        onClose();
+      },
+    });
+  };
+
   const handleOpenChange = (isOpen: boolean) => {
-    if (!isOpen && !startAuthMutation.isPending) {
+    if (!isOpen && !isPending) {
       setNickname('');
       onClose();
     }
@@ -73,8 +94,9 @@ export function AddAccountDialog({
         <DialogHeader>
           <DialogTitle>Add {displayName} Account</DialogTitle>
           <DialogDescription>
-            Click the button below to authenticate a new account. A browser window will open for
-            OAuth.
+            {isKiro
+              ? 'Authenticate via browser or import an existing token from Kiro IDE.'
+              : 'Click the button below to authenticate a new account. A browser window will open for OAuth.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -88,7 +110,7 @@ export function AddAccountDialog({
                 value={nickname}
                 onChange={(e) => setNickname(e.target.value)}
                 placeholder="e.g., work, personal"
-                disabled={startAuthMutation.isPending}
+                disabled={isPending}
                 className="flex-1"
               />
             </div>
@@ -98,10 +120,25 @@ export function AddAccountDialog({
           </div>
 
           <div className="flex items-center justify-end gap-2 pt-2">
-            <Button variant="ghost" onClick={onClose} disabled={startAuthMutation.isPending}>
+            <Button variant="ghost" onClick={onClose} disabled={isPending}>
               Cancel
             </Button>
-            <Button onClick={handleStartAuth} disabled={startAuthMutation.isPending}>
+            {isKiro && (
+              <Button variant="outline" onClick={handleKiroImport} disabled={isPending}>
+                {kiroImportMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Importing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Import from IDE
+                  </>
+                )}
+              </Button>
+            )}
+            <Button onClick={handleStartAuth} disabled={isPending}>
               {startAuthMutation.isPending ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -119,6 +156,11 @@ export function AddAccountDialog({
           {startAuthMutation.isPending && (
             <p className="text-sm text-center text-muted-foreground">
               Complete the OAuth flow in your browser...
+            </p>
+          )}
+          {kiroImportMutation.isPending && (
+            <p className="text-sm text-center text-muted-foreground">
+              Importing token from Kiro IDE...
             </p>
           )}
         </div>
