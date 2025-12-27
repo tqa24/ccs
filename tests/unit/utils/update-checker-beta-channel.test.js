@@ -27,14 +27,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
   let httpsRequests = [];
 
   beforeAll(async function () {
-    // Build the project first
-    const { execSync } = require('child_process');
-    try {
-      execSync('bun run build', { cwd: path.resolve(__dirname, '../../..'), stdio: 'pipe' });
-    } catch (error) {
-      console.warn('Build failed, tests may not work:', error.message);
-    }
-
+    // Note: Build is handled by CI before tests run (bun run build:all)
     // Import the built module
     updateCheckerModule = await import('../../../dist/utils/update-checker.js');
   });
