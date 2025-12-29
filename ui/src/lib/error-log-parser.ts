@@ -29,6 +29,11 @@ export interface ParsedErrorLog {
   isClientError: boolean;
   isServerError: boolean;
   errorType: 'rate_limit' | 'auth' | 'not_found' | 'server' | 'timeout' | 'unknown';
+
+  // Extracted from request/response bodies
+  model: string | null;
+  quotaResetDelay: number | null; // seconds until reset
+  quotaResetTimestamp: string | null; // ISO timestamp when quota resets
 }
 
 /** Parsed filename metadata */
@@ -96,6 +101,9 @@ export function parseErrorLog(content: string): ParsedErrorLog {
     isClientError: false,
     isServerError: false,
     errorType: 'unknown',
+    model: null,
+    quotaResetDelay: null,
+    quotaResetTimestamp: null,
   };
 
   // Split into sections
@@ -251,6 +259,113 @@ function computeDerivedFields(result: ParsedErrorLog): void {
   } else if (result.statusCode === 408 || result.statusCode === 504) {
     result.errorType = 'timeout';
   }
+
+  // Extract model from request body
+  extractModelFromRequestBody(result);
+
+  // Extract quota reset info from response body (for 429 errors)
+  if (result.statusCode === 429) {
+    extractQuotaResetInfo(result);
+  }
+}
+
+/** Extract model name from request body JSON */
+function extractModelFromRequestBody(result: ParsedErrorLog): void {
+  if (!result.requestBody) return;
+  try {
+    const body = JSON.parse(result.requestBody);
+    if (typeof body.model === 'string') {
+      result.model = body.model;
+    }
+  } catch {
+    // Not valid JSON, skip
+  }
+}
+
+/** Extract quota reset info from 429 response body */
+function extractQuotaResetInfo(result: ParsedErrorLog): void {
+  if (!result.responseBody) return;
+  try {
+    const body = JSON.parse(result.responseBody);
+    // Look for quotaResetDelay in various response formats
+    // Format 1: { error: { details: [{ quotaResetDelay: "123s" }] } }
+    // Format 2: { error: { quotaResetDelay: 123 } }
+    // Format 3: { quotaResetDelay: 123, quotaResetTimeStamp: "..." }
+    const delay = findQuotaResetDelay(body);
+    if (delay !== null) {
+      result.quotaResetDelay = delay;
+    }
+    const timestamp = findQuotaResetTimestamp(body);
+    if (timestamp) {
+      result.quotaResetTimestamp = timestamp;
+    }
+  } catch {
+    // Not valid JSON, skip
+  }
+}
+
+/** Recursively find quotaResetDelay in response object */
+function findQuotaResetDelay(obj: unknown): number | null {
+  if (typeof obj !== 'object' || obj === null) return null;
+
+  const record = obj as Record<string, unknown>;
+
+  // Check direct properties
+  if ('quotaResetDelay' in record) {
+    const val = record.quotaResetDelay;
+    if (typeof val === 'number') return val;
+    if (typeof val === 'string') {
+      // Handle "123s" format
+      const match = val.match(/^(\d+)s?$/);
+      if (match) return parseInt(match[1], 10);
+    }
+  }
+
+  // Check nested error object
+  if ('error' in record && typeof record.error === 'object') {
+    const found = findQuotaResetDelay(record.error);
+    if (found !== null) return found;
+  }
+
+  // Check details array
+  if ('details' in record && Array.isArray(record.details)) {
+    for (const detail of record.details) {
+      const found = findQuotaResetDelay(detail);
+      if (found !== null) return found;
+    }
+  }
+
+  return null;
+}
+
+/** Recursively find quotaResetTimeStamp in response object */
+function findQuotaResetTimestamp(obj: unknown): string | null {
+  if (typeof obj !== 'object' || obj === null) return null;
+
+  const record = obj as Record<string, unknown>;
+
+  // Check direct properties (various casing)
+  for (const key of ['quotaResetTimeStamp', 'quotaResetTimestamp', 'resetTime', 'reset_time']) {
+    if (key in record && typeof record[key] === 'string') {
+      return record[key] as string;
+    }
+  }
+
+  // Check nested error object
+  if ('error' in record && typeof record.error === 'object') {
+    const found = findQuotaResetTimestamp(record.error);
+    if (found) return found;
+  }
+
+  // Check details array
+  if ('details' in record && Array.isArray(record.details)) {
+    for (const detail of record.details) {
+      const found = findQuotaResetTimestamp(detail);
+      if (found) return found;
+    }
+  }
+
+  return null;
 }
 
 /** Get status text for common codes */
@@ -325,4 +440,45 @@ export function getErrorTypeLabel(type: ParsedErrorLog['errorType']): string {
     unknown: 'Error',
   };
   return labels[type] || 'Error';
+}
+
+/**
+ * Format quota reset delay as human-readable string
+ */
+export function formatQuotaResetDelay(seconds: number | null): string | null {
+  if (seconds === null || seconds <= 0) return null;
+
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) {
+    const mins = Math.floor(seconds / 60);
+    return `${mins}m`;
+  }
+  const hours = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+/**
+ * Format quota reset timestamp as relative time
+ */
+export function formatQuotaResetTimestamp(timestamp: string | null): string | null {
+  if (!timestamp) return null;
+  try {
+    const resetDate = new Date(timestamp);
+    const now = new Date();
+    const diff = resetDate.getTime() - now.getTime();
+    if (diff <= 0) return 'now';
+
+    const seconds = Math.floor(diff / 1000);
+    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 3600) {
+      const mins = Math.floor(seconds / 60);
+      return `${mins}m`;
+    }
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  } catch {
+    return null;
+  }
 }

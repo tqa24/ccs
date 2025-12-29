@@ -4,13 +4,22 @@
  */
 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Info } from 'lucide-react';
+import { Info, Clock, Cpu, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getErrorTypeLabel, type ParsedErrorLog } from '@/lib/error-log-parser';
+import {
+  getErrorTypeLabel,
+  formatQuotaResetDelay,
+  formatQuotaResetTimestamp,
+  type ParsedErrorLog,
+} from '@/lib/error-log-parser';
 import { StatusBadge } from './ui-primitives';
 
 /** Overview tab content */
 export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
+  const quotaResetDisplay =
+    formatQuotaResetDelay(parsed.quotaResetDelay) ||
+    formatQuotaResetTimestamp(parsed.quotaResetTimestamp);
+
   return (
     <div className="p-4 space-y-4">
       {/* Status row */}
@@ -21,6 +30,32 @@ export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
           {getErrorTypeLabel(parsed.errorType)}
         </span>
       </div>
+
+      {/* Model info - prominent display */}
+      {parsed.model && (
+        <div className="flex items-center gap-2.5 p-3 rounded-lg bg-violet-500/10 border border-violet-500/20">
+          <Cpu className="w-4 h-4 text-violet-500 shrink-0" />
+          <div className="text-sm">
+            <span className="text-muted-foreground">Model: </span>
+            <span className="font-semibold text-violet-600 dark:text-violet-400">
+              {parsed.model}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Quota reset info for 429 errors */}
+      {parsed.errorType === 'rate_limit' && quotaResetDisplay && (
+        <div className="flex items-center gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
+          <Clock className="w-4 h-4 text-amber-500 shrink-0" />
+          <div className="text-sm">
+            <span className="text-muted-foreground">Quota resets in </span>
+            <span className="font-semibold text-amber-600 dark:text-amber-400">
+              {quotaResetDisplay}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Key metrics grid */}
       <div className="grid grid-cols-4 gap-3 text-xs">
@@ -58,21 +93,56 @@ export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
         <div className="font-mono">{parsed.timestamp || 'N/A'}</div>
       </div>
 
-      {/* Suggestion based on error type */}
+      {/* Actionable suggestion based on error type */}
       {parsed.errorType !== 'unknown' && (
-        <div className="flex items-start gap-3 p-3 rounded bg-blue-500/10 border border-blue-500/20 text-xs">
-          <Info className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
-          <div className="text-blue-500/90 leading-relaxed">
-            {parsed.errorType === 'rate_limit' &&
-              'Rate limited. Consider using multiple accounts or reducing request frequency.'}
+        <div
+          className={cn(
+            'flex items-start gap-3 p-3 rounded text-xs',
+            parsed.errorType === 'rate_limit'
+              ? 'bg-amber-500/10 border border-amber-500/20'
+              : parsed.errorType === 'auth'
+                ? 'bg-red-500/10 border border-red-500/20'
+                : 'bg-blue-500/10 border border-blue-500/20'
+          )}
+        >
+          {parsed.errorType === 'rate_limit' ? (
+            <AlertTriangle className="w-4 h-4 mt-0.5 text-amber-500 shrink-0" />
+          ) : parsed.errorType === 'auth' ? (
+            <AlertTriangle className="w-4 h-4 mt-0.5 text-red-500 shrink-0" />
+          ) : (
+            <Info className="w-4 h-4 mt-0.5 text-blue-500 shrink-0" />
+          )}
+          <div
+            className={cn(
+              'leading-relaxed',
+              parsed.errorType === 'rate_limit'
+                ? 'text-amber-600 dark:text-amber-400'
+                : parsed.errorType === 'auth'
+                  ? 'text-red-600 dark:text-red-400'
+                  : 'text-blue-600 dark:text-blue-400'
+            )}
+          >
+            {parsed.errorType === 'rate_limit' && (
+              <>
+                <strong>Rate Limited.</strong> Switch to a different account or wait for quota
+                reset.
+                {parsed.model && (
+                  <>
+                    {' '}
+                    Model <code className="font-mono text-[11px]">{parsed.model}</code> has
+                    exhausted quota.
+                  </>
+                )}
+              </>
+            )}
             {parsed.errorType === 'auth' &&
-              'Authentication failed. Check credentials or re-authenticate with the provider.'}
+              'Authentication failed. Re-authenticate via CLIProxy Settings or check API key.'}
             {parsed.errorType === 'not_found' &&
               'Endpoint not found. This endpoint may not exist on this provider.'}
             {parsed.errorType === 'server' &&
-              'Server error from upstream. Retry or check provider status.'}
+              'Server error from upstream. Retry later or check provider status page.'}
             {parsed.errorType === 'timeout' &&
-              'Request timed out. Check network or increase timeout settings.'}
+              'Request timed out. Check network connection or increase timeout settings.'}
           </div>
         </div>
       )}
