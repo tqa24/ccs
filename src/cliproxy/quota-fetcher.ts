@@ -377,17 +377,10 @@ export async function fetchAccountQuota(
     };
   }
 
-  // Check if token is expired
-  if (authData.isExpired) {
-    return {
-      success: false,
-      models: [],
-      lastUpdated: Date.now(),
-      isExpired: true,
-      expiresAt: authData.expiresAt || undefined,
-      error: 'Token expired',
-    };
-  }
+  // Note: We don't check isExpired here because:
+  // 1. CLIProxyAPIPlus refreshes tokens at runtime but doesn't persist to disk
+  // 2. File-based expiration is always stale and misleading
+  // 3. If token is truly invalid, the API call below will fail with 401
 
   // Get project ID - prefer stored value, fallback to API call
   let projectId = authData.projectId;
