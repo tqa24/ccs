@@ -1,3 +1,9 @@
+## [7.11.0](https://github.com/kaitranntt/ccs/compare/v7.10.0...v7.11.0) (2025-12-29)
+
+### Features
+
+* **cliproxy:** add --proxy-timeout CLI option ([#220](https://github.com/kaitranntt/ccs/issues/220)) ([4cd9bec](https://github.com/kaitranntt/ccs/commit/4cd9bec9e1b88ebd6b83c6faf9c01399865c639b))
+
 ## [7.10.0](https://github.com/kaitranntt/ccs/compare/v7.9.0...v7.10.0) (2025-12-29)
 
 ### Features
