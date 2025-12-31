@@ -121,22 +121,38 @@ export class HeadlessExecutor {
     }
 
     // Claude Code CLI passthrough flags (explicit, validated)
+    // Use undefined checks (not truthy) to allow empty strings if ever valid
     if (maxTurns !== undefined && maxTurns > 0) {
       args.push('--max-turns', String(maxTurns));
     }
-    if (fallbackModel) {
+    if (fallbackModel !== undefined && fallbackModel) {
       args.push('--fallback-model', fallbackModel);
     }
-    if (agents) {
+    if (agents !== undefined && agents) {
       args.push('--agents', agents);
     }
-    if (betas) {
+    if (betas !== undefined && betas) {
       args.push('--betas', betas);
     }
 
     // Passthrough extra args (catch-all for new/unknown flags)
+    // Filter out duplicates of explicitly handled flags
     if (extraArgs.length > 0) {
-      args.push(...extraArgs);
+      const explicitFlags = new Set(['--max-turns', '--fallback-model', '--agents', '--betas']);
+      const filteredExtras: string[] = [];
+      for (let i = 0; i < extraArgs.length; i++) {
+        if (explicitFlags.has(extraArgs[i])) {
+          // Skip this flag and its value (next element)
+          if (i + 1 < extraArgs.length && !extraArgs[i + 1].startsWith('-')) {
+            i++; // Skip value too
+          }
+          continue;
+        }
+        filteredExtras.push(extraArgs[i]);
+      }
+      if (filteredExtras.length > 0) {
+        args.push(...filteredExtras);
+      }
     }
 
     if (process.env.CCS_DEBUG) {

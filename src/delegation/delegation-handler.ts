@@ -5,7 +5,36 @@ import { SessionManager } from './session-manager';
 import { ResultFormatter } from './result-formatter';
 import { DelegationValidator } from '../utils/delegation-validator';
 import { SettingsParser } from './settings-parser';
-import { fail } from '../utils/ui';
+import { fail, warn } from '../utils/ui';
+
+/**
+ * Parse and validate a string flag value
+ * @returns value if valid, undefined if invalid/missing
+ */
+function parseStringFlag(
+  args: string[],
+  flagName: string,
+  options?: { allowDashPrefix?: boolean }
+): string | undefined {
+  const index = args.indexOf(flagName);
+  if (index === -1 || index >= args.length - 1) return undefined;
+
+  const value = args[index + 1];
+
+  // Reject dash-prefixed values (likely another flag)
+  if (!options?.allowDashPrefix && value.startsWith('-')) {
+    console.error(warn(`${flagName} value "${value}" looks like a flag. Ignoring.`));
+    return undefined;
+  }
+
+  // Reject empty/whitespace-only
+  if (!value.trim()) {
+    console.error(warn(`${flagName} value is empty. Ignoring.`));
+    return undefined;
+  }
+
+  return value;
+}
 
 interface ParsedArgs {
   profile: string;
@@ -186,38 +215,56 @@ export class DelegationHandler {
       options.permissionMode = args[permModeIndex + 1];
     }
 
-    // Parse timeout
+    // Parse timeout (validated: positive integer, max 10 minutes)
     const timeoutIndex = args.indexOf('--timeout');
     if (timeoutIndex !== -1 && timeoutIndex < args.length - 1) {
-      options.timeout = parseInt(args[timeoutIndex + 1], 10);
+      const rawVal = args[timeoutIndex + 1];
+      const val = parseInt(rawVal, 10);
+      if (!isNaN(val) && val > 0 && val <= 600000) {
+        options.timeout = val;
+      } else if (isNaN(val)) {
+        console.error(warn(`--timeout "${rawVal}" is not a number. Using default.`));
+      } else if (val <= 0) {
+        console.error(warn(`--timeout ${val} must be positive. Using default.`));
+      } else if (val > 600000) {
+        console.error(warn(`--timeout ${val} exceeds max (600000ms). Using default.`));
+      }
     }
 
-    // Parse --max-turns (limit agentic turns)
+    // Parse --max-turns (limit agentic turns, max 100)
     const maxTurnsIndex = args.indexOf('--max-turns');
     if (maxTurnsIndex !== -1 && maxTurnsIndex < args.length - 1) {
-      const val = parseInt(args[maxTurnsIndex + 1], 10);
-      if (!isNaN(val) && val > 0) {
+      const rawVal = args[maxTurnsIndex + 1];
+      const val = parseInt(rawVal, 10);
+      if (!isNaN(val) && val > 0 && val <= 100) {
         options.maxTurns = val;
+      } else if (isNaN(val)) {
+        console.error(warn(`--max-turns "${rawVal}" is not a number. Ignoring.`));
+      } else if (val <= 0) {
+        console.error(warn(`--max-turns ${val} must be positive. Ignoring.`));
+      } else if (val > 100) {
+        console.error(warn(`--max-turns ${val} exceeds max (100). Using 100.`));
+        options.maxTurns = 100;
       }
     }
 
     // Parse --fallback-model (auto-fallback on overload)
-    const fallbackIndex = args.indexOf('--fallback-model');
-    if (fallbackIndex !== -1 && fallbackIndex < args.length - 1) {
-      options.fallbackModel = args[fallbackIndex + 1];
-    }
+    options.fallbackModel = parseStringFlag(args, '--fallback-model');
 
     // Parse --agents (dynamic subagent JSON)
-    const agentsIndex = args.indexOf('--agents');
-    if (agentsIndex !== -1 && agentsIndex < args.length - 1) {
-      options.agents = args[agentsIndex + 1];
+    const agentsValue = parseStringFlag(args, '--agents');
+    if (agentsValue) {
+      // Validate JSON structure
+      try {
+        JSON.parse(agentsValue);
+        options.agents = agentsValue;
+      } catch {
+        console.error(warn('--agents must be valid JSON. Ignoring.'));
+      }
     }
 
     // Parse --betas (experimental features)
-    const betasIndex = args.indexOf('--betas');
-    if (betasIndex !== -1 && betasIndex < args.length - 1) {
-      options.betas = args[betasIndex + 1];
-    }
+    options.betas = parseStringFlag(args, '--betas');
 
     // Collect extra args to pass through to Claude CLI
     // CCS-handled flags with values (skip these and their values):
