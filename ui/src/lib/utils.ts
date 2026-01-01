@@ -116,3 +116,27 @@ export function getEarliestResetTime<T extends { resetTime: string | null }>(
     null as string | null
   );
 }
+
+/**
+ * Calculate the minimum quota percentage from Claude models (primary usage).
+ * Falls back to minimum of all models if no Claude models exist.
+ * Returns null if no valid models or quota data.
+ */
+export function getMinClaudeQuota<
+  T extends { name: string; displayName?: string; percentage: number },
+>(models: T[]): number | null {
+  if (models.length === 0) return null;
+
+  const claudeModels = models.filter((m) => {
+    const name = (m.displayName || m.name || '').toLowerCase();
+    return name.includes('claude');
+  });
+
+  const targetModels = claudeModels.length > 0 ? claudeModels : models;
+  const percentages = targetModels
+    .map((m) => m.percentage)
+    .filter((p) => typeof p === 'number' && isFinite(p));
+
+  if (percentages.length === 0) return null;
+  return Math.min(...percentages);
+}

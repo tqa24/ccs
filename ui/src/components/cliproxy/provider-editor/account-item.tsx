@@ -23,7 +23,13 @@ import {
   CheckCircle2,
   HelpCircle,
 } from 'lucide-react';
-import { cn, sortModelsByPriority, formatResetTime, getEarliestResetTime } from '@/lib/utils';
+import {
+  cn,
+  sortModelsByPriority,
+  formatResetTime,
+  getEarliestResetTime,
+  getMinClaudeQuota,
+} from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { useAccountQuota, useCliproxyStats } from '@/hooks/use-cliproxy-stats';
 import type { AccountItemProps } from './types';
@@ -98,11 +104,8 @@ export function AccountItem({
   const runtimeLastUsed = stats?.accountStats?.[account.email || account.id]?.lastUsedAt;
   const wasRecentlyUsed = isRecentlyUsed(runtimeLastUsed);
 
-  // Calculate average quota across all models
-  const avgQuota =
-    quota?.success && quota.models.length > 0
-      ? Math.round(quota.models.reduce((sum, m) => sum + m.percentage, 0) / quota.models.length)
-      : null;
+  // Show minimum quota of Claude models (primary), fallback to min of all models
+  const minQuota = quota?.success ? getMinClaudeQuota(quota.models) : null;
 
   // Get earliest reset time
   const nextReset =
@@ -179,7 +182,7 @@ export function AccountItem({
               <Loader2 className="w-3 h-3 animate-spin" />
               <span>Loading quota...</span>
             </div>
-          ) : avgQuota !== null ? (
+          ) : minQuota !== null ? (
             <div className="space-y-1.5">
               {/* Status indicator based on runtime usage, not file state */}
               <div className="flex items-center gap-1.5 text-xs">
@@ -210,11 +213,11 @@ export function AccountItem({
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-2">
                       <Progress
-                        value={avgQuota}
+                        value={minQuota}
                         className="h-2 flex-1"
-                        indicatorClassName={getQuotaColor(avgQuota)}
+                        indicatorClassName={getQuotaColor(minQuota)}
                       />
-                      <span className="text-xs font-medium w-10 text-right">{avgQuota}%</span>
+                      <span className="text-xs font-medium w-10 text-right">{minQuota}%</span>
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
