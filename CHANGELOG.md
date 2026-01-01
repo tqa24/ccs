@@ -1,3 +1,10 @@
+## [7.12.1](https://github.com/kaitranntt/ccs/compare/v7.12.0...v7.12.1) (2026-01-01)
+
+### Bug Fixes
+
+* **cliproxy:** add comprehensive port validation across proxy system ([e0a1f8f](https://github.com/kaitranntt/ccs/commit/e0a1f8f312c1eb7621b3ea2af2edb4df44a51f64))
+* **cliproxy:** filter undefined config values to preserve defaults ([4c35e8a](https://github.com/kaitranntt/ccs/commit/4c35e8a39ed03ab026a1dff230e06f5d9449fbef))
+
 ## [7.12.0](https://github.com/kaitranntt/ccs/compare/v7.11.1...v7.12.0) (2026-01-01)
 
 ### Features
