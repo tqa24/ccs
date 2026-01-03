@@ -51,6 +51,11 @@ const PROVIDER_MAP: Record<string, string> = {
   codex: 'codex',
   qwen: 'qwen',
   iflow: 'iflow',
+  kiro: 'kiro',
+  codewhisperer: 'kiro', // CLIProxyAPI may use 'codewhisperer' for Kiro
+  ghcp: 'ghcp',
+  'github-copilot': 'ghcp',
+  copilot: 'ghcp',
 };
 
 /** Display names for providers */
@@ -60,6 +65,8 @@ const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   codex: 'Codex',
   qwen: 'Qwen',
   iflow: 'iFlow',
+  kiro: 'Kiro (AWS)',
+  ghcp: 'GitHub Copilot (OAuth)',
 };
 
 /**
