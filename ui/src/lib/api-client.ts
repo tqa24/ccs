@@ -259,6 +259,9 @@ export interface CliproxyUpdateCheckResult {
   latestVersion: string;
   fromCache: boolean;
   checkedAt: number; // Unix timestamp of last check
+  isStable: boolean; // Whether current version is at or below max stable
+  maxStableVersion: string; // Maximum stable version (e.g., "6.6.80")
+  stabilityMessage?: string; // Warning message if running unstable version
 }
 
 /** Available versions list from GitHub releases */
