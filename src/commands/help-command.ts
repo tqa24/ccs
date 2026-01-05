@@ -256,6 +256,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   printSubSection('CLI Proxy Plus Management', [
     ['ccs cliproxy', 'Show CLIProxy Plus status and version'],
     ['ccs cliproxy --help', 'Full CLIProxy Plus management help'],
+    ['ccs cliproxy doctor', 'Quota diagnostics (Antigravity)'],
     ['ccs cliproxy --install <ver>', 'Install specific version (e.g., 6.6.6)'],
     ['ccs cliproxy --latest', 'Update to latest version'],
   ]);

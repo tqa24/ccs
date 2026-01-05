@@ -21,6 +21,7 @@
 import * as path from 'path';
 import { getAllAuthStatus, getOAuthConfig, triggerOAuth } from '../cliproxy/auth-handler';
 import { getProviderAccounts } from '../cliproxy/account-manager';
+import { fetchAllProviderQuotas } from '../cliproxy/quota-fetcher';
 import { CLIPROXY_FALLBACK_VERSION } from '../cliproxy/platform-detector';
 import { CLIPROXY_PROFILES, CLIProxyProfileName } from '../auth/profile-detector';
 import { supportsModelConfig, getProviderCatalog, ModelEntry } from '../cliproxy/model-catalog';
@@ -548,6 +549,7 @@ async function showHelp(): Promise<void> {
       [
         ['status', 'Show running CLIProxy status'],
         ['stop', 'Stop running CLIProxy instance'],
+        ['doctor', 'Quota diagnostics and shared project detection'],
       ],
     ],
     [
@@ -577,6 +579,116 @@ async function showHelp(): Promise<void> {
     `  Releases: ${color('https://github.com/router-for-me/CLIProxyAPIPlus/releases', 'path')}`
   );
   console.log('');
+}
+
+// ============================================================================
+// DOCTOR COMMAND - Quota diagnostics and shared project detection
+// ============================================================================
+
+async function handleDoctor(): Promise<void> {
+  await initUI();
+  console.log(header('CLIProxy Quota Diagnostics'));
+  console.log('');
+
+  // Check each OAuth provider (agy is the only one with quota)
+  const provider: CLIProxyProvider = 'agy';
+  const accounts = getProviderAccounts(provider);
+
+  if (accounts.length === 0) {
+    console.log(info('No Antigravity accounts configured'));
+    console.log(`    Run: ${color('ccs agy --auth', 'command')} to authenticate`);
+    return;
+  }
+
+  console.log(subheader(`Antigravity Accounts (${accounts.length})`));
+  console.log('');
+
+  // Fetch quota for all accounts
+  console.log(dim('Fetching quotas...'));
+  const quotaResult = await fetchAllProviderQuotas(provider);
+
+  // Display per-account quota status
+  for (const { account, quota } of quotaResult.accounts) {
+    const accountLabel = account.email || account.id || 'Unknown Account';
+    const defaultBadge = account.isDefault ? color(' (default)', 'info') : '';
+
+    if (!quota.success) {
+      console.log(`  ${fail(accountLabel)}${defaultBadge}`);
+      console.log(`    ${color(quota.error || 'Failed to fetch quota', 'error')}`);
+      if (quota.isUnprovisioned) {
+        console.log(
+          `    ${warn('Account not provisioned - open Gemini Code Assist in IDE first')}`
+        );
+      }
+      console.log('');
+      continue;
+    }
+
+    // Calculate overall quota health (guard against empty models array)
+    const avgQuota =
+      quota.models.length > 0
+        ? quota.models.reduce((sum, m) => sum + m.percentage, 0) / quota.models.length
+        : 0;
+    const statusIcon = avgQuota > 50 ? ok('') : avgQuota > 10 ? warn('') : fail('');
+
+    console.log(`  ${statusIcon}${accountLabel}${defaultBadge}`);
+    if (quota.projectId) {
+      console.log(`    Project: ${dim(quota.projectId)}`);
+    }
+
+    // Show model quotas
+    for (const model of quota.models) {
+      const bar = formatQuotaBar(model.percentage);
+      console.log(`    ${model.name.padEnd(20)} ${bar} ${model.percentage.toFixed(0)}%`);
+    }
+    console.log('');
+  }
+
+  // Check for shared GCP projects (critical warning)
+  const sharedProjects = Object.entries(quotaResult.projectGroups).filter(
+    ([, accountIds]) => accountIds.length > 1
+  );
+
+  if (sharedProjects.length > 0) {
+    console.log('');
+    console.log(subheader('Shared Project Warning'));
+    console.log('');
+    for (const [projectId, accountIds] of sharedProjects) {
+      console.log(
+        fail(`Project ${projectId.substring(0, 20)}... shared by ${accountIds.length} accounts:`)
+      );
+      for (const accountId of accountIds) {
+        console.log(`    - ${accountId}`);
+      }
+      console.log('');
+      console.log(warn('These accounts share the same quota pool!'));
+      console.log(warn('Failover between them will NOT help when quota is exhausted.'));
+      console.log(info('Solution: Use accounts from different GCP projects.'));
+    }
+  }
+
+  // Summary
+  console.log('');
+  console.log(subheader('Summary'));
+  const healthyAccounts = quotaResult.accounts.filter(
+    ({ quota }) => quota.success && quota.models.some((m) => m.percentage > 5)
+  );
+  console.log(`  Accounts with quota: ${healthyAccounts.length}/${accounts.length}`);
+  if (sharedProjects.length > 0) {
+    console.log(`  ${fail(`Shared projects: ${sharedProjects.length} (failover limited)`)}`);
+  } else if (accounts.length > 1) {
+    console.log(`  ${ok('No shared projects (failover fully operational)')}`);
+  }
+  console.log('');
+}
+
+function formatQuotaBar(percentage: number): string {
+  const width = 20;
+  const clampedPct = Math.max(0, Math.min(100, percentage));
+  const filled = Math.round((clampedPct / 100) * width);
+  const empty = width - filled;
+  const filledChar = clampedPct > 50 ? '█' : clampedPct > 10 ? '▓' : '░';
+  return `[${filledChar.repeat(filled)}${' '.repeat(empty)}]`;
 }
 
 // ============================================================================
@@ -614,6 +726,11 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
 
   if (command === 'status') {
     await handleProxyStatus();
+    return;
+  }
+
+  if (command === 'doctor' || command === 'diag') {
+    await handleDoctor();
     return;
   }
 
