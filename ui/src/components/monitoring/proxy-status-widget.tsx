@@ -172,14 +172,6 @@ export function ProxyStatusWidget() {
       })()
     : null;
 
-  // Restart = stop then start
-  const handleRestart = async () => {
-    await stopProxy.mutateAsync();
-    // Small delay to ensure port is released
-    await new Promise((r) => setTimeout(r, 500));
-    startProxy.mutate();
-  };
-
   // Remote mode: show remote server info
   if (isRemoteMode) {
     return (
@@ -303,7 +295,12 @@ export function ProxyStatusWidget() {
                   : hasUpdate &&
                       'bg-sidebar-accent hover:bg-sidebar-accent/90 text-sidebar-accent-foreground'
               )}
-              onClick={handleRestart}
+              onClick={() => {
+                const targetVersion = isUnstable
+                  ? updateCheck?.maxStableVersion || versionsData?.latestStable
+                  : updateCheck?.latestVersion;
+                if (targetVersion) handleInstallVersion(targetVersion);
+              }}
               disabled={isActioning || (!hasUpdate && !isUnstable)}
               title={
                 isUnstable
