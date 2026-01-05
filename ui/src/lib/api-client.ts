@@ -259,6 +259,37 @@ export interface CliproxyUpdateCheckResult {
   latestVersion: string;
   fromCache: boolean;
   checkedAt: number; // Unix timestamp of last check
+  isStable: boolean; // Whether current version is at or below max stable
+  maxStableVersion: string; // Maximum stable version (e.g., "6.6.80")
+  stabilityMessage?: string; // Warning message if running unstable version
+}
+
+/** Available versions list from GitHub releases */
+export interface CliproxyVersionsResponse {
+  versions: string[];
+  latestStable: string;
+  latest: string;
+  currentVersion: string;
+  maxStableVersion: string;
+  fromCache: boolean;
+  checkedAt: number;
+}
+
+/** Result from installing a specific version */
+export interface CliproxyInstallResult {
+  success: boolean;
+  version?: string;
+  isUnstable?: boolean;
+  requiresConfirmation?: boolean;
+  message?: string;
+  error?: string;
+}
+
+/** Result from restarting the proxy */
+export interface CliproxyRestartResult {
+  success: boolean;
+  port?: number;
+  error?: string;
 }
 
 // API
@@ -300,6 +331,15 @@ export const api = {
     proxyStart: () => request<ProxyStartResult>('/cliproxy/proxy-start', { method: 'POST' }),
     proxyStop: () => request<ProxyStopResult>('/cliproxy/proxy-stop', { method: 'POST' }),
     updateCheck: () => request<CliproxyUpdateCheckResult>('/cliproxy/update-check'),
+
+    // Version management
+    versions: () => request<CliproxyVersionsResponse>('/cliproxy/versions'),
+    install: (version: string, force?: boolean) =>
+      request<CliproxyInstallResult>('/cliproxy/install', {
+        method: 'POST',
+        body: JSON.stringify({ version, force }),
+      }),
+    restart: () => request<CliproxyRestartResult>('/cliproxy/restart', { method: 'POST' }),
 
     // Stats and models for Overview tab
     stats: () => request<{ usage: Record<string, unknown> }>('/cliproxy/usage'),

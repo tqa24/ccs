@@ -4,8 +4,20 @@
  */
 
 import { fetchJson } from './downloader';
-import { readVersionCache, writeVersionCache, readInstalledVersion } from './version-cache';
-import { UpdateCheckResult, GITHUB_API_LATEST_RELEASE } from './types';
+import {
+  readVersionCache,
+  writeVersionCache,
+  readInstalledVersion,
+  readVersionListCache,
+  writeVersionListCache,
+} from './version-cache';
+import {
+  UpdateCheckResult,
+  GITHUB_API_LATEST_RELEASE,
+  GITHUB_API_ALL_RELEASES,
+  VersionListResult,
+} from './types';
+import { CLIPROXY_MAX_STABLE_VERSION } from '../platform-detector';
 
 /**
  * Compare semver versions (true if latest > current)
@@ -84,4 +96,46 @@ export async function checkForUpdates(
     fromCache: false,
     checkedAt: now,
   };
+}
+
+/**
+ * Fetch all available versions from GitHub releases
+ * Caches result for 1 hour to avoid rate limiting
+ */
+export async function fetchAllVersions(verbose = false): Promise<VersionListResult> {
+  // Try cache first
+  const cache = readVersionListCache();
+  if (cache) {
+    if (verbose) {
+      console.error(`[cliproxy] Using cached version list (${cache.versions.length} versions)`);
+    }
+    return { ...cache, fromCache: true };
+  }
+
+  // Fetch from GitHub API
+  const response = await fetchJson(GITHUB_API_ALL_RELEASES, verbose);
+
+  // Extract and normalize versions
+  const releases = response as unknown as Array<{ tag_name: string }>;
+  const versions = releases
+    .map((r) => r.tag_name.replace(/^v/, ''))
+    .filter((v) => /^\d+\.\d+\.\d+(-\d+)?$/.test(v)); // Valid semver only
+
+  const latest = versions[0] || '';
+
+  // Find latest stable (not newer than max stable)
+  const latestStable =
+    versions.find((v) => !isNewerVersion(v, CLIPROXY_MAX_STABLE_VERSION)) ||
+    CLIPROXY_MAX_STABLE_VERSION;
+
+  const result: VersionListResult = {
+    versions,
+    latestStable,
+    latest,
+    fromCache: false,
+    checkedAt: Date.now(),
+  };
+
+  writeVersionListCache(result);
+  return result;
 }

@@ -21,7 +21,13 @@ import {
 } from '../../cliproxy/config-generator';
 import { getProxyStatus as getProxyProcessStatus, stopProxy } from '../../cliproxy/session-tracker';
 import { ensureCliproxyService } from '../../cliproxy/service-manager';
-import { checkCliproxyUpdate } from '../../cliproxy/binary-manager';
+import {
+  checkCliproxyUpdate,
+  getInstalledCliproxyVersion,
+  installCliproxyVersion,
+} from '../../cliproxy/binary-manager';
+import { fetchAllVersions, isNewerVersion } from '../../cliproxy/binary/version-checker';
+import { CLIPROXY_MAX_STABLE_VERSION } from '../../cliproxy/platform-detector';
 
 const router = Router();
 
@@ -523,6 +529,104 @@ router.get('/quota/:provider/:accountId', async (req: Request, res: Response): P
   try {
     const result = await fetchAccountQuota(provider as CLIProxyProvider, accountId);
     res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+// ==================== Version Management ====================
+
+/**
+ * GET /api/cliproxy/versions - Get all available CLIProxyAPI versions
+ * Returns: { versions, latestStable, latest, currentVersion, maxStableVersion }
+ */
+router.get('/versions', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const result = await fetchAllVersions();
+    const currentVersion = getInstalledCliproxyVersion();
+
+    res.json({
+      ...result,
+      currentVersion,
+      maxStableVersion: CLIPROXY_MAX_STABLE_VERSION,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/cliproxy/install - Install specific CLIProxyAPI version
+ * Body: { version: string, force?: boolean }
+ * Returns: { success, requiresConfirmation?, message? }
+ */
+router.post('/install', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { version, force } = req.body;
+
+    if (!version || typeof version !== 'string') {
+      res.status(400).json({ error: 'Missing required field: version' });
+      return;
+    }
+
+    // Validate version format
+    if (!/^\d+\.\d+\.\d+(-\d+)?$/.test(version)) {
+      res.status(400).json({ error: 'Invalid version format. Expected: X.Y.Z or X.Y.Z-N' });
+      return;
+    }
+
+    // Check if version is unstable
+    const isUnstable = isNewerVersion(version, CLIPROXY_MAX_STABLE_VERSION);
+
+    if (isUnstable && !force) {
+      res.json({
+        success: false,
+        requiresConfirmation: true,
+        message: `Version ${version} is unstable (above max stable ${CLIPROXY_MAX_STABLE_VERSION}). Set force=true to proceed.`,
+      });
+      return;
+    }
+
+    // Stop proxy first if running
+    await stopProxy();
+
+    // Small delay to ensure port is released
+    await new Promise((r) => setTimeout(r, 500));
+
+    // Install the version
+    await installCliproxyVersion(version, true);
+
+    res.json({
+      success: true,
+      version,
+      isUnstable,
+      message: `Successfully installed CLIProxy Plus v${version}`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * POST /api/cliproxy/restart - Restart CLIProxy without version change
+ * Returns: { success, port?, error? }
+ */
+router.post('/restart', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    // Stop proxy first
+    await stopProxy();
+
+    // Small delay to ensure port is released
+    await new Promise((r) => setTimeout(r, 500));
+
+    // Start proxy
+    const startResult = await ensureCliproxyService();
+
+    if (startResult.started || startResult.alreadyRunning) {
+      res.json({ success: true, port: startResult.port });
+    } else {
+      res.json({ success: false, error: startResult.error || 'Failed to start proxy' });
+    }
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

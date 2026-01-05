@@ -14,6 +14,13 @@ import { PlatformInfo, SupportedOS, SupportedArch, ArchiveExtension } from './ty
  */
 export const CLIPROXY_FALLBACK_VERSION = '6.6.40-0';
 
+/**
+ * Maximum stable version cap - prevents auto-update to known unstable releases
+ * v81+ has context cancellation bugs causing intermittent 500 errors
+ * See: https://github.com/kaitranntt/ccs/issues/269
+ */
+export const CLIPROXY_MAX_STABLE_VERSION = '6.6.80-0';
+
 /** @deprecated Use CLIPROXY_FALLBACK_VERSION instead */
 export const CLIPROXY_VERSION = CLIPROXY_FALLBACK_VERSION;
 
