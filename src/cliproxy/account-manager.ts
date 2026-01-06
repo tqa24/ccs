@@ -14,6 +14,12 @@ import { CLIProxyProvider } from './types';
 import { getCliproxyDir, getAuthDir } from './config-generator';
 import { PROVIDER_TYPE_VALUES } from './auth/auth-types';
 
+/**
+ * Providers that typically have empty email in OAuth token files.
+ * For these providers, nickname is used as accountId instead of email.
+ */
+export const PROVIDERS_WITHOUT_EMAIL: CLIProxyProvider[] = ['kiro', 'ghcp'];
+
 /** Account information */
 export interface AccountInfo {
   /** Account identifier (email or custom name) */
@@ -257,6 +263,14 @@ export function findAccountByQuery(provider: CLIProxyProvider, query: string): A
 /**
  * Register a new account
  * Called after successful OAuth to record the account
+ *
+ * For providers without email (kiro, ghcp):
+ * - nickname is REQUIRED and used as accountId
+ * - Uniqueness is enforced to prevent overwriting
+ *
+ * For providers with email:
+ * - email is used as accountId
+ * - nickname is auto-generated from email if not provided
  */
 export function registerAccount(
   provider: CLIProxyProvider,
@@ -279,12 +293,44 @@ export function registerAccount(
     throw new Error('Failed to initialize provider accounts');
   }
 
-  // Determine account ID - use email if available, otherwise extract from filename
-  const accountId = extractAccountIdFromTokenFile(tokenFile, email);
-  const isFirstAccount = Object.keys(providerAccounts.accounts).length === 0;
+  // Determine account ID based on provider type
+  let accountId: string;
+  let accountNickname: string;
 
-  // Generate nickname if not provided
-  const accountNickname = nickname || generateNickname(email);
+  if (PROVIDERS_WITHOUT_EMAIL.includes(provider)) {
+    // For kiro/ghcp: nickname is REQUIRED and used as accountId
+    if (!nickname || nickname === 'default') {
+      throw new Error(
+        `Nickname is required when adding ${provider} accounts. ` +
+          `Use --nickname <name> or provide a nickname in the UI.`
+      );
+    }
+
+    // Validate nickname format
+    const validationError = validateNickname(nickname);
+    if (validationError) {
+      throw new Error(validationError);
+    }
+
+    // Check uniqueness
+    for (const [existingId, _account] of Object.entries(providerAccounts.accounts)) {
+      if (existingId.toLowerCase() === nickname.toLowerCase()) {
+        throw new Error(
+          `An account with nickname "${nickname}" already exists for ${provider}. ` +
+            `Choose a different nickname.`
+        );
+      }
+    }
+
+    accountId = nickname;
+    accountNickname = nickname;
+  } else {
+    // For other providers: use email as accountId, fallback to filename extraction
+    accountId = extractAccountIdFromTokenFile(tokenFile, email);
+    accountNickname = nickname || generateNickname(email);
+  }
+
+  const isFirstAccount = Object.keys(providerAccounts.accounts).length === 0;
 
   // Create or update account
   providerAccounts.accounts[accountId] = {
@@ -428,6 +474,10 @@ export function getAccountTokenPath(provider: CLIProxyProvider, accountId?: stri
 /**
  * Auto-discover accounts from existing token files
  * Called during migration or first run to populate accounts registry
+ *
+ * For kiro/ghcp providers without email, generates unique accountId from:
+ * 1. OAuth provider + profile ID from filename (e.g., github-ABC123)
+ * 2. Fallback: provider + index (e.g., kiro-1, kiro-2)
  */
 export function discoverExistingAccounts(): void {
   const authDir = getAuthDir();
@@ -478,13 +528,10 @@ export function discoverExistingAccounts(): void {
         }
       }
 
-      // Use unified ID extraction: email or filename-based unique ID
-      const accountId = extractAccountIdFromTokenFile(file, email);
-
       // Initialize provider section if needed
       if (!registry.providers[provider]) {
         registry.providers[provider] = {
-          default: accountId,
+          default: 'default',
           accounts: {},
         };
       }
@@ -492,9 +539,43 @@ export function discoverExistingAccounts(): void {
       const providerAccounts = registry.providers[provider];
       if (!providerAccounts) continue;
 
+      // Skip if token file already registered (under any accountId)
+      const existingTokenFiles = Object.values(providerAccounts.accounts).map((a) => a.tokenFile);
+      if (existingTokenFiles.includes(file)) {
+        continue;
+      }
+
+      // Determine accountId based on provider type
+      let accountId: string;
+
+      if (PROVIDERS_WITHOUT_EMAIL.includes(provider) && !email) {
+        // For kiro/ghcp without email: extract from filename or generate unique
+        // Pattern: kiro-github-ABC123.json -> github-ABC123
+        const filenameId = extractAccountIdFromTokenFile(file, undefined);
+
+        if (filenameId !== 'default') {
+          accountId = filenameId;
+        } else {
+          // Generate unique ID: provider + incrementing index
+          let index = 1;
+          while (providerAccounts.accounts[`${provider}-${index}`]) {
+            index++;
+          }
+          accountId = `${provider}-${index}`;
+        }
+      } else {
+        // For providers with email: use email or filename extraction
+        accountId = extractAccountIdFromTokenFile(file, email);
+      }
+
       // Skip if account already registered
       if (providerAccounts.accounts[accountId]) {
         continue;
+      }
+
+      // Set as default if first account
+      if (Object.keys(providerAccounts.accounts).length === 0) {
+        providerAccounts.default = accountId;
       }
 
       // Get file stats for creation time
