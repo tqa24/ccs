@@ -22,6 +22,8 @@ import {
   Loader2,
   CheckCircle2,
   HelpCircle,
+  Pause,
+  Play,
 } from 'lucide-react';
 import {
   cn,
@@ -86,6 +88,7 @@ export function AccountItem({
   account,
   onSetDefault,
   onRemove,
+  onPauseToggle,
   isRemoving,
   privacyMode,
   showQuota,
@@ -139,6 +142,28 @@ export function AccountItem({
                   Default
                 </Badge>
               )}
+              {account.tier && account.tier !== 'unknown' && (
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[10px] h-4 px-1.5 uppercase',
+                    account.tier === 'ultra' && 'border-purple-500 text-purple-600',
+                    account.tier === 'pro' && 'border-blue-500 text-blue-600',
+                    account.tier === 'free' && 'border-gray-400 text-gray-500'
+                  )}
+                >
+                  {account.tier}
+                </Badge>
+              )}
+              {account.paused && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] h-4 px-1.5 border-yellow-500 text-yellow-600"
+                >
+                  <Pause className="w-2 h-2 mr-0.5" />
+                  Paused
+                </Badge>
+              )}
             </div>
             {account.lastUsedAt && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
@@ -160,6 +185,21 @@ export function AccountItem({
               <DropdownMenuItem onClick={onSetDefault}>
                 <Star className="w-4 h-4 mr-2" />
                 Set as default
+              </DropdownMenuItem>
+            )}
+            {onPauseToggle && (
+              <DropdownMenuItem onClick={() => onPauseToggle(!account.paused)}>
+                {account.paused ? (
+                  <>
+                    <Play className="w-4 h-4 mr-2" />
+                    Resume account
+                  </>
+                ) : (
+                  <>
+                    <Pause className="w-4 h-4 mr-2" />
+                    Pause account
+                  </>
+                )}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem

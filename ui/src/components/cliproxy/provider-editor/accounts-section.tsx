@@ -15,6 +15,7 @@ interface AccountsSectionProps {
   onAddAccount: () => void;
   onSetDefault: (accountId: string) => void;
   onRemoveAccount: (accountId: string) => void;
+  onPauseToggle?: (accountId: string, paused: boolean) => void;
   isRemovingAccount?: boolean;
   privacyMode?: boolean;
   /** Show quota bars for accounts (only applicable for 'agy' provider) */
@@ -31,6 +32,7 @@ export function AccountsSection({
   onAddAccount,
   onSetDefault,
   onRemoveAccount,
+  onPauseToggle,
   isRemovingAccount,
   privacyMode,
   showQuota,
@@ -65,6 +67,9 @@ export function AccountsSection({
               account={account}
               onSetDefault={() => onSetDefault(account.id)}
               onRemove={() => onRemoveAccount(account.id)}
+              onPauseToggle={
+                onPauseToggle ? (paused) => onPauseToggle(account.id, paused) : undefined
+              }
               isRemoving={isRemovingAccount}
               privacyMode={privacyMode}
               showQuota={showQuota}

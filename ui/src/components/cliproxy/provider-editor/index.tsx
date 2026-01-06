@@ -38,6 +38,7 @@ export function ProviderEditor({
   onAddAccount,
   onSetDefault,
   onRemoveAccount,
+  onPauseToggle,
   isRemovingAccount,
 }: ProviderEditorProps) {
   const [customPresetOpen, setCustomPresetOpen] = useState(false);
@@ -200,6 +201,7 @@ export function ProviderEditor({
                     onAddAccount={onAddAccount}
                     onSetDefault={onSetDefault}
                     onRemoveAccount={onRemoveAccount}
+                    onPauseToggle={onPauseToggle}
                     isRemovingAccount={isRemovingAccount}
                     privacyMode={privacyMode}
                     isRemoteMode={isRemoteMode}
