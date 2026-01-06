@@ -17,6 +17,8 @@ interface AccountsSectionProps {
   onRemoveAccount: (accountId: string) => void;
   onPauseToggle?: (accountId: string, paused: boolean) => void;
   isRemovingAccount?: boolean;
+  /** Pause/resume mutation in progress */
+  isPausingAccount?: boolean;
   privacyMode?: boolean;
   /** Show quota bars for accounts (only applicable for 'agy' provider) */
   showQuota?: boolean;
@@ -34,6 +36,7 @@ export function AccountsSection({
   onRemoveAccount,
   onPauseToggle,
   isRemovingAccount,
+  isPausingAccount,
   privacyMode,
   showQuota,
   isKiro,
@@ -71,6 +74,7 @@ export function AccountsSection({
                 onPauseToggle ? (paused) => onPauseToggle(account.id, paused) : undefined
               }
               isRemoving={isRemovingAccount}
+              isPausingAccount={isPausingAccount}
               privacyMode={privacyMode}
               showQuota={showQuota}
             />

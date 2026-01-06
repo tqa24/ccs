@@ -36,6 +36,9 @@ interface CacheEntry {
 const CACHE_TTL_MS = 30_000; // 30 seconds
 const quotaCache = new Map<string, CacheEntry>();
 
+// Request deduplication: track in-flight fetch promises to avoid parallel duplicate requests
+const pendingFetches = new Map<string, Promise<QuotaResult>>();
+
 function getCacheKey(provider: CLIProxyProvider, accountId: string): string {
   return `${provider}:${accountId}`;
 }
@@ -74,6 +77,39 @@ export function setCachedQuota(
  */
 export function clearQuotaCache(): void {
   quotaCache.clear();
+}
+
+/**
+ * Fetch quota with request deduplication
+ * If a fetch for this account is already in progress, return the existing promise
+ */
+async function fetchQuotaWithDedup(
+  provider: CLIProxyProvider,
+  accountId: string
+): Promise<QuotaResult> {
+  const key = getCacheKey(provider, accountId);
+
+  // Check if fetch already in progress
+  const pending = pendingFetches.get(key);
+  if (pending) {
+    return pending;
+  }
+
+  // Start new fetch and track it
+  const fetchPromise = fetchAccountQuota(provider, accountId)
+    .then((result) => {
+      setCachedQuota(provider, accountId, result);
+      return result;
+    })
+    .catch((): QuotaResult => {
+      return { success: false, models: [], lastUpdated: Date.now() };
+    })
+    .finally(() => {
+      pendingFetches.delete(key);
+    });
+
+  pendingFetches.set(key, fetchPromise);
+  return fetchPromise;
 }
 
 // ============================================================================
@@ -176,17 +212,12 @@ export async function findHealthyAccount(
 
   if (available.length === 0) return null;
 
-  // Fetch quota for each available account (with caching)
+  // Fetch quota for each available account (with caching and deduplication)
   const withQuotas = await Promise.all(
     available.map(async (account) => {
       let quota = getCachedQuota(provider, account.id);
       if (!quota) {
-        try {
-          quota = await fetchAccountQuota(provider, account.id);
-          setCachedQuota(provider, account.id, quota);
-        } catch {
-          quota = { success: false, models: [], lastUpdated: Date.now() };
-        }
+        quota = await fetchQuotaWithDedup(provider, account.id);
       }
 
       const avgQuota = calculateAverageQuota(quota);
@@ -298,20 +329,10 @@ export async function preflightCheck(provider: CLIProxyProvider): Promise<Prefli
     return await findAndSwitch(provider, defaultAccount.id, 'Default account on cooldown');
   }
 
-  // Check quota (with cache)
+  // Check quota (with cache and deduplication)
   let quota = getCachedQuota(provider, defaultAccount.id);
   if (!quota) {
-    try {
-      quota = await fetchAccountQuota(provider, defaultAccount.id);
-      setCachedQuota(provider, defaultAccount.id, quota);
-    } catch {
-      // API failure: proceed anyway (graceful degradation)
-      return {
-        proceed: true,
-        accountId: defaultAccount.id,
-        reason: 'Quota check failed, proceeding',
-      };
-    }
+    quota = await fetchQuotaWithDedup(provider, defaultAccount.id);
   }
 
   // Calculate average quota
@@ -355,12 +376,7 @@ export async function getQuotaStatus(provider: CLIProxyProvider): Promise<{
     accounts.map(async (account) => {
       let quota = getCachedQuota(provider, account.id);
       if (!quota && provider === 'agy') {
-        try {
-          quota = await fetchAccountQuota(provider, account.id);
-          setCachedQuota(provider, account.id, quota);
-        } catch {
-          quota = { success: false, models: [], lastUpdated: Date.now() };
-        }
+        quota = await fetchQuotaWithDedup(provider, account.id);
       }
 
       const avgQuota = quota ? calculateAverageQuota(quota) : 100;

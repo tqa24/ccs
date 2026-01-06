@@ -221,6 +221,8 @@ export function CliproxyPage() {
   };
 
   const handlePauseToggle = (provider: string, accountId: string, paused: boolean) => {
+    // Prevent rapid clicks while mutation is pending
+    if (pauseMutation.isPending || resumeMutation.isPending) return;
     if (paused) {
       pauseMutation.mutate({ provider, accountId });
     } else {
@@ -377,6 +379,7 @@ export function CliproxyPage() {
               handlePauseToggle(selectedVariantData.provider, accountId, paused)
             }
             isRemovingAccount={removeMutation.isPending}
+            isPausingAccount={pauseMutation.isPending || resumeMutation.isPending}
           />
         ) : selectedStatus ? (
           <ProviderEditor
@@ -408,6 +411,7 @@ export function CliproxyPage() {
               handlePauseToggle(selectedStatus.provider, accountId, paused)
             }
             isRemovingAccount={removeMutation.isPending}
+            isPausingAccount={pauseMutation.isPending || resumeMutation.isPending}
           />
         ) : (
           <EmptyProviderState onSetup={() => setWizardOpen(true)} />

@@ -32,6 +32,8 @@ export interface ProviderEditorProps {
   onRemoveAccount: (accountId: string) => void;
   onPauseToggle?: (accountId: string, paused: boolean) => void;
   isRemovingAccount?: boolean;
+  /** Pause/resume mutation in progress */
+  isPausingAccount?: boolean;
 }
 
 export interface AccountItemProps {
@@ -40,6 +42,8 @@ export interface AccountItemProps {
   onRemove: () => void;
   onPauseToggle?: (paused: boolean) => void;
   isRemoving?: boolean;
+  /** Pause/resume mutation in progress */
+  isPausingAccount?: boolean;
   privacyMode?: boolean;
   /** Show quota bar (only for 'agy' provider) */
   showQuota?: boolean;

@@ -90,6 +90,7 @@ export function AccountItem({
   onRemove,
   onPauseToggle,
   isRemoving,
+  isPausingAccount,
   privacyMode,
   showQuota,
 }: AccountItemProps) {
@@ -188,16 +189,19 @@ export function AccountItem({
               </DropdownMenuItem>
             )}
             {onPauseToggle && (
-              <DropdownMenuItem onClick={() => onPauseToggle(!account.paused)}>
+              <DropdownMenuItem
+                onClick={() => onPauseToggle(!account.paused)}
+                disabled={isPausingAccount}
+              >
                 {account.paused ? (
                   <>
                     <Play className="w-4 h-4 mr-2" />
-                    Resume account
+                    {isPausingAccount ? 'Resuming...' : 'Resume account'}
                   </>
                 ) : (
                   <>
                     <Pause className="w-4 h-4 mr-2" />
-                    Pause account
+                    {isPausingAccount ? 'Pausing...' : 'Pause account'}
                   </>
                 )}
               </DropdownMenuItem>
