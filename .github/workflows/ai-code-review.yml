@@ -1,0 +1,160 @@
+# AI Code Review Workflow
+# Uses Claude Code CLI on self-hosted runner with CLIProxyAPI
+# Posts as ccs-agy-reviewer[bot] via GitHub App
+#
+# Triggers:
+# - Automatically on PR open/update
+# - Manually via /review comment on PR
+
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+# Cancel in-progress runs for same PR
+concurrency:
+  group: ai-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Claude Code Review
+    # Only run on self-hosted runner with cliproxy access
+    runs-on: [self-hosted, cliproxy]
+
+    # Conditions:
+    # - PR event: always run
+    # - Comment event: only if it's a PR and contains /review
+    if: >
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, '/review'))
+
+    steps:
+      - name: Generate App Token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CCS_REVIEWER_APP_ID }}
+          private-key: ${{ secrets.CCS_REVIEWER_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine PR Number
+        id: pr
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Add reaction to comment
+        if: github.event_name == 'issue_comment'
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST -f content=eyes
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Ensure Claude Code installed
+        run: |
+          if ! command -v claude &> /dev/null; then
+            echo "[i] Installing Claude Code..."
+            curl -fsSL https://claude.ai/install.sh | bash
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          else
+            echo "[i] Claude Code already installed: $(claude --version)"
+          fi
+
+      - name: Run Claude Code Review
+        env:
+          # CLIProxyAPI configuration
+          ANTHROPIC_BASE_URL: http://localhost:8317
+          ANTHROPIC_API_KEY: ${{ secrets.CLIPROXY_API_KEY }}
+          ANTHROPIC_MODEL: gemini-3-pro-preview
+          # GitHub token for gh CLI
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          PR_NUM="${{ steps.pr.outputs.number }}"
+          REPO="${{ github.repository }}"
+
+          echo "[i] Running Claude Code review for PR #${PR_NUM}"
+          echo "[i] Model: ${ANTHROPIC_MODEL}"
+
+          # Get PR diff for context
+          DIFF=$(gh pr diff $PR_NUM --repo $REPO | head -5000)
+          PR_TITLE=$(gh pr view $PR_NUM --repo $REPO --json title --jq .title)
+          PR_BODY=$(gh pr view $PR_NUM --repo $REPO --json body --jq .body)
+
+          # Run Claude Code in print mode with review prompt
+          REVIEW=$(claude -p "You are a senior engineer reviewing PR #${PR_NUM}: '${PR_TITLE}'.
+
+## Context
+Repository: ${REPO}
+Description: ${PR_BODY}
+
+## Diff
+\`\`\`diff
+${DIFF}
+\`\`\`
+
+## Your Task
+Review this PR with analytical depth. Focus on:
+- 🔐 Security: auth bypass, injection, secrets exposure
+- 🐛 Correctness: edge cases, null handling, race conditions
+- 🧹 Maintainability: coupling, naming, hidden complexity
+- ⚡ Performance: only if measurable impact
+
+## Output Format
+
+## 🔍 Code Review (${ANTHROPIC_MODEL})
+
+**Verdict**: ✅ Approve | ✅ Approve with notes | ⚠️ Request changes
+
+### 📋 What This PR Does
+[1-2 sentences]
+
+### ✨ The Good
+[Only if worth mentioning]
+
+### 🚨 Concerns
+Use severity: 🔴 Critical | 🟡 Warning | 🟢 Suggestion
+Format: \`file:line\` - what's wrong → what could happen
+
+### ❓ Questions for Author
+[Only if clarification needed]
+
+---
+Be direct. Skip sections if nothing significant. Approve unless 🔴 Critical issue exists." \
+            --allowed-tools "Read,Glob,Grep" \
+            --max-turns 3)
+
+          # Post review as comment
+          echo "[i] Posting review..."
+          echo "$REVIEW" | gh pr comment $PR_NUM --repo $REPO --body-file -
+          echo "[OK] Review posted"
+
+      - name: Add success reaction
+        if: success() && github.event_name == 'issue_comment'
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST -f content=rocket
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+
+      - name: Add failure reaction
+        if: failure() && github.event_name == 'issue_comment'
+        run: |
+          gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
+            --method POST -f content=confused
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
