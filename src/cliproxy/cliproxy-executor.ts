@@ -314,17 +314,51 @@ export async function execClaudeWithCLIProxy(
 
   // Parse --thinking <value> flag for thinking budget control
   // Supports: level names (low, medium, high, xhigh, auto), numeric budget, or 'off'/'none'
+  // Accepts both --thinking=value and --thinking value formats
   let thinkingOverride: string | number | undefined;
-  const thinkingIdx = argsWithoutProxy.indexOf('--thinking');
-  if (
-    thinkingIdx !== -1 &&
-    argsWithoutProxy[thinkingIdx + 1] &&
-    !argsWithoutProxy[thinkingIdx + 1].startsWith('-')
-  ) {
-    const val = argsWithoutProxy[thinkingIdx + 1];
+
+  // Check for --thinking=value format first
+  const thinkingEqArg = argsWithoutProxy.find((arg) => arg.startsWith('--thinking='));
+  if (thinkingEqArg) {
+    const val = thinkingEqArg.substring('--thinking='.length);
     // Parse as number if numeric, otherwise keep as string (level name)
     const numVal = parseInt(val, 10);
     thinkingOverride = !isNaN(numVal) ? numVal : val;
+
+    // W2: Warn if multiple --thinking flags found (check both formats)
+    const allThinkingFlags = argsWithoutProxy.filter(
+      (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
+    );
+    if (allThinkingFlags.length > 1) {
+      console.warn(
+        `[!] Multiple --thinking flags detected. Using first occurrence: ${thinkingEqArg}`
+      );
+    }
+  } else {
+    // Fall back to --thinking value format
+    const thinkingIdx = argsWithoutProxy.indexOf('--thinking');
+    if (
+      thinkingIdx !== -1 &&
+      argsWithoutProxy[thinkingIdx + 1] &&
+      // W4: Intentionally block negative numbers (negative budgets don't make sense)
+      // Values starting with '-' are treated as next flag, not a negative number
+      !argsWithoutProxy[thinkingIdx + 1].startsWith('-')
+    ) {
+      const val = argsWithoutProxy[thinkingIdx + 1];
+      // Parse as number if numeric, otherwise keep as string (level name)
+      const numVal = parseInt(val, 10);
+      thinkingOverride = !isNaN(numVal) ? numVal : val;
+
+      // W2: Warn if multiple --thinking flags found (check both formats)
+      const allThinkingFlags = argsWithoutProxy.filter(
+        (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
+      );
+      if (allThinkingFlags.length > 1) {
+        console.warn(
+          `[!] Multiple --thinking flags detected. Using first occurrence: --thinking ${val}`
+        );
+      }
+    }
   }
 
   // Handle --accounts: list accounts and exit
@@ -819,6 +853,8 @@ export async function execClaudeWithCLIProxy(
   const claudeArgs = argsWithoutProxy.filter((arg, idx) => {
     // Filter out CCS flags
     if (ccsFlags.includes(arg)) return false;
+    // Filter out --thinking=value format
+    if (arg.startsWith('--thinking=')) return false;
     // Filter out value after --use, --nickname, or --thinking
     if (
       argsWithoutProxy[idx - 1] === '--use' ||
