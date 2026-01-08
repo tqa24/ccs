@@ -712,35 +712,39 @@ export async function execClaudeWithCLIProxy(
   // - Unknown → medium
   let codexReasoningProxy: CodexReasoningProxy | null = null;
   let codexReasoningPort: number | null = null;
-  if (provider === 'codex' && envVars.ANTHROPIC_BASE_URL) {
-    try {
-      const traceEnabled =
-        process.env.CCS_CODEX_REASONING_TRACE === '1' ||
-        process.env.CCS_CODEX_REASONING_TRACE === 'true';
-      codexReasoningProxy = new CodexReasoningProxy({
-        upstreamBaseUrl: envVars.ANTHROPIC_BASE_URL,
-        verbose,
-        defaultEffort: 'medium',
-        traceFilePath: traceEnabled
-          ? `${process.env.HOME || ''}/.ccs/codex-reasoning-proxy.log`
-          : '',
-        modelMap: {
-          defaultModel: envVars.ANTHROPIC_MODEL,
-          opusModel: envVars.ANTHROPIC_DEFAULT_OPUS_MODEL,
-          sonnetModel: envVars.ANTHROPIC_DEFAULT_SONNET_MODEL,
-          haikuModel: envVars.ANTHROPIC_DEFAULT_HAIKU_MODEL,
-        },
-      });
-      codexReasoningPort = await codexReasoningProxy.start();
-      log(
-        `Codex reasoning proxy active: http://127.0.0.1:${codexReasoningPort}/api/provider/codex`
-      );
-    } catch (error) {
-      const err = error as Error;
-      codexReasoningProxy = null;
-      codexReasoningPort = null;
-      if (verbose) {
-        console.error(warn(`Codex reasoning proxy disabled: ${err.message}`));
+  if (provider === 'codex') {
+    if (!envVars.ANTHROPIC_BASE_URL) {
+      log('ANTHROPIC_BASE_URL not set for Codex, reasoning proxy disabled');
+    } else {
+      try {
+        const traceEnabled =
+          process.env.CCS_CODEX_REASONING_TRACE === '1' ||
+          process.env.CCS_CODEX_REASONING_TRACE === 'true';
+        codexReasoningProxy = new CodexReasoningProxy({
+          upstreamBaseUrl: envVars.ANTHROPIC_BASE_URL,
+          verbose,
+          defaultEffort: 'medium',
+          traceFilePath: traceEnabled
+            ? `${process.env.HOME || process.cwd()}/.ccs/codex-reasoning-proxy.log`
+            : '',
+          modelMap: {
+            defaultModel: envVars.ANTHROPIC_MODEL,
+            opusModel: envVars.ANTHROPIC_DEFAULT_OPUS_MODEL,
+            sonnetModel: envVars.ANTHROPIC_DEFAULT_SONNET_MODEL,
+            haikuModel: envVars.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+          },
+        });
+        codexReasoningPort = await codexReasoningProxy.start();
+        log(
+          `Codex reasoning proxy active: http://127.0.0.1:${codexReasoningPort}/api/provider/codex`
+        );
+      } catch (error) {
+        const err = error as Error;
+        codexReasoningProxy = null;
+        codexReasoningPort = null;
+        if (verbose) {
+          console.error(warn(`Codex reasoning proxy disabled: ${err.message}`));
+        }
       }
     }
   }

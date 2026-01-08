@@ -30,12 +30,27 @@ describe('Codex Reasoning Proxy', () => {
 
       assert.strictEqual(map.get('same'), 'medium');
     });
+
+    it('returns empty map when all models undefined', () => {
+      const map = buildCodexModelEffortMap({});
+      assert.strictEqual(map.size, 0);
+    });
+
+    it('ignores empty string models', () => {
+      const map = buildCodexModelEffortMap({ defaultModel: '', opusModel: '  ' });
+      assert.strictEqual(map.size, 0);
+    });
   });
 
   describe('getEffortForModel', () => {
     it('defaults to medium for unknown model', () => {
       const map = buildCodexModelEffortMap({ opusModel: 'm1' });
       assert.strictEqual(getEffortForModel('unknown', map, 'medium'), 'medium');
+    });
+
+    it('handles null model', () => {
+      const map = buildCodexModelEffortMap({ opusModel: 'm1' });
+      assert.strictEqual(getEffortForModel(null, map, 'high'), 'high');
     });
   });
 
@@ -50,6 +65,11 @@ describe('Codex Reasoning Proxy', () => {
 
     it('leaves non-object bodies unchanged', () => {
       assert.strictEqual(injectReasoningEffortIntoBody('x', 'medium'), 'x');
+    });
+
+    it('leaves array bodies unchanged (not treated as record)', () => {
+      const arr = [1, 2, 3];
+      assert.deepStrictEqual(injectReasoningEffortIntoBody(arr, 'high'), arr);
     });
   });
 

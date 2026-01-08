@@ -24,7 +24,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function parseModelEffortSuffix(
@@ -141,13 +141,22 @@ export class CodexReasoningProxy {
     if (!this.config.traceFilePath) return;
     try {
       // Intentionally best-effort: tracing must never break requests.
-
       const fs = require('fs') as typeof import('fs');
+      const pathMod = require('path') as typeof import('path');
 
-      const path = require('path') as typeof import('path');
-      const dir = path.dirname(this.config.traceFilePath);
+      // Security: validate trace path against safe directories to prevent path traversal
+      const resolvedPath = pathMod.resolve(this.config.traceFilePath);
+      const home = process.env.HOME || process.env.USERPROFILE || '';
+      const safeDirs = ['/tmp/', '/var/log/', home ? `${home}/.ccs/` : ''];
+      const isSafe = safeDirs.some((base) => base && resolvedPath.startsWith(base));
+      if (!isSafe) {
+        this.log(`[SECURITY] Trace path rejected (outside allowed dirs): ${resolvedPath}`);
+        return;
+      }
+
+      const dir = pathMod.dirname(resolvedPath);
       fs.mkdirSync(dir, { recursive: true });
-      fs.appendFileSync(this.config.traceFilePath, line + '\n');
+      fs.appendFileSync(resolvedPath, line + '\n');
     } catch {
       // ignore
     }
@@ -198,6 +207,7 @@ export class CodexReasoningProxy {
       req.on('data', (chunk: Buffer) => {
         total += chunk.length;
         if (total > maxSize) {
+          req.destroy(); // Signal client to stop sending
           reject(new Error('Request body too large (max 10MB)'));
           return;
         }
@@ -293,10 +303,24 @@ export class CodexReasoningProxy {
   ): http.OutgoingHttpHeaders {
     const headers: http.OutgoingHttpHeaders = {};
 
+    // RFC 7230 hop-by-hop headers that should not be forwarded
+    const hopByHop = new Set([
+      'host',
+      'content-length',
+      'connection',
+      'transfer-encoding',
+      'keep-alive',
+      'proxy-authenticate',
+      'proxy-authorization',
+      'te',
+      'trailer',
+      'upgrade',
+    ]);
+
     for (const [key, value] of Object.entries(originalHeaders)) {
       if (!value) continue;
       const lower = key.toLowerCase();
-      if (lower === 'host' || lower === 'content-length') continue;
+      if (hopByHop.has(lower)) continue;
       headers[key] = value;
     }
 
