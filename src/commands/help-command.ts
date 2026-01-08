@@ -172,6 +172,10 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       ['ccs <provider> --accounts', 'List all accounts'],
       ['ccs <provider> --use <name>', 'Switch to account'],
       ['ccs <provider> --config', 'Change model (agy, gemini)'],
+      [
+        'ccs <provider> --thinking <value>',
+        'Set thinking budget (low/medium/high/xhigh/auto/off or number)',
+      ],
       ['ccs <provider> --logout', 'Clear authentication'],
       ['ccs <provider> --headless', 'Headless auth (for SSH)'],
       ['ccs kiro --import', 'Import token from Kiro IDE'],
