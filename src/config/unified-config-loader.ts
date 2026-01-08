@@ -108,8 +108,23 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
 
     return parsed;
   } catch (err) {
-    const error = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[X] Failed to load config: ${error}`);
+    // U3: Provide better context for YAML syntax errors
+    if (err instanceof yaml.YAMLException) {
+      const mark = err.mark;
+      console.error(`[X] YAML syntax error in ${yamlPath}:`);
+      console.error(
+        `    Line ${(mark?.line ?? 0) + 1}, Column ${(mark?.column ?? 0) + 1}: ${err.reason || 'Invalid syntax'}`
+      );
+      if (mark?.snippet) {
+        console.error(`    ${mark.snippet}`);
+      }
+      console.error(
+        `    Tip: Check for missing colons, incorrect indentation, or unquoted special characters.`
+      );
+    } else {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[X] Failed to load config: ${error}`);
+    }
     return null;
   }
 }
@@ -598,6 +613,16 @@ export function getGlobalEnvConfig(): GlobalEnvConfig {
  */
 export function getThinkingConfig(): ThinkingConfig {
   const config = loadOrCreateUnifiedConfig();
+
+  // W2: Check for invalid thinking config (e.g., thinking: true instead of object)
+  if (config.thinking !== undefined && typeof config.thinking !== 'object') {
+    console.warn(
+      `[!] Invalid thinking config: expected object, got ${typeof config.thinking}. Using defaults.`
+    );
+    console.warn(`    Tip: Use 'thinking: { mode: auto }' instead of 'thinking: true'`);
+    return DEFAULT_THINKING_CONFIG;
+  }
+
   return {
     mode: config.thinking?.mode ?? DEFAULT_THINKING_CONFIG.mode,
     override: config.thinking?.override,
