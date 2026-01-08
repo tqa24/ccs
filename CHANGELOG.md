@@ -1,3 +1,19 @@
+## [7.18.0](https://github.com/kaitranntt/ccs/compare/v7.17.0...v7.18.0) (2026-01-08)
+
+### Features
+
+* **codex:** inject OpenAI reasoning.effort per tier ([204eea0](https://github.com/kaitranntt/ccs/commit/204eea00ce006fd667ce8c9e71dad397423dae2d))
+
+### Bug Fixes
+
+* **ci:** only auto-review on PR opened, not synchronize ([6f65697](https://github.com/kaitranntt/ccs/commit/6f65697d74772751eb515d76c356f117aaa017d9))
+* **cliproxy:** remove stable version cap, only v81-88 are faulty ([0abd021](https://github.com/kaitranntt/ccs/commit/0abd021d256513b88145f88c7a6a2d3a03e0746e))
+* **codex-proxy:** security hardening and edge case fixes ([87cfcc5](https://github.com/kaitranntt/ccs/commit/87cfcc5b3cbecfdccaa56c1a02b24fb8b84eb654))
+
+### Styles
+
+* **ci:** enhance ai-review prompt with rich emoji formatting ([6dcc8b2](https://github.com/kaitranntt/ccs/commit/6dcc8b28601cba9067b248c9a6befb3f9c3e1d34))
+
 ## [7.17.0](https://github.com/kaitranntt/ccs/compare/v7.16.0...v7.17.0) (2026-01-08)
 
 ### Features
