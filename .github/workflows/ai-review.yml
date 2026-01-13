@@ -21,10 +21,12 @@ on:
         required: true
         type: string
 
-# Cancel in-progress runs for same PR + event type (prevents self-cancellation from bot comments)
-# Each event type gets its own concurrency group to prevent cross-event cancellation
+# Concurrency strategy:
+# - For issue_comment: include comment author to isolate bot progress comments from human /review requests
+# - For other events: use event_name + PR number
+# This prevents bot progress comments from cancelling active reviews
 concurrency:
-  group: ai-review-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}
+  group: ai-review-${{ github.event_name }}-${{ github.event.comment.user.login || 'system' }}-${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
