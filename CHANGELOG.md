@@ -1,3 +1,9 @@
+## [7.19.1](https://github.com/kaitranntt/ccs/compare/v7.19.0...v7.19.1) (2026-01-13)
+
+### Bug Fixes
+
+* **ci:** update allowedTools pattern to prevent token waste on retries ([edec6f6](https://github.com/kaitranntt/ccs/commit/edec6f6df242a092545a3c7ffd2856aad4f3f2af))
+
 ## [7.19.0](https://github.com/kaitranntt/ccs/compare/v7.18.3...v7.19.0) (2026-01-13)
 
 ### Features
