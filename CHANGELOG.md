@@ -1,3 +1,14 @@
+## [7.19.0](https://github.com/kaitranntt/ccs/compare/v7.18.3...v7.19.0) (2026-01-13)
+
+### Features
+
+* **doctor:** add --help flag with comprehensive command documentation ([22c7d4a](https://github.com/kaitranntt/ccs/commit/22c7d4a20d96d12a2c38ec60d226a6bc26dce9b0))
+
+### Bug Fixes
+
+* **ci:** prevent AI review self-cancellation with smart concurrency ([25d31ce](https://github.com/kaitranntt/ccs/commit/25d31ce4329daf9512df4e0236e02d89d05b0842))
+* **ci:** trigger AI review on follow-up commits to PR ([a2a13fb](https://github.com/kaitranntt/ccs/commit/a2a13fb16ec3d655a817e548a5cb72a21c6c774e))
+
 ## [7.18.3](https://github.com/kaitranntt/ccs/compare/v7.18.2...v7.18.3) (2026-01-13)
 
 ### Bug Fixes
