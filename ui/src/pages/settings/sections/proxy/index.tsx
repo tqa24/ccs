@@ -3,15 +3,18 @@
  * Settings section for CLIProxyAPI configuration (local/remote)
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
-import { RefreshCw, CheckCircle2, AlertCircle, Laptop, Cloud } from 'lucide-react';
+import { RefreshCw, CheckCircle2, AlertCircle, Laptop, Cloud, Bug } from 'lucide-react';
 import { useProxyConfig, useRawConfig } from '../../hooks';
 import { LocalProxyCard } from './local-proxy-card';
 import { RemoteProxyCard } from './remote-proxy-card';
+
+/** LocalStorage key for debug mode preference */
+const DEBUG_MODE_KEY = 'ccs_debug_mode';
 
 export default function ProxySection() {
   const {
@@ -38,6 +41,40 @@ export default function ProxySection() {
   } = useProxyConfig();
 
   const { fetchRawConfig } = useRawConfig();
+
+  // Debug mode state (persisted in localStorage)
+  const [debugMode, setDebugMode] = useState(() => {
+    try {
+      return localStorage.getItem(DEBUG_MODE_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const handleDebugModeChange = (enabled: boolean) => {
+    setDebugMode(enabled);
+    try {
+      localStorage.setItem(DEBUG_MODE_KEY, String(enabled));
+    } catch {
+      // Ignore storage errors
+    }
+  };
+
+  // Log when debug mode changes (sanitize sensitive fields)
+  useEffect(() => {
+    if (debugMode && config) {
+      // Sanitize config before logging to prevent credential exposure
+      const sanitizedConfig = {
+        ...config,
+        remote: {
+          ...config.remote,
+          auth_token: config.remote.auth_token ? '[REDACTED]' : undefined,
+          management_key: config.remote.management_key ? '[REDACTED]' : undefined,
+        },
+      };
+      console.log('[CCS Debug] Debug mode enabled - proxy config:', sanitizedConfig);
+    }
+  }, [debugMode, config]);
 
   // Load data on mount
   useEffect(() => {
@@ -266,6 +303,35 @@ export default function ProxySection() {
                   disabled={saving || !isRemoteMode || !fallbackConfig.enabled}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Advanced Settings */}
+          <div className="space-y-3">
+            <h3 className="text-base font-medium flex items-center gap-2">
+              <Bug className="w-4 h-4" />
+              Advanced
+            </h3>
+            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+              {/* Debug Mode Toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-sm">Debug Mode</p>
+                  <p className="text-xs text-muted-foreground">
+                    Enable developer diagnostics in browser console
+                  </p>
+                </div>
+                <Switch
+                  checked={debugMode}
+                  onCheckedChange={handleDebugModeChange}
+                  disabled={saving}
+                />
+              </div>
+              {debugMode && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 pl-0.5">
+                  Debug mode enabled. Check browser console for detailed logs.
+                </p>
+              )}
             </div>
           </div>
 

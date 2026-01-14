@@ -96,7 +96,7 @@ The dashboard provides visual management for all account types:
 | **GLM** | API Key | `ccs glm` | Cost-optimized execution |
 | **Kimi** | API Key | `ccs kimi` | Long-context, thinking mode |
 | **Azure Foundry** | API Key | `ccs foundry` | Claude via Microsoft Azure |
-| **Minimax** | API Key | `ccs minimax` | M2 series, 1M context |
+| **Minimax** | API Key | `ccs mm` | M2 series, 1M context |
 | **DeepSeek** | API Key | `ccs deepseek` | V3.2 and R1 reasoning |
 | **Qwen** | API Key | `ccs qwen` | Alibaba Cloud, qwen3-coder |
 

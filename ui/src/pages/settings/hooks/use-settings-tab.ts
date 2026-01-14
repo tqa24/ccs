@@ -8,7 +8,8 @@ import type { SettingsTab } from '../types';
 
 export function useSettingsTab() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get('tab');
+  // Normalize to lowercase for case-insensitive matching (fixes ?tab=Backups vs ?tab=backups)
+  const tabParam = searchParams.get('tab')?.toLowerCase();
   const activeTab: SettingsTab =
     tabParam === 'globalenv'
       ? 'globalenv'
@@ -16,7 +17,9 @@ export function useSettingsTab() {
         ? 'proxy'
         : tabParam === 'auth'
           ? 'auth'
-          : 'websearch';
+          : tabParam === 'backups'
+            ? 'backups'
+            : 'websearch';
 
   const setActiveTab = useCallback(
     (tab: SettingsTab) => {

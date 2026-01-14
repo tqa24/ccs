@@ -24,6 +24,7 @@ import {
   HelpCircle,
   Pause,
   Play,
+  AlertCircle,
 } from 'lucide-react';
 import {
   cn,
@@ -40,8 +41,9 @@ import type { AccountItemProps } from './types';
  * Get color class based on quota percentage
  */
 function getQuotaColor(percentage: number): string {
-  if (percentage <= 20) return 'bg-destructive';
-  if (percentage <= 50) return 'bg-yellow-500';
+  const clamped = Math.max(0, Math.min(100, percentage));
+  if (clamped <= 20) return 'bg-destructive';
+  if (clamped <= 50) return 'bg-yellow-500';
   return 'bg-green-500';
 }
 
@@ -95,13 +97,13 @@ export function AccountItem({
   showQuota,
 }: AccountItemProps) {
   // Fetch runtime stats to get actual lastUsedAt (more accurate than file state)
-  const { data: stats } = useCliproxyStats(showQuota && account.provider === 'agy');
+  const { data: stats } = useCliproxyStats(showQuota);
 
-  // Fetch quota for 'agy' provider accounts
+  // Fetch quota for all provider accounts
   const { data: quota, isLoading: quotaLoading } = useAccountQuota(
     account.provider,
     account.id,
-    showQuota && account.provider === 'agy'
+    showQuota
   );
 
   // Get last used time from runtime stats (more accurate than file)
@@ -217,8 +219,8 @@ export function AccountItem({
         </DropdownMenu>
       </div>
 
-      {/* Quota bar - only for 'agy' provider */}
-      {showQuota && account.provider === 'agy' && (
+      {/* Quota bar - supports all providers with quota API */}
+      {showQuota && (
         <div className="pl-11">
           {quotaLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -256,7 +258,7 @@ export function AccountItem({
                   <TooltipTrigger asChild>
                     <div className="flex items-center gap-2">
                       <Progress
-                        value={minQuota}
+                        value={Math.max(0, Math.min(100, minQuota))}
                         className="h-2 flex-1"
                         indicatorClassName={getQuotaColor(minQuota)}
                       />
@@ -285,8 +287,25 @@ export function AccountItem({
                 </Tooltip>
               </TooltipProvider>
             </div>
-          ) : quota?.error ? (
-            <div className="text-xs text-muted-foreground">{quota.error}</div>
+          ) : quota?.error || (quota && !quota.success) ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] h-5 px-2 gap-1 border-muted-foreground/50 text-muted-foreground"
+                    >
+                      <AlertCircle className="w-3 h-3" />
+                      N/A
+                    </Badge>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">
+                  <p className="text-xs">{quota?.error || 'Quota information unavailable'}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : null}
         </div>
       )}

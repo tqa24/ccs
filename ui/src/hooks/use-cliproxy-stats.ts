@@ -218,13 +218,13 @@ async function fetchAccountQuota(provider: string, accountId: string): Promise<Q
 
 /**
  * Hook to get account quota
- * Only enabled for 'agy' provider (Antigravity) as it's the only one supporting quota
+ * Supports all providers that have quota API implemented
  */
 export function useAccountQuota(provider: string, accountId: string, enabled = true) {
   return useQuery({
     queryKey: ['account-quota', provider, accountId],
     queryFn: () => fetchAccountQuota(provider, accountId),
-    enabled: enabled && provider === 'agy' && !!accountId,
+    enabled: enabled && !!accountId,
     staleTime: 30000, // Consider stale after 30s (tokens can refresh anytime)
     refetchInterval: 60000, // Refresh every 1 minute
     retry: 1,
