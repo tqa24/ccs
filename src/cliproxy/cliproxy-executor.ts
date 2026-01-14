@@ -485,8 +485,10 @@ export async function execClaudeWithCLIProxy(
     if (preflight.switchedFrom) {
       console.log(info(`Auto-switched to ${preflight.accountId}`));
       console.log(`    Reason: ${preflight.reason}`);
-      if (preflight.quotaPercent !== undefined) {
+      if (preflight.quotaPercent !== undefined && preflight.quotaPercent !== null) {
         console.log(`    New account quota: ${preflight.quotaPercent.toFixed(1)}%`);
+      } else {
+        console.log(`    New account quota: N/A (fetch unavailable)`);
       }
     }
   }
