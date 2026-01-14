@@ -179,8 +179,11 @@ function isTokenExpired(expiredStr?: string): boolean {
  * This allows CCS to get fresh tokens independently of CLIProxyAPI
  */
 async function refreshAccessToken(
-  refreshToken: string
+  refreshToken: string,
+  verbose = false
 ): Promise<{ accessToken: string | null; error?: string }> {
+  if (verbose) console.error('[i] Refreshing access token...');
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10000);
 
@@ -201,26 +204,36 @@ async function refreshAccessToken(
 
     clearTimeout(timeoutId);
 
+    if (verbose) console.error(`[i] Token refresh status: ${response.status}`);
+
     const data = (await response.json()) as TokenRefreshResponse;
 
     if (!response.ok || data.error) {
+      const error = data.error_description || data.error || `OAuth error: ${response.status}`;
+      if (verbose) console.error(`[!] Token refresh failed: ${error}`);
       return {
         accessToken: null,
-        error: data.error_description || data.error || `OAuth error: ${response.status}`,
+        error,
       };
     }
 
     if (!data.access_token) {
+      if (verbose) console.error('[!] Token refresh failed: No access_token in response');
       return { accessToken: null, error: 'No access_token in response' };
     }
 
+    if (verbose) console.error('[i] Token refresh: success');
     return { accessToken: data.access_token };
   } catch (err) {
     clearTimeout(timeoutId);
-    if (err instanceof Error && err.name === 'AbortError') {
-      return { accessToken: null, error: 'Token refresh timeout' };
-    }
-    return { accessToken: null, error: err instanceof Error ? err.message : 'Unknown error' };
+    const errorMsg =
+      err instanceof Error && err.name === 'AbortError'
+        ? 'Token refresh timeout'
+        : err instanceof Error
+          ? err.message
+          : 'Unknown error';
+    if (verbose) console.error(`[!] Token refresh failed: ${errorMsg}`);
+    return { accessToken: null, error: errorMsg };
   }
 }
 
@@ -518,30 +531,38 @@ async function fetchAvailableModels(accessToken: string, _projectId: string): Pr
  *
  * @param provider - Provider name (only 'agy' supported)
  * @param accountId - Account identifier (email)
+ * @param verbose - Show detailed diagnostics
  * @returns Quota result with models and percentages
  */
 export async function fetchAccountQuota(
   provider: CLIProxyProvider,
-  accountId: string
+  accountId: string,
+  verbose = false
 ): Promise<QuotaResult> {
+  if (verbose) console.error(`[i] Fetching quota for ${accountId}...`);
+
   // Only Antigravity supports quota fetching
   if (provider !== 'agy') {
+    const error = `Quota not supported for provider: ${provider}`;
+    if (verbose) console.error(`[!] Error: ${error}`);
     return {
       success: false,
       models: [],
       lastUpdated: Date.now(),
-      error: `Quota not supported for provider: ${provider}`,
+      error,
     };
   }
 
   // Read auth data from auth file
   const authData = readAuthData(provider, accountId);
   if (!authData) {
+    const error = 'Auth file not found for account';
+    if (verbose) console.error(`[!] Error: ${error}`);
     return {
       success: false,
       models: [],
       lastUpdated: Date.now(),
-      error: 'Auth file not found for account',
+      error,
     };
   }
 
@@ -550,6 +571,7 @@ export async function fetchAccountQuota(
   // Proactive refresh: refresh 5 minutes before expiry (matches CLIProxyAPIPlus behavior)
   let accessToken = authData.accessToken;
   const REFRESH_LEAD_TIME_MS = 5 * 60 * 1000; // 5 minutes
+  let tokenRefreshed = false;
 
   if (authData.refreshToken) {
     const shouldRefresh =
@@ -558,12 +580,17 @@ export async function fetchAccountQuota(
       new Date(authData.expiresAt).getTime() - Date.now() < REFRESH_LEAD_TIME_MS; // Expiring soon
 
     if (shouldRefresh) {
-      const refreshResult = await refreshAccessToken(authData.refreshToken);
+      const refreshResult = await refreshAccessToken(authData.refreshToken, verbose);
       if (refreshResult.accessToken) {
         accessToken = refreshResult.accessToken;
+        tokenRefreshed = true;
       }
       // If refresh fails, fall back to existing token (might still work)
     }
+  }
+
+  if (verbose && !tokenRefreshed) {
+    console.error('[i] Token refresh: skipped');
   }
 
   // Get project ID and tier - prefer stored project ID, but always call API for tier
@@ -576,18 +603,20 @@ export async function fetchAccountQuota(
   if (!lastProjectResult.projectId && !projectId) {
     // If project ID fetch fails, it might be token issue - try refresh if we haven't
     if (authData.refreshToken && accessToken === authData.accessToken) {
-      const refreshResult = await refreshAccessToken(authData.refreshToken);
+      const refreshResult = await refreshAccessToken(authData.refreshToken, verbose);
       if (refreshResult.accessToken) {
         accessToken = refreshResult.accessToken;
         lastProjectResult = await getProjectId(accessToken);
       }
     }
     if (!lastProjectResult.projectId) {
+      const error = lastProjectResult.error || 'Failed to retrieve project ID';
+      if (verbose) console.error(`[!] Error: ${error}`);
       return {
         success: false,
         models: [],
         lastUpdated: Date.now(),
-        error: lastProjectResult.error || 'Failed to retrieve project ID',
+        error,
         isUnprovisioned: lastProjectResult.isUnprovisioned,
       };
     }
@@ -597,12 +626,16 @@ export async function fetchAccountQuota(
   projectId = lastProjectResult.projectId || projectId;
   apiTier = lastProjectResult.tier || 'unknown';
 
+  if (verbose) console.error(`[i] Project ID: ${projectId || 'not found'}`);
+
   // Fetch models with quota
   const result = await fetchAvailableModels(accessToken, projectId as string);
 
+  if (verbose) console.error(`[i] Models found: ${result.models.length}`);
+
   // If quota fetch fails with auth error and we haven't refreshed yet, try refresh
   if (!result.success && result.error?.includes('expired') && authData.refreshToken) {
-    const refreshResult = await refreshAccessToken(authData.refreshToken);
+    const refreshResult = await refreshAccessToken(authData.refreshToken, verbose);
     if (refreshResult.accessToken) {
       const retryResult = await fetchAvailableModels(
         refreshResult.accessToken,
@@ -617,6 +650,9 @@ export async function fetchAccountQuota(
         retryResult.tier = finalTier;
         retryResult.accountId = accountId;
         setAccountTier(provider, accountId, finalTier);
+        if (verbose && retryResult.error) {
+          console.log(`[!] Error: ${retryResult.error}`);
+        }
       }
       return retryResult;
     }
@@ -631,6 +667,10 @@ export async function fetchAccountQuota(
     result.tier = finalTier;
     result.accountId = accountId;
     setAccountTier(provider, accountId, finalTier);
+  }
+
+  if (verbose && result.error) {
+    console.log(`[!] Error: ${result.error}`);
   }
 
   return result;
@@ -668,10 +708,12 @@ export interface AllAccountsQuotaResult {
  * Also detects accounts sharing same GCP project (failover won't help)
  *
  * @param provider - Provider name (only 'agy' supported for quota)
+ * @param verbose - Show detailed diagnostics
  * @returns Results for all accounts with project grouping
  */
 export async function fetchAllProviderQuotas(
-  provider: CLIProxyProvider
+  provider: CLIProxyProvider,
+  verbose = false
 ): Promise<AllAccountsQuotaResult> {
   const accounts = getProviderAccounts(provider);
   const results: AllAccountsQuotaResult = {
@@ -687,7 +729,7 @@ export async function fetchAllProviderQuotas(
 
   // Fetch quota for each account in parallel
   const quotaPromises = accounts.map(async (account) => {
-    const quota = await fetchAccountQuota(provider, account.id);
+    const quota = await fetchAccountQuota(provider, account.id, verbose);
 
     // Read project ID from auth file if not in quota result
     let projectId = quota.projectId;
@@ -724,13 +766,15 @@ export async function fetchAllProviderQuotas(
  *
  * @param provider - Provider name
  * @param excludeAccountId - Account to exclude (current exhausted account)
+ * @param verbose - Show detailed diagnostics
  * @returns Account with available quota, or null if none available
  */
 export async function findAvailableAccount(
   provider: CLIProxyProvider,
-  excludeAccountId?: string
+  excludeAccountId?: string,
+  verbose = false
 ): Promise<{ account: AccountInfo; quota: QuotaResult } | null> {
-  const allQuotas = await fetchAllProviderQuotas(provider);
+  const allQuotas = await fetchAllProviderQuotas(provider, verbose);
 
   // Get excluded account's project ID to avoid switching to same-project accounts
   const excludedProjectId = allQuotas.accounts.find((a) => a.account.id === excludeAccountId)?.quota

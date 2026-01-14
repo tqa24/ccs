@@ -576,6 +576,7 @@ async function showHelp(): Promise<void> {
         ['--update', 'Unpin and update to latest version'],
       ],
     ],
+    ['Options:', [['--verbose, -v', 'Show detailed quota fetch diagnostics']]],
   ];
 
   for (const [title, cmds] of sections) {
@@ -601,7 +602,7 @@ async function showHelp(): Promise<void> {
 // DOCTOR COMMAND - Quota diagnostics and shared project detection
 // ============================================================================
 
-async function handleDoctor(): Promise<void> {
+async function handleDoctor(verbose = false): Promise<void> {
   await initUI();
   console.log(header('CLIProxy Quota Diagnostics'));
   console.log('');
@@ -621,7 +622,7 @@ async function handleDoctor(): Promise<void> {
 
   // Fetch quota for all accounts
   console.log(dim('Fetching quotas...'));
-  const quotaResult = await fetchAllProviderQuotas(provider);
+  const quotaResult = await fetchAllProviderQuotas(provider, verbose);
 
   // Display per-account quota status
   for (const { account, quota } of quotaResult.accounts) {
@@ -826,7 +827,7 @@ async function handleResumeAccount(args: string[]): Promise<void> {
   }
 }
 
-async function handleQuotaStatus(): Promise<void> {
+async function handleQuotaStatus(verbose = false): Promise<void> {
   await initUI();
   console.log(header('Quota Status'));
   console.log('');
@@ -841,7 +842,7 @@ async function handleQuotaStatus(): Promise<void> {
   }
 
   console.log(dim('Fetching quotas...'));
-  const quotaResult = await fetchAllProviderQuotas(provider);
+  const quotaResult = await fetchAllProviderQuotas(provider, verbose);
 
   // Build table rows
   const rows: string[][] = [];
@@ -942,7 +943,7 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
   }
 
   if (command === 'doctor' || command === 'diag') {
-    await handleDoctor();
+    await handleDoctor(verbose);
     return;
   }
 
@@ -963,7 +964,7 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
   }
 
   if (command === 'quota') {
-    await handleQuotaStatus();
+    await handleQuotaStatus(verbose);
     return;
   }
 
