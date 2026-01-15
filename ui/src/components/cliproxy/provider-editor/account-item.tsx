@@ -25,6 +25,8 @@ import {
   Pause,
   Play,
   AlertCircle,
+  AlertTriangle,
+  FolderCode,
 } from 'lucide-react';
 import {
   cn,
@@ -167,6 +169,48 @@ export function AccountItem({
                 </Badge>
               )}
             </div>
+            {/* Project ID for Antigravity accounts - read-only */}
+            {account.provider === 'agy' && (
+              <div className="flex items-center gap-1.5 mt-1">
+                {account.projectId ? (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <FolderCode className="w-3 h-3" />
+                          <span className={cn('font-mono', privacyMode && PRIVACY_BLUR_CLASS)}>
+                            {account.projectId}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        <p className="text-xs">GCP Project ID (read-only)</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-500">
+                          <AlertTriangle className="w-3 h-3" />
+                          <span>Project ID: N/A</span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-[250px]">
+                        <div className="text-xs space-y-1">
+                          <p className="font-medium text-amber-600">Missing Project ID</p>
+                          <p>
+                            This may cause errors. Remove the account and re-add it to fetch the
+                            project ID.
+                          </p>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+            )}
             {account.lastUsedAt && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5">
                 <Clock className="w-3 h-3" />

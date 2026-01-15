@@ -99,6 +99,7 @@ export function useAuthMonitorData(): AuthMonitorData {
           failureCount: failure,
           lastUsedAt: realStats?.lastUsedAt ?? account.lastUsedAt,
           color: ACCOUNT_COLORS[colorIndex % ACCOUNT_COLORS.length],
+          projectId: account.projectId,
         };
         accountsList.push(row);
         providerData.accounts.push(row);

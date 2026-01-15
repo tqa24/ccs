@@ -83,6 +83,8 @@ export interface OAuthAccount {
   pausedAt?: string;
   /** Account tier: free or paid (Pro/Ultra combined) */
   tier?: 'free' | 'paid' | 'unknown';
+  /** GCP Project ID (Antigravity only) - read-only */
+  projectId?: string;
 }
 
 export interface AuthStatus {

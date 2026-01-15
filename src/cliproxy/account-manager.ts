@@ -47,6 +47,8 @@ export interface AccountInfo {
   pausedAt?: string;
   /** Account tier: free or paid (Pro/Ultra combined) */
   tier?: AccountTier;
+  /** GCP Project ID (Antigravity only) - read-only, fetched from auth token */
+  projectId?: string;
 }
 
 /** Provider accounts configuration */
@@ -293,7 +295,8 @@ export function registerAccount(
   provider: CLIProxyProvider,
   tokenFile: string,
   email?: string,
-  nickname?: string
+  nickname?: string,
+  projectId?: string
 ): AccountInfo {
   const registry = loadAccountsRegistry();
 
@@ -350,13 +353,20 @@ export function registerAccount(
   const isFirstAccount = Object.keys(providerAccounts.accounts).length === 0;
 
   // Create or update account
-  providerAccounts.accounts[accountId] = {
+  const accountMeta: Omit<AccountInfo, 'id' | 'provider' | 'isDefault'> = {
     email,
     nickname: accountNickname,
     tokenFile,
     createdAt: new Date().toISOString(),
     lastUsedAt: new Date().toISOString(),
   };
+
+  // Include projectId for Antigravity accounts
+  if (provider === 'agy' && projectId) {
+    accountMeta.projectId = projectId;
+  }
+
+  providerAccounts.accounts[accountId] = accountMeta;
 
   // Set as default if first account
   if (isFirstAccount) {
@@ -671,13 +681,20 @@ export function discoverExistingAccounts(): void {
       // Register account with auto-generated nickname
       // Use mtime as lastUsedAt (when token was last modified = last auth/refresh)
       const lastModified = stats.mtime || stats.birthtime || new Date();
-      providerAccounts.accounts[accountId] = {
+      const accountMeta: Omit<AccountInfo, 'id' | 'provider' | 'isDefault'> = {
         email,
         nickname: generateNickname(email),
         tokenFile: file,
         createdAt: stats.birthtime?.toISOString() || new Date().toISOString(),
         lastUsedAt: lastModified.toISOString(),
       };
+
+      // Read project_id for Antigravity accounts (read-only field from auth token)
+      if (provider === 'agy' && data.project_id) {
+        accountMeta.projectId = data.project_id;
+      }
+
+      providerAccounts.accounts[accountId] = accountMeta;
     } catch {
       // Skip invalid files
       continue;

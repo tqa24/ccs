@@ -229,8 +229,15 @@ export function registerAccountFromToken(
     const content = fs.readFileSync(tokenPath, 'utf-8');
     const data = JSON.parse(content);
     const email = data.email || undefined;
+    const projectId = data.project_id || undefined;
 
-    return registerAccount(provider, newestFile, email, nickname || generateNickname(email));
+    return registerAccount(
+      provider,
+      newestFile,
+      email,
+      nickname || generateNickname(email),
+      projectId
+    );
   } catch {
     return null;
   }

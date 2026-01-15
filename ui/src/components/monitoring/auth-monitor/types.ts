@@ -12,6 +12,8 @@ export interface AccountRow {
   failureCount: number;
   lastUsedAt?: string;
   color: string;
+  /** GCP Project ID (Antigravity only) - read-only */
+  projectId?: string;
 }
 
 export interface ProviderStats {
