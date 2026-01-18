@@ -8,7 +8,7 @@ FROM node:20-bookworm-slim AS build
 SHELL ["/bin/bash", "-lc"]
 
 # Pin bun version for reproducible builds
-ARG BUN_VERSION=1.2.2
+ARG BUN_VERSION=1.2.21
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="$BUN_INSTALL/bin:$PATH"
 
@@ -43,7 +43,7 @@ FROM node:20-bookworm-slim AS runtime
 SHELL ["/bin/bash", "-lc"]
 
 # Pin bun version for reproducible builds
-ARG BUN_VERSION=1.2.2
+ARG BUN_VERSION=1.2.21
 ENV BUN_INSTALL=/usr/local/bun
 ENV PATH="$BUN_INSTALL/bin:/home/node/.opencode/bin:$PATH"
 
