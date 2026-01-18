@@ -106,6 +106,15 @@ CCS provides:
 - Pre-flight quota checks before session start
 - Dashboard UI with pause/resume toggles and tier badges
 
+### FR-010: Docker Deployment
+- Multi-stage Dockerfile with bun 1.2.21 and node:20-bookworm-slim
+- Docker Compose setup with resource limits and healthcheck
+- Persistent volumes for config, credentials, and CLI tools
+- Pre-installed CLIs: claude, gemini, grok, opencode, ccs
+- Ports: 3000 (Dashboard), 8317 (CLIProxy)
+- Entrypoint with privilege dropping and usage help
+- Environment variable configuration support
+
 ---
 
 ## Non-Functional Requirements
@@ -230,6 +239,14 @@ CCS provides:
 - [x] API tier detection (free/paid/unknown)
 - [x] Dashboard pause/resume toggles and tier badges
 - [x] Pre-flight quota checks before session start
+
+### v7.23 Release (Complete)
+- [x] Docker deployment support (PR #345)
+- [x] Multi-stage Dockerfile with bun 1.2.21
+- [x] Docker Compose with resource limits and healthcheck
+- [x] Persistent volumes for config and credentials
+- [x] Pre-installed AI CLI tools (claude, gemini, grok, opencode)
+- [x] Entrypoint with privilege dropping
 
 ### v8.0 Release (Planned - Q1 2026)
 - [ ] Multiple CLIProxyAPI instances (load balancing, failover)

@@ -14,6 +14,11 @@ ccs/
 ├── ui/                       # React dashboard application
 │   ├── src/                  # UI source code
 │   └── dist/                 # Built UI bundle
+├── docker/                   # Docker deployment configuration
+│   ├── Dockerfile            # Multi-stage build (bun 1.2.21, node:20-bookworm-slim)
+│   ├── docker-compose.yml    # Compose setup with resource limits, healthcheck
+│   ├── entrypoint.sh         # Entrypoint with privilege dropping, usage help
+│   └── README.md             # Docker deployment guide
 ├── tests/                    # Test suites
 ├── docs/                     # Documentation
 └── assets/                   # Static assets (logos, screenshots)

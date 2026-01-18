@@ -24,6 +24,7 @@ All major modularization work is complete. The codebase evolved from monolithic 
 | 10 | Remote CLIProxy | `proxy-config-resolver.ts`, `remote-proxy-client.ts` |
 | 11 | Kiro + ghcp Providers | OAuth support via CLIProxyAPIPlus (v7.2) |
 | 12 | Hybrid Quota Management | `quota-manager.ts`, `quota-fetcher.ts` (v7.14) |
+| 13 | Docker Support | `docker/` directory with Dockerfile, Compose, entrypoint |
 
 **Metrics Achieved**:
 - Files >500 lines: 12 -> 5 (-58%)
@@ -166,6 +167,7 @@ worktrees:
 | Remote CLIProxy Support (#142) | COMPLETE | v7.1 |
 | Kiro + GitHub Copilot OAuth (#157) | COMPLETE | v7.2 |
 | Hybrid Quota Management | COMPLETE | v7.14 |
+| Docker Support (PR #345) | COMPLETE | v7.23 |
 | Critical Bug Fixes (#158, #155, #124) | PLANNED | Q1 2026 |
 | Multiple CLIProxyAPI Instances | PLANNED | Q1 2026 |
 | Git Worktree Support | PLANNED | Q2 2026 |
