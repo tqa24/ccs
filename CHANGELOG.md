@@ -1,3 +1,9 @@
+## [7.24.1](https://github.com/kaitranntt/ccs/compare/v7.24.0...v7.24.1) (2026-01-18)
+
+### Bug Fixes
+
+* **ci:** use placeholder API key to pass claude-code-action validation ([a83a87b](https://github.com/kaitranntt/ccs/commit/a83a87bbc2f7542d793edff910dc833bda40f9c8))
+
 ## [7.24.0](https://github.com/kaitranntt/ccs/compare/v7.23.0...v7.24.0) (2026-01-18)
 
 ### Features
