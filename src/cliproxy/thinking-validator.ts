@@ -139,6 +139,15 @@ export function validateThinking(
 ): ThinkingValidationResult {
   const thinking = getModelThinkingSupport(provider, modelId);
 
+  // Handle string length limit to prevent performance issues
+  if (typeof value === 'string' && value.length > 100) {
+    return {
+      valid: false,
+      value: 'off',
+      warning: 'Thinking value too long (max 100 chars). Using "off".',
+    };
+  }
+
   // Handle empty string explicitly
   if (typeof value === 'string' && value.trim() === '') {
     return {
@@ -221,7 +230,14 @@ function validateBudgetThinking(
     } else {
       // Strict number parsing: reject partial parses like "123abc"
       const parsed = Number(value);
-      if (isNaN(parsed) || !Number.isFinite(parsed) || value.trim() !== String(parsed)) {
+      const trimmed = value.trim();
+      // Accept trailing .0 for whole numbers (e.g., "8192.0" → 8192)
+      const isWholeWithDecimal = Number.isInteger(parsed) && trimmed === `${parsed}.0`;
+      if (
+        isNaN(parsed) ||
+        !Number.isFinite(parsed) ||
+        (trimmed !== String(parsed) && !isWholeWithDecimal)
+      ) {
         // Not a valid number, try to find closest level
         const closest = findClosestLevel(value, Object.keys(THINKING_LEVEL_BUDGETS));
         if (closest) {

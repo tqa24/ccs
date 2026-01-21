@@ -337,6 +337,13 @@ export async function execClaudeWithCLIProxy(
   const thinkingEqArg = argsWithoutProxy.find((arg) => arg.startsWith('--thinking='));
   if (thinkingEqArg) {
     const val = thinkingEqArg.substring('--thinking='.length);
+    // Handle empty value after equals (--thinking=)
+    if (!val || val.trim() === '') {
+      console.error(fail('--thinking requires a value'));
+      console.error('    Examples: --thinking=low, --thinking=8192, --thinking=off');
+      console.error('    Levels: minimal, low, medium, high, xhigh, auto');
+      process.exit(1);
+    }
     // Parse as number if numeric, otherwise keep as string (level name)
     const numVal = parseInt(val, 10);
     thinkingOverride = !isNaN(numVal) ? numVal : val;

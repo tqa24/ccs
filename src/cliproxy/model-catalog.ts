@@ -188,8 +188,8 @@ export function getProviderCatalog(provider: CLIProxyProvider): ProviderCatalog 
  */
 export function findModel(provider: CLIProxyProvider, modelId: string): ModelEntry | undefined {
   const catalog = MODEL_CATALOG[provider];
-  if (!catalog) return undefined;
-  const normalizedId = modelId.toLowerCase();
+  if (!catalog || !modelId) return undefined;
+  const normalizedId = modelId.trim().toLowerCase();
   return catalog.models.find((m) => m.id.toLowerCase() === normalizedId);
 }
 

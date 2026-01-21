@@ -37,7 +37,14 @@ export function useThinkingConfig() {
       setError(null);
       const res = await fetch('/api/thinking', { signal: controller.signal });
       clearTimeout(timeoutId);
-      if (!res.ok) throw new Error('Failed to load Thinking config');
+      if (!res.ok) {
+        // Handle HTML error pages gracefully
+        const contentType = res.headers.get('content-type');
+        if (contentType?.includes('text/html')) {
+          throw new Error(`Server error (${res.status})`);
+        }
+        throw new Error('Failed to load Thinking config');
+      }
       const data = await res.json();
       setConfig(data.config || DEFAULT_THINKING_CONFIG);
       // W4: Store lastModified for optimistic locking
@@ -53,6 +60,9 @@ export function useThinkingConfig() {
     } finally {
       setLoading(false);
     }
+
+    // Return cleanup function for AbortController
+    return () => controller.abort();
   }, []);
 
   const saveConfig = useCallback(
@@ -84,6 +94,11 @@ export function useThinkingConfig() {
         clearTimeout(timeoutId);
 
         if (!res.ok) {
+          // Handle HTML error pages gracefully
+          const contentType = res.headers.get('content-type');
+          if (contentType?.includes('text/html')) {
+            throw new Error(`Server error (${res.status})`);
+          }
           const data = await res.json();
           // W4: Handle conflict (409) with user-friendly message
           if (res.status === 409) {
