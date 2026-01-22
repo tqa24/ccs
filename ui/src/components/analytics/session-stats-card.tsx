@@ -13,6 +13,7 @@ import type { PaginatedSessions } from '@/hooks/use-usage';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
+import { getProjectDisplayName } from './project-name-utils';
 
 interface SessionStatsCardProps {
   data: PaginatedSessions | undefined;
@@ -152,16 +153,6 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
   );
 }
 
-function getProjectDisplayName(path: string): string {
-  if (!path) return '';
-
-  // Remove leading/trailing slashes and split into segments
-  const cleanPath = path.replace(/^\/|\/$/g, '');
-  const segments = cleanPath.split('/').filter(segment => segment.length > 0);
-
-  // Return the last segment (leaf folder name)
-  return segments[segments.length - 1] || '';
-}
 
 function formatCompact(num: number): string {
   if (num >= 1_000_000_000) return `${(num / 1_000_000_000).toFixed(1)}B`;
