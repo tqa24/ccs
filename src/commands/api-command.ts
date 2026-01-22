@@ -191,7 +191,9 @@ async function handleCreate(args: string[]): Promise<void> {
       apiKey = parsedArgs.apiKey;
     } else {
       console.log(info('No API key required for local Ollama'));
-      apiKey = 'ollama'; // Placeholder token matching template
+      // Sentinel value 'ollama' matches config/base-ollama.settings.json template
+      // This is not a valid API key, just a placeholder for local-only providers
+      apiKey = 'ollama';
     }
   } else if (!apiKey) {
     const keyPrompt = preset?.apiKeyHint ? `API Key (${preset.apiKeyHint})` : 'API Key';
