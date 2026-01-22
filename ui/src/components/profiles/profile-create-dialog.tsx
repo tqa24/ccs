@@ -47,7 +47,7 @@ const schema = z.object({
     .min(1, 'Name is required')
     .regex(/^[a-zA-Z][a-zA-Z0-9._-]*$/, 'Must start with letter, only letters/numbers/.-_'),
   baseUrl: z.string().url('Invalid URL format'),
-  apiKey: z.string().min(1, 'API key is required'),
+  apiKey: z.string(), // Validation handled conditionally in onSubmit
   model: z.string().optional(),
   opusModel: z.string().optional(),
   sonnetModel: z.string().optional(),
@@ -207,9 +207,16 @@ export function ProfileCreateDialog({
   }, [baseUrlValue, selectedPreset]);
 
   const onSubmit = async (data: FormData) => {
+    // Validate API key - required unless preset has requiresApiKey: false
+    if (currentPreset?.requiresApiKey !== false && !data.apiKey) {
+      toast.error('API key is required');
+      return;
+    }
     // Use user-provided baseUrl (allows customization of preset URLs)
     const finalData = {
       ...data,
+      // For presets that don't require API key, use empty string
+      apiKey: currentPreset?.requiresApiKey === false ? '' : data.apiKey,
     };
     try {
       await createMutation.mutateAsync(finalData);
@@ -367,38 +374,51 @@ export function ProfileCreateDialog({
                   )}
                 </div>
 
-                {/* API Key */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="apiKey">
-                    API Key <span className="text-destructive">*</span>
-                  </Label>
-                  <div className="relative">
-                    <Input
-                      id="apiKey"
-                      type={showApiKey ? 'text' : 'password'}
-                      {...register('apiKey')}
-                      placeholder={currentPreset?.apiKeyPlaceholder ?? 'sk-...'}
-                      className="pr-10"
-                    />
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-0 top-0 h-9 w-9 text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowApiKey(!showApiKey)}
-                      tabIndex={-1}
-                    >
-                      {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
+                {/* API Key - hidden for presets that don't require it */}
+                {currentPreset?.requiresApiKey !== false ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="apiKey">
+                      API Key <span className="text-destructive">*</span>
+                    </Label>
+                    <div className="relative">
+                      <Input
+                        id="apiKey"
+                        type={showApiKey ? 'text' : 'password'}
+                        {...register('apiKey')}
+                        placeholder={currentPreset?.apiKeyPlaceholder ?? 'sk-...'}
+                        className="pr-10"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="absolute right-0 top-0 h-9 w-9 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowApiKey(!showApiKey)}
+                        tabIndex={-1}
+                      >
+                        {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    {errors.apiKey ? (
+                      <p className="text-xs text-destructive">{errors.apiKey.message}</p>
+                    ) : (
+                      currentPreset?.apiKeyHint && (
+                        <p className="text-xs text-muted-foreground">{currentPreset.apiKeyHint}</p>
+                      )
+                    )}
                   </div>
-                  {errors.apiKey ? (
-                    <p className="text-xs text-destructive">{errors.apiKey.message}</p>
-                  ) : (
-                    currentPreset?.apiKeyHint && (
-                      <p className="text-xs text-muted-foreground">{currentPreset.apiKeyHint}</p>
-                    )
-                  )}
-                </div>
+                ) : (
+                  <div className="flex items-start gap-3 p-3 bg-green-50 dark:bg-green-950/20 text-green-800 dark:text-green-300 rounded-md text-sm border border-green-100 dark:border-green-900/30">
+                    <Info className="w-5 h-5 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-medium">No API Key Required</p>
+                      <p className="text-xs opacity-90">
+                        {currentPreset?.apiKeyHint ||
+                          'This provider runs locally and does not require authentication.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </TabsContent>
 
               <TabsContent value="models" className="p-6 mt-0 space-y-4">

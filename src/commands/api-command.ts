@@ -186,6 +186,9 @@ async function handleCreate(args: string[]): Promise<void> {
 
   if (preset?.noApiKey) {
     // Preset doesn't require API key (e.g., local Ollama)
+    if (parsedArgs.apiKey) {
+      console.log(dim('Note: API key ignored for local Ollama (not required)'));
+    }
     console.log(info('No API key required for local Ollama'));
     apiKey = ''; // Empty string for local providers
   } else if (!apiKey) {
@@ -431,7 +434,7 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Options'));
   console.log(
-    `  ${color('--preset <id>', 'command')}        Use provider preset (openrouter, ollama, glm, glmt, kimi, foundry, mm, deepseek, qwen)`
+    `  ${color('--preset <id>', 'command')}        Use provider preset (openrouter, ollama, ollama-cloud, glm, glmt, kimi, foundry, mm, deepseek, qwen)`
   );
   console.log(`  ${color('--base-url <url>', 'command')}     API base URL (create)`);
   console.log(`  ${color('--api-key <key>', 'command')}      API key (create)`);
