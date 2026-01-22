@@ -27,6 +27,7 @@ import {
   CLIPROXY_DEFAULT_PORT,
   getCliproxyWritablePath,
   validatePort,
+  applyThinkingConfig,
 } from './config-generator';
 import { checkRemoteProxy } from './remote-proxy-client';
 import { isAuthenticated } from './auth-handler';
@@ -325,6 +326,64 @@ export async function execClaudeWithCLIProxy(
     !argsWithoutProxy[nicknameIdx + 1].startsWith('-')
   ) {
     setNickname = argsWithoutProxy[nicknameIdx + 1];
+  }
+
+  // Parse --thinking <value> flag for thinking budget control
+  // Supports: level names (low, medium, high, xhigh, auto), numeric budget, or 'off'/'none'
+  // Accepts both --thinking=value and --thinking value formats
+  let thinkingOverride: string | number | undefined;
+
+  // Check for --thinking=value format first
+  const thinkingEqArg = argsWithoutProxy.find((arg) => arg.startsWith('--thinking='));
+  if (thinkingEqArg) {
+    const val = thinkingEqArg.substring('--thinking='.length);
+    // Handle empty value after equals (--thinking=)
+    if (!val || val.trim() === '') {
+      console.error(fail('--thinking requires a value'));
+      console.error('    Examples: --thinking=low, --thinking=8192, --thinking=off');
+      console.error('    Levels: minimal, low, medium, high, xhigh, auto');
+      process.exit(1);
+    }
+    // Parse as number if numeric, otherwise keep as string (level name)
+    const numVal = parseInt(val, 10);
+    thinkingOverride = !isNaN(numVal) ? numVal : val;
+
+    // W2: Warn if multiple --thinking flags found (check both formats)
+    const allThinkingFlags = argsWithoutProxy.filter(
+      (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
+    );
+    if (allThinkingFlags.length > 1) {
+      console.warn(
+        `[!] Multiple --thinking flags detected. Using first occurrence: ${thinkingEqArg}`
+      );
+    }
+  } else {
+    // Fall back to --thinking value format
+    const thinkingIdx = argsWithoutProxy.indexOf('--thinking');
+    if (thinkingIdx !== -1) {
+      const nextArg = argsWithoutProxy[thinkingIdx + 1];
+      // U1: Check if --thinking has a value (not missing or another flag)
+      if (!nextArg || nextArg.startsWith('-')) {
+        console.error(fail('--thinking requires a value'));
+        console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
+        console.error('    Levels: minimal, low, medium, high, xhigh, auto');
+        process.exit(1);
+      }
+      const val = nextArg;
+      // Parse as number if numeric, otherwise keep as string (level name)
+      const numVal = parseInt(val, 10);
+      thinkingOverride = !isNaN(numVal) ? numVal : val;
+
+      // W2: Warn if multiple --thinking flags found (check both formats)
+      const allThinkingFlags = argsWithoutProxy.filter(
+        (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
+      );
+      if (allThinkingFlags.length > 1) {
+        console.warn(
+          `[!] Multiple --thinking flags detected. Using first occurrence: --thinking ${val}`
+        );
+      }
+    }
   }
 
   // Handle --accounts: list accounts and exit
@@ -761,6 +820,10 @@ export async function execClaudeWithCLIProxy(
         )
     : getEffectiveEnvVars(provider, cfg.port, cfg.customSettingsPath, remoteRewriteConfig);
 
+  // Apply thinking configuration to model (auto tier-based or manual override)
+  // This adds thinking suffix like model(high) or model(8192) for CLIProxyAPIPlus
+  applyThinkingConfig(envVars, provider, thinkingOverride);
+
   // Codex-only: inject OpenAI reasoning effort based on tier model mapping.
   // Maps by request.model:
   // - OPUS/default model → xhigh
@@ -850,6 +913,7 @@ export async function execClaudeWithCLIProxy(
     '--accounts',
     '--use',
     '--nickname',
+    '--thinking',
     '--incognito',
     '--no-incognito',
     '--import',
@@ -859,8 +923,14 @@ export async function execClaudeWithCLIProxy(
   const claudeArgs = argsWithoutProxy.filter((arg, idx) => {
     // Filter out CCS flags
     if (ccsFlags.includes(arg)) return false;
-    // Filter out value after --use or --nickname
-    if (argsWithoutProxy[idx - 1] === '--use' || argsWithoutProxy[idx - 1] === '--nickname')
+    // Filter out --thinking=value format
+    if (arg.startsWith('--thinking=')) return false;
+    // Filter out value after --use, --nickname, or --thinking
+    if (
+      argsWithoutProxy[idx - 1] === '--use' ||
+      argsWithoutProxy[idx - 1] === '--nickname' ||
+      argsWithoutProxy[idx - 1] === '--thinking'
+    )
       return false;
     return true;
   });

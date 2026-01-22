@@ -17,9 +17,11 @@ export function useSettingsTab() {
         ? 'proxy'
         : tabParam === 'auth'
           ? 'auth'
-          : tabParam === 'backups'
-            ? 'backups'
-            : 'websearch';
+          : tabParam === 'thinking'
+            ? 'thinking'
+            : tabParam === 'backups'
+              ? 'backups'
+              : 'websearch';
 
   const setActiveTab = useCallback(
     (tab: SettingsTab) => {

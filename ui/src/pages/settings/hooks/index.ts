@@ -8,3 +8,4 @@ export { useWebSearchConfig } from './use-websearch-config';
 export { useGlobalEnvConfig } from './use-globalenv-config';
 export { useProxyConfig } from './use-proxy-config';
 export { useRawConfig } from './use-raw-config';
+export { useThinkingConfig } from './use-thinking-config';

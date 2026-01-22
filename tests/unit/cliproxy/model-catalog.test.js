@@ -23,9 +23,15 @@ describe('Model Catalog', () => {
       assert.strictEqual(MODEL_CATALOG.gemini.displayName, 'Gemini');
     });
 
-    it('does not contain codex or qwen (not configurable)', () => {
+    it('contains Codex provider catalog', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      assert.strictEqual(MODEL_CATALOG.codex, undefined);
+      assert(MODEL_CATALOG.codex, 'Should have codex provider');
+      assert.strictEqual(MODEL_CATALOG.codex.provider, 'codex');
+      assert.strictEqual(MODEL_CATALOG.codex.displayName, 'Copilot Codex');
+    });
+
+    it('does not contain qwen (not configurable)', () => {
+      const { MODEL_CATALOG } = modelCatalog;
       assert.strictEqual(MODEL_CATALOG.qwen, undefined);
     });
   });
@@ -115,9 +121,9 @@ describe('Model Catalog', () => {
       assert.strictEqual(supportsModelConfig('gemini'), true);
     });
 
-    it('returns false for codex', () => {
+    it('returns true for codex', () => {
       const { supportsModelConfig } = modelCatalog;
-      assert.strictEqual(supportsModelConfig('codex'), false);
+      assert.strictEqual(supportsModelConfig('codex'), true);
     });
 
     it('returns false for qwen', () => {
@@ -142,10 +148,12 @@ describe('Model Catalog', () => {
       assert.strictEqual(catalog.provider, 'gemini');
     });
 
-    it('returns undefined for codex', () => {
+    it('returns catalog for codex', () => {
       const { getProviderCatalog } = modelCatalog;
       const catalog = getProviderCatalog('codex');
-      assert.strictEqual(catalog, undefined);
+      assert(catalog, 'Should return catalog');
+      assert.strictEqual(catalog.provider, 'codex');
+      assert(Array.isArray(catalog.models));
     });
   });
 

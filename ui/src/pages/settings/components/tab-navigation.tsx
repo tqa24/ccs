@@ -4,7 +4,7 @@
  */
 
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Globe, Settings2, Server, KeyRound, Archive } from 'lucide-react';
+import { Globe, Settings2, Server, KeyRound, Brain, Archive } from 'lucide-react';
 import type { SettingsTab } from '../types';
 
 interface TabNavigationProps {
@@ -23,6 +23,10 @@ export function TabNavigation({ activeTab, onTabChange }: TabNavigationProps) {
         <TabsTrigger value="globalenv" className="flex-1 gap-2">
           <Settings2 className="w-4 h-4" />
           Global Env
+        </TabsTrigger>
+        <TabsTrigger value="thinking" className="flex-1 gap-2">
+          <Brain className="w-4 h-4" />
+          Thinking
         </TabsTrigger>
         <TabsTrigger value="proxy" className="flex-1 gap-2">
           <Server className="w-4 h-4" />

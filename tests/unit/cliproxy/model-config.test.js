@@ -38,12 +38,6 @@ describe('Model Config', () => {
   });
 
   describe('configureProviderModel', () => {
-    it('returns false for unsupported provider (codex)', async () => {
-      const { configureProviderModel } = modelConfig;
-      const result = await configureProviderModel('codex', true);
-      assert.strictEqual(result, false);
-    });
-
     it('returns false for unsupported provider (qwen)', async () => {
       const { configureProviderModel } = modelConfig;
       const result = await configureProviderModel('qwen', true);

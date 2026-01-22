@@ -152,3 +152,17 @@ export {
   resetAuthToDefaults,
   getAuthSummary,
 } from './auth-token-manager';
+
+// Thinking validator
+export type { ThinkingValidationResult } from './thinking-validator';
+export {
+  validateThinking,
+  THINKING_LEVEL_BUDGETS,
+  VALID_THINKING_LEVELS,
+  VALID_THINKING_TIERS,
+  THINKING_OFF_VALUES,
+  THINKING_AUTO_VALUE,
+  THINKING_BUDGET_MIN,
+  THINKING_BUDGET_MAX,
+  THINKING_BUDGET_DEFAULT_MIN,
+} from './thinking-validator';

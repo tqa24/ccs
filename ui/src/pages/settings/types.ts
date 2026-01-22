@@ -49,7 +49,25 @@ export interface GlobalEnvConfig {
 
 // === Tab Types ===
 
-export type SettingsTab = 'websearch' | 'globalenv' | 'proxy' | 'auth' | 'backups';
+export type SettingsTab = 'websearch' | 'globalenv' | 'proxy' | 'auth' | 'thinking' | 'backups';
+
+// === Thinking Types ===
+
+export type ThinkingMode = 'auto' | 'off' | 'manual';
+
+export interface ThinkingTierDefaults {
+  opus: string;
+  sonnet: string;
+  haiku: string;
+}
+
+export interface ThinkingConfig {
+  mode: ThinkingMode;
+  override?: string | number;
+  tier_defaults: ThinkingTierDefaults;
+  provider_overrides?: Record<string, Partial<ThinkingTierDefaults>>;
+  show_warnings?: boolean;
+}
 
 // === Re-exports from api-client ===
 

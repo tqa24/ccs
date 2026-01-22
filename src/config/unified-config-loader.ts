@@ -18,8 +18,10 @@ import {
   DEFAULT_GLOBAL_ENV,
   DEFAULT_CLIPROXY_SERVER_CONFIG,
   DEFAULT_QUOTA_MANAGEMENT_CONFIG,
+  DEFAULT_THINKING_CONFIG,
   DEFAULT_DASHBOARD_AUTH_CONFIG,
   GlobalEnvConfig,
+  ThinkingConfig,
   DashboardAuthConfig,
 } from './unified-config-types';
 import { isUnifiedConfigEnabled } from './feature-flags';
@@ -108,8 +110,23 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
 
     return parsed;
   } catch (err) {
-    const error = err instanceof Error ? err.message : 'Unknown error';
-    console.error(`[X] Failed to load config: ${error}`);
+    // U3: Provide better context for YAML syntax errors
+    if (err instanceof yaml.YAMLException) {
+      const mark = err.mark;
+      console.error(`[X] YAML syntax error in ${yamlPath}:`);
+      console.error(
+        `    Line ${(mark?.line ?? 0) + 1}, Column ${(mark?.column ?? 0) + 1}: ${err.reason || 'Invalid syntax'}`
+      );
+      if (mark?.snippet) {
+        console.error(`    ${mark.snippet}`);
+      }
+      console.error(
+        `    Tip: Check for missing colons, incorrect indentation, or unquoted special characters.`
+      );
+    } else {
+      const error = err instanceof Error ? err.message : 'Unknown error';
+      console.error(`[X] Failed to load config: ${error}`);
+    }
     return null;
   }
 }
@@ -243,6 +260,20 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
           partial.quota_management?.manual?.tier_lock ??
           DEFAULT_QUOTA_MANAGEMENT_CONFIG.manual.tier_lock,
       },
+    },
+    // Thinking config - auto/manual/off control for reasoning budget
+    thinking: {
+      mode: partial.thinking?.mode ?? DEFAULT_THINKING_CONFIG.mode,
+      override: partial.thinking?.override,
+      tier_defaults: {
+        opus: partial.thinking?.tier_defaults?.opus ?? DEFAULT_THINKING_CONFIG.tier_defaults.opus,
+        sonnet:
+          partial.thinking?.tier_defaults?.sonnet ?? DEFAULT_THINKING_CONFIG.tier_defaults.sonnet,
+        haiku:
+          partial.thinking?.tier_defaults?.haiku ?? DEFAULT_THINKING_CONFIG.tier_defaults.haiku,
+      },
+      provider_overrides: partial.thinking?.provider_overrides,
+      show_warnings: partial.thinking?.show_warnings ?? DEFAULT_THINKING_CONFIG.show_warnings,
     },
     // Dashboard auth config - disabled by default
     dashboard_auth: {
@@ -439,6 +470,25 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('');
   }
 
+  // Thinking section (extended thinking/reasoning configuration)
+  if (config.thinking) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Thinking: Extended thinking/reasoning budget configuration');
+    lines.push('# Controls reasoning depth for supported providers (agy, gemini, codex).');
+    lines.push('#');
+    lines.push('# Modes: auto (use tier_defaults), off (disable), manual (--thinking flag only)');
+    lines.push('# Levels: minimal (512), low (1K), medium (8K), high (24K), xhigh (32K), auto');
+    lines.push('# Override: Set global override value (number or level name)');
+    lines.push('# Provider overrides: Per-provider tier defaults');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml
+        .dump({ thinking: config.thinking }, { indent: 2, lineWidth: -1, quotingType: '"' })
+        .trim()
+    );
+    lines.push('');
+  }
+
   // Dashboard auth section (only if configured)
   if (config.dashboard_auth?.enabled) {
     lines.push('# ----------------------------------------------------------------------------');
@@ -605,6 +655,36 @@ export function getGlobalEnvConfig(): GlobalEnvConfig {
   return {
     enabled: config.global_env?.enabled ?? true,
     env: config.global_env?.env ?? { ...DEFAULT_GLOBAL_ENV },
+  };
+}
+
+/**
+ * Get thinking configuration.
+ * Returns defaults if not configured.
+ */
+export function getThinkingConfig(): ThinkingConfig {
+  const config = loadOrCreateUnifiedConfig();
+
+  // W2: Check for invalid thinking config (e.g., thinking: true instead of object)
+  if (config.thinking !== undefined && typeof config.thinking !== 'object') {
+    console.warn(
+      `[!] Invalid thinking config: expected object, got ${typeof config.thinking}. Using defaults.`
+    );
+    console.warn(`    Tip: Use 'thinking: { mode: auto }' instead of 'thinking: true'`);
+    return DEFAULT_THINKING_CONFIG;
+  }
+
+  return {
+    mode: config.thinking?.mode ?? DEFAULT_THINKING_CONFIG.mode,
+    override: config.thinking?.override,
+    tier_defaults: {
+      opus: config.thinking?.tier_defaults?.opus ?? DEFAULT_THINKING_CONFIG.tier_defaults.opus,
+      sonnet:
+        config.thinking?.tier_defaults?.sonnet ?? DEFAULT_THINKING_CONFIG.tier_defaults.sonnet,
+      haiku: config.thinking?.tier_defaults?.haiku ?? DEFAULT_THINKING_CONFIG.tier_defaults.haiku,
+    },
+    provider_overrides: config.thinking?.provider_overrides,
+    show_warnings: config.thinking?.show_warnings ?? DEFAULT_THINKING_CONFIG.show_warnings,
   };
 }
 

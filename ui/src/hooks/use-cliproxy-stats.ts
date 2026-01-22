@@ -224,9 +224,11 @@ export function useAccountQuota(provider: string, accountId: string, enabled = t
   return useQuery({
     queryKey: ['account-quota', provider, accountId],
     queryFn: () => fetchAccountQuota(provider, accountId),
-    enabled: enabled && !!accountId,
-    staleTime: 30000, // Consider stale after 30s (tokens can refresh anytime)
+    enabled: enabled && provider === 'agy' && !!accountId,
+    staleTime: 60000, // Match refetchInterval to prevent early refetching
     refetchInterval: 60000, // Refresh every 1 minute
+    refetchOnWindowFocus: false, // Don't refetch on tab switch
+    refetchOnMount: false, // Don't refetch on component remount (AuthMonitor re-renders)
     retry: 1,
   });
 }

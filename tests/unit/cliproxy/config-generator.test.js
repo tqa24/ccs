@@ -318,8 +318,10 @@ auth-dir: "/test"
 
       const userKeys = parseUserApiKeys(configContent);
 
-      // Empty strings should be filtered out (only truthy values)
-      assert.deepStrictEqual(userKeys, ['valid-key']);
+      // Empty strings should be filtered out - parseUserApiKeys checks: key && key !== CCS_INTERNAL_API_KEY
+      // Empty string is falsy, so it's excluded along with internal key
+      assert.strictEqual(userKeys.length, 1, 'Should filter out empty string key');
+      assert.deepStrictEqual(userKeys, ['valid-key'], 'Should only include valid non-empty keys');
     });
 
     it('handles config with Windows line endings', () => {
