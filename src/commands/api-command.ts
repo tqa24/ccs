@@ -181,16 +181,18 @@ async function handleCreate(args: string[]): Promise<void> {
     console.log(dim('Note: For OpenRouter, ANTHROPIC_API_KEY should be empty.'));
   }
 
-  // Step 3: API Key (skip if preset has noApiKey flag)
+  // Step 3: API Key (skip if preset has requiresApiKey: false)
   let apiKey = parsedArgs.apiKey;
 
-  if (preset?.noApiKey) {
+  if (preset?.requiresApiKey === false) {
     // Preset doesn't require API key (e.g., local Ollama)
     if (parsedArgs.apiKey) {
-      console.log(dim('Note: API key ignored for local Ollama (not required)'));
+      console.log(dim('Note: Using provided API key for local Ollama (optional)'));
+      apiKey = parsedArgs.apiKey;
+    } else {
+      console.log(info('No API key required for local Ollama'));
+      apiKey = 'ollama'; // Placeholder token matching template
     }
-    console.log(info('No API key required for local Ollama'));
-    apiKey = ''; // Empty string for local providers
   } else if (!apiKey) {
     const keyPrompt = preset?.apiKeyHint ? `API Key (${preset.apiKeyHint})` : 'API Key';
     apiKey = await InteractivePrompt.password(keyPrompt);

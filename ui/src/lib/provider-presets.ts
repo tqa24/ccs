@@ -155,7 +155,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     id: 'ollama-cloud',
     name: 'Ollama Cloud',
-    description: 'Ollama.com cloud models (glm-4.7:cloud, qwen3-coder:480b)',
+    description: 'Ollama cloud models via direct API (glm-4.7:cloud, minimax-m2.1:cloud)',
     baseUrl: 'https://ollama.com',
     defaultProfileName: 'ollama-cloud',
     badge: 'Cloud',

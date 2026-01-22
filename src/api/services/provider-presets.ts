@@ -17,8 +17,8 @@ export interface ProviderPreset {
   apiKeyPlaceholder: string;
   apiKeyHint: string;
   category: PresetCategory;
-  /** Set to true for local providers that don't need API key */
-  noApiKey?: boolean;
+  /** Set to false for local providers that don't need API key (default: true) */
+  requiresApiKey?: boolean;
   /** Additional env vars for thinking mode, etc. */
   extraEnv?: Record<string, string>;
   /** Enable always thinking mode */
@@ -48,14 +48,14 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     id: 'ollama',
     name: 'Ollama (Local)',
-    description: 'Local open-source models via Ollama (32K+ context recommended)',
+    description: 'Local open-source models via Ollama (32K+ context)',
     baseUrl: 'http://localhost:11434',
     defaultProfileName: 'ollama',
     defaultModel: 'qwen3-coder',
     apiKeyPlaceholder: 'ollama',
     apiKeyHint: 'Install Ollama from ollama.com - no API key needed for local',
     category: 'recommended',
-    noApiKey: true,
+    requiresApiKey: false,
   },
   // Alternative providers
   {
@@ -148,7 +148,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
   {
     id: 'ollama-cloud',
     name: 'Ollama Cloud',
-    description: 'Ollama.com cloud models (glm-4.7:cloud, qwen3-coder:480b)',
+    description: 'Ollama cloud models via direct API (glm-4.7:cloud, minimax-m2.1:cloud)',
     baseUrl: 'https://ollama.com',
     defaultProfileName: 'ollama-cloud',
     defaultModel: 'glm-4.7:cloud',
