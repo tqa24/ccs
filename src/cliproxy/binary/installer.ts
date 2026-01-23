@@ -11,6 +11,7 @@ import {
   getDownloadUrl,
   getChecksumsUrl,
   getExecutableName,
+  DEFAULT_BACKEND,
 } from '../platform-detector';
 import { downloadWithRetry } from './downloader';
 import { verifyChecksum, computeChecksum } from './verifier';
@@ -26,13 +27,23 @@ export async function downloadAndInstall(
   config: BinaryManagerConfig,
   verbose = false
 ): Promise<void> {
-  const platform = detectPlatform(config.version);
-  const downloadUrl = getDownloadUrl(config.version);
-  const checksumsUrl = getChecksumsUrl(config.version);
+  const backend = config.backend ?? DEFAULT_BACKEND;
+  const platform = detectPlatform(config.version, backend);
+  const downloadUrl = getDownloadUrl(config.version, backend);
+  const checksumsUrl = getChecksumsUrl(config.version, backend);
+  const backendLabel = backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
 
   fs.mkdirSync(config.binPath, { recursive: true });
+
+  // Delete existing binary before install to prevent mismatched binaries
+  const existingBinary = path.join(config.binPath, getExecutableName(backend));
+  if (fs.existsSync(existingBinary)) {
+    fs.unlinkSync(existingBinary);
+    if (verbose) console.error(`[cliproxy] Removed existing binary: ${existingBinary}`);
+  }
+
   const archivePath = path.join(config.binPath, `cliproxy-archive.${platform.extension}`);
-  const spinner = new ProgressIndicator(`Downloading CLIProxy Plus v${config.version}`);
+  const spinner = new ProgressIndicator(`Downloading ${backendLabel} v${config.version}`);
   spinner.start();
 
   try {
@@ -63,27 +74,30 @@ export async function downloadAndInstall(
     }
 
     spinner.update('Extracting binary');
-    await extractArchive(archivePath, config.binPath, platform.extension, verbose);
-    spinner.succeed('CLIProxy Plus ready');
+    await extractArchive(archivePath, config.binPath, platform.extension, verbose, backend);
+    spinner.succeed(`${backendLabel} ready`);
     fs.unlinkSync(archivePath);
 
-    const binaryPath = path.join(config.binPath, getExecutableName());
+    const binaryPath = path.join(config.binPath, getExecutableName(backend));
     if (platform.os !== 'windows' && fs.existsSync(binaryPath)) {
       fs.chmodSync(binaryPath, 0o755);
       if (verbose) console.error(`[cliproxy] Set executable permissions: ${binaryPath}`);
     }
 
     writeInstalledVersion(config.binPath, config.version);
-    console.log(ok(`CLIProxy Plus v${config.version} installed successfully`));
+    console.log(ok(`${backendLabel} v${config.version} installed successfully`));
   } catch (error) {
     spinner.fail('Installation failed');
     throw error;
   }
 }
 
+import type { CLIProxyBackend } from '../types';
+
 /** Delete binary (for cleanup or reinstall) */
-export function deleteBinary(binPath: string, verbose = false): void {
-  const binaryPath = path.join(binPath, getExecutableName());
+export function deleteBinary(binPath: string, verbose = false, backend?: CLIProxyBackend): void {
+  const effectiveBackend = backend ?? DEFAULT_BACKEND;
+  const binaryPath = path.join(binPath, getExecutableName(effectiveBackend));
   if (fs.existsSync(binaryPath)) {
     fs.unlinkSync(binaryPath);
     if (verbose) console.error(`[cliproxy] Deleted: ${binaryPath}`);
@@ -91,29 +105,32 @@ export function deleteBinary(binPath: string, verbose = false): void {
 }
 
 /** Get binary path */
-export function getBinaryPath(binPath: string): string {
-  return path.join(binPath, getExecutableName());
+export function getBinaryPath(binPath: string, backend?: CLIProxyBackend): string {
+  const effectiveBackend = backend ?? DEFAULT_BACKEND;
+  return path.join(binPath, getExecutableName(effectiveBackend));
 }
 
 /** Check if binary exists */
-export function isBinaryInstalled(binPath: string): boolean {
-  return fs.existsSync(getBinaryPath(binPath));
+export function isBinaryInstalled(binPath: string, backend?: CLIProxyBackend): boolean {
+  return fs.existsSync(getBinaryPath(binPath, backend));
 }
 
 /** Get binary info if installed */
 export async function getBinaryInfo(
   binPath: string,
-  version: string
+  version: string,
+  backend?: CLIProxyBackend
 ): Promise<{
   path: string;
   version: string;
   platform: ReturnType<typeof detectPlatform>;
   checksum: string;
 } | null> {
-  const binaryPath = getBinaryPath(binPath);
+  const effectiveBackend = backend ?? DEFAULT_BACKEND;
+  const binaryPath = getBinaryPath(binPath, effectiveBackend);
   if (!fs.existsSync(binaryPath)) return null;
 
-  const platform = detectPlatform();
+  const platform = detectPlatform(undefined, effectiveBackend);
   const checksum = await computeChecksum(binaryPath);
   return { path: binaryPath, version, platform, checksum };
 }

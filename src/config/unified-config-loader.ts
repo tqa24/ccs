@@ -153,6 +153,11 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
       },
       // Auth config - preserve user values, no defaults (uses constants as fallback)
       auth: partial.cliproxy?.auth,
+      // Backend selection - validate and preserve user choice (original vs plus)
+      backend:
+        partial.cliproxy?.backend === 'original' || partial.cliproxy?.backend === 'plus'
+          ? partial.cliproxy.backend
+          : undefined, // Invalid values become undefined (defaults to 'plus' at runtime)
     },
     preferences: {
       ...defaults.preferences,

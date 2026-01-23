@@ -62,6 +62,7 @@ function createDefaultConfig(backend: CLIProxyBackend = DEFAULT_BACKEND): Binary
     maxRetries: 3,
     verbose: false,
     forceVersion: false,
+    backend, // Pass backend for installer to use correct download URL
   };
 }
 
@@ -95,22 +96,22 @@ export class BinaryManager {
 
   /** Get full path to binary executable */
   getBinaryPath(): string {
-    return getBinaryPath(this.config.binPath);
+    return getBinaryPath(this.config.binPath, this.backend);
   }
 
   /** Check if binary exists */
   isBinaryInstalled(): boolean {
-    return isBinaryInstalled(this.config.binPath);
+    return isBinaryInstalled(this.config.binPath, this.backend);
   }
 
   /** Get binary info if installed */
   async getBinaryInfo(): Promise<BinaryInfo | null> {
-    return getBinaryInfo(this.config.binPath, this.config.version);
+    return getBinaryInfo(this.config.binPath, this.config.version, this.backend);
   }
 
   /** Delete binary (for cleanup or reinstall) */
   deleteBinary(): void {
-    deleteBinary(this.config.binPath, this.config.verbose);
+    deleteBinary(this.config.binPath, this.config.verbose, this.backend);
   }
 }
 

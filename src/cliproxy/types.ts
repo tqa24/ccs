@@ -48,6 +48,8 @@ export interface BinaryManagerConfig {
   verbose: boolean;
   /** Force specific version (skip auto-upgrade to latest) */
   forceVersion: boolean;
+  /** Backend variant (original vs plus) */
+  backend?: CLIProxyBackend;
 }
 
 /**

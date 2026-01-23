@@ -6,15 +6,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
-import { getExecutableName, getArchiveBinaryName } from '../platform-detector';
+import { getExecutableName, getArchiveBinaryName, DEFAULT_BACKEND } from '../platform-detector';
+import type { CLIProxyBackend } from '../types';
 
 /**
  * Extract zip archive using Node.js (simple implementation)
  */
-export function extractZip(archivePath: string, destDir: string, verbose = false): Promise<void> {
+export function extractZip(
+  archivePath: string,
+  destDir: string,
+  verbose = false,
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const execName = getExecutableName();
-    const archiveBinaryName = getArchiveBinaryName();
+    const execName = getExecutableName(backend);
+    const archiveBinaryName = getArchiveBinaryName(backend);
     const buffer = fs.readFileSync(archivePath);
 
     // Find End of Central Directory record (EOCD)

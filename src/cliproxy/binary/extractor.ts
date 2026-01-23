@@ -3,7 +3,8 @@
  * Facade for tar.gz and zip archive extraction.
  */
 
-import { ArchiveExtension } from '../types';
+import { ArchiveExtension, CLIProxyBackend } from '../types';
+import { DEFAULT_BACKEND } from '../platform-detector';
 import { extractTarGz } from './tar-extractor';
 import { extractZip } from './zip-extractor';
 
@@ -18,11 +19,12 @@ export async function extractArchive(
   archivePath: string,
   destDir: string,
   extension: ArchiveExtension,
-  verbose = false
+  verbose = false,
+  backend: CLIProxyBackend = DEFAULT_BACKEND
 ): Promise<void> {
   if (extension === 'tar.gz') {
-    await extractTarGz(archivePath, destDir, verbose);
+    await extractTarGz(archivePath, destDir, verbose, backend);
   } else {
-    await extractZip(archivePath, destDir, verbose);
+    await extractZip(archivePath, destDir, verbose, backend);
   }
 }

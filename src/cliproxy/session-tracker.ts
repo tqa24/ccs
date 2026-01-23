@@ -29,6 +29,8 @@ interface SessionLock {
   startedAt: string;
   /** CLIProxy version running (added for version mismatch detection) */
   version?: string;
+  /** Backend type running (original vs plus) */
+  backend?: 'original' | 'plus';
 }
 
 /** Generate unique session ID */
@@ -175,9 +177,15 @@ export function getExistingProxy(port: number): SessionLock | null {
  * @param port Port the proxy is running on
  * @param proxyPid PID of the proxy process
  * @param version Optional CLIProxy version (stored when spawning new proxy)
+ * @param backend Optional backend type (original vs plus)
  * @returns Session ID for this session
  */
-export function registerSession(port: number, proxyPid: number, version?: string): string {
+export function registerSession(
+  port: number,
+  proxyPid: number,
+  version?: string,
+  backend?: 'original' | 'plus'
+): string {
   const sessionId = generateSessionId();
   const existingLock = readSessionLockForPort(port);
 
@@ -193,6 +201,7 @@ export function registerSession(port: number, proxyPid: number, version?: string
       sessions: [sessionId],
       startedAt: new Date().toISOString(),
       version,
+      backend,
     };
     writeSessionLockForPort(newLock);
   }

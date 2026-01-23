@@ -746,9 +746,9 @@ export async function execClaudeWithCLIProxy(
         throw new Error(`CLIProxy startup failed: ${err.message}`);
       }
 
-      // Register this session with the new proxy, including the installed version
+      // Register this session with the new proxy, including version and backend
       const installedVersion = getInstalledCliproxyVersion();
-      sessionId = registerSession(cfg.port, proxy.pid as number, installedVersion);
+      sessionId = registerSession(cfg.port, proxy.pid as number, installedVersion, backend);
       log(
         `Registered session ${sessionId} with new proxy (PID ${proxy.pid}, version ${installedVersion})`
       );
