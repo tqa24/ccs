@@ -19,6 +19,7 @@ import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
 import {
   useCliproxy,
   useCliproxyAuth,
+  useCliproxyUpdateCheck,
   useSetDefaultAccount,
   useRemoveAccount,
   usePauseAccount,
@@ -179,6 +180,7 @@ export function CliproxyPage() {
   const queryClient = useQueryClient();
   const { data: authData, isLoading: authLoading } = useCliproxyAuth();
   const { data: variantsData, isFetching } = useCliproxy();
+  const { data: updateCheck } = useCliproxyUpdateCheck();
   const setDefaultMutation = useSetDefaultAccount();
   const removeMutation = useRemoveAccount();
   const pauseMutation = usePauseAccount();
@@ -249,7 +251,7 @@ export function CliproxyPage() {
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary" />
-              <h1 className="font-semibold">CLIProxy Plus</h1>
+              <h1 className="font-semibold">{updateCheck?.backendLabel ?? 'CLIProxy'}</h1>
             </div>
             <Button
               variant="ghost"

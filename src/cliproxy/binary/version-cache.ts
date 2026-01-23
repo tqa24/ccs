@@ -5,33 +5,35 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { getCliproxyDir, getBinDir } from '../config-generator';
+import { getBinDir } from '../config-generator';
 import {
   VersionCache,
   VERSION_CACHE_DURATION_MS,
   VERSION_PIN_FILE,
   VersionListCache,
 } from './types';
+import { DEFAULT_BACKEND } from '../platform-detector';
+import type { CLIProxyBackend } from '../types';
 
 /**
- * Get path to version cache file
+ * Get path to version cache file (backend-specific)
  */
-export function getVersionCachePath(): string {
-  return path.join(getCliproxyDir(), '.version-cache.json');
+export function getVersionCachePath(backend: CLIProxyBackend = DEFAULT_BACKEND): string {
+  return path.join(getBinDir(), backend, '.version-cache.json');
 }
 
 /**
- * Get path to version pin file
+ * Get path to version pin file (backend-specific)
  */
-export function getVersionPinPath(): string {
-  return path.join(getBinDir(), VERSION_PIN_FILE);
+export function getVersionPinPath(backend: CLIProxyBackend = DEFAULT_BACKEND): string {
+  return path.join(getBinDir(), backend, VERSION_PIN_FILE);
 }
 
 /**
- * Read version cache if still valid
+ * Read version cache if still valid (backend-specific)
  */
-export function readVersionCache(): VersionCache | null {
-  const cachePath = getVersionCachePath();
+export function readVersionCache(backend: CLIProxyBackend = DEFAULT_BACKEND): VersionCache | null {
+  const cachePath = getVersionCachePath(backend);
   if (!fs.existsSync(cachePath)) {
     return null;
   }
@@ -53,10 +55,13 @@ export function readVersionCache(): VersionCache | null {
 }
 
 /**
- * Write version to cache
+ * Write version to cache (backend-specific)
  */
-export function writeVersionCache(version: string): void {
-  const cachePath = getVersionCachePath();
+export function writeVersionCache(
+  version: string,
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): void {
+  const cachePath = getVersionCachePath(backend);
   const cache: VersionCache = {
     latestVersion: version,
     checkedAt: Date.now(),
@@ -98,10 +103,10 @@ export function writeInstalledVersion(binPath: string, version: string): void {
 }
 
 /**
- * Get pinned version if one exists
+ * Get pinned version if one exists (backend-specific)
  */
-export function getPinnedVersion(): string | null {
-  const pinPath = getVersionPinPath();
+export function getPinnedVersion(backend: CLIProxyBackend = DEFAULT_BACKEND): string | null {
+  const pinPath = getVersionPinPath(backend);
   if (!fs.existsSync(pinPath)) {
     return null;
   }
@@ -113,10 +118,13 @@ export function getPinnedVersion(): string | null {
 }
 
 /**
- * Save pinned version to persist user's explicit choice
+ * Save pinned version to persist user's explicit choice (backend-specific)
  */
-export function savePinnedVersion(version: string): void {
-  const pinPath = getVersionPinPath();
+export function savePinnedVersion(
+  version: string,
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): void {
+  const pinPath = getVersionPinPath(backend);
   try {
     fs.mkdirSync(path.dirname(pinPath), { recursive: true });
     fs.writeFileSync(pinPath, version, 'utf8');
@@ -126,10 +134,10 @@ export function savePinnedVersion(version: string): void {
 }
 
 /**
- * Clear pinned version (unpin)
+ * Clear pinned version (unpin) - backend-specific
  */
-export function clearPinnedVersion(): void {
-  const pinPath = getVersionPinPath();
+export function clearPinnedVersion(backend: CLIProxyBackend = DEFAULT_BACKEND): void {
+  const pinPath = getVersionPinPath(backend);
   if (fs.existsSync(pinPath)) {
     try {
       fs.unlinkSync(pinPath);
@@ -140,10 +148,32 @@ export function clearPinnedVersion(): void {
 }
 
 /**
- * Check if a version is currently pinned
+ * Check if a version is currently pinned (backend-specific)
  */
-export function isVersionPinned(): boolean {
-  return getPinnedVersion() !== null;
+export function isVersionPinned(backend: CLIProxyBackend = DEFAULT_BACKEND): boolean {
+  return getPinnedVersion(backend) !== null;
+}
+
+/**
+ * Migrate old shared version pin to backend-specific location.
+ * Called once on first run after update.
+ */
+export function migrateVersionPin(backend: CLIProxyBackend): void {
+  const oldPinPath = path.join(getBinDir(), VERSION_PIN_FILE);
+  if (!fs.existsSync(oldPinPath)) return;
+
+  try {
+    const oldVersion = fs.readFileSync(oldPinPath, 'utf8').trim();
+    if (!oldVersion) return;
+
+    // Save to new backend-specific location
+    savePinnedVersion(oldVersion, backend);
+
+    // Delete old shared file
+    fs.unlinkSync(oldPinPath);
+  } catch {
+    // Silent fail - not critical
+  }
 }
 
 // ==================== Version List Cache ====================
@@ -151,17 +181,19 @@ export function isVersionPinned(): boolean {
 const VERSION_LIST_CACHE_FILE = '.version-list-cache.json';
 
 /**
- * Get path to version list cache file
+ * Get path to version list cache file (backend-specific)
  */
-export function getVersionListCachePath(): string {
-  return path.join(getCliproxyDir(), VERSION_LIST_CACHE_FILE);
+export function getVersionListCachePath(backend: CLIProxyBackend = DEFAULT_BACKEND): string {
+  return path.join(getBinDir(), backend, VERSION_LIST_CACHE_FILE);
 }
 
 /**
- * Read version list cache if still valid
+ * Read version list cache if still valid (backend-specific)
  */
-export function readVersionListCache(): VersionListCache | null {
-  const cachePath = getVersionListCachePath();
+export function readVersionListCache(
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): VersionListCache | null {
+  const cachePath = getVersionListCachePath(backend);
   if (!fs.existsSync(cachePath)) {
     return null;
   }
@@ -182,10 +214,13 @@ export function readVersionListCache(): VersionListCache | null {
 }
 
 /**
- * Write version list to cache
+ * Write version list to cache (backend-specific)
  */
-export function writeVersionListCache(cache: VersionListCache): void {
-  const cachePath = getVersionListCachePath();
+export function writeVersionListCache(
+  cache: VersionListCache,
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): void {
+  const cachePath = getVersionListCachePath(backend);
 
   try {
     fs.mkdirSync(path.dirname(cachePath), { recursive: true });

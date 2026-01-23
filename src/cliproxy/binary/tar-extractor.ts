@@ -6,15 +6,21 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
-import { getExecutableName, getArchiveBinaryName } from '../platform-detector';
+import { getExecutableName, getArchiveBinaryName, DEFAULT_BACKEND } from '../platform-detector';
+import type { CLIProxyBackend } from '../types';
 
 /**
  * Extract tar.gz archive using Node.js built-in modules
  */
-export function extractTarGz(archivePath: string, destDir: string, verbose = false): Promise<void> {
+export function extractTarGz(
+  archivePath: string,
+  destDir: string,
+  verbose = false,
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const execName = getExecutableName();
-    const archiveBinaryName = getArchiveBinaryName();
+    const execName = getExecutableName(backend);
+    const archiveBinaryName = getArchiveBinaryName(backend);
     const gunzip = zlib.createGunzip();
     const input = fs.createReadStream(archivePath);
 

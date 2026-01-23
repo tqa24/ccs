@@ -18,10 +18,11 @@ import {
   Box,
   AlertTriangle,
 } from 'lucide-react';
-import { toast } from 'sonner';
 import { useProxyConfig, useRawConfig } from '../../hooks';
+import { useUpdateBackend, useProxyStatus } from '@/hooks/use-cliproxy';
 import { LocalProxyCard } from './local-proxy-card';
 import { RemoteProxyCard } from './remote-proxy-card';
+import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
 import { api } from '@/lib/api-client';
 
 /** LocalStorage key for debug mode preference */
@@ -74,10 +75,12 @@ export default function ProxySection() {
     }
   };
 
-  // Backend state (loaded from API)
+  // Backend state (loaded from API) + mutation hook for proper query invalidation
   const [backend, setBackend] = useState<'original' | 'plus'>('plus');
-  const [backendSaving, setBackendSaving] = useState(false);
   const [hasKiroGhcpVariants, setHasKiroGhcpVariants] = useState(false);
+  const updateBackendMutation = useUpdateBackend();
+  const { data: proxyStatus } = useProxyStatus();
+  const isProxyRunning = proxyStatus?.running ?? false;
 
   // Fetch backend setting
   const fetchBackend = useCallback(async () => {
@@ -100,24 +103,18 @@ export default function ProxySection() {
     }
   }, []);
 
-  // Save backend setting
-  const handleBackendChange = async (value: 'original' | 'plus') => {
+  // Save backend setting using mutation hook (invalidates all related queries)
+  const handleBackendChange = (value: 'original' | 'plus') => {
     const previousValue = backend;
-    setBackend(value);
-    setBackendSaving(true);
-    try {
-      await api.cliproxyServer.updateBackend(value);
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to save backend';
-      // Check if error is due to proxy running (409 conflict)
-      if (errorMessage.includes('Proxy is running')) {
-        toast.error('Stop the proxy first to change backend');
+    setBackend(value); // Optimistic update
+    updateBackendMutation.mutate(
+      { backend: value },
+      {
+        onError: () => {
+          setBackend(previousValue); // Rollback on error
+        },
       }
-      console.error('[Proxy] Failed to save backend:', err);
-      setBackend(previousValue);
-    } finally {
-      setBackendSaving(false);
-    }
+    );
   };
 
   // Log when debug mode changes (sanitize sensitive fields)
@@ -140,8 +137,10 @@ export default function ProxySection() {
   useEffect(() => {
     fetchConfig();
     fetchRawConfig();
-    fetchBackend();
-    checkPlusOnlyVariants();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Async data fetching on mount is intended
+    void fetchBackend();
+
+    void checkPlusOnlyVariants();
   }, [fetchConfig, fetchRawConfig, fetchBackend, checkPlusOnlyVariants]);
 
   if (loading || !config) {
@@ -253,8 +252,17 @@ export default function ProxySection() {
       <ScrollArea className="flex-1">
         <div className="p-5 space-y-6">
           <p className="text-sm text-muted-foreground">
-            Configure local or remote CLIProxy Plus connection for proxy-based profiles
+            Configure local or remote {backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy'} connection
+            for proxy-based profiles
           </p>
+
+          {/* Proxy Status Widget - Quick access to start/stop controls */}
+          {!isRemoteMode && (
+            <div className="space-y-3">
+              <h3 className="text-base font-medium">Instance Status</h3>
+              <ProxyStatusWidget />
+            </div>
+          )}
 
           {/* Mode Toggle - Card based selection */}
           <div className="space-y-3">
@@ -277,7 +285,7 @@ export default function ProxySection() {
                   <span className="font-medium">Local</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Run CLIProxy Plus binary on this machine
+                  Run {backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy'} binary on this machine
                 </p>
               </button>
 
@@ -298,7 +306,7 @@ export default function ProxySection() {
                   <span className="font-medium">Remote</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Connect to a remote CLIProxy Plus server
+                  Connect to a remote {backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy'} server
                 </p>
               </button>
             </div>
@@ -310,16 +318,25 @@ export default function ProxySection() {
               <Box className="w-4 h-4" />
               Backend Binary
             </h3>
+            {/* Warning when proxy is running - must stop to change backend */}
+            {isProxyRunning && (
+              <Alert className="py-2 border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20 [&>svg]:top-2.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-700 dark:text-amber-400">
+                  Stop the running proxy in Instance Status to switch backend.
+                </AlertDescription>
+              </Alert>
+            )}
             <div className="grid grid-cols-2 gap-3">
               {/* Plus Backend Card */}
               <button
                 onClick={() => handleBackendChange('plus')}
-                disabled={backendSaving}
+                disabled={updateBackendMutation.isPending || isProxyRunning}
                 className={`p-4 rounded-lg border-2 text-left transition-all ${
                   backend === 'plus'
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-muted-foreground/50'
-                }`}
+                } ${isProxyRunning ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="font-medium">CLIProxyAPIPlus</span>
@@ -335,12 +352,12 @@ export default function ProxySection() {
               {/* Original Backend Card */}
               <button
                 onClick={() => handleBackendChange('original')}
-                disabled={backendSaving}
+                disabled={updateBackendMutation.isPending || isProxyRunning}
                 className={`p-4 rounded-lg border-2 text-left transition-all ${
                   backend === 'original'
                     ? 'border-primary bg-primary/5'
                     : 'border-border hover:border-muted-foreground/50'
-                }`}
+                } ${isProxyRunning ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center gap-3 mb-2">
                   <span className="font-medium">CLIProxyAPI</span>

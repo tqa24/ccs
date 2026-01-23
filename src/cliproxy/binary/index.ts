@@ -25,6 +25,7 @@ export {
   savePinnedVersion,
   clearPinnedVersion,
   isVersionPinned,
+  migrateVersionPin,
 } from './version-cache';
 
 // Version Checker

@@ -724,12 +724,13 @@ export async function execClaudeWithCLIProxy(
         await waitForProxyReady(cfg.port, cfg.timeout, cfg.pollInterval);
         readySpinner.succeed(`CLIProxy ready on port ${cfg.port}`);
       } catch (error) {
-        readySpinner.fail('CLIProxy Plus startup failed');
+        const backendLabel = backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
+        readySpinner.fail(`${backendLabel} startup failed`);
         proxy.kill('SIGTERM');
 
         const err = error as Error;
         console.error('');
-        console.error(fail('CLIProxy Plus failed to start'));
+        console.error(fail(`${backendLabel} failed to start`));
         console.error('');
         console.error('Possible causes:');
         console.error(`  1. Port ${cfg.port} already in use`);
@@ -746,9 +747,9 @@ export async function execClaudeWithCLIProxy(
         throw new Error(`CLIProxy startup failed: ${err.message}`);
       }
 
-      // Register this session with the new proxy, including the installed version
+      // Register this session with the new proxy, including version and backend
       const installedVersion = getInstalledCliproxyVersion();
-      sessionId = registerSession(cfg.port, proxy.pid as number, installedVersion);
+      sessionId = registerSession(cfg.port, proxy.pid as number, installedVersion, backend);
       log(
         `Registered session ${sessionId} with new proxy (PID ${proxy.pid}, version ${installedVersion})`
       );

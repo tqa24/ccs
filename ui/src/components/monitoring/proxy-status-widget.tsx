@@ -46,7 +46,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useIsMutating } from '@tanstack/react-query';
 import { api, type CliproxyServerConfig } from '@/lib/api-client';
 import {
   useProxyStatus,
@@ -167,6 +167,9 @@ export function ProxyStatusWidget() {
     staleTime: 30000, // 30 seconds
   });
 
+  // Detect if backend switch is in progress (prevents race condition)
+  const isBackendSwitching = useIsMutating({ mutationKey: ['update-backend'] }) > 0;
+
   // Determine if remote mode is enabled
   const remoteConfig = cliproxyConfig?.remote;
   const isRemoteMode = remoteConfig?.enabled && remoteConfig?.host;
@@ -176,7 +179,8 @@ export function ProxyStatusWidget() {
     startProxy.isPending ||
     stopProxy.isPending ||
     restartProxy.isPending ||
-    installVersion.isPending;
+    installVersion.isPending ||
+    isBackendSwitching;
   const hasUpdate = updateCheck?.hasUpdate ?? false;
   const isUnstable = updateCheck?.isStable === false;
   const currentVersion = updateCheck?.currentVersion;
@@ -282,10 +286,10 @@ export function ProxyStatusWidget() {
                 isRunning ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/30'
               )}
             />
-            <span className="text-sm font-medium">CLIProxy Plus</span>
+            <span className="text-sm font-medium">{updateCheck?.backendLabel ?? 'CLIProxy'}</span>
           </div>
 
-          {/* Right side: icon buttons when running */}
+          {/* Right side: icon buttons */}
           <div className="flex items-center gap-1">
             {isLoading ? (
               <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -306,16 +310,15 @@ export function ProxyStatusWidget() {
                   isPending={stopProxy.isPending}
                   variant="destructive-ghost"
                 />
-                <IconButton
-                  icon={isExpanded ? X : Settings}
-                  tooltip={isExpanded ? 'Close' : 'Version settings'}
-                  onClick={() => setIsExpanded(!isExpanded)}
-                  className={isExpanded ? 'bg-muted' : undefined}
-                />
               </>
-            ) : (
-              <Power className="w-3 h-3 text-muted-foreground" />
-            )}
+            ) : null}
+            {/* Settings button always visible */}
+            <IconButton
+              icon={isExpanded ? X : Settings}
+              tooltip={isExpanded ? 'Close' : 'Version settings'}
+              onClick={() => setIsExpanded(!isExpanded)}
+              className={isExpanded ? 'bg-muted' : undefined}
+            />
           </div>
         </div>
 
@@ -372,82 +375,80 @@ export function ProxyStatusWidget() {
           </div>
         )}
 
-        {/* Expanded section: Version Management */}
-        {isRunning && (
-          <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-            <CollapsibleContent className="mt-3 pt-3 border-t border-muted">
-              {/* Section header */}
-              <h4 className="text-xs font-medium text-muted-foreground mb-3">Version Management</h4>
+        {/* Expanded section: Version Management (available even when not running) */}
+        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+          <CollapsibleContent className="mt-3 pt-3 border-t border-muted">
+            {/* Section header */}
+            <h4 className="text-xs font-medium text-muted-foreground mb-3">Version Management</h4>
 
-              {/* Version picker row */}
-              <div className="flex items-center gap-2">
-                {/* Dropdown - full width, no truncation */}
-                <Select
-                  value={selectedVersion}
-                  onValueChange={setSelectedVersion}
-                  disabled={versionsLoading}
-                >
-                  <SelectTrigger className="h-8 text-xs flex-1">
-                    <SelectValue placeholder="Select version to install..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {versionsData?.versions.slice(0, 20).map((v) => {
-                      const vIsUnstable =
-                        versionsData?.maxStableVersion &&
-                        isNewerVersionClient(v, versionsData.maxStableVersion);
-                      return (
-                        <SelectItem key={v} value={v} className="text-xs">
-                          <span className="flex items-center gap-2">
-                            v{v}
-                            {v === versionsData.latestStable && (
-                              <span className="text-green-600 dark:text-green-400">(stable)</span>
-                            )}
-                            {vIsUnstable && (
-                              <span className="text-amber-600 dark:text-amber-400">⚠</span>
-                            )}
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+            {/* Version picker row */}
+            <div className="flex items-center gap-2">
+              {/* Dropdown - full width, no truncation */}
+              <Select
+                value={selectedVersion}
+                onValueChange={setSelectedVersion}
+                disabled={versionsLoading}
+              >
+                <SelectTrigger className="h-8 text-xs flex-1">
+                  <SelectValue placeholder="Select version to install..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {versionsData?.versions.slice(0, 20).map((v) => {
+                    const vIsUnstable =
+                      versionsData?.maxStableVersion &&
+                      isNewerVersionClient(v, versionsData.maxStableVersion);
+                    return (
+                      <SelectItem key={v} value={v} className="text-xs">
+                        <span className="flex items-center gap-2">
+                          v{v}
+                          {v === versionsData.latestStable && (
+                            <span className="text-green-600 dark:text-green-400">(stable)</span>
+                          )}
+                          {vIsUnstable && (
+                            <span className="text-amber-600 dark:text-amber-400">⚠</span>
+                          )}
+                        </span>
+                      </SelectItem>
+                    );
+                  })}
+                </SelectContent>
+              </Select>
 
-                {/* Install button */}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs gap-1.5 px-3"
-                  onClick={() => handleInstallVersion(selectedVersion)}
-                  disabled={installVersion.isPending || !selectedVersion}
-                >
-                  {installVersion.isPending ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Download className="w-3.5 h-3.5" />
-                  )}
-                  Install
-                </Button>
-              </div>
-
-              {/* Stability warning for selected version */}
-              {selectedVersion &&
-                versionsData?.maxStableVersion &&
-                isNewerVersionClient(selectedVersion, versionsData.maxStableVersion) && (
-                  <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
-                    <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>Versions above {versionsData.maxStableVersion} have known issues</span>
-                  </div>
+              {/* Install button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1.5 px-3"
+                onClick={() => handleInstallVersion(selectedVersion)}
+                disabled={installVersion.isPending || !selectedVersion}
+              >
+                {installVersion.isPending ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
                 )}
+                Install
+              </Button>
+            </div>
 
-              {/* Sync time */}
-              {updateCheck?.checkedAt && (
-                <div className="mt-2 text-[10px] text-muted-foreground/60">
-                  Last checked {formatTimeAgo(updateCheck.checkedAt)}
+            {/* Stability warning for selected version */}
+            {selectedVersion &&
+              versionsData?.maxStableVersion &&
+              isNewerVersionClient(selectedVersion, versionsData.maxStableVersion) && (
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span>Versions above {versionsData.maxStableVersion} have known issues</span>
                 </div>
               )}
-            </CollapsibleContent>
-          </Collapsible>
-        )}
+
+            {/* Sync time */}
+            {updateCheck?.checkedAt && (
+              <div className="mt-2 text-[10px] text-muted-foreground/60">
+                Last checked {formatTimeAgo(updateCheck.checkedAt)}
+              </div>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
 
         {/* Not running state */}
         {!isRunning && (

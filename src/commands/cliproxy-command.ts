@@ -111,6 +111,13 @@ function getEffectiveBackend(cliBackend?: CLIProxyBackend): CLIProxyBackend {
   return config.cliproxy?.backend ?? DEFAULT_BACKEND;
 }
 
+/**
+ * Get display label for backend
+ */
+function getBackendLabel(backend: CLIProxyBackend): string {
+  return backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
+}
+
 interface CliproxyProfileArgs {
   name?: string;
   provider?: CLIProxyProfileName;
@@ -152,8 +159,10 @@ function formatModelOption(model: ModelEntry): string {
 
 async function handleCreate(args: string[]): Promise<void> {
   await initUI();
+  const { backend } = parseBackendArg(args);
+  const effectiveBackend = getEffectiveBackend(backend);
   const parsedArgs = parseProfileArgs(args);
-  console.log(header('Create CLIProxy Plus Variant'));
+  console.log(header(`Create ${getBackendLabel(effectiveBackend)} Variant`));
   console.log('');
 
   // Step 1: Profile name
@@ -292,7 +301,7 @@ async function handleCreate(args: string[]): Promise<void> {
 
   // Create variant
   console.log('');
-  console.log(info('Creating CLIProxy Plus variant...'));
+  console.log(info(`Creating ${getBackendLabel(effectiveBackend)} variant...`));
   const result = createVariant(name, provider, model, account);
 
   if (!result.success) {
@@ -479,7 +488,7 @@ async function showStatus(verbose: boolean, backend: CLIProxyBackend): Promise<v
   const status = getBinaryStatus(backend);
 
   console.log('');
-  const backendLabel = backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy (Original)';
+  const backendLabel = getBackendLabel(backend);
   console.log(color(`${backendLabel} Status`, 'primary'));
   console.log('');
 
@@ -530,14 +539,19 @@ async function showStatus(verbose: boolean, backend: CLIProxyBackend): Promise<v
   console.log('');
 }
 
-async function handleInstallVersion(version: string, verbose: boolean): Promise<void> {
-  console.log(info(`Installing CLIProxy Plus v${version}...`));
+async function handleInstallVersion(
+  version: string,
+  verbose: boolean,
+  backend: CLIProxyBackend
+): Promise<void> {
+  const label = getBackendLabel(backend);
+  console.log(info(`Installing ${label} v${version}...`));
   console.log('');
 
-  const result = await installVersion(version, verbose);
+  const result = await installVersion(version, verbose, backend);
   if (!result.success) {
     console.error('');
-    console.error(fail(`Failed to install CLIProxy Plus v${version}`));
+    console.error(fail(`Failed to install ${label} v${version}`));
     console.error(`    ${result.error}`);
     console.error('');
     console.error('Possible causes:');
@@ -546,12 +560,12 @@ async function handleInstallVersion(version: string, verbose: boolean): Promise<
     console.error('  3. GitHub API rate limiting');
     console.error('');
     console.error('Check available versions at:');
-    console.error('  https://github.com/router-for-me/CLIProxyAPIPlus/releases');
+    console.error(`  https://github.com/${BACKEND_CONFIG[backend].repo}/releases`);
     process.exit(1);
   }
 
   console.log('');
-  console.log(ok(`CLIProxy Plus v${version} installed (pinned)`));
+  console.log(ok(`${label} v${version} installed (pinned)`));
   console.log('');
   console.log(dim('This version will be used until you run:'));
   console.log(
@@ -560,10 +574,11 @@ async function handleInstallVersion(version: string, verbose: boolean): Promise<
   console.log('');
 }
 
-async function handleInstallLatest(verbose: boolean): Promise<void> {
-  console.log(info('Fetching latest CLIProxy Plus version...'));
+async function handleInstallLatest(verbose: boolean, backend: CLIProxyBackend): Promise<void> {
+  const label = getBackendLabel(backend);
+  console.log(info(`Fetching latest ${label} version...`));
 
-  const result = await installLatest(verbose);
+  const result = await installLatest(verbose, backend);
   if (!result.success) {
     console.error(fail(`Failed to install latest version: ${result.error}`));
     process.exit(1);
@@ -575,7 +590,7 @@ async function handleInstallLatest(verbose: boolean): Promise<void> {
   }
 
   console.log('');
-  console.log(ok(`CLIProxy Plus updated to v${result.version}`));
+  console.log(ok(`${label} updated to v${result.version}`));
   console.log(dim('Auto-update is now enabled.'));
   console.log('');
 }
@@ -1036,12 +1051,12 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
     }
     // Strip leading 'v' prefix and whitespace (user may type " v6.6.80-0 ")
     version = version.trim().replace(/^v/, '');
-    await handleInstallVersion(version, verbose);
+    await handleInstallVersion(version, verbose, effectiveBackend);
     return;
   }
 
   if (remainingArgs.includes('--latest') || remainingArgs.includes('--update')) {
-    await handleInstallLatest(verbose);
+    await handleInstallLatest(verbose, effectiveBackend);
     return;
   }
 
