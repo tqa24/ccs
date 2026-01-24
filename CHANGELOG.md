@@ -1,3 +1,19 @@
+## [7.26.3](https://github.com/kaitranntt/ccs/compare/v7.26.2...v7.26.3) (2026-01-24)
+
+### Bug Fixes
+
+* **cliproxy:** propagate backend parameter to version check functions ([2a0efbd](https://github.com/kaitranntt/ccs/commit/2a0efbd954d5126d29920e4992f2f9a6be74fce6))
+* **tests:** address edge cases in mock infrastructure ([2b91c40](https://github.com/kaitranntt/ccs/commit/2b91c40e37d5b28420ba9fa45f5b7bcbde6e29d5))
+* **tests:** remove undefined MockRoute export and unused imports ([aaa6feb](https://github.com/kaitranntt/ccs/commit/aaa6feb8db6a31e598204448d6f45520313140f3))
+
+### Documentation
+
+* clarify no-emoji rule applies only to CLI terminal output ([0902211](https://github.com/kaitranntt/ccs/commit/0902211d409712f00bc5582e50660f6d76ef4e4c))
+
+### Performance Improvements
+
+* **tests:** replace real network ops with mock infrastructure ([5c83429](https://github.com/kaitranntt/ccs/commit/5c83429a79e178283654ee5d401cd8814d7ed599))
+
 ## [7.26.2](https://github.com/kaitranntt/ccs/compare/v7.26.1...v7.26.2) (2026-01-23)
 
 ### Bug Fixes
