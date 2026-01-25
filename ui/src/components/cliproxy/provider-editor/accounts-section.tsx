@@ -153,6 +153,18 @@ export function AccountsSection({
         </Button>
       </div>
 
+      {/* Bulk Action Bar - shows when accounts selected (positioned at TOP for visibility) */}
+      {isSelectable && selectedCount > 0 && (
+        <BulkActionBar
+          selectedCount={selectedCount}
+          onPauseSelected={handleBulkPause}
+          onResumeSelected={handleBulkResume}
+          onClearSelection={deselectAll}
+          isPausing={!!isBulkPausing}
+          isResuming={!!isBulkResuming}
+        />
+      )}
+
       {accounts.length > 0 ? (
         <div className="space-y-2">
           {accounts.map((account) => (
@@ -182,18 +194,6 @@ export function AccountsSection({
           <p className="text-sm">No accounts connected</p>
           <p className="text-xs opacity-70">Add an account to get started</p>
         </div>
-      )}
-
-      {/* Bulk Action Bar - shows when accounts selected */}
-      {isSelectable && (
-        <BulkActionBar
-          selectedCount={selectedCount}
-          onPauseSelected={handleBulkPause}
-          onResumeSelected={handleBulkResume}
-          onClearSelection={deselectAll}
-          isPausing={!!isBulkPausing}
-          isResuming={!!isBulkResuming}
-        />
       )}
 
       {/* Kiro-specific: Incognito browser setting - users complain "it keeps opening incognito" */}
