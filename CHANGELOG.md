@@ -1,3 +1,34 @@
+## [7.27.0](https://github.com/kaitranntt/ccs/compare/v7.26.3...v7.27.0) (2026-01-25)
+
+### Features
+
+* **ui:** add bulk account controls to provider editor ([1427d36](https://github.com/kaitranntt/ccs/commit/1427d36f869f8b0eb64d2c5d6893810515d2d4d4))
+* **ui:** add expandable provider cards with account controls ([87226e0](https://github.com/kaitranntt/ccs/commit/87226e05c40be83299187b35ba1ca4ca2113fbe3))
+* **ui:** add tiered visual grouping to quota tooltip ([ebfc554](https://github.com/kaitranntt/ccs/commit/ebfc554f5f8733b811c1ba8610a1bf11d0154510))
+* **ui:** add visible pause toggle button to account item cards ([56dfb24](https://github.com/kaitranntt/ccs/commit/56dfb2429bc93772e260aa6ecaed50ebf714be06))
+* **ui:** persist provider selection in cliproxy and auth-monitor ([7fc9ff0](https://github.com/kaitranntt/ccs/commit/7fc9ff0d77ddf89c13e8ec168b700bee38cabc12))
+
+### Bug Fixes
+
+* **api:** add race condition prevention and input validation for account control ([d1b579a](https://github.com/kaitranntt/ccs/commit/d1b579ad1b8c58da352f1a2c803256a427e3f669))
+* **hooks:** add stats invalidation to account control mutations ([7086617](https://github.com/kaitranntt/ccs/commit/708661744fa8463ae919cb597bd9c43cca21c336))
+* **quota:** fetch quota for paused accounts + simplify exhausted display ([27e8813](https://github.com/kaitranntt/ccs/commit/27e8813cae5379dbd8f9e700155812e59fe99389))
+* **quota:** return exhausted models with resetTime from API ([e3920e0](https://github.com/kaitranntt/ccs/commit/e3920e077610b3d31b7e533a629c6b09e8b6d427))
+* **ui:** add pause toggle to flow viz account cards, remove dropdown redundancy ([56dfada](https://github.com/kaitranntt/ccs/commit/56dfada31c36425a11d4eff397c925980a43b94c))
+* **ui:** display exhausted Claude/GPT models in quota tooltip ([ce16517](https://github.com/kaitranntt/ccs/commit/ce1651714473b0d7484efbbb45ecb503d7490a3b))
+* **ui:** improve bulk actions UX in provider editor ([6021c10](https://github.com/kaitranntt/ccs/commit/6021c10ddce84536f01dd8e9bb8a59f279dfc3cc))
+* **ui:** improve model quota tooltip tier sorting ([de71381](https://github.com/kaitranntt/ccs/commit/de7138166ca2dca765c05ab59e9d9b1b154277bb))
+* **ui:** improve pause toggle position in flow-viz account cards ([eb05342](https://github.com/kaitranntt/ccs/commit/eb053425c074ab150f67181ba7cf62668e0e7b49))
+* **ui:** improve tier header contrast in quota tooltip ([41d17e7](https://github.com/kaitranntt/ccs/commit/41d17e7cae7949dbb169963b3a0e71516afa91b3))
+* **ui:** remove dead 'Account is paused' error handling from flow-viz ([a84cc03](https://github.com/kaitranntt/ccs/commit/a84cc036df8179442498531fa0b4383f0b96d904))
+* **ui:** show 0% quota when Claude/GPT models exhausted ([1f323f0](https://github.com/kaitranntt/ccs/commit/1f323f082c92bd8e740fa519b196f2ed957a0b68))
+* **ui:** show Claude reset time for quota display (not earliest) ([9516e71](https://github.com/kaitranntt/ccs/commit/9516e71f17c112eb71d7e0283e5c9d8c654fa2f9))
+* **ui:** simplify quota tooltip - delimiter lines only, full model names ([b2b8a85](https://github.com/kaitranntt/ccs/commit/b2b8a85af6c860c2e76d1f0198c2d8bc25f2ff2e))
+
+### Code Refactoring
+
+* **ui:** update cliproxy page for account control flow ([118ce46](https://github.com/kaitranntt/ccs/commit/118ce46e7287aa929f489e218ef30609fb1348c8))
+
 ## [7.26.3](https://github.com/kaitranntt/ccs/compare/v7.26.2...v7.26.3) (2026-01-24)
 
 ### Bug Fixes
