@@ -22,7 +22,12 @@ import { FlowVizHeader } from './flow-viz-header';
 // Re-export types for backward compatibility
 export type { AccountData, ProviderData, AccountFlowVizProps, ConnectionEvent } from './types';
 
-export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
+export function AccountFlowViz({
+  providerData,
+  onBack,
+  onPauseToggle,
+  isPausingAccount,
+}: AccountFlowVizProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredAccount, setHoveredAccount] = useState<number | null>(null);
@@ -112,6 +117,8 @@ export function AccountFlowViz({ providerData, onBack }: AccountFlowVizProps) {
           onPointerDown={(e) => handlePointerDown(account.id, e)}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPauseToggle={onPauseToggle}
+          isPausingAccount={isPausingAccount}
         />
       );
     });

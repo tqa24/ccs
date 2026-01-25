@@ -4,17 +4,20 @@
  * Uses glass panel aesthetic with hover interactions and glow effects
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { STATUS_COLORS } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AccountFlowViz } from '@/components/account-flow-viz';
 import { usePrivacy } from '@/contexts/privacy-context';
+import { usePauseAccount, useResumeAccount } from '@/hooks/use-cliproxy';
 import { Activity, CheckCircle2, XCircle, Radio } from 'lucide-react';
 
 import { useAuthMonitorData } from './hooks';
 import { LivePulse } from './components/live-pulse';
 import { ProviderCard } from './components/provider-card';
 import { SummaryCard } from './components/summary-card';
+
+const STORAGE_KEY = 'auth-monitor-selected-provider';
 
 export function AuthMonitor() {
   const {
@@ -30,13 +33,51 @@ export function AuthMonitor() {
   } = useAuthMonitorData();
 
   const { privacyMode } = usePrivacy();
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+
+  // Persist selected provider in localStorage
+  const [selectedProvider, setSelectedProviderState] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem(STORAGE_KEY);
+    }
+    return null;
+  });
+
+  // Wrapper to persist selection
+  const setSelectedProvider = (provider: string | null) => {
+    setSelectedProviderState(provider);
+    if (provider) {
+      localStorage.setItem(STORAGE_KEY, provider);
+    } else {
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  };
+
+  // Effective provider: prefer saved (if still exists) > null (show grid)
+  const effectiveProvider = useMemo(() => {
+    if (selectedProvider && providerStats.some((p) => p.provider === selectedProvider)) {
+      return selectedProvider;
+    }
+    return null;
+  }, [selectedProvider, providerStats]);
   const [hoveredProvider, setHoveredProvider] = useState<string | null>(null);
 
+  // Account control mutations for flow viz
+  const pauseMutation = usePauseAccount();
+  const resumeMutation = useResumeAccount();
+
   // Get selected provider data for detail view
-  const selectedProviderData = selectedProvider
-    ? providerStats.find((ps) => ps.provider === selectedProvider)
+  const selectedProviderData = effectiveProvider
+    ? providerStats.find((ps) => ps.provider === effectiveProvider)
     : null;
+
+  const handlePauseToggle = (accountId: string, paused: boolean) => {
+    if (!effectiveProvider || pauseMutation.isPending || resumeMutation.isPending) return;
+    if (paused) {
+      pauseMutation.mutate({ provider: effectiveProvider, accountId });
+    } else {
+      resumeMutation.mutate({ provider: effectiveProvider, accountId });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -121,6 +162,8 @@ export function AuthMonitor() {
           <AccountFlowViz
             providerData={selectedProviderData}
             onBack={() => setSelectedProvider(null)}
+            onPauseToggle={handlePauseToggle}
+            isPausingAccount={pauseMutation.isPending || resumeMutation.isPending}
           />
         ) : (
           <div className="p-6">

@@ -110,7 +110,7 @@ export function ProviderCard({
           return (
             <div key={acc.id} className="relative">
               <div
-                className="w-2 h-2 rounded-full"
+                className={cn('w-2 h-2 rounded-full', acc.paused && 'opacity-50')}
                 style={{ backgroundColor: acc.color }}
                 title={privacyMode ? '••••••' : cleanEmail(acc.email)}
               />

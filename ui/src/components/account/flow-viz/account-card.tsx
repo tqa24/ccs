@@ -4,15 +4,18 @@
 
 import {
   cn,
-  sortModelsByPriority,
   formatResetTime,
-  getEarliestResetTime,
+  getClaudeResetTime,
   getMinClaudeQuota,
+  getModelsWithTiers,
+  groupModelsByTier,
+  type ModelTier,
 } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
-import { GripVertical, Loader2, Clock, Pause } from 'lucide-react';
+import { GripVertical, Loader2, Clock, Pause, Play } from 'lucide-react';
 import { useAccountQuota } from '@/hooks/use-cliproxy-stats';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 
 import type { AccountData, DragOffset } from './types';
 import { cleanEmail } from './utils';
@@ -34,6 +37,8 @@ interface AccountCardProps {
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: () => void;
+  onPauseToggle?: (accountId: string, paused: boolean) => void;
+  isPausingAccount?: boolean;
 }
 
 const BORDER_SIDE_MAP: Record<Zone, string> = {
@@ -77,6 +82,8 @@ export function AccountCard({
   onPointerDown,
   onPointerMove,
   onPointerUp,
+  onPauseToggle,
+  isPausingAccount,
 }: AccountCardProps) {
   const borderSide = BORDER_SIDE_MAP[zone];
   const borderColor = getBorderColorStyle(zone, account.color);
@@ -109,7 +116,8 @@ export function AccountCard({
         borderSide,
         'select-none touch-none',
         isHovered && 'bg-muted/50 dark:bg-zinc-800/60',
-        isDragging && 'cursor-grabbing shadow-xl scale-105 z-50'
+        isDragging && 'cursor-grabbing shadow-xl scale-105 z-50',
+        account.paused && 'opacity-60'
       )}
       style={{
         ...borderColor,
@@ -117,7 +125,7 @@ export function AccountCard({
       }}
     >
       <GripVertical className="absolute top-2 right-2 w-4 h-4 text-muted-foreground/40" />
-      <div className="flex justify-between items-start mb-1 mr-4">
+      <div className="flex items-center gap-1.5 mb-1 mr-4">
         <span
           className={cn(
             'text-xs font-semibold text-foreground tracking-tight truncate max-w-[100px]',
@@ -126,6 +134,39 @@ export function AccountCard({
         >
           {cleanEmail(account.email)}
         </span>
+        {onPauseToggle && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn(
+                    'h-4 w-4 shrink-0',
+                    'transition-all rounded-full',
+                    account.paused ? 'bg-amber-500/20 hover:bg-amber-500/30' : 'hover:bg-muted'
+                  )}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPauseToggle(account.id, !account.paused);
+                  }}
+                  disabled={isPausingAccount}
+                >
+                  {isPausingAccount ? (
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                  ) : account.paused ? (
+                    <Play className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />
+                  ) : (
+                    <Pause className="w-2.5 h-2.5 text-muted-foreground/50 hover:text-foreground" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {account.paused ? 'Resume account' : 'Pause account'}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
       <AccountCardStats
         success={account.successCount}
@@ -180,16 +221,37 @@ export function AccountCard({
                 <TooltipContent side="top" className="max-w-xs">
                   <div className="text-xs space-y-1">
                     <p className="font-medium">Model Quotas:</p>
-                    {sortModelsByPriority(quota?.models || []).map((m) => (
-                      <div key={m.name} className="flex justify-between gap-4">
-                        <span className="truncate">{m.displayName || m.name}</span>
-                        <span className="font-mono">{m.percentage}%</span>
-                      </div>
-                    ))}
                     {(() => {
-                      const resetTime = getEarliestResetTime(quota?.models || []);
+                      const tiered = getModelsWithTiers(quota?.models || []);
+                      const groups = groupModelsByTier(tiered);
+                      const tierOrder: ModelTier[] = ['primary', 'gemini-3', 'gemini-2', 'other'];
+                      return tierOrder.map((tier, idx) => {
+                        const models = groups.get(tier);
+                        if (!models || models.length === 0) return null;
+                        const isFirst = tierOrder
+                          .slice(0, idx)
+                          .every((t) => !groups.get(t)?.length);
+                        return (
+                          <div key={tier}>
+                            {!isFirst && <div className="border-t border-border/40 my-1" />}
+                            {models.map((m) => (
+                              <div key={m.name} className="flex justify-between gap-4">
+                                <span className={cn('truncate', m.exhausted && 'text-red-500')}>
+                                  {m.displayName}
+                                </span>
+                                <span className={cn('font-mono', m.exhausted && 'text-red-500')}>
+                                  {m.percentage}%
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      });
+                    })()}
+                    {(() => {
+                      const resetTime = getClaudeResetTime(quota?.models || []);
                       return resetTime ? (
-                        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-border/50">
+                        <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
                           <Clock className="w-3 h-3 text-blue-400" />
                           <span className="text-blue-400 font-medium">
                             Resets {formatResetTime(resetTime)}
@@ -202,16 +264,9 @@ export function AccountCard({
               </Tooltip>
             </TooltipProvider>
           ) : quota?.error ? (
-            quota.error === 'Account is paused' ? (
-              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
-                <Pause className="w-3 h-3" />
-                <span className="text-[9px] font-medium uppercase tracking-wide">Paused</span>
-              </div>
-            ) : (
-              <div className="text-[8px] text-muted-foreground/60 truncate" title={quota.error}>
-                {quota.error.length > 20 ? `${quota.error.slice(0, 18)}...` : quota.error}
-              </div>
-            )
+            <div className="text-[8px] text-muted-foreground/60 truncate" title={quota.error}>
+              {quota.error.length > 20 ? `${quota.error.slice(0, 18)}...` : quota.error}
+            </div>
           ) : null}
         </div>
       )}
