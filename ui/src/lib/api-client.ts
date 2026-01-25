@@ -415,6 +415,30 @@ export const api = {
           `/cliproxy/auth/accounts/${provider}/${accountId}/resume`,
           { method: 'POST' }
         ),
+      /** Solo mode: activate one account, pause all others */
+      solo: (provider: string, accountId: string) =>
+        request<{ activated: string; paused: string[] }>('/accounts/solo', {
+          method: 'POST',
+          body: JSON.stringify({ provider, accountId }),
+        }),
+      /** Bulk pause multiple accounts */
+      bulkPause: (provider: string, accountIds: string[]) =>
+        request<{ succeeded: string[]; failed: Array<{ id: string; reason: string }> }>(
+          '/accounts/bulk-pause',
+          {
+            method: 'POST',
+            body: JSON.stringify({ provider, accountIds }),
+          }
+        ),
+      /** Bulk resume multiple accounts */
+      bulkResume: (provider: string, accountIds: string[]) =>
+        request<{ succeeded: string[]; failed: Array<{ id: string; reason: string }> }>(
+          '/accounts/bulk-resume',
+          {
+            method: 'POST',
+            body: JSON.stringify({ provider, accountIds }),
+          }
+        ),
     },
     // OAuth flow
     auth: {

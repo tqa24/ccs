@@ -11,7 +11,7 @@ import { getAuthDir } from './config-generator';
 import { CLIProxyProvider } from './types';
 import {
   getProviderAccounts,
-  isAccountPaused,
+  getPausedDir,
   setAccountTier,
   type AccountInfo,
   type AccountTier,
@@ -242,57 +242,58 @@ async function refreshAccessToken(
  * Read auth data from auth file (access token, project_id, expiry status)
  */
 function readAuthData(provider: CLIProxyProvider, accountId: string): AuthData | null {
-  const authDir = getAuthDir();
-
-  // Check if auth directory exists
-  if (!fs.existsSync(authDir)) {
-    return null;
-  }
+  // Check both active and paused auth directories (quota needed for paused accounts too)
+  const authDirs = [getAuthDir(), getPausedDir()];
 
   // Sanitize accountId (email) to match auth file naming: @ and . → _
   const sanitizedId = sanitizeEmail(accountId);
   const prefix = provider === 'agy' ? 'antigravity-' : `${provider}-`;
   const expectedFile = `${prefix}${sanitizedId}.json`;
-  const filePath = path.join(authDir, expectedFile);
 
-  // Direct file access (most common case)
-  if (fs.existsSync(filePath)) {
-    try {
-      const content = fs.readFileSync(filePath, 'utf-8');
-      const data = JSON.parse(content) as AntigravityAuthFile;
-      if (!data.access_token) return null;
-      return {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token || null,
-        projectId: data.project_id || null,
-        isExpired: isTokenExpired(data.expired),
-        expiresAt: data.expired || null,
-      };
-    } catch {
-      return null;
-    }
-  }
+  for (const authDir of authDirs) {
+    if (!fs.existsSync(authDir)) continue;
 
-  // Fallback: scan directory for matching email in file content
-  const files = fs.readdirSync(authDir);
-  for (const file of files) {
-    if (file.startsWith(prefix) && file.endsWith('.json')) {
-      const candidatePath = path.join(authDir, file);
+    const filePath = path.join(authDir, expectedFile);
+
+    // Direct file access (most common case)
+    if (fs.existsSync(filePath)) {
       try {
-        const content = fs.readFileSync(candidatePath, 'utf-8');
+        const content = fs.readFileSync(filePath, 'utf-8');
         const data = JSON.parse(content) as AntigravityAuthFile;
-        // Match by email field inside the auth file
-        if (data.email === accountId && data.access_token) {
-          return {
-            accessToken: data.access_token,
-            refreshToken: data.refresh_token || null,
-            projectId: data.project_id || null,
-            isExpired: isTokenExpired(data.expired),
-            expiresAt: data.expired || null,
-          };
-        }
+        if (!data.access_token) continue;
+        return {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token || null,
+          projectId: data.project_id || null,
+          isExpired: isTokenExpired(data.expired),
+          expiresAt: data.expired || null,
+        };
       } catch {
         continue;
+      }
+    }
+
+    // Fallback: scan directory for matching email in file content
+    const files = fs.readdirSync(authDir);
+    for (const file of files) {
+      if (file.startsWith(prefix) && file.endsWith('.json')) {
+        const candidatePath = path.join(authDir, file);
+        try {
+          const content = fs.readFileSync(candidatePath, 'utf-8');
+          const data = JSON.parse(content) as AntigravityAuthFile;
+          // Match by email field inside the auth file
+          if (data.email === accountId && data.access_token) {
+            return {
+              accessToken: data.access_token,
+              refreshToken: data.refresh_token || null,
+              projectId: data.project_id || null,
+              isExpired: isTokenExpired(data.expired),
+              expiresAt: data.expired || null,
+            };
+          }
+        } catch {
+          continue;
+        }
       }
     }
   }
@@ -493,14 +494,21 @@ async function fetchAvailableModels(accessToken: string, _projectId: string): Pr
         const remaining =
           quotaInfo.remainingFraction ?? quotaInfo.remaining_fraction ?? quotaInfo.remaining;
 
-        // Skip invalid values (NaN, Infinity, non-numbers)
-        if (typeof remaining !== 'number' || !isFinite(remaining)) continue;
-
-        // Convert to percentage (0-100) and clamp to valid range
-        const percentage = Math.max(0, Math.min(100, Math.round(remaining * 100)));
-
         // Extract reset time
         const resetTime = quotaInfo.resetTime || quotaInfo.reset_time || null;
+
+        // If remaining is not a valid number but resetTime exists, treat as exhausted (0%)
+        // This happens when Claude models hit quota limit - API returns resetTime but no fraction
+        let percentage: number;
+        if (typeof remaining === 'number' && isFinite(remaining)) {
+          percentage = Math.max(0, Math.min(100, Math.round(remaining * 100)));
+        } else if (resetTime) {
+          // Model is exhausted but has reset time - show as 0%
+          percentage = 0;
+        } else {
+          // No valid data, skip this model
+          continue;
+        }
 
         models.push({
           name: modelId,
@@ -554,19 +562,7 @@ export async function fetchAccountQuota(
     };
   }
 
-  // Check if account is paused (token moved to auth-paused/ directory)
-  if (isAccountPaused(provider, accountId)) {
-    const error = 'Account is paused';
-    if (verbose) console.error(`[i] ${error}`);
-    return {
-      success: false,
-      models: [],
-      lastUpdated: Date.now(),
-      error,
-    };
-  }
-
-  // Read auth data from auth file
+  // Read auth data from auth file (checks both active and paused directories)
   const authData = readAuthData(provider, accountId);
   if (!authData) {
     const error = 'Auth file not found for account';

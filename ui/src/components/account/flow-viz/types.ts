@@ -16,6 +16,7 @@ export interface AccountData {
   failureCount: number;
   lastUsedAt?: string;
   color: string;
+  paused?: boolean;
 }
 
 export interface ProviderData {
@@ -28,6 +29,8 @@ export interface ProviderData {
 export interface AccountFlowVizProps {
   providerData: ProviderData;
   onBack?: () => void;
+  onPauseToggle?: (accountId: string, paused: boolean) => void;
+  isPausingAccount?: boolean;
 }
 
 export interface ConnectionEvent {

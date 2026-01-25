@@ -127,6 +127,7 @@ export function usePauseAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
       toast.success('Account paused');
     },
     onError: (error: Error) => {
@@ -144,7 +145,79 @@ export function useResumeAccount() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
       queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
       toast.success('Account resumed');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useSoloAccount() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
+      api.cliproxy.accounts.solo(provider, accountId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
+      const pausedCount = data.paused.length;
+      toast.success(
+        `Solo mode: paused ${pausedCount} other account${pausedCount !== 1 ? 's' : ''}`
+      );
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useBulkPauseAccounts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ provider, accountIds }: { provider: string; accountIds: string[] }) =>
+      api.cliproxy.accounts.bulkPause(provider, accountIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
+      toast.success(
+        `Paused ${data.succeeded.length} account${data.succeeded.length !== 1 ? 's' : ''}`
+      );
+      if (data.failed.length > 0) {
+        toast.warning(
+          `${data.failed.length} account${data.failed.length !== 1 ? 's' : ''} failed to pause`
+        );
+      }
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useBulkResumeAccounts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ provider, accountIds }: { provider: string; accountIds: string[] }) =>
+      api.cliproxy.accounts.bulkResume(provider, accountIds),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
+      toast.success(
+        `Resumed ${data.succeeded.length} account${data.succeeded.length !== 1 ? 's' : ''}`
+      );
+      if (data.failed.length > 0) {
+        toast.warning(
+          `${data.failed.length} account${data.failed.length !== 1 ? 's' : ''} failed to resume`
+        );
+      }
     },
     onError: (error: Error) => {
       toast.error(error.message);
