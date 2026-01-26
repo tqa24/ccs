@@ -127,14 +127,17 @@ router.get('/aliases', async (_req: Request, res: Response): Promise<void> => {
 router.post('/aliases', async (req: Request, res: Response): Promise<void> => {
   try {
     const { profile, from, to } = req.body;
+    const trimmedProfile = typeof profile === 'string' ? profile.trim() : '';
+    const trimmedFrom = typeof from === 'string' ? from.trim() : '';
+    const trimmedTo = typeof to === 'string' ? to.trim() : '';
 
-    if (!profile || !from || !to) {
+    if (!trimmedProfile || !trimmedFrom || !trimmedTo) {
       res.status(400).json({ error: 'Missing required fields: profile, from, to' });
       return;
     }
 
-    addProfileAlias(profile, from, to);
-    res.json({ success: true, profile, from, to });
+    addProfileAlias(trimmedProfile, trimmedFrom, trimmedTo);
+    res.json({ success: true, profile: trimmedProfile, from: trimmedFrom, to: trimmedTo });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
@@ -148,14 +151,16 @@ router.post('/aliases', async (req: Request, res: Response): Promise<void> => {
 router.delete('/aliases', async (req: Request, res: Response): Promise<void> => {
   try {
     const { profile, from } = req.body;
+    const trimmedProfile = typeof profile === 'string' ? profile.trim() : '';
+    const trimmedFrom = typeof from === 'string' ? from.trim() : '';
 
-    if (!profile || !from) {
+    if (!trimmedProfile || !trimmedFrom) {
       res.status(400).json({ error: 'Missing required fields: profile, from' });
       return;
     }
 
-    const removed = removeProfileAlias(profile, from);
-    res.json({ success: removed, profile, from });
+    const removed = removeProfileAlias(trimmedProfile, trimmedFrom);
+    res.json({ success: removed, profile: trimmedProfile, from: trimmedFrom });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

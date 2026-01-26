@@ -66,8 +66,14 @@ export interface AliasesResponse {
 async function fetchSyncStatus(): Promise<SyncStatus> {
   const response = await fetch('/api/cliproxy/sync/status');
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch sync status');
+    let message = 'Failed to fetch sync status';
+    try {
+      const error = await response.json();
+      message = error.error || error.message || message;
+    } catch {
+      // Non-JSON response (e.g., 502 Bad Gateway)
+    }
+    throw new Error(message);
   }
   return response.json();
 }
@@ -78,8 +84,14 @@ async function fetchSyncStatus(): Promise<SyncStatus> {
 async function fetchSyncPreview(): Promise<SyncPreview> {
   const response = await fetch('/api/cliproxy/sync/preview');
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch sync preview');
+    let message = 'Failed to fetch sync preview';
+    try {
+      const error = await response.json();
+      message = error.error || error.message || message;
+    } catch {
+      // Non-JSON response (e.g., 502 Bad Gateway)
+    }
+    throw new Error(message);
   }
   return response.json();
 }
@@ -93,13 +105,18 @@ async function executeSync(): Promise<SyncResult> {
     headers: { 'Content-Type': 'application/json' },
   });
 
-  const data = await response.json();
-
   if (!response.ok) {
-    throw new Error(data.error || 'Sync failed');
+    let message = 'Sync failed';
+    try {
+      const data = await response.json();
+      message = data.error || data.message || message;
+    } catch {
+      // Non-JSON response (e.g., 502 Bad Gateway)
+    }
+    throw new Error(message);
   }
 
-  return data;
+  return response.json();
 }
 
 /**
@@ -108,8 +125,14 @@ async function executeSync(): Promise<SyncResult> {
 async function fetchAliases(): Promise<AliasesResponse> {
   const response = await fetch('/api/cliproxy/sync/aliases');
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch aliases');
+    let message = 'Failed to fetch aliases';
+    try {
+      const error = await response.json();
+      message = error.error || error.message || message;
+    } catch {
+      // Non-JSON response (e.g., 502 Bad Gateway)
+    }
+    throw new Error(message);
   }
   return response.json();
 }
@@ -129,8 +152,14 @@ async function addAlias(params: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to add alias');
+    let message = 'Failed to add alias';
+    try {
+      const error = await response.json();
+      message = error.error || error.message || message;
+    } catch {
+      // Non-JSON response (e.g., 502 Bad Gateway)
+    }
+    throw new Error(message);
   }
 
   return response.json();
@@ -150,8 +179,14 @@ async function removeAlias(params: {
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.error || 'Failed to remove alias');
+    let message = 'Failed to remove alias';
+    try {
+      const error = await response.json();
+      message = error.error || error.message || message;
+    } catch {
+      // Non-JSON response (e.g., 502 Bad Gateway)
+    }
+    throw new Error(message);
   }
 
   return response.json();

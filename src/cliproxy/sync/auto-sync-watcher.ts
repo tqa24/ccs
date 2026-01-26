@@ -152,6 +152,9 @@ export async function stopAutoSyncWatcher(): Promise<void> {
     watcherInstance = null;
     log('Watcher stopped');
   }
+
+  // Reset flag to prevent stale state
+  isSyncing = false;
 }
 
 /**

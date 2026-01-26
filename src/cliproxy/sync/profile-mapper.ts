@@ -111,7 +111,11 @@ export function mapProfileToClaudeKey(profile: SyncableProfile): ClaudeKey | nul
   const baseUrl = env.ANTHROPIC_BASE_URL;
 
   // Generate prefix from profile name (e.g., "glm" -> "glm-")
-  const prefix = `${sanitizeProfileName(profile.name)}-`;
+  const sanitizedName = sanitizeProfileName(profile.name);
+  if (!sanitizedName || sanitizedName === '') {
+    return null; // Skip profiles with invalid names
+  }
+  const prefix = `${sanitizedName}-`;
 
   // Load model aliases for this profile
   const aliases = getProfileAliases(profile.name);

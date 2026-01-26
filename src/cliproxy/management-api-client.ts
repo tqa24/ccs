@@ -28,7 +28,7 @@ const DEFAULT_HTTPS_PORT = 443;
  * Get effective port based on config and protocol.
  */
 function getEffectivePort(port: number | undefined, protocol: 'http' | 'https'): number {
-  if (port !== undefined && port > 0 && port <= 65535) {
+  if (port !== undefined && Number.isInteger(port) && port > 0 && port <= 65535) {
     return port;
   }
   return protocol === 'https' ? DEFAULT_HTTPS_PORT : DEFAULT_HTTP_PORT;
