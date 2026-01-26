@@ -113,12 +113,14 @@ async function selectOption(
 }
 
 /**
- * Check if this is a first-time install (config exists but is empty/unconfigured)
- * Returns true if user should be prompted to run setup wizard
+ * Check if this is a first-time install (config exists but is empty/unconfigured).
+ * Returns true if user should be prompted to run setup wizard.
  *
- * IMPORTANT: Also checks legacy config.json for existing profiles to avoid
- * treating users with existing GLM/Kimi setups as "first-time installs"
- * (Fix for issue #195 - GLM auth persistence regression)
+ * Detection priority:
+ * 1. setup_completed flag (explicit wizard completion)
+ * 2. Unified config content (profiles, accounts, variants, oauth_accounts, remote proxy)
+ * 3. Legacy config.json profiles (GLM, Kimi)
+ * 4. Legacy profiles.json accounts
  */
 export function isFirstTimeInstall(): boolean {
   // Check unified config first (config.yaml)
@@ -129,6 +131,11 @@ export function isFirstTimeInstall(): boolean {
     if (loaded === null) {
       console.log(warn('Warning: ~/.ccs/config.yaml exists but appears corrupted'));
       console.log(info('  Run `ccs setup --force` to reset, or `ccs doctor` to diagnose'));
+      return false;
+    }
+
+    // If setup wizard was completed, NOT first-time install
+    if (loaded.setup_completed) {
       return false;
     }
 
@@ -370,6 +377,7 @@ async function runSetupWizard(force: boolean = false): Promise<void> {
     }
 
     // Save config
+    config.setup_completed = true;
     saveUnifiedConfig(config);
 
     // Final summary

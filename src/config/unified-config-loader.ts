@@ -139,6 +139,7 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
   const defaults = createEmptyUnifiedConfig();
   return {
     version: partial.version ?? defaults.version,
+    setup_completed: partial.setup_completed,
     default: partial.default ?? defaults.default,
     accounts: partial.accounts ?? defaults.accounts,
     profiles: partial.profiles ?? defaults.profiles,
@@ -326,6 +327,9 @@ function generateYamlWithComments(config: UnifiedConfig): string {
 
   // Version
   lines.push(`version: ${config.version}`);
+  if (config.setup_completed !== undefined) {
+    lines.push(`setup_completed: ${config.setup_completed}`);
+  }
   lines.push('');
 
   // Default

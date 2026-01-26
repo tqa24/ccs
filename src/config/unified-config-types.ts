@@ -521,6 +521,8 @@ export const DEFAULT_DASHBOARD_AUTH_CONFIG: DashboardAuthConfig = {
 export interface UnifiedConfig {
   /** Config version (7 for quota management) */
   version: number;
+  /** Flag indicating setup wizard has been completed */
+  setup_completed?: boolean;
   /** Default profile name to use when none specified */
   default?: string;
   /** Account-based profiles (isolated Claude instances) */

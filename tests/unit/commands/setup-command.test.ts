@@ -115,6 +115,51 @@ cliproxy_server:
     });
   });
 
+  describe('setup_completed flag detection', () => {
+    it('should detect setup_completed flag in unified config', () => {
+      createConfigYaml(`
+version: 8
+setup_completed: true
+profiles: {}
+accounts: {}
+`);
+
+      const content = fs.readFileSync(path.join(testDir, 'config.yaml'), 'utf8');
+      const hasSetupCompleted = content.includes('setup_completed: true');
+
+      expect(hasSetupCompleted).toBe(true);
+    });
+
+    it('should treat missing setup_completed as first-time eligible', () => {
+      createConfigYaml(`
+version: 8
+profiles: {}
+accounts: {}
+`);
+
+      const content = fs.readFileSync(path.join(testDir, 'config.yaml'), 'utf8');
+      const hasSetupCompleted = content.includes('setup_completed: true');
+
+      expect(hasSetupCompleted).toBe(false);
+    });
+
+    it('should treat setup_completed: false as first-time eligible', () => {
+      createConfigYaml(`
+version: 8
+setup_completed: false
+profiles: {}
+accounts: {}
+`);
+
+      const content = fs.readFileSync(path.join(testDir, 'config.yaml'), 'utf8');
+      const hasSetupCompletedTrue = content.includes('setup_completed: true');
+      const hasSetupCompletedFalse = content.includes('setup_completed: false');
+
+      expect(hasSetupCompletedTrue).toBe(false);
+      expect(hasSetupCompletedFalse).toBe(true);
+    });
+  });
+
   describe('corrupted config handling', () => {
     it('should handle corrupted config.json gracefully', () => {
       fs.writeFileSync(path.join(testDir, 'config.json'), 'not valid json{{{', 'utf8');

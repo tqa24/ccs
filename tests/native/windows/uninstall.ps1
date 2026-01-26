@@ -191,6 +191,8 @@ Test-Case "Empty uninstall: Reports 0 items removed" "Zero removed count" {
 # ============================================================================
 
 # Install first so we can test uninstall
+# NOTE: --install is currently a no-op (under development), but we call it
+# to test the install/uninstall cycle works without errors
 Write-Host ""
 Write-ColorOutput "Setting up for install/uninstall cycle test..." "Yellow"
 $originalHome = $env:HOME
@@ -414,6 +416,100 @@ Test-Case "Edge case: Missing parent directories" "Handles missing .claude direc
     # Ensure .claude directory doesn't exist
     if (Test-Path $TestClaudeDir) {
         Remove-Item $TestClaudeDir -Recurse -Force
+    }
+
+    $env:HOME = $TestHome
+    try {
+        & $CcsPath --uninstall | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# ============================================================================
+# TEST SECTION 7: PER-PROFILE HOOK BEHAVIOR (Global settings untouched)
+# ============================================================================
+
+Write-Host ""
+Write-ColorOutput "========================================" "Yellow"
+Write-ColorOutput "SECTION 7: PER-PROFILE HOOK BEHAVIOR" "Yellow"
+Write-ColorOutput "========================================" "Yellow"
+
+Test-Case "Per-profile: Uninstall does NOT touch global settings.json" "Global settings unchanged" {
+    # Setup: Create settings.json with user hook
+    New-Item -ItemType Directory -Path $TestClaudeDir -Force | Out-Null
+    $settingsPath = Join-Path $TestClaudeDir "settings.json"
+    $settingsContent = @'
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "WebSearch", "hooks": [{ "command": "my-custom-hook.sh" }] }
+    ]
+  }
+}
+'@
+    Set-Content -Path $settingsPath -Value $settingsContent
+
+    # Uninstall
+    $env:HOME = $TestHome
+    try {
+        & $CcsPath --uninstall | Out-Null
+    } catch { }
+
+    # Verify global settings unchanged
+    $content = Get-Content -Path $settingsPath -Raw
+    $content -match "my-custom-hook"
+}
+
+Test-Case "Per-profile: Uninstall preserves CCS hooks in global settings (not touched)" "Both hooks preserved" {
+    # Setup: Create settings.json with CCS hook (old format - shouldn't be touched)
+    New-Item -ItemType Directory -Path $TestClaudeDir -Force | Out-Null
+    $settingsPath = Join-Path $TestClaudeDir "settings.json"
+    $settingsContent = @'
+{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "WebSearch", "hooks": [{ "command": "node ~/.ccs/hooks/websearch-transformer.cjs" }] },
+      { "matcher": "WebSearch", "hooks": [{ "command": "my-custom-hook.sh" }] }
+    ]
+  }
+}
+'@
+    Set-Content -Path $settingsPath -Value $settingsContent
+
+    # Uninstall - should NOT modify global settings
+    $env:HOME = $TestHome
+    try {
+        & $CcsPath --uninstall | Out-Null
+    } catch { }
+
+    # Both hooks should still be in global settings (not touched)
+    $content = Get-Content -Path $settingsPath -Raw
+    ($content -match "websearch-transformer") -and ($content -match "my-custom-hook")
+}
+
+Test-Case "Per-profile: Migration marker cleanup on uninstall" "Marker file removed" {
+    # Setup: Create ~/.ccs/.hook-migrated marker
+    $ccsDir = Join-Path $TestHome ".ccs"
+    New-Item -ItemType Directory -Path $ccsDir -Force | Out-Null
+    Set-Content -Path (Join-Path $ccsDir ".hook-migrated") -Value "2026-01-25T00:00:00.000Z"
+
+    # Uninstall
+    $env:HOME = $TestHome
+    try {
+        & $CcsPath --uninstall | Out-Null
+    } catch { }
+
+    # Verify marker removed
+    -not (Test-Path (Join-Path $ccsDir ".hook-migrated"))
+}
+
+Test-Case "Per-profile: Handles missing settings.json" "No error when settings.json missing" {
+    # Ensure settings.json doesn't exist
+    $settingsPath = Join-Path $TestClaudeDir "settings.json"
+    if (Test-Path $settingsPath) {
+        Remove-Item $settingsPath -Force
     }
 
     $env:HOME = $TestHome
