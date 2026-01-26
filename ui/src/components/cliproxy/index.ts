@@ -27,3 +27,7 @@ export { YamlEditor } from './config/yaml-editor';
 export { CredentialHealthList } from './overview/credential-health-list';
 export { ModelPreferencesGrid } from './overview/model-preferences-grid';
 export { QuickStatsRow } from './overview/quick-stats-row';
+
+// Sync components (from subdirectory)
+export { SyncStatusCard } from './sync/sync-status-card';
+export { SyncDialog } from './sync/sync-dialog';
