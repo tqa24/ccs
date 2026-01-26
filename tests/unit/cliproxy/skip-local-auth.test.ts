@@ -185,7 +185,7 @@ describe('skip-local-auth logic', () => {
     });
 
     it('should not run preflight for non-agy providers regardless of mode', () => {
-      const providers = ['gemini', 'codex', 'copilot', 'kiro'];
+      const providers = ['gemini', 'codex', 'ghcp', 'kiro'];
 
       for (const provider of providers) {
         const shouldRunPreflight = provider === 'agy' && !false;
