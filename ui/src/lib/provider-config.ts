@@ -35,6 +35,7 @@ export const PROVIDER_ASSETS: Record<string, string> = {
   agy: '/assets/providers/agy.png',
   codex: '/assets/providers/openai.svg',
   qwen: '/assets/providers/qwen-color.svg',
+  iflow: '/assets/providers/iflow.png',
   kiro: '/assets/providers/kiro.png',
   ghcp: '/assets/providers/copilot.svg',
   claude: '/assets/providers/claude.svg',
