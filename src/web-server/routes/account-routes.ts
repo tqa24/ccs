@@ -17,20 +17,13 @@ import {
   soloAccount,
 } from '../../cliproxy/account-manager';
 import type { CLIProxyProvider } from '../../cliproxy/types';
+import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 
 const router = Router();
 const registry = new ProfileRegistry();
 
-/** Valid CLIProxy providers */
-const VALID_PROVIDERS: CLIProxyProvider[] = [
-  'gemini',
-  'codex',
-  'agy',
-  'qwen',
-  'iflow',
-  'kiro',
-  'ghcp',
-];
+/** Valid CLIProxy providers - derived from canonical CLIPROXY_PROFILES */
+const VALID_PROVIDERS: CLIProxyProvider[] = [...CLIPROXY_PROFILES];
 
 /** Check if provider is valid */
 function isValidProvider(provider: string): provider is CLIProxyProvider {

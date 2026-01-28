@@ -35,19 +35,12 @@ import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { tryKiroImport } from '../../cliproxy/auth/kiro-import';
 import { getProviderTokenDir } from '../../cliproxy/auth/token-manager';
 import type { CLIProxyProvider } from '../../cliproxy/types';
+import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 
 const router = Router();
 
-// Valid providers list
-const validProviders: CLIProxyProvider[] = [
-  'gemini',
-  'codex',
-  'agy',
-  'qwen',
-  'iflow',
-  'kiro',
-  'ghcp',
-];
+// Valid providers list - derived from canonical CLIPROXY_PROFILES
+const validProviders: CLIProxyProvider[] = [...CLIPROXY_PROFILES];
 
 /**
  * GET /api/cliproxy/auth - Get auth status for built-in CLIProxy profiles

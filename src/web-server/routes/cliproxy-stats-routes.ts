@@ -14,6 +14,7 @@ import {
 } from '../../cliproxy/stats-fetcher';
 import { fetchAccountQuota } from '../../cliproxy/quota-fetcher';
 import type { CLIProxyProvider } from '../../cliproxy/types';
+import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import {
   getCliproxyWritablePath,
   getCliproxyConfigPath,
@@ -517,16 +518,8 @@ router.put('/models/:provider', async (req: Request, res: Response): Promise<voi
 router.get('/quota/:provider/:accountId', async (req: Request, res: Response): Promise<void> => {
   const { provider, accountId } = req.params;
 
-  // Validate provider
-  const validProviders: CLIProxyProvider[] = [
-    'agy',
-    'gemini',
-    'codex',
-    'qwen',
-    'iflow',
-    'kiro',
-    'ghcp',
-  ];
+  // Validate provider - use canonical CLIPROXY_PROFILES
+  const validProviders: CLIProxyProvider[] = [...CLIPROXY_PROFILES];
   if (!validProviders.includes(provider as CLIProxyProvider)) {
     res.status(400).json({
       error: 'Invalid provider',
