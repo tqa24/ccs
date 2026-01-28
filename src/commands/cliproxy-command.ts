@@ -152,7 +152,12 @@ function parseProfileArgs(args: string[]): CliproxyProfileArgs {
 }
 
 function formatModelOption(model: ModelEntry): string {
-  const tierBadge = model.tier === 'paid' ? color(' [Paid Tier]', 'warning') : '';
+  const tierBadge =
+    model.tier === 'ultra'
+      ? color(' [Ultra]', 'warning')
+      : model.tier === 'pro'
+        ? color(' [Pro]', 'warning')
+        : '';
   return `${model.name}${tierBadge}`;
 }
 

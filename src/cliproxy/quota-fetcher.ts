@@ -303,43 +303,19 @@ function readAuthData(provider: CLIProxyProvider, accountId: string): AuthData |
 
 /**
  * Map tier ID string to AccountTier type
- * Simplified: anything with 'pro' or 'ultra' = paid, 'free'/'legacy' = free
+ * Priority: ultra > pro > free
  */
 function mapTierString(tierStr: string | undefined): AccountTier {
   if (!tierStr) return 'unknown';
   const normalized = tierStr.toLowerCase();
-  if (normalized.includes('ultra') || normalized.includes('pro')) return 'paid';
+  if (normalized.includes('ultra')) return 'ultra';
+  if (normalized.includes('pro')) return 'pro';
   if (normalized.includes('free') || normalized.includes('legacy')) {
     return 'free';
   }
   // "standard-tier" and other unknown values should NOT map to 'free'
   // Let inferTierFromModels handle the detection
   return 'unknown';
-}
-
-/**
- * Infer tier from model access patterns.
- * - Paid: Has access to Claude models OR premium Gemini models
- * - Free: Only basic models
- *
- * Claude models are Ultra-exclusive, premium Gemini indicates Pro/Ultra.
- * Both are "paid" tier for our purposes.
- */
-function inferTierFromModels(models: ModelQuota[]): AccountTier {
-  if (models.length === 0) return 'unknown';
-
-  // Check for Claude models (Ultra-exclusive) or premium Gemini (Pro/Ultra)
-  const hasPaidAccess = models.some((m) => {
-    const name = m.name.toLowerCase();
-    return (
-      name.includes('claude') ||
-      name.includes('gemini-3-pro') ||
-      name.includes('gemini-2.5-pro') ||
-      name.includes('gemini-pro-high')
-    );
-  });
-
-  return hasPaidAccess ? 'paid' : 'unknown';
 }
 
 /**
@@ -650,15 +626,14 @@ export async function fetchAccountQuota(
         refreshResult.accessToken,
         projectId as string
       );
-      // Determine tier: model access (Claude = Ultra) > API tier > fallback
+      // Determine tier from API response only (model inference is unreliable)
       if (retryResult.success) {
-        let finalTier = inferTierFromModels(retryResult.models);
-        if (finalTier === 'unknown') {
-          finalTier = apiTier !== 'unknown' ? apiTier : 'paid';
-        }
+        const finalTier = apiTier !== 'unknown' ? apiTier : 'unknown';
         retryResult.tier = finalTier;
         retryResult.accountId = accountId;
-        setAccountTier(provider, accountId, finalTier);
+        if (finalTier !== 'unknown') {
+          setAccountTier(provider, accountId, finalTier);
+        }
         if (verbose && retryResult.error) {
           console.log(`[!] Error: ${retryResult.error}`);
         }
@@ -667,15 +642,14 @@ export async function fetchAccountQuota(
     }
   }
 
-  // Determine tier: model access > API tier > fallback to paid
+  // Determine tier from API response only
   if (result.success) {
-    let finalTier = inferTierFromModels(result.models);
-    if (finalTier === 'unknown') {
-      finalTier = apiTier !== 'unknown' ? apiTier : 'paid';
-    }
+    const finalTier = apiTier !== 'unknown' ? apiTier : 'unknown';
     result.tier = finalTier;
     result.accountId = accountId;
-    setAccountTier(provider, accountId, finalTier);
+    if (finalTier !== 'unknown') {
+      setAccountTier(provider, accountId, finalTier);
+    }
   }
 
   if (verbose && result.error) {

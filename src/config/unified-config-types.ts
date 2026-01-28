@@ -409,7 +409,7 @@ export interface QuotaManagementConfig {
 export const DEFAULT_AUTO_QUOTA_CONFIG: AutoQuotaConfig = {
   preflight_check: true,
   exhaustion_threshold: 5,
-  tier_priority: ['paid'],
+  tier_priority: ['ultra', 'pro', 'free'],
   cooldown_minutes: 5,
 };
 

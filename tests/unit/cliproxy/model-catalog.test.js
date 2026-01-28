@@ -88,12 +88,12 @@ describe('Model Catalog', () => {
       assert.strictEqual(MODEL_CATALOG.gemini.defaultModel, 'gemini-2.5-pro');
     });
 
-    it('includes Gemini 3 Pro with paid tier', () => {
+    it('includes Gemini 3 Pro with pro tier', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const gem3 = MODEL_CATALOG.gemini.models.find((m) => m.id === 'gemini-3-pro-preview');
       assert(gem3, 'Should include Gemini 3 Pro');
       assert.strictEqual(gem3.name, 'Gemini 3 Pro');
-      assert.strictEqual(gem3.tier, 'paid');
+      assert.strictEqual(gem3.tier, 'pro');
     });
 
     it('includes Gemini 2.5 Pro without tier (free)', () => {
@@ -197,7 +197,7 @@ describe('Model Catalog', () => {
           assert(typeof model.name === 'string', `Model name should be string`);
           // tier is optional
           if (model.tier !== undefined) {
-            assert(['free', 'paid'].includes(model.tier), `Invalid tier: ${model.tier}`);
+            assert(['free', 'pro', 'ultra'].includes(model.tier), `Invalid tier: ${model.tier}`);
           }
         }
       }
