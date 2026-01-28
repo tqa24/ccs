@@ -101,6 +101,7 @@ export function useAuthMonitorData(): AuthMonitorData {
           color: ACCOUNT_COLORS[colorIndex % ACCOUNT_COLORS.length],
           projectId: account.projectId,
           paused: account.paused,
+          tier: account.tier,
         };
         accountsList.push(row);
         providerData.accounts.push(row);

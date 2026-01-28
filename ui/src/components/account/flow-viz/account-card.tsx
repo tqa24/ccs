@@ -99,6 +99,10 @@ export function AccountCard({
   // Show minimum quota of Claude models (primary), fallback to min of all models
   const minQuota = quota?.success ? getMinClaudeQuota(quota.models) : null;
 
+  // Tier badge (AGY only) - show P for Pro, U for Ultra
+  const showTierBadge =
+    isAgy && account.tier && account.tier !== 'unknown' && account.tier !== 'free';
+
   return (
     <div
       data-account-index={originalIndex}
@@ -124,16 +128,33 @@ export function AccountCard({
         transform: `translate(${offset.x}px, ${offset.y}px)${isDragging ? ' scale(1.05)' : ''}`,
       }}
     >
-      <GripVertical className="absolute top-2 right-2 w-4 h-4 text-muted-foreground/40" />
-      <div className="flex items-center gap-1.5 mb-1 mr-4">
-        <span
-          className={cn(
-            'text-xs font-semibold text-foreground tracking-tight truncate max-w-[100px]',
-            privacyMode && PRIVACY_BLUR_CLASS
+      {/* Header row: Email + Tier | Pause button | Drag handle */}
+      <div className="flex items-center gap-1.5 mb-1">
+        {/* Email with tier badge inline */}
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <span
+            className={cn(
+              'text-xs font-semibold text-foreground tracking-tight truncate',
+              privacyMode && PRIVACY_BLUR_CLASS
+            )}
+          >
+            {cleanEmail(account.email)}
+          </span>
+          {showTierBadge && (
+            <span
+              className={cn(
+                'text-[7px] font-bold uppercase tracking-wide px-1 py-px rounded shrink-0',
+                account.tier === 'ultra'
+                  ? 'bg-violet-500/15 text-violet-600 dark:bg-violet-500/25 dark:text-violet-300'
+                  : 'bg-yellow-500/15 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400'
+              )}
+            >
+              {account.tier}
+            </span>
           )}
-        >
-          {cleanEmail(account.email)}
-        </span>
+        </div>
+
+        {/* Pause/Resume button */}
         {onPauseToggle && (
           <TooltipProvider>
             <Tooltip>
@@ -167,7 +188,11 @@ export function AccountCard({
             </Tooltip>
           </TooltipProvider>
         )}
+
+        {/* Drag handle */}
+        <GripVertical className="w-4 h-4 text-muted-foreground/40 shrink-0" />
       </div>
+
       <AccountCardStats
         success={account.successCount}
         failure={account.failureCount}

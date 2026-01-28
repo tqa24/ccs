@@ -128,14 +128,14 @@ export function AccountItem({
   return (
     <div
       className={cn(
-        'flex flex-col gap-2 p-3 rounded-lg border transition-colors',
+        'flex flex-col gap-2 p-3 rounded-lg border transition-colors overflow-hidden',
         account.isDefault ? 'border-primary/30 bg-primary/5' : 'border-border hover:bg-muted/30',
         account.paused && 'opacity-75',
         selected && 'ring-2 ring-primary/50 bg-primary/5'
       )}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           {/* Selection checkbox for bulk actions */}
           {selectable && (
             <button
@@ -179,13 +179,30 @@ export function AccountItem({
               </Tooltip>
             </TooltipProvider>
           )}
-          <div
-            className={cn(
-              'flex items-center justify-center w-8 h-8 rounded-full',
-              account.isDefault ? 'bg-primary/10' : 'bg-muted'
+          {/* Avatar with tier badge overlay */}
+          <div className="relative shrink-0">
+            <div
+              className={cn(
+                'flex items-center justify-center w-8 h-8 rounded-full',
+                account.isDefault ? 'bg-primary/10' : 'bg-muted'
+              )}
+            >
+              <User className="w-4 h-4" />
+            </div>
+            {/* Tier badge - fixed position on avatar */}
+            {account.tier && account.tier !== 'unknown' && account.tier !== 'free' && (
+              <span
+                className={cn(
+                  'absolute -bottom-0.5 -right-0.5 text-[7px] font-bold uppercase px-1 py-px rounded',
+                  'ring-1 ring-background',
+                  account.tier === 'ultra'
+                    ? 'bg-violet-500/20 text-violet-600 dark:bg-violet-500/30 dark:text-violet-300'
+                    : 'bg-yellow-500/20 text-yellow-700 dark:bg-yellow-500/25 dark:text-yellow-400'
+                )}
+              >
+                {account.tier === 'ultra' ? 'U' : 'P'}
+              </span>
             )}
-          >
-            <User className="w-4 h-4" />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
@@ -198,18 +215,6 @@ export function AccountItem({
                 <Badge variant="secondary" className="text-[10px] h-4 px-1.5 gap-0.5">
                   <Star className="w-2.5 h-2.5 fill-current" />
                   Default
-                </Badge>
-              )}
-              {account.tier && account.tier !== 'unknown' && (
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'text-[10px] h-4 px-1.5 uppercase',
-                    account.tier === 'paid' && 'border-blue-500 text-blue-600',
-                    account.tier === 'free' && 'border-gray-400 text-gray-500'
-                  )}
-                >
-                  {account.tier}
                 </Badge>
               )}
               {account.paused && (
@@ -281,7 +286,7 @@ export function AccountItem({
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
               <MoreHorizontal className="w-4 h-4" />
             </Button>
           </DropdownMenuTrigger>

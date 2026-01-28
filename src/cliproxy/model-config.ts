@@ -51,8 +51,13 @@ export function getCurrentModel(
  * Format model entry for display in selection list
  */
 function formatModelOption(model: ModelEntry): string {
-  // Tier badge: clarify that "paid" means paid Google account (not free tier)
-  const tierBadge = model.tier === 'paid' ? color(' [Paid Tier]', 'warning') : '';
+  // Tier badge: ultra/pro indicate paid tiers
+  const tierBadge =
+    model.tier === 'ultra'
+      ? color(' [Ultra]', 'warning')
+      : model.tier === 'pro'
+        ? color(' [Pro]', 'warning')
+        : '';
   const brokenBadge = model.broken ? color(' [BROKEN]', 'error') : '';
   const deprecatedBadge = model.deprecated ? color(' [DEPRECATED]', 'warning') : '';
   return `${model.name}${tierBadge}${brokenBadge}${deprecatedBadge}`;
@@ -64,7 +69,12 @@ function formatModelOption(model: ModelEntry): string {
 function formatModelDetailed(model: ModelEntry, isCurrent: boolean): string {
   const marker = isCurrent ? color('>', 'success') : ' ';
   const name = isCurrent ? bold(model.name) : model.name;
-  const tierBadge = model.tier === 'paid' ? color(' [Paid Tier]', 'warning') : '';
+  const tierBadge =
+    model.tier === 'ultra'
+      ? color(' [Ultra]', 'warning')
+      : model.tier === 'pro'
+        ? color(' [Pro]', 'warning')
+        : '';
   const brokenBadge = model.broken ? color(' [BROKEN]', 'error') : '';
   const deprecatedBadge = model.deprecated ? color(' [DEPRECATED]', 'warning') : '';
   const desc = model.description ? dim(` - ${model.description}`) : '';

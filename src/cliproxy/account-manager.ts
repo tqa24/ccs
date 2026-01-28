@@ -16,8 +16,8 @@ import { CLIPROXY_PROFILES } from '../auth/profile-detector';
 import { getCliproxyDir, getAuthDir } from './config-generator';
 import { PROVIDER_TYPE_VALUES } from './auth/auth-types';
 
-/** Account tier for quota management (free vs paid - no Pro/Ultra distinction needed) */
-export type AccountTier = 'free' | 'paid' | 'unknown';
+/** Account tier for quota management: ultra > pro > free */
+export type AccountTier = 'free' | 'pro' | 'ultra' | 'unknown';
 
 /**
  * Providers that typically have empty email in OAuth token files.
@@ -47,7 +47,7 @@ export interface AccountInfo {
   paused?: boolean;
   /** ISO timestamp when paused */
   pausedAt?: string;
-  /** Account tier: free or paid (Pro/Ultra combined) */
+  /** Account tier: ultra, pro, or free */
   tier?: AccountTier;
   /** GCP Project ID (Antigravity only) - read-only, fetched from auth token */
   projectId?: string;

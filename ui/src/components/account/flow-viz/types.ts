@@ -2,6 +2,9 @@
  * Type definitions for Account Flow Visualization
  */
 
+/** Account tier for subscription level */
+export type AccountTier = 'free' | 'pro' | 'ultra' | 'unknown';
+
 /** Position offset for draggable cards */
 export interface DragOffset {
   x: number;
@@ -17,6 +20,8 @@ export interface AccountData {
   lastUsedAt?: string;
   color: string;
   paused?: boolean;
+  /** Account tier (Antigravity only) */
+  tier?: AccountTier;
 }
 
 export interface ProviderData {

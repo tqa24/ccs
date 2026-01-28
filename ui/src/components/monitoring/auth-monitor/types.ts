@@ -2,6 +2,9 @@
  * Type definitions for Auth Monitor components
  */
 
+/** Account tier for subscription level */
+export type AccountTier = 'free' | 'pro' | 'ultra' | 'unknown';
+
 export interface AccountRow {
   id: string;
   email: string;
@@ -16,6 +19,8 @@ export interface AccountRow {
   projectId?: string;
   /** Whether account is paused (skipped in quota rotation) */
   paused?: boolean;
+  /** Account tier (Antigravity only) */
+  tier?: AccountTier;
 }
 
 export interface ProviderStats {

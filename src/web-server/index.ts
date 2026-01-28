@@ -12,6 +12,7 @@ import path from 'path';
 import { WebSocketServer } from 'ws';
 import { setupWebSocket } from './websocket';
 import { createSessionMiddleware, authMiddleware } from './middleware/auth-middleware';
+import { startAutoSyncWatcher, stopAutoSyncWatcher } from '../cliproxy/sync';
 
 export interface ServerOptions {
   port: number;
@@ -93,7 +94,16 @@ export async function startServer(options: ServerOptions): Promise<ServerInstanc
   }
 
   // WebSocket connection handler + file watcher
-  const { cleanup } = setupWebSocket(wss);
+  const { cleanup: wsCleanup } = setupWebSocket(wss);
+
+  // Start auto-sync watcher (if enabled in config)
+  startAutoSyncWatcher();
+
+  // Combined cleanup function
+  const cleanup = () => {
+    wsCleanup();
+    stopAutoSyncWatcher().catch(() => {});
+  };
 
   // Start listening
   return new Promise<ServerInstance>((resolve) => {

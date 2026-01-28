@@ -83,8 +83,8 @@ export interface OAuthAccount {
   paused?: boolean;
   /** ISO timestamp when account was paused */
   pausedAt?: string;
-  /** Account tier: free or paid (Pro/Ultra combined) */
-  tier?: 'free' | 'paid' | 'unknown';
+  /** Account tier: free, pro, ultra, or unknown */
+  tier?: 'free' | 'pro' | 'ultra' | 'unknown';
   /** GCP Project ID (Antigravity only) - read-only */
   projectId?: string;
 }

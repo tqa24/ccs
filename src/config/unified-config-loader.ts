@@ -159,6 +159,8 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         partial.cliproxy?.backend === 'original' || partial.cliproxy?.backend === 'plus'
           ? partial.cliproxy.backend
           : undefined, // Invalid values become undefined (defaults to 'plus' at runtime)
+      // Auto-sync - default to true
+      auto_sync: partial.cliproxy?.auto_sync ?? defaults.cliproxy.auto_sync ?? true,
     },
     preferences: {
       ...defaults.preferences,

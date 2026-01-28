@@ -2,6 +2,7 @@
  * Variant Creation Step
  */
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +19,8 @@ import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { MODEL_CATALOGS } from '@/lib/model-catalogs';
 import type { VariantStepProps } from '../types';
 
+const CUSTOM_MODEL_VALUE = '__custom__';
+
 export function VariantStep({
   selectedProvider,
   selectedAccount,
@@ -31,6 +34,21 @@ export function VariantStep({
   onSkip,
   onCreate,
 }: VariantStepProps) {
+  // Track if user selected custom model option
+  const catalogModels = MODEL_CATALOGS[selectedProvider]?.models || [];
+  const isCustomModel = modelName && !catalogModels.some((m) => m.id === modelName);
+  const [showCustomInput, setShowCustomInput] = useState(isCustomModel);
+
+  const handleModelSelect = (value: string) => {
+    if (value === CUSTOM_MODEL_VALUE) {
+      setShowCustomInput(true);
+      onModelChange(''); // Clear to let user type custom
+    } else {
+      setShowCustomInput(false);
+      onModelChange(value);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {selectedAccount && (
@@ -60,25 +78,50 @@ export function VariantStep({
 
       <div className="space-y-2">
         <Label>Model</Label>
-        <Select value={modelName} onValueChange={onModelChange}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select a model" />
-          </SelectTrigger>
-          <SelectContent>
-            {MODEL_CATALOGS[selectedProvider]?.models.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                <div className="flex items-center gap-2">
-                  <span>{m.name}</span>
-                  {m.description && (
-                    <span className="text-xs text-muted-foreground">- {m.description}</span>
-                  )}
-                </div>
+        {showCustomInput ? (
+          <div className="space-y-2">
+            <Input
+              value={modelName}
+              onChange={(e) => onModelChange(e.target.value)}
+              placeholder="e.g., gemini-2.5-pro, claude-opus-4-5"
+            />
+            <button
+              type="button"
+              className="text-xs text-primary hover:underline"
+              onClick={() => setShowCustomInput(false)}
+            >
+              Choose from presets instead
+            </button>
+          </div>
+        ) : (
+          <Select
+            value={catalogModels.some((m) => m.id === modelName) ? modelName : ''}
+            onValueChange={handleModelSelect}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select a model" />
+            </SelectTrigger>
+            <SelectContent>
+              {catalogModels.map((m) => (
+                <SelectItem key={m.id} value={m.id}>
+                  <div className="flex items-center gap-2">
+                    <span>{m.name}</span>
+                    {m.description && (
+                      <span className="text-xs text-muted-foreground">- {m.description}</span>
+                    )}
+                  </div>
+                </SelectItem>
+              ))}
+              <SelectItem value={CUSTOM_MODEL_VALUE}>
+                <span className="text-primary">Custom model name...</span>
               </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+            </SelectContent>
+          </Select>
+        )}
         <div className="text-xs text-muted-foreground">
-          Default: {MODEL_CATALOGS[selectedProvider]?.defaultModel || 'provider default'}
+          {showCustomInput
+            ? 'Enter any model name supported by CLIProxy'
+            : `Default: ${MODEL_CATALOGS[selectedProvider]?.defaultModel || 'provider default'}`}
         </div>
       </div>
 
