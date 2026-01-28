@@ -22,7 +22,8 @@ export function AccountStep({
         Select an account ({accounts.length})
       </div>
 
-      <div className="grid gap-2">
+      {/* Scrollable account list with max-height for many accounts */}
+      <div className="grid gap-2 max-h-[320px] overflow-y-auto pr-1">
         {accounts.map((acc) => (
           <button
             key={acc.id}

@@ -64,6 +64,9 @@ import {
   installLatest,
 } from '../cliproxy/services';
 
+// Import sync handler
+import { handleSync } from './cliproxy-sync-handler';
+
 // ============================================================================
 // ARGUMENT PARSING
 // ============================================================================
@@ -614,6 +617,14 @@ async function showHelp(): Promise<void> {
       ],
     ],
     [
+      'Local Sync:',
+      [
+        ['sync', 'Sync API profiles to local CLIProxy config'],
+        ['sync --dry-run', 'Preview sync without applying'],
+        ['sync --verbose', 'Show detailed sync information'],
+      ],
+    ],
+    [
       'Quota Management:',
       [
         ['default <account>', 'Set default account for rotation'],
@@ -1001,6 +1012,11 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
 
   if (command === 'remove' || command === 'delete' || command === 'rm') {
     await handleRemove(remainingArgs.slice(1));
+    return;
+  }
+
+  if (command === 'sync') {
+    await handleSync(remainingArgs.slice(1));
     return;
   }
 

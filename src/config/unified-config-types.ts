@@ -132,6 +132,8 @@ export interface CLIProxyConfig {
   auth?: CLIProxyAuthConfig;
   /** Background token refresh worker settings */
   token_refresh?: TokenRefreshSettings;
+  /** Auto-sync API profiles to local CLIProxy config on settings change (default: true) */
+  auto_sync?: boolean;
 }
 
 /**
@@ -259,6 +261,8 @@ export interface ProxyRemoteConfig {
   management_key?: string;
   /** Connection timeout in milliseconds (default: 2000) */
   timeout?: number;
+  /** Enable auto-sync profiles to remote on settings change (default: false) */
+  auto_sync?: boolean;
 }
 
 /**
@@ -605,6 +609,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
         enabled: false,
         request_log: false,
       },
+      auto_sync: true,
     },
     preferences: {
       theme: 'system',

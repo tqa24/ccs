@@ -24,6 +24,9 @@ import {
   Settings,
   X,
   Download,
+  FileDown,
+  Check,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -57,6 +60,7 @@ import {
   useInstallVersion,
   useRestartProxy,
 } from '@/hooks/use-cliproxy';
+import { useSyncStatus, useExecuteSync } from '@/hooks/use-cliproxy-sync';
 import { cn } from '@/lib/utils';
 
 /** Client-side semver comparison (true if a > b) */
@@ -152,6 +156,10 @@ export function ProxyStatusWidget() {
   const restartProxy = useRestartProxy();
   const installVersion = useInstallVersion();
 
+  // Sync functionality
+  const { data: syncStatus } = useSyncStatus();
+  const { mutate: executeSync, isPending: isSyncing } = useExecuteSync();
+
   // Version picker state (expanded section)
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedVersion, setSelectedVersion] = useState<string>('');
@@ -180,10 +188,15 @@ export function ProxyStatusWidget() {
     stopProxy.isPending ||
     restartProxy.isPending ||
     installVersion.isPending ||
-    isBackendSwitching;
+    isBackendSwitching ||
+    isSyncing;
   const hasUpdate = updateCheck?.hasUpdate ?? false;
   const isUnstable = updateCheck?.isStable === false;
   const currentVersion = updateCheck?.currentVersion;
+
+  // Sync status
+  const isSyncConfigured = syncStatus?.configured ?? false;
+  const syncStatusText = isSyncConfigured ? 'Sync Ready' : 'No Config';
 
   // Target version for update/downgrade badge
   const targetVersion = isUnstable
@@ -296,6 +309,13 @@ export function ProxyStatusWidget() {
             ) : isRunning ? (
               <>
                 <IconButton
+                  icon={isSyncing ? RefreshCw : FileDown}
+                  tooltip="Sync profiles to CLIProxy"
+                  onClick={() => executeSync()}
+                  disabled={!isSyncConfigured || isActioning}
+                  isPending={isSyncing}
+                />
+                <IconButton
                   icon={RotateCw}
                   tooltip="Restart"
                   onClick={() => restartProxy.mutate()}
@@ -374,6 +394,23 @@ export function ProxyStatusWidget() {
             )}
           </div>
         )}
+
+        {/* Sync status row */}
+        <div className="mt-2 flex items-center gap-1.5 text-xs">
+          {isSyncConfigured ? (
+            <Check className="w-3 h-3 text-green-600 dark:text-green-400" />
+          ) : (
+            <AlertCircle className="w-3 h-3 text-muted-foreground" />
+          )}
+          <span
+            className={cn(
+              'text-xs',
+              isSyncConfigured ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'
+            )}
+          >
+            {syncStatusText}
+          </span>
+        </div>
 
         {/* Expanded section: Version Management (available even when not running) */}
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
