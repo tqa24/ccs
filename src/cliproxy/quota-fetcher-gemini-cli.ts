@@ -25,18 +25,15 @@ const GEMINI_CLI_GROUPS: Record<
   {
     label: string;
     models: string[];
-    preferred: string;
   }
 > = {
   'gemini-flash-series': {
     label: 'Gemini Flash Series',
     models: ['gemini-3-flash-preview', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-    preferred: 'gemini-3-flash-preview',
   },
   'gemini-pro-series': {
     label: 'Gemini Pro Series',
     models: ['gemini-3-pro-preview', 'gemini-2.5-pro'],
-    preferred: 'gemini-3-pro-preview',
   },
 };
 
