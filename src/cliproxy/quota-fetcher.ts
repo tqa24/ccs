@@ -16,6 +16,7 @@ import {
   type AccountInfo,
   type AccountTier,
 } from './account-manager';
+import { sanitizeEmail, isTokenExpired } from './auth-utils';
 
 /** Individual model quota info */
 export interface ModelQuota {
@@ -152,27 +153,6 @@ interface AvailableModel {
 /** fetchAvailableModels response */
 interface FetchAvailableModelsResponse {
   models?: Record<string, AvailableModel>;
-}
-
-/**
- * Sanitize email to match CLIProxyAPI auth file naming convention
- * Replaces @ and . with underscores (matches Go sanitizeAntigravityFileName)
- */
-function sanitizeEmail(email: string): string {
-  return email.replace(/@/g, '_').replace(/\./g, '_');
-}
-
-/**
- * Check if token is expired based on the expired timestamp
- */
-function isTokenExpired(expiredStr?: string): boolean {
-  if (!expiredStr) return false;
-  try {
-    const expiredDate = new Date(expiredStr);
-    return expiredDate.getTime() < Date.now();
-  } catch {
-    return false;
-  }
 }
 
 /**
