@@ -299,7 +299,7 @@ export function AccountCard({
                   ) : quota && isCodexQuotaResult(quota) ? (
                     <div className="text-xs space-y-1">
                       <p className="font-medium">Rate Limits:</p>
-                      {quota.windows?.map((w) => (
+                      {quota.windows.map((w) => (
                         <div key={w.label} className="flex justify-between gap-4">
                           <span className={cn(w.remainingPercent < 20 && 'text-red-500')}>
                             {w.label}
@@ -322,7 +322,7 @@ export function AccountCard({
                   ) : quota && isGeminiQuotaResult(quota) ? (
                     <div className="text-xs space-y-1">
                       <p className="font-medium">Buckets:</p>
-                      {quota.buckets?.map((b) => (
+                      {quota.buckets.map((b) => (
                         <div key={b.id} className="flex justify-between gap-4">
                           <span className={cn(b.remainingPercent < 20 && 'text-red-500')}>
                             {b.label}

@@ -9,6 +9,7 @@ import type {
   CodexQuotaResult,
   GeminiCliQuotaResult,
 } from '@/lib/api-client';
+import type { UnifiedQuotaResult } from '@/lib/utils';
 
 /** Per-account usage statistics */
 export interface AccountUsageStats {
@@ -261,8 +262,8 @@ async function fetchGeminiQuotaApi(accountId: string): Promise<GeminiCliQuotaRes
   return response.json();
 }
 
-/** Unified quota result type for all providers */
-export type UnifiedQuotaResult = QuotaResult | CodexQuotaResult | GeminiCliQuotaResult;
+// Re-export unified type from utils for consumers
+export type { UnifiedQuotaResult } from '@/lib/utils';
 
 /**
  * Fetch quota by provider (dispatcher)
@@ -298,37 +299,5 @@ export function useAccountQuota(provider: string, accountId: string, enabled = t
     refetchOnWindowFocus: false, // Don't refetch on tab switch
     refetchOnMount: false, // Don't refetch on component remount (AuthMonitor re-renders)
     retry: 1,
-  });
-}
-
-/**
- * Hook to get Codex quota for a specific account
- */
-export function useCodexQuota(accountId: string | null) {
-  return useQuery({
-    queryKey: ['codex-quota', accountId],
-    queryFn: async () => {
-      if (!accountId) throw new Error('Account ID required');
-      return fetchCodexQuotaApi(accountId);
-    },
-    enabled: !!accountId,
-    staleTime: 30000,
-    refetchInterval: 60000,
-  });
-}
-
-/**
- * Hook to get Gemini CLI quota for a specific account
- */
-export function useGeminiQuota(accountId: string | null) {
-  return useQuery({
-    queryKey: ['gemini-quota', accountId],
-    queryFn: async () => {
-      if (!accountId) throw new Error('Account ID required');
-      return fetchGeminiQuotaApi(accountId);
-    },
-    enabled: !!accountId,
-    staleTime: 30000,
-    refetchInterval: 60000,
   });
 }
