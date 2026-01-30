@@ -43,6 +43,8 @@ export interface CodexQuotaResult {
   error?: string;
   /** Account ID (email) this quota belongs to */
   accountId?: string;
+  /** True if token is expired and needs re-authentication */
+  needsReauth?: boolean;
 }
 
 /**
@@ -81,4 +83,6 @@ export interface GeminiCliQuotaResult {
   error?: string;
   /** Account ID (email) this quota belongs to */
   accountId?: string;
+  /** True if token is expired and needs re-authentication */
+  needsReauth?: boolean;
 }

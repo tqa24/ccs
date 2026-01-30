@@ -174,6 +174,10 @@ export interface CodexQuotaResult {
   error?: string;
   /** Account ID (email) this quota belongs to */
   accountId?: string;
+  /** True if token is expired and needs re-authentication */
+  needsReauth?: boolean;
+  /** True if result was served from cache */
+  cached?: boolean;
 }
 
 /** Gemini CLI bucket (grouped by model series) */
@@ -208,6 +212,10 @@ export interface GeminiCliQuotaResult {
   error?: string;
   /** Account ID (email) this quota belongs to */
   accountId?: string;
+  /** True if token is expired and needs re-authentication */
+  needsReauth?: boolean;
+  /** True if result was served from cache */
+  cached?: boolean;
 }
 
 /** Provider accounts summary */

@@ -204,6 +204,7 @@ export async function fetchCodexQuota(
       lastUpdated: Date.now(),
       error,
       accountId,
+      needsReauth: true,
     };
   }
 
@@ -247,6 +248,7 @@ export async function fetchCodexQuota(
         lastUpdated: Date.now(),
         error: 'Token expired or invalid',
         accountId,
+        needsReauth: true,
       };
     }
 

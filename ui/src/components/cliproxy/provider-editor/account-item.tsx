@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   FolderCode,
   Check,
+  KeyRound,
 } from 'lucide-react';
 import { cn, getProviderMinQuota, getProviderResetTime } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
@@ -351,6 +352,30 @@ export function AccountItem({
                 </Tooltip>
               </TooltipProvider>
             </div>
+          ) : quota?.needsReauth ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] h-5 px-2 gap-1 border-amber-500/50 text-amber-600 dark:text-amber-400"
+                    >
+                      <KeyRound className="w-3 h-3" />
+                      Reauth
+                    </Badge>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-[200px]">
+                  <p className="text-xs">
+                    Token expired. Re-authenticate via CLI:{' '}
+                    <code className="font-mono text-[10px]">
+                      ccs cliproxy auth {account.provider}
+                    </code>
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           ) : quota?.error || (quota && !quota.success) ? (
             <TooltipProvider>
               <Tooltip>

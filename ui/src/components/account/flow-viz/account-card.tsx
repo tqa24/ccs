@@ -4,7 +4,7 @@
 
 import { cn, getProviderMinQuota, getProviderResetTime } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
-import { GripVertical, Loader2, Pause, Play } from 'lucide-react';
+import { GripVertical, Loader2, Pause, Play, KeyRound } from 'lucide-react';
 import { useAccountQuota, QUOTA_SUPPORTED_PROVIDERS } from '@/hooks/use-cliproxy-stats';
 import type { QuotaSupportedProvider } from '@/hooks/use-cliproxy-stats';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -246,6 +246,20 @@ export function AccountCard({
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
                   {quota && <QuotaTooltipContent quota={quota} resetTime={resetTime} />}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : quota?.needsReauth ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1 text-[8px] text-amber-600 dark:text-amber-400">
+                    <KeyRound className="w-2.5 h-2.5" />
+                    <span>Reauth needed</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-[180px]">
+                  <p className="text-xs">Token expired. Re-authenticate via CLI.</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
