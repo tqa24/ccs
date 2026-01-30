@@ -13,6 +13,8 @@ import {
   fetchCliproxyErrorLogContent,
 } from '../../cliproxy/stats-fetcher';
 import { fetchAccountQuota } from '../../cliproxy/quota-fetcher';
+import { fetchCodexQuota } from '../../cliproxy/quota-fetcher-codex';
+import { fetchGeminiCliQuota } from '../../cliproxy/quota-fetcher-gemini-cli';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import {
@@ -510,10 +512,64 @@ router.put('/models/:provider', async (req: Request, res: Response): Promise<voi
 });
 
 // ==================== Account Quota ====================
+// NOTE: Specific routes MUST be defined BEFORE generic routes for Express routing to work correctly
 
 /**
- * GET /api/cliproxy/quota/:provider/:accountId - Get quota for a specific account
+ * GET /api/cliproxy/quota/codex/:accountId - Get Codex quota for a specific account
+ * Returns: CodexQuotaResult with rate limit windows
+ */
+router.get('/quota/codex/:accountId', async (req: Request, res: Response): Promise<void> => {
+  const { accountId } = req.params;
+
+  // Validate accountId - prevent path traversal
+  if (
+    !accountId ||
+    accountId.includes('..') ||
+    accountId.includes('/') ||
+    accountId.includes('\\')
+  ) {
+    res.status(400).json({ error: 'Invalid account ID' });
+    return;
+  }
+
+  try {
+    const result = await fetchCodexQuota(accountId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/cliproxy/quota/gemini/:accountId - Get Gemini quota for a specific account
+ * Returns: GeminiCliQuotaResult with quota buckets
+ */
+router.get('/quota/gemini/:accountId', async (req: Request, res: Response): Promise<void> => {
+  const { accountId } = req.params;
+
+  // Validate accountId - prevent path traversal
+  if (
+    !accountId ||
+    accountId.includes('..') ||
+    accountId.includes('/') ||
+    accountId.includes('\\')
+  ) {
+    res.status(400).json({ error: 'Invalid account ID' });
+    return;
+  }
+
+  try {
+    const result = await fetchGeminiCliQuota(accountId);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/cliproxy/quota/:provider/:accountId - Get quota for a specific account (generic)
  * Returns: QuotaResult with model quotas and reset times
+ * NOTE: This generic route MUST come after specific routes (codex, gemini) to avoid matching them
  */
 router.get('/quota/:provider/:accountId', async (req: Request, res: Response): Promise<void> => {
   const { provider, accountId } = req.params;

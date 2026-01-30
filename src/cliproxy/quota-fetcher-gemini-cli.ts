@@ -83,60 +83,136 @@ function resolveGeminiCliProjectId(accountField: string): string | null {
 }
 
 /**
+ * Extract access token from Gemini auth file data
+ * Handles both flat (access_token) and nested (token.access_token) structures
+ */
+function extractAccessToken(data: Record<string, unknown>): string | null {
+  // Flat structure: { access_token: "..." }
+  if (typeof data.access_token === 'string') {
+    return data.access_token;
+  }
+  // Nested structure: { token: { access_token: "..." } }
+  if (data.token && typeof data.token === 'object') {
+    const token = data.token as Record<string, unknown>;
+    if (typeof token.access_token === 'string') {
+      return token.access_token;
+    }
+  }
+  return null;
+}
+
+/**
+ * Extract expiry from Gemini auth file data
+ * Handles both flat (expired) and nested (token.expiry) structures
+ */
+function extractExpiry(data: Record<string, unknown>): string | null {
+  // Flat structure: { expired: "..." }
+  if (typeof data.expired === 'string') {
+    return data.expired;
+  }
+  // Nested structure: { token: { expiry: "..." } }
+  if (data.token && typeof data.token === 'object') {
+    const token = data.token as Record<string, unknown>;
+    if (typeof token.expiry === 'string') {
+      return token.expiry;
+    }
+  }
+  return null;
+}
+
+/**
+ * Check if file matches Gemini CLI auth file patterns
+ * Patterns: gemini-*.json OR *-gen-lang-client-*.json OR email@domain.com-*.json with type=gemini
+ */
+function isGeminiAuthFile(filename: string): boolean {
+  if (!filename.endsWith('.json')) return false;
+  // Legacy pattern: gemini-email.json
+  if (filename.startsWith('gemini-')) return true;
+  // New pattern: email-gen-lang-client-projectId.json
+  if (filename.includes('-gen-lang-client-')) return true;
+  // Check if contains @ (email pattern) - will verify type inside
+  if (filename.includes('@')) return true;
+  return false;
+}
+
+/**
  * Read auth data from Gemini CLI auth file
+ * Supports multiple file naming conventions and JSON structures
  */
 function readGeminiCliAuthData(accountId: string): GeminiCliAuthData | null {
   const authDirs = [getAuthDir(), getPausedDir()];
   const sanitizedId = sanitizeEmail(accountId);
-  const expectedFile = `gemini-${sanitizedId}.json`;
+  const expectedFiles = [
+    `gemini-${sanitizedId}.json`, // Legacy format
+    `${accountId}-gen-lang-client-`, // New format prefix (partial match)
+  ];
 
   for (const authDir of authDirs) {
     if (!fs.existsSync(authDir)) continue;
 
-    const filePath = path.join(authDir, expectedFile);
-    if (fs.existsSync(filePath)) {
+    // Try exact legacy match first
+    const legacyPath = path.join(authDir, expectedFiles[0]);
+    if (fs.existsSync(legacyPath)) {
       try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const data = JSON.parse(content);
-        if (!data.access_token) continue;
+        const content = fs.readFileSync(legacyPath, 'utf-8');
+        const data = JSON.parse(content) as Record<string, unknown>;
+        const accessToken = extractAccessToken(data);
+        if (accessToken) {
+          const projectId =
+            typeof data.project_id === 'string'
+              ? data.project_id
+              : resolveGeminiCliProjectId(String(data.account || ''));
+          const expiry = extractExpiry(data);
 
-        // Extract project ID from account field
-        const accountField = data.account || '';
-        const projectId = resolveGeminiCliProjectId(accountField);
-
-        return {
-          accessToken: data.access_token,
-          projectId,
-          isExpired: isTokenExpired(data.expired),
-          expiresAt: data.expired || null,
-        };
+          return {
+            accessToken,
+            projectId,
+            isExpired: isTokenExpired(expiry ?? undefined),
+            expiresAt: expiry,
+          };
+        }
       } catch {
-        continue;
+        // Continue to fallback
       }
     }
 
-    // Fallback: scan directory for matching email in file content
+    // Scan directory for matching files
     const files = fs.readdirSync(authDir);
     for (const file of files) {
-      if (file.startsWith('gemini-') && file.endsWith('.json')) {
-        const candidatePath = path.join(authDir, file);
-        try {
-          const content = fs.readFileSync(candidatePath, 'utf-8');
-          const data = JSON.parse(content);
-          if (data.email === accountId && data.access_token) {
-            const accountField = data.account || '';
-            const projectId = resolveGeminiCliProjectId(accountField);
+      if (!isGeminiAuthFile(file)) continue;
+
+      const candidatePath = path.join(authDir, file);
+      try {
+        const content = fs.readFileSync(candidatePath, 'utf-8');
+        const data = JSON.parse(content) as Record<string, unknown>;
+
+        // Check if this file matches our account
+        const fileEmail = typeof data.email === 'string' ? data.email : null;
+        const fileType = typeof data.type === 'string' ? data.type : null;
+        const matchesEmail = fileEmail === accountId;
+        const matchesFilename = file.startsWith(`${accountId}-`) || file.includes(sanitizedId);
+        const isGeminiType = fileType === 'gemini' || fileType === 'gemini-cli';
+
+        // Must match account AND be gemini type (or legacy gemini- prefix)
+        if ((matchesEmail || matchesFilename) && (isGeminiType || file.startsWith('gemini-'))) {
+          const accessToken = extractAccessToken(data);
+          if (accessToken) {
+            const projectId =
+              typeof data.project_id === 'string'
+                ? data.project_id
+                : resolveGeminiCliProjectId(String(data.account || ''));
+            const expiry = extractExpiry(data);
 
             return {
-              accessToken: data.access_token,
+              accessToken,
               projectId,
-              isExpired: isTokenExpired(data.expired),
-              expiresAt: data.expired || null,
+              isExpired: isTokenExpired(expiry ?? undefined),
+              expiresAt: expiry,
             };
           }
-        } catch {
-          continue;
         }
+      } catch {
+        continue;
       }
     }
   }
