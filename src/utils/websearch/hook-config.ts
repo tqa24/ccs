@@ -134,6 +134,10 @@ export function ensureHookConfig(): boolean {
         return normalized.includes('.ccs/hooks/websearch-transformer');
       });
 
+      // INVARIANT: webSearchHookIndex remains valid after deduplication because:
+      // - findIndex() returns the FIRST matching CCS hook
+      // - deduplicateCcsHooks() keeps the FIRST CCS hook and removes subsequent duplicates
+      // This means the index always points to the preserved hook.
       if (webSearchHookIndex !== -1) {
         // Hook exists - first clean up any duplicates
         const hadDuplicates = deduplicateCcsHooks(settings);
