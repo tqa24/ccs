@@ -195,7 +195,9 @@ function updateHookTimeoutIfNeeded(
       const command = hookArray[0].command;
       if (typeof command !== 'string') continue;
       // Normalize path separators for cross-platform matching (Windows uses backslashes)
-      const normalizedCommand = command.replace(/\\/g, '/');
+      const normalizedCommand = command
+        .replace(/\\/g, '/') // Windows backslashes
+        .replace(/\/+/g, '/'); // Collapse multiple slashes
       if (!normalizedCommand.includes('.ccs/hooks/websearch-transformer')) continue;
 
       // Found CCS hook - check if needs update

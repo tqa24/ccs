@@ -130,7 +130,9 @@ export function ensureHookConfig(): boolean {
         const command = hookArray?.[0]?.command;
         if (typeof command !== 'string') return false;
 
-        const normalized = command.replace(/\\/g, '/');
+        const normalized = command
+          .replace(/\\/g, '/') // Windows backslashes
+          .replace(/\/+/g, '/'); // Collapse multiple slashes
         return normalized.includes('.ccs/hooks/websearch-transformer');
       });
 
@@ -254,7 +256,9 @@ export function removeHookConfig(): boolean {
 
       const command = hookArray[0].command as string;
       // Normalize path separators for cross-platform matching (Windows uses backslashes)
-      const normalizedCommand = command.replace(/\\/g, '/');
+      const normalizedCommand = command
+        .replace(/\\/g, '/') // Windows backslashes
+        .replace(/\/+/g, '/'); // Collapse multiple slashes
       return !normalizedCommand.includes('.ccs/hooks/websearch-transformer'); // Remove if CCS hook
     });
 

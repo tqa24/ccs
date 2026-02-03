@@ -38,6 +38,18 @@ describe('isCcsWebSearchHook', () => {
     expect(isCcsWebSearchHook(hook)).toBe(true);
   });
 
+  test('Returns true for path with double slashes (normalization)', () => {
+    const hook = {
+      matcher: 'WebSearch',
+      hooks: [
+        {
+          command: 'node /home/user//.ccs//hooks/websearch-transformer/index.js',
+        },
+      ],
+    };
+    expect(isCcsWebSearchHook(hook)).toBe(true);
+  });
+
   test('Returns false for non-WebSearch matcher', () => {
     const hook = {
       matcher: 'SomethingElse',

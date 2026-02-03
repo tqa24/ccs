@@ -20,7 +20,9 @@ export function isCcsWebSearchHook(hook: Record<string, unknown>): boolean {
   if (typeof command !== 'string') return false;
 
   // Normalize path separators for cross-platform matching
-  const normalizedCommand = command.replace(/\\/g, '/');
+  const normalizedCommand = command
+    .replace(/\\/g, '/') // Windows backslashes
+    .replace(/\/+/g, '/'); // Collapse multiple slashes
   return normalizedCommand.includes('.ccs/hooks/websearch-transformer');
 }
 
