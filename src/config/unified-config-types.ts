@@ -523,14 +523,12 @@ export const DEFAULT_DASHBOARD_AUTH_CONFIG: DashboardAuthConfig = {
  * Routes image/PDF files through CLIProxy for vision analysis.
  */
 export interface ImageAnalysisConfig {
-  /** Enable image analysis via CLIProxy (default: true for agy/gemini) */
+  /** Enable image analysis via CLIProxy (default: true) */
   enabled: boolean;
-  /** Model to use for analysis (default: gemini-2.5-flash) */
-  model: string;
   /** Timeout in seconds (default: 60) */
   timeout: number;
-  /** Providers to enable for (default: ['agy', 'gemini']) */
-  providers: string[];
+  /** Provider-to-model mapping for vision analysis */
+  provider_models: Record<string, string>;
 }
 
 /**
@@ -539,9 +537,15 @@ export interface ImageAnalysisConfig {
  */
 export const DEFAULT_IMAGE_ANALYSIS_CONFIG: ImageAnalysisConfig = {
   enabled: true,
-  model: 'gemini-2.5-flash',
   timeout: 60,
-  providers: ['agy', 'gemini'],
+  provider_models: {
+    agy: 'gemini-2.5-flash',
+    gemini: 'gemini-2.5-flash',
+    codex: 'gpt-5.1-codex-mini',
+    kiro: 'kiro-claude-haiku-4-5',
+    ghcp: 'claude-haiku-4.5',
+    claude: 'claude-haiku-4-5-20251001',
+  },
 };
 
 /**

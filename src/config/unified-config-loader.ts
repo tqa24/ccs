@@ -298,9 +298,9 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
     // Image analysis config - enabled by default for CLIProxy providers
     image_analysis: {
       enabled: partial.image_analysis?.enabled ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.enabled,
-      model: partial.image_analysis?.model ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.model,
       timeout: partial.image_analysis?.timeout ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.timeout,
-      providers: partial.image_analysis?.providers ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.providers,
+      provider_models:
+        partial.image_analysis?.provider_models ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models,
     },
   };
 }
@@ -740,8 +740,8 @@ export function getImageAnalysisConfig(): ImageAnalysisConfig {
 
   return {
     enabled: config.image_analysis?.enabled ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.enabled,
-    model: config.image_analysis?.model ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.model,
     timeout: config.image_analysis?.timeout ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.timeout,
-    providers: config.image_analysis?.providers ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.providers,
+    provider_models:
+      config.image_analysis?.provider_models ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models,
   };
 }

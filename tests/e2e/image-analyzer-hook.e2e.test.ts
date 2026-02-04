@@ -31,6 +31,10 @@ const TEST_DIR = '/tmp/ccs-hook-tests';
 const MOCK_PORT = 59876; // Use a unique port for mock server
 const CLIPROXY_API_KEY = 'test-api-key-12345';
 
+// Default provider models for testing (matches DEFAULT_IMAGE_ANALYSIS_CONFIG)
+const DEFAULT_PROVIDER_MODELS = 'agy:gemini-2.5-flash,gemini:gemini-2.5-flash,codex:gpt-5.1-codex-mini,kiro:kiro-claude-haiku-4-5,ghcp:claude-haiku-4.5,claude:claude-haiku-4-5-20251001';
+const DEFAULT_PROVIDER = 'agy'; // Default test provider
+
 // ============================================================================
 // MOCK SERVER
 // ============================================================================
@@ -143,6 +147,9 @@ function invokeHook(
       ...process.env,
       CCS_CLIPROXY_API_KEY: CLIPROXY_API_KEY,
       CCS_CLIPROXY_PORT: String(MOCK_PORT),
+      // Default provider config for tests (can be overridden)
+      CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: DEFAULT_PROVIDER_MODELS,
+      CCS_CURRENT_PROVIDER: DEFAULT_PROVIDER,
       ...env,
     },
     timeout: 10000, // 10 second timeout per test
@@ -409,7 +416,13 @@ describe('Image Analyzer Hook', () => {
         input: 'not valid json',
         encoding: 'utf8',
         timeout: 5000,
-        env: { ...process.env, CCS_CLIPROXY_API_KEY: CLIPROXY_API_KEY },
+        env: {
+          ...process.env,
+          CCS_CLIPROXY_API_KEY: CLIPROXY_API_KEY,
+          CCS_CLIPROXY_PORT: String(MOCK_PORT),
+          CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: DEFAULT_PROVIDER_MODELS,
+          CCS_CURRENT_PROVIDER: DEFAULT_PROVIDER,
+        },
       });
 
       // Should exit with error (code 2)
@@ -546,7 +559,8 @@ describe('Image Analyzer Hook', () => {
         {
           CCS_IMAGE_ANALYSIS_ENABLED: '1',
           CCS_PROFILE_TYPE: 'cliproxy',
-          CCS_IMAGE_ANALYSIS_MODEL: 'gemini-2.5-flash',
+          CCS_CURRENT_PROVIDER: 'agy',
+          CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: 'agy:gemini-2.5-flash',
         }
       );
 
@@ -646,7 +660,7 @@ describe('Image Analyzer Hook', () => {
       expect(output.hookSpecificOutput.permissionDecisionReason).toContain('Error');
     });
 
-    it('should use default model when CCS_IMAGE_ANALYSIS_MODEL is not set', () => {
+    it('should use model from provider_models mapping', () => {
       resetMockState();
 
       invokeHook(
@@ -654,11 +668,33 @@ describe('Image Analyzer Hook', () => {
           tool_name: 'Read',
           tool_input: { file_path: testPngPath },
         },
-        { CCS_IMAGE_ANALYSIS_ENABLED: '1', CCS_PROFILE_TYPE: 'cliproxy' }
+        {
+          CCS_IMAGE_ANALYSIS_ENABLED: '1',
+          CCS_PROFILE_TYPE: 'cliproxy',
+          CCS_CURRENT_PROVIDER: 'codex',
+          CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: 'codex:gpt-5.1-codex-mini,agy:gemini-2.5-flash',
+        }
       );
 
       const body = lastRequest?.body as { model: string };
-      expect(body.model).toBe('gemini-2.5-flash'); // Default model
+      expect(body.model).toBe('gpt-5.1-codex-mini'); // Model from provider_models
+    });
+
+    it('should skip when provider is not in provider_models', () => {
+      const result = invokeHook(
+        {
+          tool_name: 'Read',
+          tool_input: { file_path: testPngPath },
+        },
+        {
+          CCS_IMAGE_ANALYSIS_ENABLED: '1',
+          CCS_PROFILE_TYPE: 'cliproxy',
+          CCS_CURRENT_PROVIDER: 'unknown-provider',
+          CCS_IMAGE_ANALYSIS_PROVIDER_MODELS: 'agy:gemini-2.5-flash',
+        }
+      );
+
+      expect(result.code).toBe(0); // Skip - provider not in map
     });
   });
 

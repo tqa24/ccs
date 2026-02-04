@@ -38,6 +38,7 @@ import { configureProviderModel, getCurrentModel } from './model-config';
 import { resolveProxyConfig, PROXY_CLI_FLAGS } from './proxy-config-resolver';
 import { getWebSearchHookEnv } from '../utils/websearch-manager';
 import { getImageReadBlockHookEnv } from '../utils/hooks/image-read-block-hook-env';
+import { getImageAnalysisHookEnv } from '../utils/hooks/get-image-analysis-hook-env';
 import { supportsModelConfig, isModelBroken, getModelIssueUrl, findModel } from './model-catalog';
 import { CodexReasoningProxy } from './codex-reasoning-proxy';
 import { ToolSanitizationProxy } from './tool-sanitization-proxy';
@@ -946,11 +947,13 @@ export async function execClaudeWithCLIProxy(
   };
   const webSearchEnv = getWebSearchHookEnv();
   const imageReadBlockEnv = getImageReadBlockHookEnv();
+  const imageAnalysisEnv = getImageAnalysisHookEnv(provider);
   const env = {
     ...process.env,
     ...effectiveEnvVars,
     ...webSearchEnv,
     ...imageReadBlockEnv,
+    ...imageAnalysisEnv,
     CCS_PROFILE_TYPE: 'cliproxy', // Signal to WebSearch hook this is a third-party provider
   };
 
