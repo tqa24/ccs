@@ -667,18 +667,22 @@ async function main(): Promise<void> {
 
       // Execute Claude with instance isolation
       // Skip WebSearch hook - account profiles use native server-side WebSearch
+      // Skip Image Analyzer hook - account profiles have native vision support
       const envVars: NodeJS.ProcessEnv = {
         CLAUDE_CONFIG_DIR: instancePath,
         CCS_PROFILE_TYPE: 'account',
         CCS_WEBSEARCH_SKIP: '1',
+        CCS_IMAGE_ANALYSIS_SKIP: '1',
       };
       execClaude(claudeCli, remainingArgs, envVars);
     } else {
       // DEFAULT: No profile configured, use Claude's own defaults
       // Skip WebSearch hook - native Claude has server-side WebSearch
+      // Skip Image Analyzer hook - native Claude has native vision support
       const envVars: NodeJS.ProcessEnv = {
         CCS_PROFILE_TYPE: 'default',
         CCS_WEBSEARCH_SKIP: '1',
+        CCS_IMAGE_ANALYSIS_SKIP: '1',
       };
       execClaude(claudeCli, remainingArgs, envVars);
     }
