@@ -20,9 +20,11 @@ import {
   DEFAULT_QUOTA_MANAGEMENT_CONFIG,
   DEFAULT_THINKING_CONFIG,
   DEFAULT_DASHBOARD_AUTH_CONFIG,
+  DEFAULT_IMAGE_ANALYSIS_CONFIG,
   GlobalEnvConfig,
   ThinkingConfig,
   DashboardAuthConfig,
+  ImageAnalysisConfig,
 } from './unified-config-types';
 import { isUnifiedConfigEnabled } from './feature-flags';
 
@@ -292,6 +294,13 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
       session_timeout_hours:
         partial.dashboard_auth?.session_timeout_hours ??
         DEFAULT_DASHBOARD_AUTH_CONFIG.session_timeout_hours,
+    },
+    // Image analysis config - enabled by default for CLIProxy providers
+    image_analysis: {
+      enabled: partial.image_analysis?.enabled ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.enabled,
+      model: partial.image_analysis?.model ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.model,
+      timeout: partial.image_analysis?.timeout ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.timeout,
+      providers: partial.image_analysis?.providers ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.providers,
     },
   };
 }
@@ -719,5 +728,20 @@ export function getDashboardAuthConfig(): DashboardAuthConfig {
     username: envUsername ?? config.dashboard_auth?.username ?? '',
     password_hash: envPasswordHash ?? config.dashboard_auth?.password_hash ?? '',
     session_timeout_hours: config.dashboard_auth?.session_timeout_hours ?? 24,
+  };
+}
+
+/**
+ * Get image_analysis configuration.
+ * Returns defaults if not configured.
+ */
+export function getImageAnalysisConfig(): ImageAnalysisConfig {
+  const config = loadOrCreateUnifiedConfig();
+
+  return {
+    enabled: config.image_analysis?.enabled ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.enabled,
+    model: config.image_analysis?.model ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.model,
+    timeout: config.image_analysis?.timeout ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.timeout,
+    providers: config.image_analysis?.providers ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.providers,
   };
 }

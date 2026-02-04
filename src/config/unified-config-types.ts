@@ -519,6 +519,32 @@ export const DEFAULT_DASHBOARD_AUTH_CONFIG: DashboardAuthConfig = {
 };
 
 /**
+ * Image analysis configuration.
+ * Routes image/PDF files through CLIProxy for vision analysis.
+ */
+export interface ImageAnalysisConfig {
+  /** Enable image analysis via CLIProxy (default: true for agy/gemini) */
+  enabled: boolean;
+  /** Model to use for analysis (default: gemini-2.5-flash) */
+  model: string;
+  /** Timeout in seconds (default: 60) */
+  timeout: number;
+  /** Providers to enable for (default: ['agy', 'gemini']) */
+  providers: string[];
+}
+
+/**
+ * Default image analysis configuration.
+ * Enabled by default for CLIProxy providers with vision support.
+ */
+export const DEFAULT_IMAGE_ANALYSIS_CONFIG: ImageAnalysisConfig = {
+  enabled: true,
+  model: 'gemini-2.5-flash',
+  timeout: 60,
+  providers: ['agy', 'gemini'],
+};
+
+/**
  * Main unified configuration structure.
  * Stored in ~/.ccs/config.yaml
  */
@@ -551,6 +577,8 @@ export interface UnifiedConfig {
   thinking?: ThinkingConfig;
   /** Dashboard authentication configuration (optional) */
   dashboard_auth?: DashboardAuthConfig;
+  /** Image analysis configuration (vision via CLIProxy) */
+  image_analysis?: ImageAnalysisConfig;
 }
 
 /**
@@ -644,6 +672,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
     quota_management: { ...DEFAULT_QUOTA_MANAGEMENT_CONFIG },
     thinking: { ...DEFAULT_THINKING_CONFIG },
     dashboard_auth: { ...DEFAULT_DASHBOARD_AUTH_CONFIG },
+    image_analysis: { ...DEFAULT_IMAGE_ANALYSIS_CONFIG },
   };
 }
 
