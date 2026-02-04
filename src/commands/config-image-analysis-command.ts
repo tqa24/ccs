@@ -104,9 +104,8 @@ function showHelp(): void {
   console.log('');
 }
 
-function showStatus(forceReload = false): void {
-  // Force reload if config was just modified
-  const config = forceReload ? getImageAnalysisConfig() : getImageAnalysisConfig();
+function showStatus(): void {
+  const config = getImageAnalysisConfig();
 
   console.log('');
   console.log(header('Image Analysis Configuration'));
@@ -212,6 +211,6 @@ export async function handleConfigImageAnalysisCommand(args: string[]): Promise<
     console.log('');
   }
 
-  // Always show current status (reload if we made changes)
-  showStatus(hasChanges);
+  // Always show current status
+  showStatus();
 }
