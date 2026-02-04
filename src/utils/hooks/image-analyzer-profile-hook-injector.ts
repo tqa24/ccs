@@ -4,7 +4,7 @@
  * Injects image analyzer hooks into per-profile settings files.
  * This replaces the global ~/.claude/settings.json approach.
  *
- * Only injects for CLIProxy profiles (agy, gemini) that support vision analysis.
+ * Injects for profiles configured in image_analysis.provider_models.
  *
  * @module utils/hooks/image-analyzer-profile-injector
  */

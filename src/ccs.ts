@@ -13,7 +13,6 @@ import {
   ensureProfileHooks,
 } from './utils/websearch-manager';
 import { getGlobalEnvConfig } from './config/unified-config-loader';
-import { getImageReadBlockHookEnv } from './utils/hooks/image-read-block-hook-env';
 import { ensureProfileHooks as ensureImageAnalyzerHooks } from './utils/hooks/image-analyzer-profile-hook-injector';
 import { fail, info } from './utils/ui';
 
@@ -166,12 +165,10 @@ async function execClaudeWithProxy(
   const isWindows = process.platform === 'win32';
   const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(claudeCli);
   const webSearchEnv = getWebSearchHookEnv();
-  const imageReadBlockEnv = getImageReadBlockHookEnv();
   const env = {
     ...process.env,
     ...envVars,
     ...webSearchEnv,
-    ...imageReadBlockEnv,
     CCS_PROFILE_TYPE: 'settings', // Signal to WebSearch hook this is a third-party provider
   };
 
@@ -622,7 +619,6 @@ async function main(): Promise<void> {
         // Use --settings flag (backward compatible)
         const expandedSettingsPath = getSettingsPath(profileInfo.name);
         const webSearchEnv = getWebSearchHookEnv();
-        const imageReadBlockEnv = getImageReadBlockHookEnv();
         // Get global env vars (DISABLE_TELEMETRY, etc.) for third-party profiles
         const globalEnvConfig = getGlobalEnvConfig();
         const globalEnv = globalEnvConfig.enabled ? globalEnvConfig.env : {};
@@ -644,7 +640,6 @@ async function main(): Promise<void> {
           ...globalEnv,
           ...settingsEnv, // Explicitly inject all settings env vars
           ...webSearchEnv,
-          ...imageReadBlockEnv,
           CCS_PROFILE_TYPE: 'settings', // Signal to WebSearch hook this is a third-party provider
         };
         execClaude(claudeCli, ['--settings', expandedSettingsPath, ...remainingArgs], envVars);
