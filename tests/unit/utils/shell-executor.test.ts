@@ -75,5 +75,10 @@ describe('escapeShellArg', () => {
       const { escapeShellArg } = await import('../../../src/utils/shell-executor');
       expect(escapeShellArg('C:\\Program Files\\App')).toBe('"C:\\Program Files\\App"');
     });
+
+    it('escapes exclamation marks for delayed expansion', async () => {
+      const { escapeShellArg } = await import('../../../src/utils/shell-executor');
+      expect(escapeShellArg('hello!')).toBe('"hello^^!"');
+    });
   });
 });

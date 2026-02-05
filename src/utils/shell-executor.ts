@@ -28,6 +28,7 @@ export function escapeShellArg(arg: string): string {
         .replace(/[\r\n\t]/g, ' ') // Replace newlines/tabs with space
         .replace(/%/g, '%%') // Escape percent signs
         .replace(/\^/g, '^^') // Escape carets
+        .replace(/!/g, '^^!') // Escape exclamation marks (delayed expansion)
         .replace(/"/g, '""') + // Escape quotes
       '"'
     );
