@@ -21,7 +21,16 @@ export function escapeShellArg(arg: string): string {
   if (isWindows) {
     // cmd.exe: Use double quotes, escape inner double quotes with backslash
     // cmd.exe interprets "" as escaped double quote inside quoted string
-    return '"' + String(arg).replace(/"/g, '""') + '"';
+    // Strip newlines/tabs that can break cmd.exe parsing
+    return (
+      '"' +
+      String(arg)
+        .replace(/[\r\n\t]/g, ' ') // Replace newlines/tabs with space
+        .replace(/%/g, '%%') // Escape percent signs
+        .replace(/\^/g, '^^') // Escape carets
+        .replace(/"/g, '""') + // Escape quotes
+      '"'
+    );
   } else {
     // Unix/macOS: Double quotes with escaped inner quotes
     return '"' + String(arg).replace(/"/g, '\\"') + '"';
