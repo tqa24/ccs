@@ -305,6 +305,72 @@ describe('sanitizeInputSchema', () => {
     expect(result.schema).toEqual({ type: 'object' });
   });
 
+  test('strips number/array/object validation fields unsupported by Gemini', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        score: {
+          type: 'number',
+          exclusiveMinimum: 0,
+          exclusiveMaximum: 100,
+          multipleOf: 5,
+        },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          uniqueItems: true,
+          contains: { type: 'string' },
+          additionalItems: false,
+        },
+        meta: {
+          type: 'object',
+          writeOnly: true,
+          definitions: { addr: { type: 'string' } },
+        },
+      },
+    };
+
+    const result = sanitizeInputSchema(schema);
+
+    expect(result.removedPaths).toContain('properties.score.exclusiveMinimum');
+    expect(result.removedPaths).toContain('properties.score.exclusiveMaximum');
+    expect(result.removedPaths).toContain('properties.score.multipleOf');
+    expect(result.removedPaths).toContain('properties.tags.uniqueItems');
+    expect(result.removedPaths).toContain('properties.tags.contains');
+    expect(result.removedPaths).toContain('properties.tags.additionalItems');
+    expect(result.removedPaths).toContain('properties.meta.writeOnly');
+    expect(result.removedPaths).toContain('properties.meta.definitions');
+    expect(result.removedCount).toBe(8);
+  });
+
+  test('preserves example/default with complex values without recursion', () => {
+    const schema = {
+      type: 'object',
+      example: ['value1', 'value2'],
+      default: { nested: { deep: { unsupportedKey: true } } },
+    };
+
+    const result = sanitizeInputSchema(schema);
+
+    expect(result.removedCount).toBe(0);
+    expect(result.schema.example).toEqual(['value1', 'value2']);
+    expect(result.schema.default).toEqual({ nested: { deep: { unsupportedKey: true } } });
+  });
+
+  test('handles empty properties and anyOf edge cases', () => {
+    const schema = {
+      type: 'object',
+      properties: {},
+      anyOf: [],
+    };
+
+    const result = sanitizeInputSchema(schema);
+
+    expect(result.removedCount).toBe(0);
+    expect(result.schema.properties).toEqual({});
+    expect(result.schema.anyOf).toEqual([]);
+  });
+
   test('preserves all Gemini-supported fields', () => {
     const schema = {
       type: 'object',
