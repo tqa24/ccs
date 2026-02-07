@@ -1,3 +1,24 @@
+## [7.40.0](https://github.com/kaitranntt/ccs/compare/v7.39.0...v7.40.0) (2026-02-07)
+
+### Features
+
+* **cliproxy:** add hybrid catalog sync with CLIProxyAPI ([#485](https://github.com/kaitranntt/ccs/issues/485)) ([c8a0995](https://github.com/kaitranntt/ccs/commit/c8a099509a878f24a211f01ee0000f01020c4d6b)), closes [#477](https://github.com/kaitranntt/ccs/issues/477)
+* **cliproxy:** delegate kiro/ghcp token refresh to CLIProxyAPIPlus ([#488](https://github.com/kaitranntt/ccs/issues/488)) ([215c00e](https://github.com/kaitranntt/ccs/commit/215c00e9830e4a604231dd64c01154c91574ace9)), closes [#487](https://github.com/kaitranntt/ccs/issues/487)
+
+### Bug Fixes
+
+* **cliproxy:** disable 1M extended context for opus 4.6 (256k limit) ([#492](https://github.com/kaitranntt/ccs/issues/492)) ([43cd19a](https://github.com/kaitranntt/ccs/commit/43cd19a52b128363c7202590869fb4bd9349b859)), closes [#490](https://github.com/kaitranntt/ccs/issues/490)
+* **cliproxy:** guard against empty upstream SSE responses in agy profile ([#489](https://github.com/kaitranntt/ccs/issues/489)) ([545c8b9](https://github.com/kaitranntt/ccs/commit/545c8b9515d5afeda17976f418e22037cc9acef9)), closes [#350](https://github.com/kaitranntt/ccs/issues/350)
+* **hooks:** add image analysis env vars for settings-based profiles ([#484](https://github.com/kaitranntt/ccs/issues/484)) ([b0dff7a](https://github.com/kaitranntt/ccs/commit/b0dff7a148c795994c2e3f871db9f60dd1cc737a)), closes [#440](https://github.com/kaitranntt/ccs/issues/440)
+* **teams:** propagate CLAUDE_CONFIG_DIR to tmux session for agent teammates ([db88290](https://github.com/kaitranntt/ccs/commit/db88290b9110ba78f484d707ae3e64521db4e622))
+
+### Code Refactoring
+
+* **cliproxy:** check lifecycle events in remaining SSE buffer ([42a3eb1](https://github.com/kaitranntt/ccs/commit/42a3eb150630b3a466b7ec9063a2256ecc38c60e))
+* **cliproxy:** deduplicate message_delta/message_stop in synthetic SSE response ([152f543](https://github.com/kaitranntt/ccs/commit/152f5432ae26e42e07ea422b882298033ed66c7f)), closes [#491](https://github.com/kaitranntt/ccs/issues/491)
+* **cliproxy:** extract SSE lifecycle tracker and add backpressure handling ([1b3440b](https://github.com/kaitranntt/ccs/commit/1b3440b93962e347797105b9bf92c2aaeb954a27))
+* **teams:** use spawnSync array args instead of execSync string ([0f7d5f9](https://github.com/kaitranntt/ccs/commit/0f7d5f97576d68b9c73ea952a4ea5853b0993467))
+
 ## [7.39.0](https://github.com/kaitranntt/ccs/compare/v7.38.0...v7.39.0) (2026-02-07)
 
 ### Features
