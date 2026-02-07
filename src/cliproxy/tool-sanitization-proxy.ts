@@ -535,6 +535,15 @@ export class ToolSanitizationProxy {
                 if (buffer.includes('"content_block_start"')) {
                   hasReceivedContent = true;
                 }
+                if (buffer.includes('"message_start"')) {
+                  hasReceivedMessageStart = true;
+                }
+                if (buffer.includes('"message_delta"')) {
+                  hasReceivedMessageDelta = true;
+                }
+                if (buffer.includes('"message_stop"')) {
+                  hasReceivedMessageStop = true;
+                }
                 const processedEvent = this.processSSEEvent(buffer, mapper);
                 clientRes.write(processedEvent + '\n\n');
               }
