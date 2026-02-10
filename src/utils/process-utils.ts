@@ -16,5 +16,6 @@ export function killWithEscalation(proc: ChildProcess, gracePeriodMs = 3000): vo
       proc.kill('SIGKILL');
     }
   }, gracePeriodMs);
+  timer.unref(); // Don't keep event loop alive just for escalation
   proc.once('exit', () => clearTimeout(timer));
 }

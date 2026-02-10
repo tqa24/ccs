@@ -330,6 +330,7 @@ export class HeadlessExecutor {
               clearInterval(progressInterval);
               process.stderr.write('\r\x1b[K');
             }
+            // Longer grace period for timeout (vs 2s for SIGINT) since delegated sessions may need time to flush output
             killWithEscalation(proc, 10000);
           }
         }, timeout);
