@@ -30,17 +30,18 @@ export function detectShell(flag?: string): ShellType {
   return 'bash';
 }
 
-/** Format a single env var export for the target shell */
+/** Format a single env var export for the target shell (single-quoted to prevent injection) */
 export function formatExportLine(shell: ShellType, key: string, value: string): string {
-  // Escape double quotes in value
-  const escaped = value.replace(/"/g, '\\"');
   switch (shell) {
     case 'fish':
-      return `set -gx ${key} "${escaped}"`;
+      // Fish: single quotes prevent expansion; escape embedded single quotes with \'
+      return `set -gx ${key} '${value.replace(/'/g, "\\'")}'`;
     case 'powershell':
-      return `$env:${key} = "${escaped}"`;
+      // PowerShell: single quotes prevent expansion; escape embedded single quotes with ''
+      return `$env:${key} = '${value.replace(/'/g, "''")}'`;
     default:
-      return `export ${key}="${escaped}"`;
+      // Bash/zsh: single quotes prevent all expansion; handle embedded single quotes
+      return `export ${key}='${value.replace(/'/g, "'\\''")}'`;
   }
 }
 
@@ -59,7 +60,7 @@ export function transformToOpenAI(envVars: Record<string, string>): Record<strin
 function parseFlag(args: string[], flag: string): string | undefined {
   // --flag=value style
   const eqMatch = args.find((a) => a.startsWith(`--${flag}=`));
-  if (eqMatch) return eqMatch.split('=')[1];
+  if (eqMatch) return eqMatch.split('=').slice(1).join('=');
   // --flag value style
   const idx = args.indexOf(`--${flag}`);
   if (idx >= 0 && idx + 1 < args.length && !args[idx + 1].startsWith('-')) {
@@ -218,6 +219,14 @@ export async function handleEnvCommand(args: string[]): Promise<void> {
     case 'raw':
       output = envVars;
       break;
+  }
+
+  // Guard: format transformation may filter out all vars
+  if (Object.keys(output).filter((k) => output[k]).length === 0) {
+    console.error(
+      warn(`No ${format}-format vars found for profile '${profile}'. Try --format raw`)
+    );
+    process.exit(1);
   }
 
   // Output shell-formatted exports to stdout

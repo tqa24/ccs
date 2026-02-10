@@ -3,13 +3,12 @@
  *
  * Tests pure utility functions: detectShell, formatExportLine, transformToOpenAI
  */
-import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { describe, it, expect, afterEach } from 'bun:test';
 import { detectShell, formatExportLine, transformToOpenAI } from '../../../src/commands/env-command';
 
 describe('env-command', () => {
   describe('detectShell', () => {
     const originalShell = process.env['SHELL'];
-    const originalPlatform = process.platform;
 
     afterEach(() => {
       if (originalShell !== undefined) {
@@ -59,32 +58,38 @@ describe('env-command', () => {
 
   describe('formatExportLine', () => {
     it('formats bash export', () => {
-      expect(formatExportLine('bash', 'API_KEY', 'sk-123')).toBe('export API_KEY="sk-123"');
+      expect(formatExportLine('bash', 'API_KEY', 'sk-123')).toBe("export API_KEY='sk-123'");
     });
 
     it('formats fish export', () => {
-      expect(formatExportLine('fish', 'API_KEY', 'sk-123')).toBe('set -gx API_KEY "sk-123"');
+      expect(formatExportLine('fish', 'API_KEY', 'sk-123')).toBe("set -gx API_KEY 'sk-123'");
     });
 
     it('formats powershell export', () => {
       expect(formatExportLine('powershell', 'API_KEY', 'sk-123')).toBe(
-        '$env:API_KEY = "sk-123"'
+        "$env:API_KEY = 'sk-123'"
       );
     });
 
-    it('escapes double quotes in values', () => {
-      expect(formatExportLine('bash', 'VAL', 'has "quotes"')).toBe(
-        'export VAL="has \\"quotes\\""'
+    it('escapes single quotes in values', () => {
+      expect(formatExportLine('bash', 'VAL', "it's here")).toBe(
+        "export VAL='it'\\''s here'"
       );
     });
 
     it('handles empty values', () => {
-      expect(formatExportLine('bash', 'EMPTY', '')).toBe('export EMPTY=""');
+      expect(formatExportLine('bash', 'EMPTY', '')).toBe("export EMPTY=''");
     });
 
     it('handles URLs with special characters', () => {
       const url = 'http://127.0.0.1:8317/api/provider/gemini';
-      expect(formatExportLine('bash', 'BASE_URL', url)).toBe(`export BASE_URL="${url}"`);
+      expect(formatExportLine('bash', 'BASE_URL', url)).toBe(`export BASE_URL='${url}'`);
+    });
+
+    it('prevents shell injection with $() in values', () => {
+      expect(formatExportLine('bash', 'TOKEN', 'safe$(whoami)')).toBe(
+        "export TOKEN='safe$(whoami)'"
+      );
     });
   });
 
