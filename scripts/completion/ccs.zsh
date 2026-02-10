@@ -130,7 +130,7 @@ _ccs() {
             '--format[Output format]:format:(openai anthropic raw)' \
             '--shell[Shell syntax]:shell:(bash fish powershell)' \
             '(- *)'{-h,--help}'[Show help]' \
-            '1:profile:($proxy_profiles)'
+            '1:profile:($proxy_profiles ${(k)settings_profiles_described})'
           ;;
         gemini|codex|agy|qwen)
           _arguments \

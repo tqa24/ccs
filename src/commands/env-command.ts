@@ -12,6 +12,7 @@ import { getEffectiveEnvVars } from '../cliproxy/config/env-builder';
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
 import { isUnifiedMode, loadUnifiedConfig } from '../config/unified-config-loader';
 import { expandPath } from '../utils/helpers';
+import { getCcsDir } from '../utils/config-manager';
 
 type ShellType = 'bash' | 'fish' | 'powershell';
 type OutputFormat = 'openai' | 'anthropic' | 'raw';
@@ -46,7 +47,9 @@ export function formatExportLine(shell: ShellType, key: string, value: string): 
   }
 }
 
-/** Map Anthropic env vars to OpenAI-compatible format */
+/** Map Anthropic env vars to OpenAI-compatible format.
+ * ANTHROPIC_MODEL is intentionally omitted — the proxy endpoint handles
+ * model routing, so OPENAI_MODEL is unnecessary for OpenAI-compatible tools. */
 export function transformToOpenAI(envVars: Record<string, string>): Record<string, string> {
   const baseUrl = envVars['ANTHROPIC_BASE_URL'] || '';
   const apiKey = envVars['ANTHROPIC_AUTH_TOKEN'] || '';
@@ -58,7 +61,7 @@ export function transformToOpenAI(envVars: Record<string, string>): Record<strin
 }
 
 /** Parse --key=value or --key value style args */
-function parseFlag(args: string[], flag: string): string | undefined {
+export function parseFlag(args: string[], flag: string): string | undefined {
   // --flag=value style
   const eqMatch = args.find((a) => a.startsWith(`--${flag}=`));
   if (eqMatch) return eqMatch.split('=').slice(1).join('=');
@@ -190,7 +193,7 @@ export async function handleEnvCommand(args: string[]): Promise<void> {
     if (!resolved) {
       console.error(fail(`Profile '${profile}' not found.`));
       console.error(dim('  Available CLIProxy profiles: ' + CLIPROXY_PROFILES.join(', ')));
-      console.error(dim('  Check ~/.ccs/config.yaml for custom profiles.'));
+      console.error(dim(`  Check ${getCcsDir()}/config.yaml for custom profiles.`));
       process.exit(1);
     }
     envVars = resolved;

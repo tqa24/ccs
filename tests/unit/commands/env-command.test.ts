@@ -4,7 +4,12 @@
  * Tests pure utility functions: detectShell, formatExportLine, transformToOpenAI
  */
 import { describe, it, expect, afterEach } from 'bun:test';
-import { detectShell, formatExportLine, transformToOpenAI } from '../../../src/commands/env-command';
+import {
+  detectShell,
+  formatExportLine,
+  transformToOpenAI,
+  parseFlag,
+} from '../../../src/commands/env-command';
 
 describe('env-command', () => {
   describe('detectShell', () => {
@@ -91,6 +96,16 @@ describe('env-command', () => {
         "export TOKEN='safe$(whoami)'"
       );
     });
+
+    it('escapes single quotes in fish values', () => {
+      expect(formatExportLine('fish', 'VAL', "it's here")).toBe("set -gx VAL 'it\\'s here'");
+    });
+
+    it('escapes single quotes in powershell values', () => {
+      expect(formatExportLine('powershell', 'VAL', "it's here")).toBe(
+        "$env:VAL = 'it''s here'"
+      );
+    });
   });
 
   describe('transformToOpenAI', () => {
@@ -129,6 +144,28 @@ describe('env-command', () => {
       // Should only have 3 keys
       expect(Object.keys(result)).toHaveLength(3);
       expect(result['ANTHROPIC_MAX_TOKENS']).toBeUndefined();
+    });
+  });
+
+  describe('parseFlag', () => {
+    it('parses --flag=value style', () => {
+      expect(parseFlag(['--format=openai'], 'format')).toBe('openai');
+    });
+
+    it('parses --flag value style', () => {
+      expect(parseFlag(['--format', 'openai'], 'format')).toBe('openai');
+    });
+
+    it('handles values containing =', () => {
+      expect(parseFlag(['--format=key=val=ue'], 'format')).toBe('key=val=ue');
+    });
+
+    it('returns undefined for missing flag', () => {
+      expect(parseFlag(['--shell', 'bash'], 'format')).toBeUndefined();
+    });
+
+    it('does not consume next flag as value', () => {
+      expect(parseFlag(['--format', '--shell'], 'format')).toBeUndefined();
     });
   });
 });
