@@ -148,13 +148,32 @@ export class GlmtTransformer {
     return this.streamParser.finalizeDelta(accumulator);
   }
 
+  private redactSensitiveData(data: unknown): unknown {
+    if (data === null || data === undefined) return data;
+    if (typeof data !== 'object') return data;
+    if (Array.isArray(data)) return data.map((item) => this.redactSensitiveData(item));
+
+    const SENSITIVE_KEYS =
+      /^(authorization|auth[_-]?token|api[_-]?key|apikey|token|secret|password|credential|x-api-key|anthropic-api-key|cookie)$/i;
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+      if (SENSITIVE_KEYS.test(key)) {
+        result[key] = '[REDACTED]';
+      } else {
+        result[key] = this.redactSensitiveData(value);
+      }
+    }
+    return result;
+  }
+
   private writeDebugLog(type: string, data: unknown): void {
     if (!this.debugLog) return;
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('.')[0];
       const filepath = path.join(this.debugLogDir, `${timestamp}-${type}.json`);
       fs.mkdirSync(this.debugLogDir, { recursive: true });
-      fs.writeFileSync(filepath, JSON.stringify(data, null, 2) + '\n', 'utf8');
+      const redacted = this.redactSensitiveData(data);
+      fs.writeFileSync(filepath, JSON.stringify(redacted, null, 2) + '\n', 'utf8');
     } catch (error) {
       console.error(`[glmt-transformer] Debug log error: ${(error as Error).message}`);
     }

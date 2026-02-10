@@ -382,15 +382,15 @@ export class GlmtProxy {
    * Honors Retry-After header if provided
    */
   private calculateRetryDelay(attempt: number, retryAfterHeader?: string): number {
+    const MAX_DELAY_MS = 30000;
     // Honor Retry-After header if present and valid
     if (retryAfterHeader) {
       const retryAfter = parseInt(retryAfterHeader, 10);
       if (!isNaN(retryAfter) && retryAfter > 0) {
-        return retryAfter * 1000; // Convert seconds to ms
+        return Math.min(retryAfter * 1000, MAX_DELAY_MS); // Cap at 30s
       }
     }
     // Exponential backoff: 2^attempt * baseDelay + random jitter (0-500ms), capped at 30s
-    const MAX_DELAY_MS = 30000;
     const exponentialDelay = Math.min(
       Math.pow(2, attempt) * this.retryConfig.baseDelay,
       MAX_DELAY_MS
