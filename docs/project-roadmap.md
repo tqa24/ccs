@@ -26,13 +26,14 @@ All major modularization work is complete. The codebase evolved from monolithic 
 | 12 | Hybrid Quota Management | `quota-manager.ts`, `quota-fetcher.ts` (v7.14) |
 | 13 | Docker Support | `docker/` directory with Dockerfile, Compose, entrypoint |
 | 14 | Image Analysis Hook | Vision proxying via CLIProxy transformers (v7.34) |
+| 15 | Third-Party Tool Integration | `ccs env` command with multi-format export (v7.39) |
 
 **Metrics Achieved**:
 - Files >500 lines: 12 -> 5 (-58%)
 - UI files >200 lines: 28 -> 8 (-71%)
 - Barrel exports: 5 -> 39 (+680%)
 - Test coverage: 0% -> 90%
-- Total tests: 1407 (6 skipped)
+- Total tests: 1440 (6 skipped)
 
 ---
 
@@ -170,6 +171,7 @@ worktrees:
 | Hybrid Quota Management | COMPLETE | v7.14 |
 | Docker Support (PR #345) | COMPLETE | v7.23 |
 | Image Analysis Hook | COMPLETE | v7.34 |
+| Third-Party Tool Integration | COMPLETE | v7.39 |
 | Critical Bug Fixes (#158, #155, #124) | PLANNED | Q1 2026 |
 | Multiple CLIProxyAPI Instances | PLANNED | Q1 2026 |
 | Git Worktree Support | PLANNED | Q2 2026 |
