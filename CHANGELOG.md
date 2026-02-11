@@ -1,3 +1,44 @@
+## [7.41.0](https://github.com/kaitranntt/ccs/compare/v7.40.0...v7.41.0) (2026-02-11)
+
+### Features
+
+* **config:** add CCS_DIR env var and --config-dir flag for config directory override ([7a0e6a4](https://github.com/kaitranntt/ccs/commit/7a0e6a4112b50dad14bf48004b07a77d1a5fd4d8)), closes [#507](https://github.com/kaitranntt/ccs/issues/507)
+* **env:** add ccs env command for third-party tool integration ([2e85064](https://github.com/kaitranntt/ccs/commit/2e85064b8a6a3eed694abb56bef70bf889f648d3)), closes [#503](https://github.com/kaitranntt/ccs/issues/503)
+* update cliproxy, config loader, glmt transformer, and provider routes ([8c6afe2](https://github.com/kaitranntt/ccs/commit/8c6afe2e73049ecfbb12cb29a894e83eb2576354))
+
+### Bug Fixes
+
+* **cliproxy:** prevent OAuth process hang on Qwen device code flow ([086bf95](https://github.com/kaitranntt/ccs/commit/086bf958e9c6c9d6d745e78a29a95a9a58490bf1)), closes [#314](https://github.com/kaitranntt/ccs/issues/314)
+* **cliproxy:** strip Gemini-unsupported schema fields including "examples" ([505d6d0](https://github.com/kaitranntt/ccs/commit/505d6d0f111b11e4e231742d65d2a3bbfb73864a)), closes [#155](https://github.com/kaitranntt/ccs/issues/155)
+* **config:** dynamic health message, cache getters, static imports, cloud hint ([706cca8](https://github.com/kaitranntt/ccs/commit/706cca8b3e57c1f9e6c559dc4c1a18ed6854a96d))
+* **config:** lazy-evaluate paths, fix TOCTOU, segment-boundary cloud detection ([d5abc7d](https://github.com/kaitranntt/ccs/commit/d5abc7d69170132cc5c604c453e45f54fa2973b6))
+* **config:** migrate all hardcoded paths to getCcsDir() and improve validation ([60d6bbd](https://github.com/kaitranntt/ccs/commit/60d6bbd0271a4bad4df1eaa705c11d34f7abd464))
+* **config:** resolve remaining hardcoded paths and improve readability ([c8800b4](https://github.com/kaitranntt/ccs/commit/c8800b418a8ee2143366a2e199c42384ff5693f4))
+* **delegation:** use exitCode instead of killed for process termination checks ([4b1fcac](https://github.com/kaitranntt/ccs/commit/4b1fcacf307e0bb8935495202f0322210eb395ea))
+* **env:** add key sanitization and shell completions ([76457a5](https://github.com/kaitranntt/ccs/commit/76457a567d7d1fe52a983a3c6e37b49d503071c9))
+* **env:** add missing CLIProxy profiles to bash completion and shell validation ([6d9351d](https://github.com/kaitranntt/ccs/commit/6d9351dcbc1baa4135d75361301e36cafc3556a3))
+* **env:** address all PR review feedback ([44b3152](https://github.com/kaitranntt/ccs/commit/44b3152d347a7f0c96af4e2e4cd8027ea30634fc))
+* **env:** address P1-P3 review items from code review ([3f5ecd4](https://github.com/kaitranntt/ccs/commit/3f5ecd4d6963a25ce909cd7e17fcca610d9dc978))
+* **env:** fix fish escaping, profile parsing, and add OPENAI_MODEL mapping ([d5c03d1](https://github.com/kaitranntt/ccs/commit/d5c03d1f2d2ad600b4106a9a2fb38a028d099338))
+* **env:** improve empty profile UX and consolidate shell validation constants ([b96eacf](https://github.com/kaitranntt/ccs/commit/b96eacfc06a97e89796620c1ea675aaac290e427))
+* **env:** sync CLIProxy profiles across all shell completions and improve error messages ([a98f4a5](https://github.com/kaitranntt/ccs/commit/a98f4a54278f9f8d9e4b30ccccc900514c08b32f))
+* **env:** use single quotes to prevent shell injection via eval ([a5dc15d](https://github.com/kaitranntt/ccs/commit/a5dc15d174dec2e39b251d63bc4a4093003fc0cb))
+* separate type-only exports and migrate test imports from dist/ to src/ ([0483444](https://github.com/kaitranntt/ccs/commit/048344486456bd561c03a1441060bfc4ca650655))
+
+### Documentation
+
+* update local docs for ccs env command ([38bd562](https://github.com/kaitranntt/ccs/commit/38bd562687865c2cb523734509143390f83a5dcc))
+
+### Code Refactoring
+
+* **config:** DRY precedence logic, dynamic recovery messages, CCS_HOME cloud warning ([9699e01](https://github.com/kaitranntt/ccs/commit/9699e01725c3b33ca1bf24a4eeea7ec7f7e9c220))
+* **utils:** extract killWithEscalation to shared process-utils ([90b4627](https://github.com/kaitranntt/ccs/commit/90b4627740ae90374b06e0013c09bd583e1ddb39))
+
+### Tests
+
+* **cliproxy:** add edge case coverage for Gemini schema sanitizer ([917f0bb](https://github.com/kaitranntt/ccs/commit/917f0bbef7b7132dca0c37e474a82a9bb07f0df1))
+* **utils:** add unit tests for killWithEscalation ([dc9b276](https://github.com/kaitranntt/ccs/commit/dc9b27623bd3cd92dd1b556329d20fd62043b37b))
+
 ## [7.40.0](https://github.com/kaitranntt/ccs/compare/v7.39.0...v7.40.0) (2026-02-07)
 
 ### Features
