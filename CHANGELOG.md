@@ -1,3 +1,9 @@
+## [7.42.0](https://github.com/kaitranntt/ccs/compare/v7.41.0...v7.42.0) (2026-02-11)
+
+### Features
+
+* account safety, quota monitoring, and stability fixes ([#530](https://github.com/kaitranntt/ccs/issues/530)) ([0518050](https://github.com/kaitranntt/ccs/commit/051805074eb80db839a4deb8ab1dcb89f29766de)), closes [#515](https://github.com/kaitranntt/ccs/issues/515) [#513](https://github.com/kaitranntt/ccs/issues/513) [#514](https://github.com/kaitranntt/ccs/issues/514) [#511](https://github.com/kaitranntt/ccs/issues/511) [#523](https://github.com/kaitranntt/ccs/issues/523) [#522](https://github.com/kaitranntt/ccs/issues/522) [#516](https://github.com/kaitranntt/ccs/issues/516) [#509](https://github.com/kaitranntt/ccs/issues/509) [#512](https://github.com/kaitranntt/ccs/issues/512) [#529](https://github.com/kaitranntt/ccs/issues/529) [#524](https://github.com/kaitranntt/ccs/issues/524)
+
 ## [7.41.0](https://github.com/kaitranntt/ccs/compare/v7.40.0...v7.41.0) (2026-02-11)
 
 ### Features
