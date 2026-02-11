@@ -32,6 +32,12 @@ router.put('/', (req: Request, res: Response): void => {
   try {
     const updates = req.body;
 
+    // Reject non-object bodies
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+      res.status(400).json({ error: 'Request body must be a JSON object' });
+      return;
+    }
+
     // Validate input types
     if (updates && typeof updates === 'object') {
       if ('port' in updates) {
@@ -96,7 +102,7 @@ router.get('/raw', (_req: Request, res: Response): void => {
       res.json({
         settings: defaultSettings,
         mtime: Date.now(),
-        path: `~/.ccs/cursor.settings.json`,
+        path: settingsPath,
         exists: false,
       });
       return;
@@ -109,7 +115,7 @@ router.get('/raw', (_req: Request, res: Response): void => {
     res.json({
       settings,
       mtime: stat.mtimeMs,
-      path: `~/.ccs/cursor.settings.json`,
+      path: settingsPath,
       exists: true,
     });
   } catch (error) {
@@ -124,6 +130,12 @@ router.get('/raw', (_req: Request, res: Response): void => {
 router.put('/raw', (req: Request, res: Response): void => {
   try {
     const { settings, expectedMtime } = req.body;
+
+    if (!settings || typeof settings !== 'object') {
+      res.status(400).json({ error: 'settings must be a JSON object' });
+      return;
+    }
+
     const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
 
     // Check for conflict if file exists and expectedMtime provided
