@@ -25,7 +25,13 @@ function getCursorDir(): string {
   return path.join(getCcsDir(), 'cursor');
 }
 
-const PID_FILE = path.join(getCursorDir(), 'daemon.pid');
+/**
+ * Get PID file path.
+ * Computed at runtime to respect CCS_HOME changes (e.g., in tests).
+ */
+function getPidFilePath(): string {
+  return path.join(getCursorDir(), 'daemon.pid');
+}
 
 /**
  * Check if cursor daemon is running on the specified port.
@@ -77,9 +83,10 @@ export async function getDaemonStatus(port: number): Promise<CursorDaemonStatus>
  * Read PID from file.
  */
 function getPidFromFile(): number | null {
+  const pidFile = getPidFilePath();
   try {
-    if (fs.existsSync(PID_FILE)) {
-      const content = fs.readFileSync(PID_FILE, 'utf8').trim();
+    if (fs.existsSync(pidFile)) {
+      const content = fs.readFileSync(pidFile, 'utf8').trim();
       const pid = parseInt(content, 10);
       return isNaN(pid) ? null : pid;
     }
@@ -93,12 +100,13 @@ function getPidFromFile(): number | null {
  * Write PID to file.
  */
 function writePidToFile(pid: number): void {
+  const pidFile = getPidFilePath();
   try {
-    const dir = path.dirname(PID_FILE);
+    const dir = path.dirname(pidFile);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
-    fs.writeFileSync(PID_FILE, pid.toString(), { mode: 0o600 });
+    fs.writeFileSync(pidFile, pid.toString(), { mode: 0o600 });
   } catch {
     // Ignore errors
   }
@@ -108,9 +116,10 @@ function writePidToFile(pid: number): void {
  * Remove PID file.
  */
 function removePidFile(): void {
+  const pidFile = getPidFilePath();
   try {
-    if (fs.existsSync(PID_FILE)) {
-      fs.unlinkSync(PID_FILE);
+    if (fs.existsSync(pidFile)) {
+      fs.unlinkSync(pidFile);
     }
   } catch {
     // Ignore errors
@@ -196,6 +205,16 @@ export async function startDaemon(
           success: false,
           error: `Failed to start daemon: ${err.message}`,
         });
+      });
+
+      proc.on('exit', (code) => {
+        if (code !== 0 && code !== null) {
+          clearInterval(checkInterval);
+          resolve({
+            success: false,
+            error: `Daemon process exited with code ${code}`,
+          });
+        }
       });
     } catch (err) {
       resolve({

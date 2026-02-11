@@ -3,260 +3,229 @@
  * Implements ConnectRPC protobuf wire format encoding
  */
 
-import { randomUUID } from "crypto";
-import * as zlib from "zlib";
+import { randomUUID } from 'crypto';
+import * as zlib from 'zlib';
 import {
-	WIRE_TYPE,
-	ROLE,
-	UNIFIED_MODE,
-	THINKING_LEVEL,
-	FIELD,
-	COMPRESS_FLAG,
-	type WireType,
-	type RoleType,
-	type ThinkingLevelType,
-	type CursorTool,
-	type CursorToolResult,
-	type CursorMessage,
-	type FormattedMessage,
-	type MessageId,
-} from "./cursor-protobuf-schema.js";
+  WIRE_TYPE,
+  ROLE,
+  UNIFIED_MODE,
+  THINKING_LEVEL,
+  FIELD,
+  COMPRESS_FLAG,
+  type WireType,
+  type RoleType,
+  type ThinkingLevelType,
+  type CursorTool,
+  type CursorToolResult,
+  type CursorMessage,
+  type FormattedMessage,
+  type MessageId,
+} from './cursor-protobuf-schema.js';
 
 /**
  * Encode a varint (variable-length integer)
  */
 export function encodeVarint(value: number): Uint8Array {
-	const bytes: number[] = [];
-	let val = value >>> 0; // Ensure unsigned
-	while (val >= 0x80) {
-		bytes.push((val & 0x7f) | 0x80);
-		val >>>= 7;
-	}
-	bytes.push(val & 0x7f);
-	return new Uint8Array(bytes);
+  const bytes: number[] = [];
+  let val = value >>> 0; // Ensure unsigned
+  while (val >= 0x80) {
+    bytes.push((val & 0x7f) | 0x80);
+    val >>>= 7;
+  }
+  bytes.push(val & 0x7f);
+  return new Uint8Array(bytes);
 }
 
 /**
  * Encode a protobuf field (tag + value)
  */
 export function encodeField(
-	fieldNum: number,
-	wireType: WireType,
-	value: number | string | Uint8Array
+  fieldNum: number,
+  wireType: WireType,
+  value: number | string | Uint8Array
 ): Uint8Array {
-	const tag = (fieldNum << 3) | wireType;
-	const tagBytes = encodeVarint(tag);
+  const tag = (fieldNum << 3) | wireType;
+  const tagBytes = encodeVarint(tag);
 
-	if (wireType === WIRE_TYPE.VARINT) {
-		const valueBytes = encodeVarint(value as number);
-		return concatArrays(tagBytes, valueBytes);
-	}
+  if (wireType === WIRE_TYPE.VARINT) {
+    const valueBytes = encodeVarint(value as number);
+    return concatArrays(tagBytes, valueBytes);
+  }
 
-	if (wireType === WIRE_TYPE.LEN) {
-		const dataBytes =
-			typeof value === "string"
-				? new TextEncoder().encode(value)
-				: value instanceof Uint8Array
-					? value
-					: new Uint8Array(0);
+  if (wireType === WIRE_TYPE.LEN) {
+    const dataBytes =
+      typeof value === 'string'
+        ? new TextEncoder().encode(value)
+        : value instanceof Uint8Array
+          ? value
+          : new Uint8Array(0);
 
-		const lengthBytes = encodeVarint(dataBytes.length);
-		return concatArrays(tagBytes, lengthBytes, dataBytes);
-	}
+    const lengthBytes = encodeVarint(dataBytes.length);
+    return concatArrays(tagBytes, lengthBytes, dataBytes);
+  }
 
-	return new Uint8Array(0);
+  return new Uint8Array(0);
 }
 
 /**
  * Concatenate multiple Uint8Arrays
  */
 function concatArrays(...arrays: Uint8Array[]): Uint8Array {
-	const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
-	const result = new Uint8Array(totalLength);
-	let offset = 0;
-	for (const arr of arrays) {
-		result.set(arr, offset);
-		offset += arr.length;
-	}
-	return result;
+  const totalLength = arrays.reduce((sum, arr) => sum + arr.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const arr of arrays) {
+    result.set(arr, offset);
+    offset += arr.length;
+  }
+  return result;
 }
 
 /**
  * Encode a tool result
  */
 export function encodeToolResult(toolResult: CursorToolResult): Uint8Array {
-	const toolCallId = toolResult.tool_call_id || "";
-	const toolName = toolResult.name || "";
-	const toolIndex = toolResult.index || 0;
-	const rawArgs = toolResult.raw_args || "{}";
+  const toolCallId = toolResult.tool_call_id || '';
+  const toolName = toolResult.name || '';
+  const toolIndex = toolResult.index || 0;
+  const rawArgs = toolResult.raw_args || '{}';
 
-	return concatArrays(
-		encodeField(FIELD.TOOL_RESULT_CALL_ID, WIRE_TYPE.LEN, toolCallId),
-		encodeField(FIELD.TOOL_RESULT_NAME, WIRE_TYPE.LEN, toolName),
-		encodeField(FIELD.TOOL_RESULT_INDEX, WIRE_TYPE.VARINT, toolIndex),
-		encodeField(FIELD.TOOL_RESULT_RAW_ARGS, WIRE_TYPE.LEN, rawArgs)
-	);
+  return concatArrays(
+    encodeField(FIELD.TOOL_RESULT_CALL_ID, WIRE_TYPE.LEN, toolCallId),
+    encodeField(FIELD.TOOL_RESULT_NAME, WIRE_TYPE.LEN, toolName),
+    encodeField(FIELD.TOOL_RESULT_INDEX, WIRE_TYPE.VARINT, toolIndex),
+    encodeField(FIELD.TOOL_RESULT_RAW_ARGS, WIRE_TYPE.LEN, rawArgs)
+  );
 }
 
 /**
  * Encode a conversation message
  */
 export function encodeMessage(
-	content: string,
-	role: RoleType,
-	messageId: string,
-	isLast: boolean,
-	hasTools: boolean,
-	toolResults: CursorToolResult[]
+  content: string,
+  role: RoleType,
+  messageId: string,
+  isLast: boolean,
+  hasTools: boolean,
+  toolResults: CursorToolResult[]
 ): Uint8Array {
-	return concatArrays(
-		encodeField(FIELD.MSG_CONTENT, WIRE_TYPE.LEN, content),
-		encodeField(FIELD.MSG_ROLE, WIRE_TYPE.VARINT, role),
-		encodeField(FIELD.MSG_ID, WIRE_TYPE.LEN, messageId),
-		...(toolResults.length > 0
-			? toolResults.map((tr) =>
-					encodeField(
-						FIELD.MSG_TOOL_RESULTS,
-						WIRE_TYPE.LEN,
-						encodeToolResult(tr)
-					)
-				)
-			: []),
-		encodeField(FIELD.MSG_IS_AGENTIC, WIRE_TYPE.VARINT, hasTools ? 1 : 0),
-		encodeField(
-			FIELD.MSG_UNIFIED_MODE,
-			WIRE_TYPE.VARINT,
-			hasTools ? UNIFIED_MODE.AGENT : UNIFIED_MODE.CHAT
-		),
-		...(isLast && hasTools
-			? [
-					encodeField(
-						FIELD.MSG_SUPPORTED_TOOLS,
-						WIRE_TYPE.LEN,
-						encodeVarint(1)
-					),
-				]
-			: [])
-	);
+  return concatArrays(
+    encodeField(FIELD.MSG_CONTENT, WIRE_TYPE.LEN, content),
+    encodeField(FIELD.MSG_ROLE, WIRE_TYPE.VARINT, role),
+    encodeField(FIELD.MSG_ID, WIRE_TYPE.LEN, messageId),
+    ...(toolResults.length > 0
+      ? toolResults.map((tr) =>
+          encodeField(FIELD.MSG_TOOL_RESULTS, WIRE_TYPE.LEN, encodeToolResult(tr))
+        )
+      : []),
+    encodeField(FIELD.MSG_IS_AGENTIC, WIRE_TYPE.VARINT, hasTools ? 1 : 0),
+    encodeField(
+      FIELD.MSG_UNIFIED_MODE,
+      WIRE_TYPE.VARINT,
+      hasTools ? UNIFIED_MODE.AGENT : UNIFIED_MODE.CHAT
+    ),
+    ...(isLast && hasTools
+      ? [encodeField(FIELD.MSG_SUPPORTED_TOOLS, WIRE_TYPE.LEN, encodeVarint(1))]
+      : [])
+  );
 }
 
 /**
  * Encode instruction text
  */
 export function encodeInstruction(text: string): Uint8Array {
-	return text
-		? encodeField(FIELD.INSTRUCTION_TEXT, WIRE_TYPE.LEN, text)
-		: new Uint8Array(0);
+  return text ? encodeField(FIELD.INSTRUCTION_TEXT, WIRE_TYPE.LEN, text) : new Uint8Array(0);
 }
 
 /**
  * Encode model information
  */
 export function encodeModel(modelName: string): Uint8Array {
-	return concatArrays(
-		encodeField(FIELD.MODEL_NAME, WIRE_TYPE.LEN, modelName),
-		encodeField(FIELD.MODEL_EMPTY, WIRE_TYPE.LEN, new Uint8Array(0))
-	);
+  return concatArrays(
+    encodeField(FIELD.MODEL_NAME, WIRE_TYPE.LEN, modelName),
+    encodeField(FIELD.MODEL_EMPTY, WIRE_TYPE.LEN, new Uint8Array(0))
+  );
 }
 
 /**
  * Encode cursor settings
  */
 export function encodeCursorSetting(): Uint8Array {
-	const unknown6 = concatArrays(
-		encodeField(FIELD.SETTING6_FIELD_1, WIRE_TYPE.LEN, new Uint8Array(0)),
-		encodeField(FIELD.SETTING6_FIELD_2, WIRE_TYPE.LEN, new Uint8Array(0))
-	);
+  const unknown6 = concatArrays(
+    encodeField(FIELD.SETTING6_FIELD_1, WIRE_TYPE.LEN, new Uint8Array(0)),
+    encodeField(FIELD.SETTING6_FIELD_2, WIRE_TYPE.LEN, new Uint8Array(0))
+  );
 
-	return concatArrays(
-		encodeField(FIELD.SETTING_PATH, WIRE_TYPE.LEN, "cursor\\aisettings"),
-		encodeField(FIELD.SETTING_UNKNOWN_3, WIRE_TYPE.LEN, new Uint8Array(0)),
-		encodeField(FIELD.SETTING_UNKNOWN_6, WIRE_TYPE.LEN, unknown6),
-		encodeField(FIELD.SETTING_UNKNOWN_8, WIRE_TYPE.VARINT, 1),
-		encodeField(FIELD.SETTING_UNKNOWN_9, WIRE_TYPE.VARINT, 1)
-	);
+  return concatArrays(
+    encodeField(FIELD.SETTING_PATH, WIRE_TYPE.LEN, 'cursor\\aisettings'),
+    encodeField(FIELD.SETTING_UNKNOWN_3, WIRE_TYPE.LEN, new Uint8Array(0)),
+    encodeField(FIELD.SETTING_UNKNOWN_6, WIRE_TYPE.LEN, unknown6),
+    encodeField(FIELD.SETTING_UNKNOWN_8, WIRE_TYPE.VARINT, 1),
+    encodeField(FIELD.SETTING_UNKNOWN_9, WIRE_TYPE.VARINT, 1)
+  );
 }
 
 /**
  * Encode metadata
  */
 export function encodeMetadata(): Uint8Array {
-	return concatArrays(
-		encodeField(FIELD.META_PLATFORM, WIRE_TYPE.LEN, process.platform || "linux"),
-		encodeField(FIELD.META_ARCH, WIRE_TYPE.LEN, process.arch || "x64"),
-		encodeField(FIELD.META_VERSION, WIRE_TYPE.LEN, process.version || "v20.0.0"),
-		encodeField(FIELD.META_CWD, WIRE_TYPE.LEN, process.cwd() || "/"),
-		encodeField(FIELD.META_TIMESTAMP, WIRE_TYPE.LEN, new Date().toISOString())
-	);
+  return concatArrays(
+    encodeField(FIELD.META_PLATFORM, WIRE_TYPE.LEN, process.platform || 'linux'),
+    encodeField(FIELD.META_ARCH, WIRE_TYPE.LEN, process.arch || 'x64'),
+    encodeField(FIELD.META_VERSION, WIRE_TYPE.LEN, process.version || 'v20.0.0'),
+    encodeField(FIELD.META_CWD, WIRE_TYPE.LEN, process.cwd() || '/'),
+    encodeField(FIELD.META_TIMESTAMP, WIRE_TYPE.LEN, new Date().toISOString())
+  );
 }
 
 /**
  * Encode message ID
  */
-export function encodeMessageId(
-	messageId: string,
-	role: RoleType,
-	summaryId?: string
-): Uint8Array {
-	return concatArrays(
-		encodeField(FIELD.MSGID_ID, WIRE_TYPE.LEN, messageId),
-		...(summaryId
-			? [encodeField(FIELD.MSGID_SUMMARY, WIRE_TYPE.LEN, summaryId)]
-			: []),
-		encodeField(FIELD.MSGID_ROLE, WIRE_TYPE.VARINT, role)
-	);
+export function encodeMessageId(messageId: string, role: RoleType, summaryId?: string): Uint8Array {
+  return concatArrays(
+    encodeField(FIELD.MSGID_ID, WIRE_TYPE.LEN, messageId),
+    ...(summaryId ? [encodeField(FIELD.MSGID_SUMMARY, WIRE_TYPE.LEN, summaryId)] : []),
+    encodeField(FIELD.MSGID_ROLE, WIRE_TYPE.VARINT, role)
+  );
 }
 
 /**
  * Encode MCP tool
  */
 export function encodeMcpTool(tool: CursorTool): Uint8Array {
-	const toolName = tool.function?.name || tool.name || "";
-	const toolDesc = tool.function?.description || tool.description || "";
-	const inputSchema = tool.function?.parameters || tool.input_schema || {};
+  const toolName = tool.function?.name || tool.name || '';
+  const toolDesc = tool.function?.description || tool.description || '';
+  const inputSchema = tool.function?.parameters || tool.input_schema || {};
 
-	return concatArrays(
-		...(toolName
-			? [encodeField(FIELD.MCP_TOOL_NAME, WIRE_TYPE.LEN, toolName)]
-			: []),
-		...(toolDesc
-			? [encodeField(FIELD.MCP_TOOL_DESC, WIRE_TYPE.LEN, toolDesc)]
-			: []),
-		...(Object.keys(inputSchema).length > 0
-			? [
-					encodeField(
-						FIELD.MCP_TOOL_PARAMS,
-						WIRE_TYPE.LEN,
-						JSON.stringify(inputSchema)
-					),
-				]
-			: []),
-		encodeField(FIELD.MCP_TOOL_SERVER, WIRE_TYPE.LEN, "custom")
-	);
+  return concatArrays(
+    ...(toolName ? [encodeField(FIELD.MCP_TOOL_NAME, WIRE_TYPE.LEN, toolName)] : []),
+    ...(toolDesc ? [encodeField(FIELD.MCP_TOOL_DESC, WIRE_TYPE.LEN, toolDesc)] : []),
+    ...(Object.keys(inputSchema).length > 0
+      ? [encodeField(FIELD.MCP_TOOL_PARAMS, WIRE_TYPE.LEN, JSON.stringify(inputSchema))]
+      : []),
+    encodeField(FIELD.MCP_TOOL_SERVER, WIRE_TYPE.LEN, 'custom')
+  );
 }
 
 /**
  * Wrap payload in ConnectRPC frame (5-byte header + payload)
  */
-export function wrapConnectRPCFrame(
-	payload: Uint8Array,
-	compress = false
-): Uint8Array {
-	let finalPayload = payload;
-	let flags: number = COMPRESS_FLAG.NONE;
+export function wrapConnectRPCFrame(payload: Uint8Array, compress = false): Uint8Array {
+  let finalPayload = payload;
+  let flags: number = COMPRESS_FLAG.NONE;
 
-	if (compress) {
-		finalPayload = new Uint8Array(zlib.gzipSync(Buffer.from(payload)));
-		flags = COMPRESS_FLAG.GZIP;
-	}
+  if (compress) {
+    finalPayload = new Uint8Array(zlib.gzipSync(Buffer.from(payload)));
+    flags = COMPRESS_FLAG.GZIP;
+  }
 
-	const frame = new Uint8Array(5 + finalPayload.length);
-	frame[0] = flags;
-	frame[1] = (finalPayload.length >> 24) & 0xff;
-	frame[2] = (finalPayload.length >> 16) & 0xff;
-	frame[3] = (finalPayload.length >> 8) & 0xff;
-	frame[4] = finalPayload.length & 0xff;
-	frame.set(finalPayload, 5);
+  const frame = new Uint8Array(5 + finalPayload.length);
+  frame[0] = flags;
+  frame[1] = (finalPayload.length >> 24) & 0xff;
+  frame[2] = (finalPayload.length >> 16) & 0xff;
+  frame[3] = (finalPayload.length >> 8) & 0xff;
+  frame[4] = finalPayload.length & 0xff;
+  frame.set(finalPayload, 5);
 
-	return frame;
+  return frame;
 }
