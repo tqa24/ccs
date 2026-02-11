@@ -63,6 +63,7 @@ router.put('/', (req: Request, res: Response): void => {
     const config = loadOrCreateUnifiedConfig();
 
     // Merge updates with existing config
+    // Only known fields (port, auto_start, ghost_mode) are merged — unknown properties are ignored
     config.cursor = {
       port: updates.port ?? config.cursor?.port ?? DEFAULT_CURSOR_CONFIG.port,
       auto_start:
