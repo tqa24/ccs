@@ -11,6 +11,8 @@ import {
   writePidToFile,
   removePidFile,
   isDaemonRunning,
+  getDaemonStatus,
+  stopDaemon,
 } from '../../../src/cursor/cursor-daemon';
 
 // Test isolation
@@ -119,5 +121,42 @@ describe('isDaemonRunning', () => {
     // Use a port that should not have anything running
     const result = await isDaemonRunning(19999);
     expect(result).toBe(false);
+  });
+});
+
+describe('getDaemonStatus', () => {
+  it('returns status with running=false when no daemon running', async () => {
+    const status = await getDaemonStatus(19999);
+    expect(status.running).toBe(false);
+    expect(status.port).toBe(19999);
+    expect(status.pid).toBeUndefined();
+  });
+
+  it('returns status with pid when PID file exists but daemon not running', async () => {
+    writePidToFile(99999);
+    const status = await getDaemonStatus(19999);
+    expect(status.running).toBe(false);
+    expect(status.port).toBe(19999);
+    expect(status.pid).toBeUndefined();
+  });
+});
+
+describe('stopDaemon', () => {
+  it('returns success when no PID file exists', async () => {
+    const result = await stopDaemon();
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+  });
+
+  it('returns success when PID refers to non-existent process', async () => {
+    // Write a PID that doesn't exist
+    writePidToFile(999999);
+    const result = await stopDaemon();
+    expect(result.success).toBe(true);
+    expect(result.error).toBeUndefined();
+
+    // PID file should be removed
+    const pidFile = path.join(ccsDir(), 'cursor', 'daemon.pid');
+    expect(fs.existsSync(pidFile)).toBe(false);
   });
 });

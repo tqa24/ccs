@@ -140,10 +140,25 @@ export async function startDaemon(
     return { success: true, pid: getPidFromFile() ?? undefined };
   }
 
+  // Validate port before interpolation (prevents injection)
+  if (!Number.isInteger(config.port) || config.port < 1 || config.port > 65535) {
+    return { success: false, error: `Invalid port: ${config.port}` };
+  }
+
   // For now, create a simple structure that will be filled in later
   // The actual server implementation will be added in a separate task
   return new Promise((resolve) => {
     let proc: ChildProcess;
+    let resolved = false;
+
+    const safeResolve = (result: { success: boolean; pid?: number; error?: string }) => {
+      if (resolved) return;
+      resolved = true;
+      if (checkInterval) clearInterval(checkInterval);
+      resolve(result);
+    };
+
+    let checkInterval: NodeJS.Timeout | null = null;
 
     try {
       // Spawn a placeholder Node.js process
@@ -184,15 +199,13 @@ export async function startDaemon(
       // Wait for daemon to be ready (poll for up to 30 seconds)
       let attempts = 0;
       const maxAttempts = 30;
-      const checkInterval = setInterval(async () => {
+      checkInterval = setInterval(async () => {
         attempts++;
 
         if (await isDaemonRunning(config.port)) {
-          clearInterval(checkInterval);
-          resolve({ success: true, pid: proc.pid });
+          safeResolve({ success: true, pid: proc.pid });
         } else if (attempts >= maxAttempts) {
-          clearInterval(checkInterval);
-          resolve({
+          safeResolve({
             success: false,
             error: 'Daemon did not start within 30 seconds',
           });
@@ -200,34 +213,32 @@ export async function startDaemon(
       }, 1000);
 
       proc.on('error', (err) => {
-        clearInterval(checkInterval);
-        resolve({
+        safeResolve({
           success: false,
           error: `Failed to start daemon: ${err.message}`,
         });
       });
 
       proc.on('exit', (code, signal) => {
-        clearInterval(checkInterval);
         if (code === null) {
-          resolve({
+          safeResolve({
             success: false,
             error: `Daemon process was killed by signal ${signal}`,
           });
         } else if (code === 0) {
-          resolve({
+          safeResolve({
             success: false,
             error: 'Daemon process exited unexpectedly with code 0',
           });
         } else if (code !== null) {
-          resolve({
+          safeResolve({
             success: false,
             error: `Daemon process exited with code ${code}`,
           });
         }
       });
     } catch (err) {
-      resolve({
+      safeResolve({
         success: false,
         error: `Failed to spawn daemon: ${(err as Error).message}`,
       });
@@ -242,7 +253,7 @@ export async function stopDaemon(): Promise<{ success: boolean; error?: string }
   const pid = getPidFromFile();
 
   if (!pid) {
-    // No PID file, try to find by port
+    // No PID file — daemon is not running or was already stopped
     removePidFile();
     return { success: true };
   }
