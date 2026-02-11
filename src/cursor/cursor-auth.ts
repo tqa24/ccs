@@ -164,11 +164,16 @@ export function extractUserInfo(
       }
       const decoded = JSON.parse(
         Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
-      );
+      ) as Record<string, unknown>;
       return {
-        email: decoded.email || decoded.sub,
-        userId: decoded.sub || decoded.user_id,
-        exp: decoded.exp,
+        email: typeof decoded.email === 'string' ? decoded.email : undefined,
+        userId:
+          typeof decoded.sub === 'string'
+            ? decoded.sub
+            : typeof decoded.user_id === 'string'
+              ? decoded.user_id
+              : undefined,
+        exp: typeof decoded.exp === 'number' ? decoded.exp : undefined,
       };
     }
   } catch {
@@ -274,13 +279,11 @@ export function checkAuthStatus(): CursorAuthStatus {
   } else {
     // Fallback to importedAt heuristic
     const TOKEN_EXPIRY_HOURS = 24;
-    try {
-      const importedDate = new Date(credentials.importedAt);
+    const importedDate = new Date(credentials.importedAt);
+    if (!isNaN(importedDate.getTime())) {
       const now = new Date();
       tokenAge = Math.floor((now.getTime() - importedDate.getTime()) / (1000 * 60 * 60));
       expired = tokenAge >= TOKEN_EXPIRY_HOURS;
-    } catch {
-      // Invalid date format
     }
   }
 
