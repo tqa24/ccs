@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import { detectRunningProxy } from '../../../dist/cliproxy/proxy-detector';
-import { CLIPROXY_DEFAULT_PORT } from '../../../dist/cliproxy/config-generator';
+import { detectRunningProxy } from '../../../src/cliproxy/proxy-detector';
+import { CLIPROXY_DEFAULT_PORT } from '../../../src/cliproxy/config-generator';
 
 describe('Proxy Detector Port Validation', () => {
   describe('detectRunningProxy with invalid ports', () => {

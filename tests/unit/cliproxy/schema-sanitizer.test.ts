@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, test } from 'bun:test';
-import { sanitizeInputSchema, sanitizeToolSchemas } from '../../../dist/cliproxy/schema-sanitizer.js';
+import { sanitizeInputSchema, sanitizeToolSchemas } from '../../../src/cliproxy/schema-sanitizer';
 
 describe('sanitizeInputSchema', () => {
   test('preserves Gemini-supported properties', () => {
