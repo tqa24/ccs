@@ -165,16 +165,20 @@ export function extractUserInfo(
       const decoded = JSON.parse(
         Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()
       ) as Record<string, unknown>;
-      return {
-        email: typeof decoded.email === 'string' ? decoded.email : undefined,
-        userId:
-          typeof decoded.sub === 'string'
-            ? decoded.sub
-            : typeof decoded.user_id === 'string'
-              ? decoded.user_id
-              : undefined,
-        exp: typeof decoded.exp === 'number' ? decoded.exp : undefined,
-      };
+
+      const email = typeof decoded.email === 'string' ? decoded.email : undefined;
+      const userId =
+        typeof decoded.sub === 'string'
+          ? decoded.sub
+          : typeof decoded.user_id === 'string'
+            ? decoded.user_id
+            : undefined;
+      const exp = typeof decoded.exp === 'number' ? decoded.exp : undefined;
+
+      // If all claims are undefined, treat as if JWT parsing failed
+      if (!email && !userId && exp === undefined) return null;
+
+      return { email, userId, exp };
     }
   } catch {
     // Token is not a JWT, that's okay
@@ -272,17 +276,19 @@ export function checkAuthStatus(): CursorAuthStatus {
   const userInfo = extractUserInfo(credentials.accessToken);
 
   if (userInfo?.exp) {
-    // Use JWT exp claim (Unix timestamp in seconds)
+    // Use JWT exp claim for expiry detection
     const now = Math.floor(Date.now() / 1000);
     expired = now >= userInfo.exp;
-    tokenAge = Math.floor((now - (userInfo.exp - 24 * 60 * 60)) / (60 * 60)); // Assume 24h token
-  } else {
-    // Fallback to importedAt heuristic
-    const TOKEN_EXPIRY_HOURS = 24;
-    const importedDate = new Date(credentials.importedAt);
-    if (!isNaN(importedDate.getTime())) {
-      const now = new Date();
-      tokenAge = Math.floor((now.getTime() - importedDate.getTime()) / (1000 * 60 * 60));
+  }
+
+  // Always use importedAt for tokenAge (more reliable than reverse-engineering JWT lifetime)
+  const TOKEN_EXPIRY_HOURS = 24;
+  const importedDate = new Date(credentials.importedAt);
+  if (!isNaN(importedDate.getTime())) {
+    const now = new Date();
+    tokenAge = Math.floor((now.getTime() - importedDate.getTime()) / (1000 * 60 * 60));
+    // Only set expired from importedAt if JWT exp was not available
+    if (userInfo?.exp === undefined) {
       expired = tokenAge >= TOKEN_EXPIRY_HOURS;
     }
   }
@@ -299,14 +305,8 @@ export function checkAuthStatus(): CursorAuthStatus {
  * Delete credentials file
  */
 export function deleteCredentials(): boolean {
-  const credPath = getCredentialsPath();
-
-  if (!fs.existsSync(credPath)) {
-    return false;
-  }
-
   try {
-    fs.unlinkSync(credPath);
+    fs.unlinkSync(getCredentialsPath());
     return true;
   } catch {
     return false;

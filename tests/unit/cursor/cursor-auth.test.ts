@@ -14,6 +14,7 @@ import {
   loadCredentials,
   checkAuthStatus,
   deleteCredentials,
+  autoDetectTokens,
 } from '../../../src/cursor/cursor-auth';
 
 // Test isolation
@@ -103,9 +104,9 @@ describe('extractUserInfo', () => {
 
   it('should return undefined email when only sub claim exists', () => {
     // JWT: {"sub":"uuid-12345","exp":1234567890}
-    const payload = Buffer.from(
-      JSON.stringify({ sub: 'uuid-12345', exp: 1234567890 })
-    ).toString('base64');
+    const payload = Buffer.from(JSON.stringify({ sub: 'uuid-12345', exp: 1234567890 })).toString(
+      'base64'
+    );
     const token = `header.${payload}.signature`;
 
     const result = extractUserInfo(token);
@@ -141,6 +142,15 @@ describe('extractUserInfo', () => {
       userId: '67890',
       exp: undefined,
     });
+  });
+
+  it('should return null for JWT with no meaningful claims', () => {
+    // JWT: {"iat":1234567890} (only issued-at, no email/sub/exp)
+    const payload = Buffer.from(JSON.stringify({ iat: 1234567890 })).toString('base64');
+    const token = `header.${payload}.signature`;
+
+    const result = extractUserInfo(token);
+    expect(result).toBe(null);
   });
 });
 
@@ -187,8 +197,10 @@ describe('saveCredentials and loadCredentials', () => {
   });
 
   it('should return null for invalid JSON in credentials file', () => {
-    const credPath = path.join(tempDir, 'cursor', 'credentials.json');
-    fs.mkdirSync(path.dirname(credPath), { recursive: true });
+    // CCS_HOME is set to tempDir, getCcsDir() returns path.join(tempDir, '.ccs')
+    const credDir = path.join(tempDir, '.ccs', 'cursor');
+    const credPath = path.join(credDir, 'credentials.json');
+    fs.mkdirSync(credDir, { recursive: true });
     fs.writeFileSync(credPath, 'invalid json{{{');
 
     const loaded = loadCredentials();
@@ -196,8 +208,9 @@ describe('saveCredentials and loadCredentials', () => {
   });
 
   it('should return null for credentials missing required fields', () => {
-    const credPath = path.join(tempDir, 'cursor', 'credentials.json');
-    fs.mkdirSync(path.dirname(credPath), { recursive: true });
+    const credDir = path.join(tempDir, '.ccs', 'cursor');
+    const credPath = path.join(credDir, 'credentials.json');
+    fs.mkdirSync(credDir, { recursive: true });
     fs.writeFileSync(
       credPath,
       JSON.stringify({
@@ -211,8 +224,9 @@ describe('saveCredentials and loadCredentials', () => {
   });
 
   it('should return null for credentials with wrong types', () => {
-    const credPath = path.join(tempDir, 'cursor', 'credentials.json');
-    fs.mkdirSync(path.dirname(credPath), { recursive: true });
+    const credDir = path.join(tempDir, '.ccs', 'cursor');
+    const credPath = path.join(credDir, 'credentials.json');
+    fs.mkdirSync(credDir, { recursive: true });
     fs.writeFileSync(
       credPath,
       JSON.stringify({
@@ -228,8 +242,9 @@ describe('saveCredentials and loadCredentials', () => {
   });
 
   it('should return null for invalid authMethod', () => {
-    const credPath = path.join(tempDir, 'cursor', 'credentials.json');
-    fs.mkdirSync(path.dirname(credPath), { recursive: true });
+    const credDir = path.join(tempDir, '.ccs', 'cursor');
+    const credPath = path.join(credDir, 'credentials.json');
+    fs.mkdirSync(credDir, { recursive: true });
     fs.writeFileSync(
       credPath,
       JSON.stringify({
@@ -384,5 +399,50 @@ describe('deleteCredentials', () => {
 
     // Second delete should return false (already deleted)
     expect(deleteCredentials()).toBe(false);
+  });
+});
+
+describe('autoDetectTokens', () => {
+  it('should return not found for Windows platform', () => {
+    // Save original platform
+    const originalPlatform = process.platform;
+
+    // Mock Windows platform
+    Object.defineProperty(process, 'platform', {
+      value: 'win32',
+      configurable: true,
+    });
+
+    const result = autoDetectTokens();
+
+    expect(result.found).toBe(false);
+    expect(result.error).toContain('not supported on Windows');
+
+    // Restore original platform
+    Object.defineProperty(process, 'platform', {
+      value: originalPlatform,
+      configurable: true,
+    });
+  });
+
+  it('should return not found when database file does not exist', () => {
+    // Skip on Windows (already covered by previous test)
+    if (process.platform === 'win32') {
+      return;
+    }
+
+    const result = autoDetectTokens();
+
+    // Should fail because Cursor database doesn't exist in test environment
+    expect(result.found).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it('should have found property in return type', () => {
+    const result = autoDetectTokens();
+
+    // Verify return type structure
+    expect(result).toHaveProperty('found');
+    expect(typeof result.found).toBe('boolean');
   });
 });
