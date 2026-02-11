@@ -276,7 +276,7 @@ CCS provides:
 - [x] Settings profile support (glm, kimi, custom API)
 - [x] Security: single-quoted output, key sanitization, shell-specific escaping
 - [x] Shell completion updated (bash, zsh, fish, PowerShell)
-- [x] 33 unit tests for env command
+- [x] 34 unit tests for env command
 
 ### v8.0 Release (Planned - Q1 2026)
 - [ ] Multiple CLIProxyAPI instances (load balancing, failover)

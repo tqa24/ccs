@@ -20,6 +20,7 @@ type OutputFormat = 'openai' | 'anthropic' | 'raw';
 
 const VALID_FORMATS: OutputFormat[] = ['openai', 'anthropic', 'raw'];
 const VALID_SHELLS: ShellType[] = ['bash', 'fish', 'powershell'];
+const VALID_SHELL_INPUTS = ['auto', 'bash', 'zsh', 'fish', 'powershell'] as const;
 const VALID_ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /** Auto-detect shell from environment */
@@ -122,11 +123,10 @@ function resolveSettingsProfile(profileName: string): Record<string, string> | n
 
   if (profileConfig.settings) {
     const settingsPath = expandPath(profileConfig.settings);
-    const env = loadSettingsFromFile(settingsPath);
-    if (Object.keys(env).length > 0) return env;
+    return loadSettingsFromFile(settingsPath);
   }
 
-  return null;
+  return {};
 }
 
 /** Show help for env command */
@@ -206,9 +206,8 @@ export async function handleEnvCommand(args: string[]): Promise<void> {
   const format = formatStr as OutputFormat;
 
   const shellStr = parseFlag(args, 'shell') || 'auto';
-  const validShellInputs = ['auto', 'bash', 'zsh', 'fish', 'powershell'];
-  if (!validShellInputs.includes(shellStr)) {
-    console.error(fail(`Invalid shell: ${shellStr}. Use: ${validShellInputs.join(', ')}`));
+  if (!VALID_SHELL_INPUTS.includes(shellStr as (typeof VALID_SHELL_INPUTS)[number])) {
+    console.error(fail(`Invalid shell: ${shellStr}. Use: ${VALID_SHELL_INPUTS.join(', ')}`));
     process.exit(1);
   }
   // zsh uses the same syntax as bash
