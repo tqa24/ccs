@@ -438,9 +438,11 @@ export class CursorExecutor {
 
       // Check for protobuf-decoded error
       if (result.error) {
+        const errorLower = result.error.toLowerCase();
         const isRateLimit =
-          result.error.toLowerCase().includes('rate') ||
-          result.error.toLowerCase().includes('limit');
+          errorLower.includes('rate limit') ||
+          errorLower.includes('resource_exhausted') ||
+          errorLower.includes('too many requests');
         yield {
           type: 'error',
           response: new Response(
