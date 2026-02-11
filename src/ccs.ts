@@ -162,7 +162,7 @@ async function execClaudeWithProxy(
 
   // 4. Spawn Claude CLI with proxy URL
   // Use model from user's settings (not hardcoded) - fixes issue #358
-  const configuredModel = envData['ANTHROPIC_MODEL'] || 'glm-4.7';
+  const configuredModel = envData['ANTHROPIC_MODEL'] || 'glm-5';
   const envVars: NodeJS.ProcessEnv = {
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
     ANTHROPIC_AUTH_TOKEN: apiKey,

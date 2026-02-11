@@ -463,7 +463,7 @@ async function showHelp(): Promise<void> {
     `  ${color('ollama', 'command')}          Ollama - Local open-source models (no API key)`
   );
   console.log(
-    `  ${color('ollama-cloud', 'command')}   Ollama Cloud - glm-4.7:cloud, qwen3-coder:480b`
+    `  ${color('ollama-cloud', 'command')}   Ollama Cloud - glm-5:cloud, qwen3-coder:480b`
   );
   console.log(`  ${color('glm', 'command')}           GLM - Claude via Z.AI`);
   console.log(`  ${color('glmt', 'command')}          GLMT - GLM with Thinking mode`);

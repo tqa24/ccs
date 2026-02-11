@@ -337,7 +337,7 @@ export function getModelDisplayName(profile: string): string {
       const model = settings.env?.ANTHROPIC_MODEL;
 
       if (model) {
-        // Format: 'glm-4.7' -> 'GLM-4.7' (uppercase letters, preserve numbers)
+        // Format: 'glm-5' -> 'GLM-5' (uppercase letters, preserve numbers)
         return model
           .split('-')
           .map((part) => part.toUpperCase())
