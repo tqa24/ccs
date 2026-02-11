@@ -121,33 +121,34 @@ complete -c ccs -s v -l version -d 'Show version information'
 complete -c ccs -s sc -l shell-completion -d 'Install shell completion'
 
 # Commands - grouped with [cmd] prefix for visual distinction
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'auth' -d '[cmd] Manage multiple Claude accounts'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'api' -d '[cmd] Manage API profiles (create/remove)'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'cliproxy' -d '[cmd] Manage CLIProxy variants and binary'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'doctor' -d '[cmd] Run health check and diagnostics'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'sync' -d '[cmd] Sync delegation commands and skills'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'update' -d '[cmd] Update CCS to latest version'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'auth' -d '[cmd] Manage multiple Claude accounts'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'api' -d '[cmd] Manage API profiles (create/remove)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'cliproxy' -d '[cmd] Manage CLIProxy variants and binary'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'doctor' -d '[cmd] Run health check and diagnostics'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'env' -d '[cmd] Export env vars for third-party tools'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'sync' -d '[cmd] Sync delegation commands and skills'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'update' -d '[cmd] Update CCS to latest version'
 
 # CLIProxy profiles - grouped with [proxy] prefix for OAuth providers
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'gemini' -d '[proxy] Google Gemini (OAuth)'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'codex' -d '[proxy] OpenAI Codex (OAuth)'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'agy' -d '[proxy] Antigravity (OAuth)'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'qwen' -d '[proxy] Qwen Code (OAuth)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'gemini' -d '[proxy] Google Gemini (OAuth)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'codex' -d '[proxy] OpenAI Codex (OAuth)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'agy' -d '[proxy] Antigravity (OAuth)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'qwen' -d '[proxy] Qwen Code (OAuth)'
 
 # Model profiles - grouped with [model] prefix for visual distinction
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'default' -d '[model] Default Claude Sonnet 4.5'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'glm' -d '[model] GLM-4.6 (cost-optimized)'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'glmt' -d '[model] GLM-4.6 with thinking mode'
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a 'kimi' -d '[model] Kimi for Coding (long-context)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'default' -d '[model] Default Claude Sonnet 4.5'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'glm' -d '[model] GLM-4.6 (cost-optimized)'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'glmt' -d '[model] GLM-4.6 with thinking mode'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a 'kimi' -d '[model] Kimi for Coding (long-context)'
 
 # Custom model profiles - dynamic with [model] prefix
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a '(__fish_ccs_get_custom_settings_profiles)' -d '[model] Settings-based profile'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a '(__fish_ccs_get_custom_settings_profiles)' -d '[model] Settings-based profile'
 
 # CLIProxy variants - dynamic with [variant] prefix
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a '(__fish_ccs_get_cliproxy_variants)' -d '[variant] CLIProxy variant'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a '(__fish_ccs_get_cliproxy_variants)' -d '[variant] CLIProxy variant'
 
 # Account profiles - dynamic with [account] prefix
-complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor sync update gemini codex agy qwen' -a '(__fish_ccs_get_account_profiles)' -d '[account] Account-based profile'
+complete -c ccs -n 'not __fish_seen_subcommand_from auth api cliproxy doctor env sync update gemini codex agy qwen' -a '(__fish_ccs_get_account_profiles)' -d '[account] Account-based profile'
 
 # shell-completion subflags
 complete -c ccs -n '__fish_seen_argument -l shell-completion; or __fish_seen_argument -s sc' -l bash -d 'Install for bash'
@@ -170,6 +171,14 @@ complete -c ccs -n '__fish_seen_subcommand_from update' -s h -l help -d 'Show he
 
 # doctor command flags
 complete -c ccs -n '__fish_seen_subcommand_from doctor' -s h -l help -d 'Show help for doctor command'
+
+# env command completions
+complete -c ccs -n '__fish_seen_subcommand_from env; and not __fish_seen_argument -l format -l shell' -a 'gemini codex agy qwen iflow kiro ghcp claude' -d '[proxy] CLIProxy profile'
+complete -c ccs -n '__fish_seen_subcommand_from env' -l format -d 'Output format'
+complete -c ccs -n '__fish_seen_subcommand_from env; and __fish_seen_argument -l format' -a 'openai anthropic raw' -d 'Format'
+complete -c ccs -n '__fish_seen_subcommand_from env' -l shell -d 'Shell syntax'
+complete -c ccs -n '__fish_seen_subcommand_from env; and __fish_seen_argument -l shell' -a 'auto bash zsh fish powershell' -d 'Shell'
+complete -c ccs -n '__fish_seen_subcommand_from env' -s h -l help -d 'Show help for env command'
 
 # ============================================================================
 # auth subcommands

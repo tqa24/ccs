@@ -7,6 +7,7 @@
 
 import { spawn, ChildProcess } from 'child_process';
 import { ok, fail, info, warn } from '../../utils/ui';
+import { killWithEscalation } from '../../utils/process-utils';
 import { tryKiroImport } from './kiro-import';
 import { CLIProxyProvider } from '../types';
 import { AccountInfo } from '../account-manager';
@@ -333,8 +334,8 @@ export function executeOAuthProcess(options: OAuthProcessOptions): Promise<Accou
     // H8: Also clear stdinKeepalive interval to prevent memory leak
     const cleanup = () => {
       if (stdinKeepalive) clearInterval(stdinKeepalive);
-      if (authProcess && !authProcess.killed) {
-        authProcess.kill('SIGTERM');
+      if (authProcess && authProcess.exitCode === null) {
+        killWithEscalation(authProcess);
       }
     };
     process.on('SIGINT', cleanup);
@@ -358,9 +359,9 @@ export function executeOAuthProcess(options: OAuthProcessOptions): Promise<Accou
 
     // Listen for external cancel signal
     const handleCancel = (cancelledSessionId: string) => {
-      if (cancelledSessionId === state.sessionId && authProcess && !authProcess.killed) {
+      if (cancelledSessionId === state.sessionId && authProcess && authProcess.exitCode === null) {
         log('Session cancelled externally');
-        authProcess.kill('SIGTERM');
+        killWithEscalation(authProcess);
       }
     };
     authSessionEvents.on('session:cancelled', handleCancel);
@@ -425,7 +426,8 @@ export function executeOAuthProcess(options: OAuthProcessOptions): Promise<Accou
     }, 2000);
 
     // Timeout handling
-    const timeoutMs = headless ? 300000 : 120000;
+    // Device code flows need longer timeout to match CLIProxy binary's polling window (60 attempts × 5s = 300s)
+    const timeoutMs = headless || isDeviceCodeFlow ? 300000 : 120000;
     const timeout = setTimeout(() => {
       // H7: Clear stdin keepalive interval
       if (stdinKeepalive) clearInterval(stdinKeepalive);
@@ -435,9 +437,9 @@ export function executeOAuthProcess(options: OAuthProcessOptions): Promise<Accou
       authSessionEvents.removeListener('session:cancelled', handleCancel);
       unregisterAuthSession(state.sessionId);
       cancelProjectSelection(state.sessionId);
-      authProcess.kill();
+      killWithEscalation(authProcess);
       console.log('');
-      console.log(fail(`OAuth timed out after ${headless ? 5 : 2} minutes`));
+      console.log(fail(`OAuth timed out after ${timeoutMs / 60000} minutes`));
       for (const line of getTimeoutTroubleshooting(provider, callbackPort ?? null)) {
         console.log(line);
       }

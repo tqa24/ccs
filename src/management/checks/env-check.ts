@@ -4,6 +4,7 @@
 
 import { getEnvironmentDiagnostics } from '../environment-diagnostics';
 import { ok, warn } from '../../utils/ui';
+import { getCcsDir, getCcsDirSource } from '../../utils/config-manager';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
 
 const ora = createSpinner();
@@ -53,6 +54,12 @@ export class EnvironmentChecker implements IHealthChecker {
       console.log(`  ${''.padEnd(24)}  TTY: undefined [!]`);
     }
     console.log(`  ${''.padEnd(24)}  Browser: ${diag.browserReason}`);
+
+    // Show CCS directory and source
+    const ccsDir = getCcsDir();
+    const [dirSource] = getCcsDirSource();
+    const sourceLabel = dirSource === 'default' ? '' : ` (via ${dirSource})`;
+    console.log(`  ${''.padEnd(24)}  CCS Dir: ${ccsDir}${sourceLabel}`);
 
     results.addCheck(
       'Environment',

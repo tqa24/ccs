@@ -197,12 +197,7 @@ export class ClaudeDirInstaller {
   cleanupDeprecated(silent = false): CleanupResult {
     const deprecatedFile = path.join(this.ccsClaudeDir, 'agents', 'ccs-delegator.md');
     const userSymlinkFile = path.join(this.homeDir, '.claude', 'agents', 'ccs-delegator.md');
-    const migrationMarker = path.join(
-      this.homeDir,
-      '.ccs',
-      '.migrations',
-      'v435-delegator-cleanup'
-    );
+    const migrationMarker = path.join(getCcsDir(), '.migrations', 'v435-delegator-cleanup');
 
     const cleanedFiles: string[] = [];
 

@@ -2,7 +2,13 @@ import { spawn, ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 import { detectClaudeCli } from './utils/claude-detector';
-import { getSettingsPath, loadSettings } from './utils/config-manager';
+import {
+  getSettingsPath,
+  loadSettings,
+  getCcsDir,
+  setGlobalConfigDir,
+  detectCloudSyncPath,
+} from './utils/config-manager';
 import { validateGlmKey, validateMiniMaxKey } from './utils/api-key-validator';
 import { ErrorManager } from './utils/error-manager';
 import { execClaudeWithCLIProxy, CLIProxyProvider } from './cliproxy';
@@ -15,7 +21,7 @@ import {
 import { getGlobalEnvConfig } from './config/unified-config-loader';
 import { ensureProfileHooks as ensureImageAnalyzerHooks } from './utils/hooks/image-analyzer-profile-hook-injector';
 import { getImageAnalysisHookEnv } from './utils/hooks';
-import { fail, info } from './utils/ui';
+import { fail, info, warn } from './utils/ui';
 
 // Import centralized error handling
 import { handleError, runCleanup } from './errors';
@@ -80,7 +86,7 @@ async function execClaudeWithProxy(
 
   if (!apiKey || apiKey === 'YOUR_GLM_API_KEY_HERE') {
     console.error(fail('GLMT profile requires Z.AI API key'));
-    console.error('    Edit ~/.ccs/glmt.settings.json and set ANTHROPIC_AUTH_TOKEN');
+    console.error(`    Edit ${getCcsDir()}/glmt.settings.json and set ANTHROPIC_AUTH_TOKEN`);
     process.exit(1);
   }
 
@@ -148,7 +154,7 @@ async function execClaudeWithProxy(
     console.error('Workarounds:');
     console.error('  - Use non-thinking mode: ccs glm "prompt"');
     console.error('  - Enable verbose logging: ccs glmt --verbose "prompt"');
-    console.error('  - Check proxy logs in ~/.ccs/logs/ (if debug enabled)');
+    console.error(`  - Check proxy logs in ${getCcsDir()}/logs/ (if debug enabled)`);
     console.error('');
     proxy.kill();
     process.exit(1);
@@ -259,7 +265,6 @@ async function showCachedUpdateNotification(): Promise<boolean> {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
-  const firstArg = args[0];
 
   // Initialize UI colors early to ensure consistent colored output
   // Must happen before any status messages (ok, info, fail, etc.)
@@ -267,6 +272,69 @@ async function main(): Promise<void> {
     const { initUI } = await import('./utils/ui');
     await initUI();
   }
+
+  // Parse --config-dir flag (must happen before any config loading)
+  const configDirIdx = args.findIndex((a) => a === '--config-dir' || a.startsWith('--config-dir='));
+  if (configDirIdx !== -1) {
+    const arg = args[configDirIdx];
+    let configDirValue: string | undefined;
+    let spliceCount = 1;
+
+    if (arg.startsWith('--config-dir=')) {
+      configDirValue = arg.split('=').slice(1).join('=');
+    } else {
+      configDirValue = args[configDirIdx + 1];
+      spliceCount = 2;
+    }
+
+    if (!configDirValue || configDirValue.startsWith('-')) {
+      console.error(fail('--config-dir requires a path argument'));
+      process.exit(1);
+    }
+
+    try {
+      const stat = fs.statSync(configDirValue);
+      if (!stat.isDirectory()) {
+        console.error(fail(`Not a directory: ${configDirValue}`));
+        process.exit(1);
+      }
+    } catch {
+      console.error(fail(`Config directory not found: ${configDirValue}`));
+      console.error(info('Create the directory first, then copy your config files into it.'));
+      process.exit(1);
+    }
+
+    setGlobalConfigDir(configDirValue);
+
+    // Security warning: cloud sync paths expose OAuth tokens
+    const cloudService = detectCloudSyncPath(configDirValue);
+    if (cloudService) {
+      console.error(warn(`CCS directory is under ${cloudService}.`));
+      console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
+      console.error('    Consider: CCS_DIR=/path/outside/cloud ccs ...');
+    }
+
+    // Remove consumed args so they don't leak to Claude CLI
+    args.splice(configDirIdx, spliceCount);
+  } else if (process.env.CCS_DIR) {
+    // Also warn for CCS_DIR env var pointing to cloud sync
+    const cloudService = detectCloudSyncPath(process.env.CCS_DIR);
+    if (cloudService) {
+      console.error(warn(`CCS directory is under ${cloudService}.`));
+      console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
+      console.error('    Consider: CCS_DIR=/path/outside/cloud ccs ...');
+    }
+  } else if (process.env.CCS_HOME) {
+    // Also warn for CCS_HOME env var pointing to cloud sync
+    const cloudService = detectCloudSyncPath(process.env.CCS_HOME);
+    if (cloudService) {
+      console.error(warn(`CCS directory is under ${cloudService}.`));
+      console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
+      console.error('    Consider: CCS_DIR=/path/outside/cloud ccs ...');
+    }
+  }
+
+  const firstArg = args[0];
 
   // Trigger update check early for ALL commands except version/help/update
   // Only if TTY and not CI to avoid noise in automated environments
@@ -447,6 +515,13 @@ async function main(): Promise<void> {
   if (firstArg === 'persist') {
     const { handlePersistCommand } = await import('./commands/persist-command');
     await handlePersistCommand(args.slice(1));
+    return;
+  }
+
+  // Special case: env command (export env vars for third-party tools)
+  if (firstArg === 'env') {
+    const { handleEnvCommand } = await import('./commands/env-command');
+    await handleEnvCommand(args.slice(1));
     return;
   }
 

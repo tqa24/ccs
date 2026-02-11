@@ -18,7 +18,7 @@ _ccs_completion() {
 
   # Top-level completion (first argument)
   if [[ ${COMP_CWORD} -eq 1 ]]; then
-    local commands="auth api cliproxy doctor sync update"
+    local commands="auth api cliproxy doctor env sync update"
     local flags="--help --version --shell-completion -h -v -sc"
     local cliproxy_profiles="gemini codex agy qwen"
     local profiles=""
@@ -146,6 +146,33 @@ _ccs_completion() {
       list)
         # Complete with list flags
         COMPREPLY=( $(compgen -W "--verbose --json" -- ${cur}) )
+        return 0
+        ;;
+    esac
+  fi
+
+  # env subcommands
+  if [[ ${COMP_WORDS[1]} == "env" ]]; then
+    case "${prev}" in
+      env)
+        # Complete with profile names and flags (inline profiles since $cliproxy_profiles is out of scope)
+        local env_opts="--format --shell --help -h gemini codex agy qwen iflow kiro ghcp claude"
+        if [[ -f ~/.ccs/config.json ]]; then
+          env_opts="$env_opts $(jq -r '.profiles | keys[]' ~/.ccs/config.json 2>/dev/null || true)"
+        fi
+        COMPREPLY=( $(compgen -W "${env_opts}" -- ${cur}) )
+        return 0
+        ;;
+      --format)
+        COMPREPLY=( $(compgen -W "openai anthropic raw" -- ${cur}) )
+        return 0
+        ;;
+      --shell)
+        COMPREPLY=( $(compgen -W "auto bash zsh fish powershell" -- ${cur}) )
+        return 0
+        ;;
+      *)
+        COMPREPLY=( $(compgen -W "--format --shell --help -h" -- ${cur}) )
         return 0
         ;;
     esac

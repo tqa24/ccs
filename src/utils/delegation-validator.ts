@@ -2,9 +2,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { Settings } from '../types';
 import { ValidationResult } from '../types/utils';
+import { getCcsDir } from './config-manager';
 
 /**
  * Extended validation result for delegation profiles
@@ -28,8 +28,7 @@ export class DelegationValidator {
    * @returns Validation result { valid: boolean, error?: string, settingsPath?: string }
    */
   static validate(profileName: string): DelegationValidationResult {
-    const homeDir = os.homedir();
-    const settingsPath = path.join(homeDir, '.ccs', `${profileName}.settings.json`);
+    const settingsPath = path.join(getCcsDir(), `${profileName}.settings.json`);
 
     // Check if profile directory exists
     if (!fs.existsSync(settingsPath)) {
@@ -144,8 +143,7 @@ export class DelegationValidator {
    * @returns List of profile names ready for delegation
    */
   static getReadyProfiles(): string[] {
-    const homeDir = os.homedir();
-    const ccsDir = path.join(homeDir, '.ccs');
+    const ccsDir = getCcsDir();
     const configPath = path.join(ccsDir, 'config.yaml');
 
     if (!fs.existsSync(ccsDir)) {

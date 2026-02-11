@@ -89,10 +89,13 @@ function acquireLock(): boolean {
     }
 
     // Acquire lock
-    fs.writeFileSync(lockPath, lockData, { mode: 0o600 });
+    fs.writeFileSync(lockPath, lockData, { flag: 'wx', mode: 0o600 });
     return true;
-  } catch {
-    // Lock acquisition failed
+  } catch (error) {
+    // EEXIST means another process acquired the lock between our check and write
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      return false;
+    }
     return false;
   }
 }
@@ -645,7 +648,15 @@ export function saveUnifiedConfig(config: UnifiedConfig): void {
     // Synchronous sleep without CPU-intensive busy-wait
     // Uses Atomics.wait which properly sleeps the thread
     // Note: saveUnifiedConfig is sync API with 19+ callers, converting to async not feasible
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryDelayMs);
+    try {
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryDelayMs);
+    } catch {
+      // Fallback for environments without SharedArrayBuffer/Atomics support
+      const end = Date.now() + retryDelayMs;
+      while (Date.now() < end) {
+        /* busy-wait */
+      }
+    }
   }
 
   if (!lockAcquired) {

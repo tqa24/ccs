@@ -12,8 +12,8 @@
 Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
     param($commandName, $wordToComplete, $commandAst, $fakeBoundParameters)
 
-    $commands = @('auth', 'api', 'cliproxy', 'doctor', 'sync', 'update', '--help', '--version', '--shell-completion', '-h', '-v', '-sc')
-    $cliproxyProfiles = @('gemini', 'codex', 'agy', 'qwen')
+    $commands = @('auth', 'api', 'cliproxy', 'doctor', 'env', 'sync', 'update', '--help', '--version', '--shell-completion', '-h', '-v', '-sc')
+    $cliproxyProfiles = @('gemini', 'codex', 'agy', 'qwen', 'iflow', 'kiro', 'ghcp', 'claude')
     $authCommands = @('create', 'list', 'show', 'remove', 'default', '--help', '-h')
     $apiCommands = @('create', 'list', 'remove', '--help', '-h')
     $cliproxyCommands = @('create', 'list', 'remove', '--install', '--latest', '--help', '-h')
@@ -21,6 +21,9 @@ Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
     $cliproxyCreateFlags = @('--provider', '--model', '--force', '--yes', '-y')
     $providerFlags = @('--auth', '--config', '--logout', '--headless', '--help', '-h')
     $updateFlags = @('--force', '--beta', '--dev', '--help', '-h')
+    $envFlags = @('--format', '--shell', '--help', '-h')
+    $envFormats = @('openai', 'anthropic', 'raw')
+    $envShells = @('auto', 'bash', 'zsh', 'fish', 'powershell')
     $shellCompletionFlags = @('--bash', '--zsh', '--fish', '--powershell')
     $listFlags = @('--verbose', '--json')
     $removeFlags = @('--yes', '-y')
@@ -126,6 +129,55 @@ Register-ArgumentCompleter -CommandName ccs -ScriptBlock {
                 'ParameterValue',
                 $_
             )
+        }
+        return
+    }
+
+    # env command completion
+    if ($words[1] -eq 'env') {
+        if ($position -eq 3) {
+            $options = $cliproxyProfiles + (Get-CcsProfiles -Type settings) + $envFlags
+            $options | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                [System.Management.Automation.CompletionResult]::new(
+                    $_,
+                    $_,
+                    'ParameterValue',
+                    $_
+                )
+            }
+        } elseif ($position -ge 4) {
+            switch ($words[$position - 2]) {
+                '--format' {
+                    $envFormats | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new(
+                            $_,
+                            $_,
+                            'ParameterValue',
+                            $_
+                        )
+                    }
+                }
+                '--shell' {
+                    $envShells | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new(
+                            $_,
+                            $_,
+                            'ParameterValue',
+                            $_
+                        )
+                    }
+                }
+                default {
+                    $envFlags | Where-Object { $_ -like "$wordToComplete*" } | ForEach-Object {
+                        [System.Management.Automation.CompletionResult]::new(
+                            $_,
+                            $_,
+                            'ParameterValue',
+                            $_
+                        )
+                    }
+                }
+            }
         }
         return
     }

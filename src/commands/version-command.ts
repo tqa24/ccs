@@ -6,9 +6,8 @@
 
 import * as path from 'path';
 import * as fs from 'fs';
-import * as os from 'os';
 import { initUI, header, subheader, color, warn } from '../utils/ui';
-import { getActiveConfigPath } from '../utils/config-manager';
+import { getActiveConfigPath, getCcsDir } from '../utils/config-manager';
 import { getVersion } from '../utils/version';
 
 /**
@@ -23,24 +22,24 @@ export async function handleVersionCommand(): Promise<void> {
   const installLocation = process.argv[1] || '(not found)';
   console.log(`  ${color('Location:'.padEnd(17), 'info')} ${installLocation}`);
 
-  const ccsDir = path.join(os.homedir(), '.ccs');
+  const ccsDir = getCcsDir();
   console.log(`  ${color('CCS Directory:'.padEnd(17), 'info')} ${ccsDir}`);
 
   const configPath = getActiveConfigPath();
   console.log(`  ${color('Config:'.padEnd(17), 'info')} ${configPath}`);
 
-  const profilesJson = path.join(os.homedir(), '.ccs', 'profiles.json');
+  const profilesJson = path.join(ccsDir, 'profiles.json');
   console.log(`  ${color('Profiles:'.padEnd(17), 'info')} ${profilesJson}`);
 
   // Delegation status
-  const delegationSessionsPath = path.join(os.homedir(), '.ccs', 'delegation-sessions.json');
+  const delegationSessionsPath = path.join(ccsDir, 'delegation-sessions.json');
   const delegationConfigured = fs.existsSync(delegationSessionsPath);
 
   const readyProfiles: string[] = [];
 
   // Check for profiles with valid API keys
   for (const profile of ['glm', 'kimi']) {
-    const settingsPath = path.join(os.homedir(), '.ccs', `${profile}.settings.json`);
+    const settingsPath = path.join(ccsDir, `${profile}.settings.json`);
     if (fs.existsSync(settingsPath)) {
       try {
         const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));

@@ -49,13 +49,9 @@ export function checkCcsSymlinks(): HealthCheck {
 /**
  * Check settings symlinks
  */
-export function checkSettingsSymlinks(
-  homedir: string,
-  ccsDir: string,
-  claudeDir: string
-): HealthCheck {
+export function checkSettingsSymlinks(ccsDir: string, claudeDir: string): HealthCheck {
   try {
-    const sharedDir = `${homedir}/.ccs/shared`;
+    const sharedDir = `${ccsDir}/shared`;
     const sharedSettings = `${sharedDir}/settings.json`;
     const claudeSettings = `${claudeDir}/settings.json`;
 

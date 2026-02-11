@@ -6,9 +6,8 @@
  */
 
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
-import { getConfigPath } from '../../utils/config-manager';
+import { getConfigPath, getCcsDir } from '../../utils/config-manager';
 import { isUnifiedMode, hasUnifiedConfig } from '../../config/unified-config-loader';
 import type { HealthCheck } from './types';
 
@@ -18,7 +17,7 @@ import type { HealthCheck } from './types';
 export function checkConfigFile(): HealthCheck {
   // In unified mode, check config.yaml
   if (isUnifiedMode() || hasUnifiedConfig()) {
-    const ccsDir = path.join(os.homedir(), '.ccs');
+    const ccsDir = getCcsDir();
     const yamlPath = path.join(ccsDir, 'config.yaml');
 
     if (!fs.existsSync(yamlPath)) {

@@ -7,15 +7,12 @@
 
 import * as fs from 'fs';
 import * as os from 'os';
-import * as path from 'path';
 import { InteractivePrompt } from '../utils/prompt';
 import { getProviderCatalog, supportsModelConfig, ModelEntry } from './model-catalog';
 import { getProviderSettingsPath, getClaudeEnvVars } from './config-generator';
 import { CLIProxyProvider } from './types';
 import { initUI, color, bold, dim, ok, info, header } from '../utils/ui';
-
-/** CCS directory */
-const CCS_DIR = path.join(os.homedir(), '.ccs');
+import { getCcsDir } from '../utils/config-manager';
 
 /**
  * Check if provider has user settings configured
@@ -185,8 +182,9 @@ export async function configureProviderModel(
   };
 
   // Ensure CCS directory exists
-  if (!fs.existsSync(CCS_DIR)) {
-    fs.mkdirSync(CCS_DIR, { recursive: true });
+  const ccsDir = getCcsDir();
+  if (!fs.existsSync(ccsDir)) {
+    fs.mkdirSync(ccsDir, { recursive: true });
   }
 
   // Write settings file

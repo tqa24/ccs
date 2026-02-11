@@ -10,6 +10,18 @@ import { isUnifiedMode, loadOrCreateUnifiedConfig } from '../config/unified-conf
 // const { ErrorManager } = require('./error-manager');
 // const RecoveryManager = require('./recovery-manager');
 
+// Module-level state for --config-dir CLI flag override
+let _globalConfigDir: string | undefined;
+
+/**
+ * Set global config directory from --config-dir CLI flag.
+ * Must be called before any config loading.
+ * Pass undefined to clear (useful for tests).
+ */
+export function setGlobalConfigDir(dir: string | undefined): void {
+  _globalConfigDir = dir ? path.resolve(dir) : undefined;
+}
+
 /**
  * Get the CCS home directory (respects CCS_HOME env var for test isolation)
  * @returns Home directory path
@@ -19,11 +31,62 @@ export function getCcsHome(): string {
 }
 
 /**
- * Get the CCS directory path (~/.ccs)
- * @returns Path to .ccs directory
+ * Resolve the CCS directory with source information.
+ * Single source of truth for precedence logic.
+ */
+function _resolveCcsDir(): { source: string; dir: string } {
+  if (_globalConfigDir) return { source: '--config-dir', dir: _globalConfigDir };
+  if (process.env.CCS_DIR) return { source: 'CCS_DIR', dir: path.resolve(process.env.CCS_DIR) };
+  if (process.env.CCS_HOME)
+    return { source: 'CCS_HOME', dir: path.join(path.resolve(process.env.CCS_HOME), '.ccs') };
+  return { source: 'default', dir: path.join(os.homedir(), '.ccs') };
+}
+
+/**
+ * Get the CCS directory path.
+ * Precedence: --config-dir flag > CCS_DIR env > CCS_HOME env (legacy, appends .ccs) > ~/.ccs default
+ * @returns Path to CCS config directory
  */
 export function getCcsDir(): string {
-  return path.join(getCcsHome(), '.ccs');
+  return _resolveCcsDir().dir;
+}
+
+/**
+ * Get which source determined the CCS directory (for diagnostics).
+ * @returns [source_label, resolved_path] tuple
+ */
+export function getCcsDirSource(): [string, string] {
+  const r = _resolveCcsDir();
+  return [r.source, r.dir];
+}
+
+/**
+ * Cloud sync folder patterns for security warning.
+ */
+const CLOUD_SYNC_PATTERNS = [
+  'Dropbox',
+  'OneDrive',
+  'Google Drive',
+  'iCloud Drive',
+  'iCloudDrive',
+  'pCloud',
+  'MEGA',
+  'Box Sync',
+];
+
+/**
+ * Check if a path is under a cloud-synced folder.
+ * @returns Detected service name or null
+ */
+export function detectCloudSyncPath(dir: string): string | null {
+  const normalized = dir.replace(/\\/g, '/').toLowerCase();
+  const segments = normalized.split('/');
+  for (const pattern of CLOUD_SYNC_PATTERNS) {
+    const patternLower = pattern.toLowerCase();
+    // Exact path segment match to avoid false positives (e.g., "megauser" != "MEGA")
+    if (segments.some((s) => s === patternLower)) return pattern;
+  }
+  return null;
 }
 
 /**
@@ -39,7 +102,7 @@ export function getCcsHooksDir(): string {
  * @deprecated Use getActiveConfigPath() for mode-aware config path
  */
 export function getConfigPath(): string {
-  return process.env.CCS_CONFIG || path.join(getCcsHome(), '.ccs', 'config.json');
+  return process.env.CCS_CONFIG || path.join(getCcsDir(), 'config.json');
 }
 
 /**

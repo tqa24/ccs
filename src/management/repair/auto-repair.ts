@@ -4,8 +4,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { ok, warn, fail, info, header, color } from '../../utils/ui';
+import { getCcsDir } from '../../utils/config-manager';
 import {
   CLIPROXY_DEFAULT_PORT,
   configNeedsRegeneration,
@@ -28,8 +28,6 @@ const ora = createSpinner();
  * 4. OAuth callback ports blocked by CLIProxy
  */
 export async function runAutoRepair(): Promise<void> {
-  const homedir = os.homedir();
-
   console.log('');
   console.log(header('AUTO-FIX MODE'));
   console.log('');
@@ -111,7 +109,7 @@ export async function runAutoRepair(): Promise<void> {
 
   // Fix 4: Fix shared symlinks (settings.json broken by Claude CLI toggle thinking, etc.)
   const symlinkSpinner = ora('Checking shared settings.json symlink').start();
-  const sharedSettings = path.join(homedir, '.ccs', 'shared', 'settings.json');
+  const sharedSettings = path.join(getCcsDir(), 'shared', 'settings.json');
   try {
     if (fs.existsSync(sharedSettings)) {
       const stats = fs.lstatSync(sharedSettings);

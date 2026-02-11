@@ -165,6 +165,26 @@ export function clearCooldown(provider: CLIProxyProvider, accountId: string): vo
 // ============================================================================
 
 /**
+ * Process items with limited concurrency to prevent connection burst
+ * @param items - Items to process
+ * @param fn - Async function to apply to each item
+ * @param concurrency - Number of concurrent operations (default: 10)
+ */
+async function batchedMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency = 10
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let i = 0; i < items.length; i += concurrency) {
+    const batch = items.slice(i, i + concurrency);
+    const batchResults = await Promise.all(batch.map(fn));
+    results.push(...batchResults);
+  }
+  return results;
+}
+
+/**
  * Result of pre-flight quota check
  */
 export interface PreflightResult {
@@ -213,9 +233,10 @@ export async function findHealthyAccount(
 
   if (available.length === 0) return null;
 
-  // Fetch quota for each available account (with caching and deduplication)
-  const withQuotas = await Promise.all(
-    available.map(async (account) => {
+  // Fetch quota for each available account (batched to prevent connection burst)
+  const withQuotas = await batchedMap(
+    available,
+    async (account) => {
       let quota = getCachedQuota(provider, account.id);
       if (!quota) {
         quota = await fetchQuotaWithDedup(provider, account.id);
@@ -228,7 +249,8 @@ export async function findHealthyAccount(
         tier: account.tier || 'unknown',
         lastQuota: avgQuota,
       };
-    })
+    },
+    10
   );
 
   // Filter by threshold

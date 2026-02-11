@@ -177,13 +177,15 @@ export function isRetryableError(error: Error): boolean {
 /**
  * Download file from URL with progress tracking
  * @param timeout Timeout in ms (default 120000 for large files)
+ * @param maxRedirects Maximum number of redirects to follow (default 10)
  */
 export function downloadFile(
   url: string,
   destPath: string,
   onProgress?: ProgressCallback,
   verbose = false,
-  timeout = 120000
+  timeout = 120000,
+  maxRedirects = 10
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let resolved = false;
@@ -203,10 +205,14 @@ export function downloadFile(
           cleanup(new Error('Redirect without location header'));
           return;
         }
+        if (maxRedirects <= 0) {
+          cleanup(new Error('Too many redirects'));
+          return;
+        }
         if (verbose) {
           console.error(`[cliproxy] Following redirect: ${redirectUrl}`);
         }
-        downloadFile(redirectUrl, destPath, onProgress, verbose, timeout)
+        downloadFile(redirectUrl, destPath, onProgress, verbose, timeout, maxRedirects - 1)
           .then(resolve)
           .catch(reject);
         return;
@@ -340,7 +346,12 @@ export async function downloadWithRetry(
 /**
  * Fetch text content from URL (single attempt)
  */
-function fetchTextOnce(url: string, verbose = false, timeout = 30000): Promise<string> {
+function fetchTextOnce(
+  url: string,
+  verbose = false,
+  timeout = 30000,
+  maxRedirects = 10
+): Promise<string> {
   return new Promise((resolve, reject) => {
     let resolved = false;
 
@@ -352,7 +363,13 @@ function fetchTextOnce(url: string, verbose = false, timeout = 30000): Promise<s
           reject(new Error('Redirect without location header'));
           return;
         }
-        fetchTextOnce(redirectUrl, verbose, timeout).then(resolve).catch(reject);
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'));
+          return;
+        }
+        fetchTextOnce(redirectUrl, verbose, timeout, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject);
         return;
       }
 
@@ -436,7 +453,8 @@ export async function fetchText(url: string, verbose = false, maxRetries = 3): P
 function fetchJsonOnce(
   url: string,
   verbose = false,
-  timeout = 15000
+  timeout = 15000,
+  maxRedirects = 10
 ): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let resolved = false;
@@ -456,7 +474,13 @@ function fetchJsonOnce(
           reject(new Error('Redirect without location header'));
           return;
         }
-        fetchJsonOnce(redirectUrl, verbose, timeout).then(resolve).catch(reject);
+        if (maxRedirects <= 0) {
+          reject(new Error('Too many redirects'));
+          return;
+        }
+        fetchJsonOnce(redirectUrl, verbose, timeout, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject);
         return;
       }
 

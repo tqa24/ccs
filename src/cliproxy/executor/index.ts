@@ -13,8 +13,10 @@
 import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as path from 'path';
 import { ProgressIndicator } from '../../utils/progress-indicator';
 import { ok, fail, info, warn } from '../../utils/ui';
+import { getCcsDir } from '../../utils/config-manager';
 import { escapeShellArg } from '../../utils/shell-executor';
 import { ensureCLIProxyBinary } from '../binary-manager';
 import {
@@ -655,7 +657,7 @@ export async function execClaudeWithCLIProxy(
           upstreamBaseUrl: postSanitizationBaseUrl,
           verbose,
           defaultEffort: 'medium',
-          traceFilePath: traceEnabled ? `${os.homedir()}/.ccs/codex-reasoning-proxy.log` : '',
+          traceFilePath: traceEnabled ? path.join(getCcsDir(), 'codex-reasoning-proxy.log') : '',
           modelMap: {
             defaultModel: initialEnvVars.ANTHROPIC_MODEL,
             opusModel: initialEnvVars.ANTHROPIC_DEFAULT_OPUS_MODEL,

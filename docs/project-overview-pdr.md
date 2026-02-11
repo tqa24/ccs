@@ -115,6 +115,13 @@ CCS provides:
 - Entrypoint with privilege dropping and usage help
 - Environment variable configuration support
 
+### FR-011: Third-Party Tool Integration
+- Export shell-evaluable env vars via `ccs env` command
+- Support OpenAI, Anthropic, raw output formats
+- Auto-detect shell (bash/zsh, fish, PowerShell) from $SHELL
+- Security: single-quoted output, key sanitization, shell-specific escaping
+- Cross-platform compatibility (macOS, Linux, Windows)
+
 ---
 
 ## Non-Functional Requirements
@@ -192,7 +199,7 @@ CCS provides:
 | Startup time | < 100ms | Achieved |
 | Dashboard load | < 2s | Achieved |
 | Error rate | < 1% | Achieved |
-| Test coverage | > 90% | 90% (1407 tests, 6 skipped) |
+| Test coverage | > 90% | 90% (1440 tests, 6 skipped) |
 | File size compliance | 100% < 200 lines | 95% |
 
 ---
@@ -260,6 +267,16 @@ CCS provides:
 - [x] Network error handling with noRetryPatterns
 - [x] Quota 429 rate limit handling improvements
 - [x] WebSocket maxPayload limit (DoS prevention)
+
+### v7.39 Release (Complete)
+- [x] `ccs env` command for third-party tool integration (OpenCode, Cursor, Continue)
+- [x] Multi-format output: openai, anthropic, raw
+- [x] Multi-shell support: bash/zsh, fish, PowerShell (auto-detected)
+- [x] CLIProxy profile support (gemini, codex, agy, qwen)
+- [x] Settings profile support (glm, kimi, custom API)
+- [x] Security: single-quoted output, key sanitization, shell-specific escaping
+- [x] Shell completion updated (bash, zsh, fish, PowerShell)
+- [x] 34 unit tests for env command
 
 ### v8.0 Release (Planned - Q1 2026)
 - [ ] Multiple CLIProxyAPI instances (load balancing, failover)

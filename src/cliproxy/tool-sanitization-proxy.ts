@@ -218,7 +218,7 @@ export class ToolSanitizationProxy {
           for (const entry of schemaResult.removedByTool) {
             this.writeLog(
               'warn',
-              `[tool-sanitization-proxy] Schema sanitized for "${entry.name}": removed ${entry.removed.length} non-standard properties`
+              `[tool-sanitization-proxy] Schema sanitized for "${entry.name}": removed ${entry.removed.length} Gemini-unsupported properties`
             );
           }
           this.log(

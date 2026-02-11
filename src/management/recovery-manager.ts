@@ -6,21 +6,14 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { info } from '../utils/ui';
+import { getCcsHome, getCcsDir } from '../utils/config-manager';
 import { createEmptyUnifiedConfig, UNIFIED_CONFIG_VERSION } from '../config/unified-config-types';
 import {
   saveUnifiedConfig,
   hasUnifiedConfig,
   loadUnifiedConfig,
 } from '../config/unified-config-loader';
-
-/**
- * Get CCS home directory (respects CCS_HOME env for test isolation)
- */
-function getCcsHome(): string {
-  return process.env.CCS_HOME || os.homedir();
-}
 
 /**
  * Recovery Manager Class
@@ -35,7 +28,7 @@ class RecoveryManager {
 
   constructor() {
     this.homedir = getCcsHome();
-    this.ccsDir = path.join(this.homedir, '.ccs');
+    this.ccsDir = getCcsDir();
     this.claudeDir = path.join(this.homedir, '.claude');
     this.sharedDir = path.join(this.ccsDir, 'shared');
     this.completionsDir = path.join(this.ccsDir, 'completions');
@@ -48,7 +41,7 @@ class RecoveryManager {
   ensureCcsDirectory(): boolean {
     if (!fs.existsSync(this.ccsDir)) {
       fs.mkdirSync(this.ccsDir, { recursive: true, mode: 0o755 });
-      this.recovered.push('Created ~/.ccs/ directory');
+      this.recovered.push(`Created ${this.ccsDir} directory`);
       return true;
     }
     return false;
@@ -67,7 +60,7 @@ class RecoveryManager {
         return false; // Config exists and is valid
       }
       // Config exists but is corrupted - will be recreated below
-      this.recovered.push('Detected corrupted ~/.ccs/config.yaml');
+      this.recovered.push(`Detected corrupted ${this.ccsDir}/config.yaml`);
     }
 
     // Check for legacy config.json - if exists, let autoMigrate handle it
@@ -83,7 +76,7 @@ class RecoveryManager {
 
     try {
       saveUnifiedConfig(config);
-      this.recovered.push('Created ~/.ccs/config.yaml');
+      this.recovered.push(`Created ${this.ccsDir}/config.yaml`);
       return true;
     } catch (_saveErr) {
       // Fallback: create minimal config.json for backward compat
@@ -92,7 +85,7 @@ class RecoveryManager {
         const tmpPath = `${legacyConfigPath}.tmp`;
         fs.writeFileSync(tmpPath, JSON.stringify(fallbackConfig, null, 2) + '\n', 'utf8');
         fs.renameSync(tmpPath, legacyConfigPath);
-        this.recovered.push('Created ~/.ccs/config.json (fallback)');
+        this.recovered.push(`Created ${this.ccsDir}/config.json (fallback)`);
         return true;
       } catch (_fallbackErr) {
         // Both writes failed - log but don't crash
@@ -111,7 +104,7 @@ class RecoveryManager {
     // Create ~/.claude/ if missing
     if (!fs.existsSync(this.claudeDir)) {
       fs.mkdirSync(this.claudeDir, { recursive: true, mode: 0o755 });
-      this.recovered.push('Created ~/.claude/ directory');
+      this.recovered.push(`Created ${this.claudeDir} directory`);
     }
 
     // Create settings.json if missing
@@ -120,7 +113,7 @@ class RecoveryManager {
       fs.writeFileSync(tmpPath, '{}\n', 'utf8');
       fs.renameSync(tmpPath, claudeSettingsPath);
 
-      this.recovered.push('Created ~/.claude/settings.json');
+      this.recovered.push(`Created ${claudeSettingsPath}`);
       return true;
     }
 
@@ -136,7 +129,7 @@ class RecoveryManager {
     // Create shared directory
     if (!fs.existsSync(this.sharedDir)) {
       fs.mkdirSync(this.sharedDir, { recursive: true, mode: 0o755 });
-      this.recovered.push('Created ~/.ccs/shared/');
+      this.recovered.push(`Created ${this.sharedDir}`);
       created = true;
     }
 
@@ -197,7 +190,7 @@ class RecoveryManager {
     }
 
     if (installed) {
-      this.recovered.push('Installed shell completions to ~/.ccs/completions/');
+      this.recovered.push(`Installed shell completions to ${this.completionsDir}`);
     }
 
     return installed;
@@ -245,7 +238,7 @@ class RecoveryManager {
     this.recovered.forEach((msg) => console.log(`    - ${msg}`));
 
     // Show login hint if created Claude settings
-    if (this.recovered.some((msg) => msg.includes('~/.claude/settings.json'))) {
+    if (this.recovered.some((msg) => msg.includes('settings.json') && msg.includes('.claude'))) {
       console.log('');
       console.log(info('Next step: Login to Claude CLI'));
       console.log('    Run: claude /login');

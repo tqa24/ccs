@@ -13,7 +13,7 @@
 #     sudo cp scripts/completion/ccs.zsh /usr/local/share/zsh/site-functions/_ccs
 
 # Set up completion styles for better formatting and colors
-zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|api|cliproxy|doctor|sync|update)([[:space:]]#--[[:space:]]#*)==0\;34=2\;37'
+zstyle ':completion:*:*:ccs:*:commands' list-colors '=(#b)(auth|api|cliproxy|doctor|env|sync|update)([[:space:]]#--[[:space:]]#*)==0\;34=2\;37'
 zstyle ':completion:*:*:ccs:*:proxy-profiles' list-colors '=(#b)(gemini|codex|agy|qwen)([[:space:]]#--[[:space:]]#*)==0\;35=2\;37'
 zstyle ':completion:*:*:ccs:*:model-profiles' list-colors '=(#b)(default|glm|glmt|kimi|[^[:space:]]##)([[:space:]]#--[[:space:]]#*)==0\;32=2\;37'
 zstyle ':completion:*:*:ccs:*:account-profiles' list-colors '=(#b)([^[:space:]]##)([[:space:]]#--[[:space:]]#*)==0\;33=2\;37'
@@ -34,6 +34,7 @@ _ccs() {
     'api:Manage API profiles (create/remove)'
     'cliproxy:Manage CLIProxy variants and binary'
     'doctor:Run health check and diagnostics'
+    'env:Export env vars for third-party tools'
     'sync:Sync delegation commands and skills'
     'update:Update CCS to latest version'
   )
@@ -44,6 +45,10 @@ _ccs() {
     'codex:OpenAI Codex (OAuth)'
     'agy:Antigravity (OAuth)'
     'qwen:Qwen Code (OAuth)'
+    'iflow:iFlow (OAuth)'
+    'kiro:Kiro (OAuth)'
+    'ghcp:GitHub Copilot (OAuth)'
+    'claude:Claude Direct (OAuth)'
   )
 
   # Define known settings profiles with descriptions
@@ -123,6 +128,13 @@ _ccs() {
         doctor)
           _arguments \
             '(- *)'{-h,--help}'[Show help for doctor command]'
+          ;;
+        env)
+          _arguments \
+            '--format[Output format]:format:(openai anthropic raw)' \
+            '--shell[Shell syntax]:shell:(auto bash zsh fish powershell)' \
+            '(- *)'{-h,--help}'[Show help]' \
+            '1:profile:($proxy_profiles ${(k)settings_profiles_described})'
           ;;
         gemini|codex|agy|qwen)
           _arguments \

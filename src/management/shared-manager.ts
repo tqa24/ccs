@@ -62,7 +62,7 @@ class SharedManager {
       const resolvedTarget = path.resolve(path.dirname(target), targetLink);
 
       // Check if target points back to our shared dir or link path
-      const sharedDir = path.join(this.homeDir, '.ccs', 'shared');
+      const sharedDir = path.join(getCcsDir(), 'shared');
       if (resolvedTarget.startsWith(sharedDir) || resolvedTarget === linkPath) {
         console.log(warn(`Circular symlink detected: ${target} → ${resolvedTarget}`));
         return true;

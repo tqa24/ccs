@@ -7,6 +7,7 @@
 
 import { spawn } from 'child_process';
 import * as path from 'path';
+import { killWithEscalation } from '../utils/process-utils';
 import * as fs from 'fs';
 import { SessionManager } from './session-manager';
 import { SettingsParser } from './settings-parser';
@@ -214,11 +215,8 @@ export class HeadlessExecutor {
 
       // Setup signal handlers for cleanup
       const cleanupHandler = () => {
-        if (!proc.killed) {
-          proc.kill('SIGTERM');
-          setTimeout(() => {
-            if (!proc.killed) proc.kill('SIGKILL');
-          }, 2000);
+        if (proc.exitCode === null) {
+          killWithEscalation(proc, 2000);
         }
       };
       process.once('SIGINT', cleanupHandler);
@@ -326,16 +324,14 @@ export class HeadlessExecutor {
       // Handle timeout
       if (timeout > 0) {
         const timeoutHandle = setTimeout(() => {
-          if (!proc.killed) {
+          if (proc.exitCode === null) {
             timedOut = true;
             if (progressInterval) {
               clearInterval(progressInterval);
               process.stderr.write('\r\x1b[K');
             }
-            proc.kill('SIGTERM');
-            setTimeout(() => {
-              if (!proc.killed) proc.kill('SIGKILL');
-            }, 10000);
+            // Longer grace period for timeout (vs 2s for SIGINT) since delegated sessions may need time to flush output
+            killWithEscalation(proc, 10000);
           }
         }, timeout);
         proc.on('close', () => clearTimeout(timeoutHandle));

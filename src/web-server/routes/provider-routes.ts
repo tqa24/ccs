@@ -25,7 +25,7 @@ router.get('/', (_req: Request, res: Response): void => {
     // Mask API keys for security
     const masked = providers.map((p) => ({
       ...p,
-      apiKey: p.apiKey ? `...${p.apiKey.slice(-4)}` : '',
+      apiKey: p.apiKey ? (p.apiKey.length > 8 ? `...${p.apiKey.slice(-4)}` : '***') : '',
     }));
     res.json({ providers: masked });
   } catch (error) {
@@ -58,7 +58,11 @@ router.get('/:name', (req: Request, res: Response): void => {
     // Mask API key
     res.json({
       ...provider,
-      apiKey: provider.apiKey ? `...${provider.apiKey.slice(-4)}` : '',
+      apiKey: provider.apiKey
+        ? provider.apiKey.length > 8
+          ? `...${provider.apiKey.slice(-4)}`
+          : '***'
+        : '',
     });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -92,6 +96,10 @@ router.post('/', (req: Request, res: Response): void => {
     }
     if (!apiKey || typeof apiKey !== 'string') {
       res.status(400).json({ error: 'apiKey is required' });
+      return;
+    }
+    if (models && !Array.isArray(models)) {
+      res.status(400).json({ error: 'models must be an array' });
       return;
     }
 

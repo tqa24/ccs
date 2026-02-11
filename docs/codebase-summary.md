@@ -48,6 +48,7 @@ src/
 │   ├── config-command.ts     # Config management commands
 │   ├── config-image-analysis-command.ts  # Image analysis hook config (NEW v7.34)
 │   ├── doctor-command.ts     # Health diagnostics
+│   ├── env-command.ts        # Export shell env vars for third-party tools (v7.39)
 │   ├── help-command.ts       # Help text generation
 │   ├── install-command.ts    # Install/uninstall logic
 │   ├── shell-completion-command.ts
@@ -465,10 +466,12 @@ export type { ProviderEditorProps } from './provider-editor';
 
 ```
 tests/
-├── unit/                     # Unit tests (6 core test files)
+├── unit/                     # Unit tests (7 core test files)
 │   ├── data-aggregator.test.ts
 │   ├── cliproxy/
 │   │   └── remote-proxy-client.test.ts
+│   ├── commands/
+│   │   └── env-command.test.ts
 │   ├── jsonl-parser.test.ts
 │   ├── model-pricing.test.ts
 │   ├── unified-config.test.ts
@@ -487,12 +490,12 @@ tests/
 
 | Metric | Value |
 |--------|-------|
-| Total Tests | 1407 |
-| Passing | 1407 |
+| Total Tests | 1440 |
+| Passing | 1440 |
 | Skipped | 6 |
 | Failed | 0 |
 | Coverage Threshold | 90% |
-| Test Files | 40+ |
+| Test Files | 41 |
 
 ---
 

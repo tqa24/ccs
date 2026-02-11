@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { getCcsDir } from './config-manager';
 // import { execSync } from 'child_process'; // Currently unused
 
 type ShellType = 'bash' | 'zsh' | 'fish' | 'powershell' | null;
@@ -24,7 +25,7 @@ export class ShellCompletionInstaller {
 
   constructor() {
     this.homeDir = os.homedir();
-    this.ccsDir = path.join(this.homeDir, '.ccs');
+    this.ccsDir = getCcsDir();
     this.completionDir = path.join(this.ccsDir, 'completions');
     this.scriptsDir = path.join(__dirname, '../../scripts/completion');
   }

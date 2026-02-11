@@ -7,7 +7,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import {
   loadDailyUsageData,
   loadMonthlyUsageData,
@@ -25,28 +24,32 @@ import {
   getCacheAge,
 } from './disk-cache';
 import { ok, info, fail } from '../../utils/ui';
+import { getCcsDir } from '../../utils/config-manager';
 
 // ============================================================================
 // Multi-Instance Support - Aggregate usage from CCS profiles
 // ============================================================================
 
 /** Path to CCS instances directory */
-const CCS_INSTANCES_DIR = path.join(os.homedir(), '.ccs', 'instances');
+function getCcsInstancesDir() {
+  return path.join(getCcsDir(), 'instances');
+}
 
 /**
  * Get list of CCS instance paths that have usage data
  * Only returns instances with existing projects/ directory
  */
 function getInstancePaths(): string[] {
-  if (!fs.existsSync(CCS_INSTANCES_DIR)) {
+  const instancesDir = getCcsInstancesDir();
+  if (!fs.existsSync(instancesDir)) {
     return [];
   }
 
   try {
-    const entries = fs.readdirSync(CCS_INSTANCES_DIR, { withFileTypes: true });
+    const entries = fs.readdirSync(instancesDir, { withFileTypes: true });
     return entries
       .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(CCS_INSTANCES_DIR, entry.name))
+      .map((entry) => path.join(instancesDir, entry.name))
       .filter((instancePath) => {
         // Only include instances that have a projects directory
         const projectsPath = path.join(instancePath, 'projects');

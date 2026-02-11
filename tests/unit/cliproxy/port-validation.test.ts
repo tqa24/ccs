@@ -15,8 +15,8 @@ import { describe, it, expect } from 'bun:test';
 import {
   validatePort,
   CLIPROXY_DEFAULT_PORT,
-} from '../../../dist/cliproxy/config-generator';
-import { resolveProxyConfig } from '../../../dist/cliproxy/proxy-config-resolver';
+} from '../../../src/cliproxy/config-generator';
+import { resolveProxyConfig } from '../../../src/cliproxy/proxy-config-resolver';
 
 describe('Port Validation', () => {
   describe('validatePort()', () => {

@@ -116,9 +116,10 @@ CCS v7.34 adds Image Analysis Hook for vision model proxying through CLIProxy wi
   |     commands/    |     |      auth/       |     |     config/      |
   |------------------|     |------------------|     |------------------|
   | doctor-command   |     | account-switcher |     | unified-config-  |
-  | help-command     |     | profile-detector |     |   loader         |
-  | install-command  |     | commands/        |     | migration-manager|
-  | sync-command     |     +------------------+     +------------------+
+  | env-command      |     | profile-detector |     |   loader         |
+  | help-command     |     | commands/        |     | migration-manager|
+  | install-command  |     +------------------+     +------------------+
+  | sync-command     |
   | update-command   |
   +------------------+
            |                       |                        |

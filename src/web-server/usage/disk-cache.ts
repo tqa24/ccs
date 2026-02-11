@@ -10,14 +10,17 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import type { DailyUsage, HourlyUsage, MonthlyUsage, SessionUsage } from './types';
 import { ok, info, warn } from '../../utils/ui';
+import { getCcsDir } from '../../utils/config-manager';
 
 // Cache configuration
-const CCS_DIR = path.join(os.homedir(), '.ccs');
-const CACHE_DIR = path.join(CCS_DIR, 'cache');
-const CACHE_FILE = path.join(CACHE_DIR, 'usage.json');
+function getCacheDir() {
+  return path.join(getCcsDir(), 'cache');
+}
+function getCacheFile() {
+  return path.join(getCacheDir(), 'usage.json');
+}
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const STALE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days (max age for stale data)
 
@@ -39,8 +42,9 @@ const CACHE_VERSION = 3;
  * Ensure ~/.ccs/cache directory exists
  */
 function ensureCacheDir(): void {
-  if (!fs.existsSync(CACHE_DIR)) {
-    fs.mkdirSync(CACHE_DIR, { recursive: true });
+  const dir = getCacheDir();
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
   }
 }
 
@@ -51,11 +55,12 @@ function ensureCacheDir(): void {
  */
 export function readDiskCache(): UsageDiskCache | null {
   try {
-    if (!fs.existsSync(CACHE_FILE)) {
+    const cacheFile = getCacheFile();
+    if (!fs.existsSync(cacheFile)) {
       return null;
     }
 
-    const data = fs.readFileSync(CACHE_FILE, 'utf-8');
+    const data = fs.readFileSync(cacheFile, 'utf-8');
     const cache: UsageDiskCache = JSON.parse(data);
 
     // Version check - invalidate if schema changed
@@ -113,9 +118,10 @@ export function writeDiskCache(
     };
 
     // Write atomically using temp file + rename
-    const tempFile = CACHE_FILE + '.tmp';
+    const cacheFile = getCacheFile();
+    const tempFile = cacheFile + '.tmp';
     fs.writeFileSync(tempFile, JSON.stringify(cache), 'utf-8');
-    fs.renameSync(tempFile, CACHE_FILE);
+    fs.renameSync(tempFile, cacheFile);
 
     console.log(ok('Disk cache updated'));
   } catch (err) {
@@ -145,8 +151,9 @@ export function getCacheAge(cache: UsageDiskCache | null): string {
  */
 export function clearDiskCache(): void {
   try {
-    if (fs.existsSync(CACHE_FILE)) {
-      fs.unlinkSync(CACHE_FILE);
+    const cacheFile = getCacheFile();
+    if (fs.existsSync(cacheFile)) {
+      fs.unlinkSync(cacheFile);
       console.log(ok('Disk cache cleared'));
     }
   } catch (err) {
