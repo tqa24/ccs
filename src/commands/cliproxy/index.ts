@@ -19,7 +19,7 @@ import {
   handlePauseAccount,
   handleResumeAccount,
 } from './quota-subcommand';
-import { handleCreate, handleRemove } from './variant-subcommand';
+import { handleCreate, handleRemove, handleEdit } from './variant-subcommand';
 import { handleProxyStatus, handleStop } from './proxy-lifecycle-subcommand';
 import { showStatus, handleInstallVersion, handleInstallLatest } from './install-subcommand';
 import { showHelp } from './help-subcommand';
@@ -158,6 +158,11 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
   // Profile commands
   if (command === 'create') {
     await handleCreate(remainingArgs.slice(1), effectiveBackend);
+    return;
+  }
+
+  if (command === 'edit') {
+    await handleEdit(remainingArgs.slice(1), effectiveBackend);
     return;
   }
 

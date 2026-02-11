@@ -27,6 +27,7 @@ export async function showHelp(): Promise<void> {
       [
         ['create [name]', 'Create new CLIProxy variant profile'],
         ['create --composite', 'Create composite variant (mix providers per tier)'],
+        ['edit [name]', 'Edit an existing CLIProxy variant profile'],
         ['list', 'List all CLIProxy variant profiles'],
         ['remove <name>', 'Remove a CLIProxy variant profile'],
       ],

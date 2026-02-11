@@ -21,6 +21,7 @@ import {
   listVariants,
   createVariant,
   createCompositeVariant,
+  updateCompositeVariant,
   removeVariant,
 } from '../../cliproxy/services';
 import { DEFAULT_BACKEND } from '../../cliproxy/platform-detector';
@@ -456,5 +457,210 @@ export async function handleRemove(args: string[]): Promise<void> {
   }
 
   console.log(ok(`Variant removed: ${name}`));
+  console.log('');
+}
+
+export async function handleEdit(
+  args: string[],
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): Promise<void> {
+  await initUI();
+  const parsedArgs = parseProfileArgs(args);
+  const variants = listVariants();
+  const variantNames = Object.keys(variants);
+
+  if (variantNames.length === 0) {
+    console.log(warn('No CLIProxy variants to edit'));
+    process.exit(0);
+  }
+
+  let name = parsedArgs.name;
+  if (!name) {
+    console.log(header(`Edit ${getBackendLabel(backend)} Variant`));
+    console.log('');
+    console.log('Available variants:');
+    variantNames.forEach((n, i) => {
+      const v = variants[n];
+      const label = v.type === 'composite' ? 'composite' : v.provider;
+      console.log(`  ${i + 1}. ${n} (${label})`);
+    });
+    console.log('');
+    name = await InteractivePrompt.input('Variant name to edit', {
+      validate: (val) => {
+        if (!val) return 'Variant name is required';
+        if (!variantNames.includes(val)) return `Variant '${val}' not found`;
+        return null;
+      },
+    });
+  }
+
+  if (!variantNames.includes(name)) {
+    console.log(fail(`Variant '${name}' not found`));
+    console.log('');
+    console.log('Available variants:');
+    variantNames.forEach((n) => console.log(`  - ${n}`));
+    process.exit(1);
+  }
+
+  const variant = variants[name];
+
+  // If not composite, use existing updateVariant() flow (interactive prompts)
+  if (variant.type !== 'composite') {
+    console.log(header(`Edit Variant: ${name}`));
+    console.log('');
+    console.log(`Current provider: ${variant.provider}`);
+    if (variant.model) {
+      console.log(`Current model:    ${variant.model}`);
+    }
+    console.log('');
+
+    const changeProvider = await InteractivePrompt.confirm('Change provider?', { default: false });
+    let newProvider: CLIProxyProfileName | undefined = undefined;
+    if (changeProvider) {
+      const providerOptions = CLIPROXY_PROFILES.map((p) => ({
+        id: p,
+        label: p.charAt(0).toUpperCase() + p.slice(1),
+      }));
+      newProvider = (await InteractivePrompt.selectFromList(
+        'Select new provider:',
+        providerOptions
+      )) as CLIProxyProfileName;
+    }
+
+    const changeModel = await InteractivePrompt.confirm('Change model?', { default: false });
+    let newModel = variant.model || '';
+    if (changeModel) {
+      const providerForModel = newProvider || (variant.provider as CLIProxyProfileName);
+      if (supportsModelConfig(providerForModel as CLIProxyProvider)) {
+        const catalog = getProviderCatalog(providerForModel as CLIProxyProvider);
+        if (catalog) {
+          const modelOptions = catalog.models.map((m) => ({
+            id: m.id,
+            label: formatModelOption(m),
+          }));
+          const defaultIdx = catalog.models.findIndex((m) => m.id === catalog.defaultModel);
+          newModel = await InteractivePrompt.selectFromList('Select new model:', modelOptions, {
+            defaultIndex: defaultIdx >= 0 ? defaultIdx : 0,
+          });
+        }
+      } else {
+        newModel = await InteractivePrompt.input('New model name', {
+          validate: (val) => (val ? null : 'Model is required'),
+        });
+      }
+    }
+
+    console.log('');
+    console.log(info(`Updating ${getBackendLabel(backend)} variant...`));
+    // Use existing updateVariant from variant-service for single-provider variants
+    const { updateVariant } = await import('../../cliproxy/services/variant-service');
+    const result = updateVariant(name, {
+      provider: newProvider,
+      model: changeModel ? newModel : undefined,
+    });
+
+    if (!result.success) {
+      console.log(fail(`Failed to update variant: ${result.error}`));
+      process.exit(1);
+    }
+
+    console.log('');
+    console.log(ok(`Variant updated: ${name}`));
+    console.log('');
+    return;
+  }
+
+  // Composite variant edit flow
+  console.log(header(`Edit Composite Variant: ${name}`));
+  console.log('');
+  if (!variant.tiers) {
+    console.log(fail('Invalid composite variant: missing tier configuration'));
+    process.exit(1);
+  }
+
+  console.log(info('Current tier configuration:'));
+  console.log(`  Opus:    ${variant.tiers.opus.provider} / ${variant.tiers.opus.model}`);
+  console.log(`  Sonnet:  ${variant.tiers.sonnet.provider} / ${variant.tiers.sonnet.model}`);
+  console.log(`  Haiku:   ${variant.tiers.haiku.provider} / ${variant.tiers.haiku.model}`);
+  console.log(`  Default: ${variant.default_tier}`);
+  console.log('');
+
+  const verbose = args.includes('--verbose');
+  const updatedTiers: Partial<Record<'opus' | 'sonnet' | 'haiku', CompositeTierConfig>> = {};
+
+  // Ask per-tier edits
+  for (const tierName of ['opus', 'sonnet', 'haiku'] as const) {
+    const shouldEdit = await InteractivePrompt.confirm(`Edit ${tierName} tier?`, {
+      default: false,
+    });
+    if (shouldEdit) {
+      const newConfig = await selectTierConfig(tierName, verbose);
+      if (!newConfig) {
+        console.log(fail('Edit cancelled'));
+        process.exit(0);
+      }
+      updatedTiers[tierName] = newConfig;
+    }
+  }
+
+  // Ask for default tier change
+  let newDefaultTier = variant.default_tier;
+  const changeDefault = await InteractivePrompt.confirm('Change default tier?', { default: false });
+  if (changeDefault) {
+    const finalTiers = {
+      opus: updatedTiers.opus ?? variant.tiers.opus,
+      sonnet: updatedTiers.sonnet ?? variant.tiers.sonnet,
+      haiku: updatedTiers.haiku ?? variant.tiers.haiku,
+    };
+    const tierOptions = [
+      {
+        id: 'opus' as const,
+        label: `Opus (${finalTiers.opus.provider}: ${finalTiers.opus.model})`,
+      },
+      {
+        id: 'sonnet' as const,
+        label: `Sonnet (${finalTiers.sonnet.provider}: ${finalTiers.sonnet.model})`,
+      },
+      {
+        id: 'haiku' as const,
+        label: `Haiku (${finalTiers.haiku.provider}: ${finalTiers.haiku.model})`,
+      },
+    ];
+    newDefaultTier = (await InteractivePrompt.selectFromList(
+      'Default tier (ANTHROPIC_MODEL):',
+      tierOptions
+    )) as 'opus' | 'sonnet' | 'haiku';
+  }
+
+  console.log('');
+  console.log(info(`Updating composite ${getBackendLabel(backend)} variant...`));
+  const result = updateCompositeVariant(name, {
+    tiers: updatedTiers,
+    defaultTier: changeDefault ? newDefaultTier : undefined,
+  });
+
+  if (!result.success) {
+    console.log(fail(`Failed to update composite variant: ${result.error}`));
+    process.exit(1);
+  }
+
+  console.log('');
+  const finalVariant = result.variant;
+  if (finalVariant && finalVariant.tiers) {
+    const tierSummary =
+      `Opus:    ${finalVariant.tiers.opus.provider} / ${finalVariant.tiers.opus.model}\n` +
+      `Sonnet:  ${finalVariant.tiers.sonnet.provider} / ${finalVariant.tiers.sonnet.model}\n` +
+      `Haiku:   ${finalVariant.tiers.haiku.provider} / ${finalVariant.tiers.haiku.model}\n` +
+      `Default: ${finalVariant.default_tier}`;
+    const portInfo = finalVariant.port ? `\nPort:    ${finalVariant.port}` : '';
+    console.log(
+      infoBox(
+        `Variant: ${name} (composite)\n${tierSummary}${portInfo}\nConfig:  ~/.ccs/config.yaml`,
+        'Composite Variant Updated'
+      )
+    );
+  } else {
+    console.log(ok(`Composite variant updated: ${name}`));
+  }
   console.log('');
 }

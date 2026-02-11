@@ -337,3 +337,90 @@ export function createCompositeVariant(
     return { success: false, error: (error as Error).message };
   }
 }
+
+/** Update options for composite variant */
+export interface UpdateCompositeVariantOptions {
+  defaultTier?: 'opus' | 'sonnet' | 'haiku';
+  tiers?: Partial<Record<'opus' | 'sonnet' | 'haiku', CompositeTierConfig>>;
+}
+
+/**
+ * Update an existing composite CLIProxy variant.
+ * Merges changes with existing config and regenerates settings file.
+ */
+export function updateCompositeVariant(
+  name: string,
+  updates: UpdateCompositeVariantOptions
+): VariantOperationResult {
+  if (!isUnifiedMode()) {
+    throw new Error('Composite variants require unified config (config.yaml).');
+  }
+
+  try {
+    const variants = listVariantsFromConfig();
+    const existing = variants[name];
+
+    if (!existing) {
+      return { success: false, error: `Variant '${name}' not found` };
+    }
+
+    if (existing.type !== 'composite' || !existing.tiers) {
+      return { success: false, error: `Variant '${name}' is not a composite variant` };
+    }
+
+    // Merge tiers (keep unchanged tiers from existing)
+    const mergedTiers = {
+      opus: updates.tiers?.opus ?? existing.tiers.opus,
+      sonnet: updates.tiers?.sonnet ?? existing.tiers.sonnet,
+      haiku: updates.tiers?.haiku ?? existing.tiers.haiku,
+    };
+
+    // Validate all tier providers against backend compatibility
+    const tierNames: Array<'opus' | 'sonnet' | 'haiku'> = ['opus', 'sonnet', 'haiku'];
+    for (const tier of tierNames) {
+      const backendError = validateProviderBackend(mergedTiers[tier].provider);
+      if (backendError) {
+        return { success: false, error: `${tier} tier: ${backendError}` };
+      }
+    }
+
+    const newDefaultTier = updates.defaultTier ?? existing.default_tier ?? 'sonnet';
+
+    // Delete old settings file
+    if (existing.settings) {
+      deleteSettingsFile(existing.settings);
+    }
+
+    // Create new settings file with updated config
+    const settingsPath = createCompositeSettingsFile(
+      name,
+      mergedTiers,
+      newDefaultTier,
+      existing.port
+    );
+
+    // Save updated composite config to unified config
+    const compositeConfig: CompositeVariantConfig = {
+      type: 'composite',
+      default_tier: newDefaultTier,
+      tiers: mergedTiers,
+      settings: getCompositeRelativeSettingsPath(name),
+      port: existing.port,
+    };
+    saveCompositeVariantUnified(name, compositeConfig);
+
+    return {
+      success: true,
+      settingsPath,
+      variant: {
+        provider: mergedTiers[newDefaultTier].provider,
+        type: 'composite',
+        default_tier: newDefaultTier,
+        tiers: mergedTiers,
+        port: existing.port,
+      },
+    };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+}
