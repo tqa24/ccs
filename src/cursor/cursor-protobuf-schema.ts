@@ -201,4 +201,6 @@ export interface MessageId {
 export const COMPRESS_FLAG = {
   NONE: 0x00,
   GZIP: 0x01,
+  GZIP_ALT: 0x02,
+  GZIP_BOTH: 0x03,
 } as const;

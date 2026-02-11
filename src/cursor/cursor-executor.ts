@@ -10,13 +10,7 @@ import { generateCursorBody, extractTextFromResponse } from './cursor-protobuf.j
 import { buildCursorRequest } from './cursor-translator.js';
 import type { CursorTool } from './cursor-protobuf-schema.js';
 
-/** Compression flags for response parsing */
-const COMPRESS_FLAG = {
-  NONE: 0x00,
-  GZIP: 0x01,
-  GZIP_ALT: 0x02,
-  GZIP_BOTH: 0x03,
-} as const;
+import { COMPRESS_FLAG } from './cursor-protobuf-schema.js';
 
 /** Cursor credentials structure */
 interface CursorCredentials {
@@ -163,12 +157,14 @@ export class CursorExecutor {
    */
   generateChecksum(machineId: string): string {
     const timestamp = Math.floor(Date.now() / 1000000);
+    // JS bitwise shifts wrap modulo 32, so >>40 and >>32 give wrong results.
+    // Use Math.trunc division for upper bytes that exceed 32-bit range.
     const byteArray = new Uint8Array([
-      (timestamp >> 40) & 0xff,
-      (timestamp >> 32) & 0xff,
-      (timestamp >> 24) & 0xff,
-      (timestamp >> 16) & 0xff,
-      (timestamp >> 8) & 0xff,
+      Math.trunc(timestamp / 2 ** 40) & 0xff,
+      Math.trunc(timestamp / 2 ** 32) & 0xff,
+      (timestamp >>> 24) & 0xff,
+      (timestamp >>> 16) & 0xff,
+      (timestamp >>> 8) & 0xff,
       timestamp & 0xff,
     ]);
 
@@ -209,7 +205,8 @@ export class CursorExecutor {
       throw new Error('Machine ID is required for Cursor API');
     }
 
-    const cleanToken = accessToken.includes('::') ? accessToken.split('::')[1] : accessToken;
+    const delimIdx = accessToken.indexOf('::');
+    const cleanToken = delimIdx !== -1 ? accessToken.slice(delimIdx + 2) : accessToken;
 
     return {
       authorization: `Bearer ${cleanToken}`,
@@ -326,13 +323,18 @@ export class CursorExecutor {
       });
 
       if (signal) {
-        // TODO: AbortSignal listener is not removed after request completes.
-        // To fix: store handler reference, remove in end/error callbacks.
-        signal.addEventListener('abort', () => {
+        const onAbort = () => {
           req.close();
           client.close();
           reject(new Error('Request aborted'));
-        });
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+
+        const cleanup = () => {
+          signal.removeEventListener('abort', onAbort);
+        };
+        req.on('end', cleanup);
+        req.on('error', cleanup);
       }
 
       req.write(body);
