@@ -42,41 +42,19 @@ interface Http2Response {
   body: Buffer;
 }
 
-/** Detect cloud environment */
-function isCloudEnv(): boolean {
-  if (
-    typeof globalThis !== 'undefined' &&
-    'caches' in globalThis &&
-    typeof (globalThis as { caches?: unknown }).caches === 'object'
-  )
-    return true;
-  try {
-    // Check for EdgeRuntime without causing compilation error
-    if (typeof (globalThis as { EdgeRuntime?: string }).EdgeRuntime !== 'undefined') return true;
-  } catch (err) {
-    if (process.env.CCS_DEBUG) {
-      console.error('[cursor] EdgeRuntime detection failed:', err);
-    }
-  }
-  return false;
-}
-
 /** Lazy import http2 */
 let http2Module: typeof import('http2') | null = null;
 async function getHttp2() {
   if (http2Module) return http2Module;
-  if (!isCloudEnv()) {
-    try {
-      http2Module = await import('http2');
-      return http2Module;
-    } catch (err) {
-      if (process.env.CCS_DEBUG) {
-        console.error('[cursor] http2 import failed:', err);
-      }
-      return null;
+  try {
+    http2Module = await import('http2');
+    return http2Module;
+  } catch (err) {
+    if (process.env.CCS_DEBUG) {
+      console.error('[cursor] http2 module not available, falling back to fetch:', err);
     }
+    return null;
   }
-  return null;
 }
 
 /**
@@ -214,6 +192,10 @@ export class CursorExecutor {
     const delimIdx = accessToken.indexOf('::');
     const cleanToken = delimIdx !== -1 ? accessToken.slice(delimIdx + 2) : accessToken;
 
+    if (!cleanToken) {
+      throw new Error('Access token is empty after parsing');
+    }
+
     return {
       authorization: `Bearer ${cleanToken}`,
       'connect-accept-encoding': 'gzip',
@@ -318,7 +300,7 @@ export class CursorExecutor {
       req.on('end', () => {
         client.close();
         resolve({
-          status: Number(responseHeaders[':status']),
+          status: Number(responseHeaders[':status']) || 500,
           headers: responseHeaders,
           body: Buffer.concat(chunks),
         });
@@ -456,18 +438,21 @@ export class CursorExecutor {
 
       // Check for protobuf-decoded error
       if (result.error) {
+        const isRateLimit =
+          result.error.toLowerCase().includes('rate') ||
+          result.error.toLowerCase().includes('limit');
         yield {
           type: 'error',
           response: new Response(
             JSON.stringify({
               error: {
                 message: result.error,
-                type: 'rate_limit_error',
-                code: 'rate_limited',
+                type: isRateLimit ? 'rate_limit_error' : 'server_error',
+                code: isRateLimit ? 'rate_limited' : 'cursor_error',
               },
             }),
             {
-              status: 429,
+              status: isRateLimit ? 429 : 400,
               headers: { 'Content-Type': 'application/json' },
             }
           ),

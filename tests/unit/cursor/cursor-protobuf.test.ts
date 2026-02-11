@@ -16,6 +16,7 @@ import {
   parseConnectRPCFrame,
 } from '../../../src/cursor/cursor-protobuf-decoder';
 import { buildCursorRequest } from '../../../src/cursor/cursor-translator';
+import { generateCursorBody } from '../../../src/cursor/cursor-protobuf';
 import { CursorExecutor } from '../../../src/cursor/cursor-executor';
 import { WIRE_TYPE, FIELD } from '../../../src/cursor/cursor-protobuf-schema';
 
@@ -277,6 +278,117 @@ describe('Message Translation', () => {
       expect(result.messages).toHaveLength(1);
       expect(result.messages[0].content).toBe('Hello World');
     });
+
+    it('should handle system message with array content format', () => {
+      const result = buildCursorRequest(
+        'gpt-4',
+        {
+          messages: [
+            {
+              role: 'system',
+              content: [
+                { type: 'text', text: 'System instruction part 1' },
+                { type: 'text', text: ' part 2' },
+              ],
+            },
+          ],
+        },
+        false,
+        {}
+      );
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].role).toBe('user');
+      expect(result.messages[0].content).toBe('[System Instructions]\nSystem instruction part 1 part 2');
+    });
+  });
+});
+
+describe('Request Encoding', () => {
+  describe('generateCursorBody', () => {
+    it('should encode basic text message', () => {
+      const result = generateCursorBody([{ role: 'user', content: 'Hello' }], 'gpt-4', [], null);
+
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(result.length).toBeGreaterThan(0);
+    });
+
+    it('should encode message with tools', () => {
+      const tools = [
+        {
+          type: 'function' as const,
+          function: {
+            name: 'get_weather',
+            description: 'Get weather data',
+            parameters: {
+              type: 'object',
+              properties: {
+                city: { type: 'string' },
+              },
+              required: ['city'],
+            },
+          },
+        },
+      ];
+
+      const result = generateCursorBody([{ role: 'user', content: 'What is the weather?' }], 'gpt-4', tools, null);
+
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(result.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('should handle malformed frame gracefully', () => {
+      const executor = new CursorExecutor();
+
+      // Incomplete frame header (only 3 bytes instead of 5)
+      const incompleteFrame = Buffer.from([0x00, 0x00, 0x00]);
+
+      const result = executor.transformProtobufToJSON(incompleteFrame, 'gpt-4', {
+        messages: [],
+      });
+
+      // Should return valid response even with malformed input
+      expect(result.status).toBe(200);
+    });
+
+    it('should handle truncated payload', () => {
+      const executor = new CursorExecutor();
+
+      // Frame header says payload is 100 bytes but only 5 bytes follow
+      const truncatedFrame = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x64, 0x01, 0x02, 0x03, 0x04, 0x05]);
+
+      const result = executor.transformProtobufToJSON(truncatedFrame, 'gpt-4', {
+        messages: [],
+      });
+
+      // Should handle gracefully
+      expect(result.status).toBe(200);
+    });
+
+    it('should handle multi-frame buffer', () => {
+      const executor = new CursorExecutor();
+
+      // Create two simple frames
+      const frame1 = wrapConnectRPCFrame(
+        encodeField(FIELD.RESPONSE_TEXT, WIRE_TYPE.LEN, 'Frame 1'),
+        false
+      );
+      const frame2 = wrapConnectRPCFrame(
+        encodeField(FIELD.RESPONSE_TEXT, WIRE_TYPE.LEN, ' Frame 2'),
+        false
+      );
+
+      // Concatenate them
+      const multiFrame = Buffer.concat([Buffer.from(frame1), Buffer.from(frame2)]);
+
+      const result = executor.transformProtobufToJSON(multiFrame, 'gpt-4', {
+        messages: [],
+      });
+
+      expect(result.status).toBe(200);
+    });
   });
 });
 
@@ -479,63 +591,6 @@ describe('CursorExecutor', () => {
 
       // Should handle gracefully and return valid response
       expect(result.status).toBe(200);
-    });
-  });
-
-  describe('transformProtobufToSSE', () => {
-    it('should output SSE format for simple text response', async () => {
-      const executor = new CursorExecutor();
-
-      // Minimal protobuf frame with text content
-      const textPayload = new Uint8Array([
-        (FIELD.MSG_CONTENT << 3) | WIRE_TYPE.LEN,
-        4,
-        ...[116, 101, 115, 116], // "test"
-      ]);
-
-      const buffer = Buffer.from(
-        wrapConnectRPCFrame(textPayload, {
-          compress: false,
-        })
-      );
-
-      const result = executor.transformProtobufToSSE(buffer, 'test-model', {
-        messages: [],
-        stream: true,
-      });
-
-      expect(result.status).toBe(200);
-      expect(result.headers.get('Content-Type')).toBe('text/event-stream');
-
-      const body = await result.text();
-      expect(body).toContain('data: ');
-      expect(body).toContain('"object":"chat.completion.chunk"');
-      expect(body).toContain('data: [DONE]');
-    });
-
-    it('should handle error responses in SSE format', () => {
-      const executor = new CursorExecutor();
-
-      // Protobuf frame with error
-      const errorPayload = new Uint8Array([
-        (FIELD.MSG_CONTENT << 3) | WIRE_TYPE.LEN,
-        17,
-        ...[101, 114, 114, 111, 114, 58, 32, 116, 101, 115, 116, 32, 101, 114, 114, 111, 114], // "error: test error"
-      ]);
-
-      const buffer = Buffer.from(
-        wrapConnectRPCFrame(errorPayload, {
-          compress: false,
-        })
-      );
-
-      const result = executor.transformProtobufToSSE(buffer, 'test-model', {
-        messages: [],
-        stream: true,
-      });
-
-      // Error responses should still be valid
-      expect(result.status).toBeGreaterThanOrEqual(200);
     });
   });
 

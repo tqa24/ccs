@@ -39,9 +39,17 @@ function convertMessages(messages: OpenAIMessage[]): CursorMessage[] {
     const msg = messages[i];
 
     if (msg.role === 'system') {
+      let content = '';
+      if (typeof msg.content === 'string') {
+        content = msg.content;
+      } else if (Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (part.type === 'text' && part.text) content += part.text;
+        }
+      }
       result.push({
         role: 'user',
-        content: `[System Instructions]\n${msg.content}`,
+        content: `[System Instructions]\n${content}`,
       });
       continue;
     }
