@@ -121,15 +121,15 @@ router.post('/auth/auto-detect', async (_req: Request, res: Response): Promise<v
   try {
     const result = autoDetectTokens();
 
-    if (!result.found) {
-      res.status(404).json({ error: result.error });
+    if (!result.found || !result.accessToken || !result.machineId) {
+      res.status(404).json({ error: result.error ?? 'Token not found' });
       return;
     }
 
     // Save credentials
     saveCredentials({
-      accessToken: result.accessToken!,
-      machineId: result.machineId!,
+      accessToken: result.accessToken,
+      machineId: result.machineId,
       authMethod: 'auto-detect',
       importedAt: new Date().toISOString(),
     });

@@ -34,9 +34,15 @@ router.put('/', (req: Request, res: Response): void => {
 
     // Validate input types
     if (updates && typeof updates === 'object') {
-      if ('port' in updates && typeof updates.port !== 'number') {
-        res.status(400).json({ error: 'port must be a number' });
-        return;
+      if ('port' in updates) {
+        if (typeof updates.port !== 'number' || !Number.isInteger(updates.port)) {
+          res.status(400).json({ error: 'port must be an integer' });
+          return;
+        }
+        if (updates.port < 1 || updates.port > 65535) {
+          res.status(400).json({ error: 'port must be between 1 and 65535' });
+          return;
+        }
       }
       if ('auto_start' in updates && typeof updates.auto_start !== 'boolean') {
         res.status(400).json({ error: 'auto_start must be a boolean' });
