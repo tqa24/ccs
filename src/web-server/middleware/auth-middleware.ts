@@ -38,10 +38,12 @@ function getSessionSecret(): string {
     return process.env.CCS_SESSION_SECRET;
   }
 
+  const secretPath = getSessionSecretPath();
+
   // 2. Try to read persisted secret
   try {
-    if (fs.existsSync(getSessionSecretPath())) {
-      const secret = fs.readFileSync(getSessionSecretPath(), 'utf-8').trim();
+    if (fs.existsSync(secretPath)) {
+      const secret = fs.readFileSync(secretPath, 'utf-8').trim();
       if (secret.length >= 32) {
         return secret;
       }
@@ -53,11 +55,11 @@ function getSessionSecret(): string {
   // 3. Generate and persist new random secret
   const newSecret = crypto.randomBytes(32).toString('hex');
   try {
-    const dir = path.dirname(getSessionSecretPath());
+    const dir = path.dirname(secretPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    fs.writeFileSync(getSessionSecretPath(), newSecret, { mode: 0o600 });
+    fs.writeFileSync(secretPath, newSecret, { mode: 0o600 });
   } catch (err) {
     // Log warning - sessions won't persist across restarts
     console.warn('[!] Failed to persist session secret:', (err as Error).message);

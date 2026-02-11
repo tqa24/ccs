@@ -42,8 +42,9 @@ const CACHE_VERSION = 3;
  * Ensure ~/.ccs/cache directory exists
  */
 function ensureCacheDir(): void {
-  if (!fs.existsSync(getCacheDir())) {
-    fs.mkdirSync(getCacheDir(), { recursive: true });
+  const dir = getCacheDir();
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
   }
 }
 

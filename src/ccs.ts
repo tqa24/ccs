@@ -318,6 +318,14 @@ async function main(): Promise<void> {
       console.error(warn(`CCS directory is under ${cloudService}.`));
       console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
     }
+  } else if (process.env.CCS_HOME) {
+    // Also warn for CCS_HOME env var pointing to cloud sync
+    const { detectCloudSyncPath } = await import('./utils/config-manager');
+    const cloudService = detectCloudSyncPath(process.env.CCS_HOME);
+    if (cloudService) {
+      console.error(warn(`CCS directory is under ${cloudService}.`));
+      console.error('    OAuth tokens in cliproxy/auth/ will be synced to cloud.');
+    }
   }
 
   const firstArg = args[0];

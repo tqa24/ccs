@@ -31,15 +31,24 @@ export function getCcsHome(): string {
 }
 
 /**
+ * Resolve the CCS directory with source information.
+ * Single source of truth for precedence logic.
+ */
+function _resolveCcsDir(): { source: string; dir: string } {
+  if (_globalConfigDir) return { source: '--config-dir', dir: _globalConfigDir };
+  if (process.env.CCS_DIR) return { source: 'CCS_DIR', dir: path.resolve(process.env.CCS_DIR) };
+  if (process.env.CCS_HOME)
+    return { source: 'CCS_HOME', dir: path.join(path.resolve(process.env.CCS_HOME), '.ccs') };
+  return { source: 'default', dir: path.join(os.homedir(), '.ccs') };
+}
+
+/**
  * Get the CCS directory path.
  * Precedence: --config-dir flag > CCS_DIR env > CCS_HOME env (legacy, appends .ccs) > ~/.ccs default
  * @returns Path to CCS config directory
  */
 export function getCcsDir(): string {
-  if (_globalConfigDir) return _globalConfigDir;
-  if (process.env.CCS_DIR) return path.resolve(process.env.CCS_DIR);
-  if (process.env.CCS_HOME) return path.join(path.resolve(process.env.CCS_HOME), '.ccs');
-  return path.join(os.homedir(), '.ccs');
+  return _resolveCcsDir().dir;
 }
 
 /**
@@ -47,11 +56,8 @@ export function getCcsDir(): string {
  * @returns [source_label, resolved_path] tuple
  */
 export function getCcsDirSource(): [string, string] {
-  if (_globalConfigDir) return ['--config-dir', _globalConfigDir];
-  if (process.env.CCS_DIR) return ['CCS_DIR', path.resolve(process.env.CCS_DIR)];
-  if (process.env.CCS_HOME)
-    return ['CCS_HOME', path.join(path.resolve(process.env.CCS_HOME), '.ccs')];
-  return ['default', path.join(os.homedir(), '.ccs')];
+  const r = _resolveCcsDir();
+  return [r.source, r.dir];
 }
 
 /**
