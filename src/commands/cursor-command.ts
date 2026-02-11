@@ -6,6 +6,7 @@
 
 import {
   autoDetectTokens,
+  saveCredentials,
   checkAuthStatus,
   startDaemon,
   stopDaemon,
@@ -86,9 +87,15 @@ async function handleAuth(): Promise<number> {
 
   // Try auto-detection first
   console.log(info('Attempting auto-detection...'));
-  const autoResult = await autoDetectTokens();
+  const autoResult = autoDetectTokens();
 
   if (autoResult.found && autoResult.accessToken && autoResult.machineId) {
+    saveCredentials({
+      accessToken: autoResult.accessToken,
+      machineId: autoResult.machineId,
+      authMethod: 'auto-detect',
+      importedAt: new Date().toISOString(),
+    });
     console.log(ok('Auto-detected Cursor credentials'));
     console.log('');
     console.log('Next steps:');
@@ -123,7 +130,7 @@ async function handleStatus(): Promise<number> {
   // TODO: Load from unified config when #521 is complete
   const cursorConfig = DEFAULT_CURSOR_CONFIG;
 
-  const authStatus = await checkAuthStatus();
+  const authStatus = checkAuthStatus();
   const daemonStatus = await getDaemonStatus(cursorConfig.port);
 
   console.log('Cursor IDE Status');
@@ -203,7 +210,7 @@ async function handleStart(): Promise<number> {
   const cursorConfig = DEFAULT_CURSOR_CONFIG;
 
   // Check auth first
-  const authStatus = await checkAuthStatus();
+  const authStatus = checkAuthStatus();
   if (!authStatus.authenticated) {
     console.error(fail('Not authenticated. Run: ccs cursor auth'));
     return 1;

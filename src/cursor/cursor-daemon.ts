@@ -207,9 +207,14 @@ export async function startDaemon(
         });
       });
 
-      proc.on('exit', (code) => {
+      proc.on('exit', (code, signal) => {
         clearInterval(checkInterval);
-        if (code === 0) {
+        if (code === null) {
+          resolve({
+            success: false,
+            error: `Daemon process was killed by signal ${signal}`,
+          });
+        } else if (code === 0) {
           resolve({
             success: false,
             error: 'Daemon process exited unexpectedly with code 0',
