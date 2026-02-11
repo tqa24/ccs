@@ -10,6 +10,7 @@ import {
   getDefaultModel,
   detectProvider,
   formatModelName,
+  fetchModelsFromDaemon,
 } from '../../../src/cursor/cursor-models';
 
 describe('DEFAULT_CURSOR_MODELS', () => {
@@ -57,6 +58,12 @@ describe('detectProvider', () => {
     expect(detectProvider('o3-mini')).toBe('openai');
   });
 
+  it('detects o1 and o4 models as openai', () => {
+    expect(detectProvider('o1')).toBe('openai');
+    expect(detectProvider('o1-preview')).toBe('openai');
+    expect(detectProvider('o4-mini')).toBe('openai');
+  });
+
   it('detects google models', () => {
     expect(detectProvider('gemini-2.5-pro')).toBe('google');
   });
@@ -78,5 +85,15 @@ describe('formatModelName', () => {
 
   it('converts kebab-case to title case for unknown models', () => {
     expect(formatModelName('my-custom-model')).toBe('My Custom Model');
+  });
+});
+
+describe('fetchModelsFromDaemon', () => {
+  it('falls back to DEFAULT_CURSOR_MODELS when daemon is unreachable', async () => {
+    // Use a port that nothing is listening on
+    const unreachablePort = 9999;
+    const models = await fetchModelsFromDaemon(unreachablePort);
+
+    expect(models).toEqual(DEFAULT_CURSOR_MODELS);
   });
 });

@@ -148,7 +148,7 @@ export function getDefaultModel(): string {
  */
 export function detectProvider(modelId: string): string {
   if (modelId.includes('claude')) return 'anthropic';
-  if (modelId.includes('gpt') || modelId.includes('o3')) return 'openai';
+  if (modelId.includes('gpt') || /^o\d/.test(modelId)) return 'openai';
   if (modelId.includes('gemini')) return 'google';
   if (modelId.includes('cursor')) return 'cursor';
   return 'openai';

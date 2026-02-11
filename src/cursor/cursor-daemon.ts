@@ -265,6 +265,14 @@ export async function stopDaemon(): Promise<{ success: boolean; error?: string }
       }
     }
 
+    // Escalate to SIGKILL if process still alive after SIGTERM attempts
+    try {
+      process.kill(pid, 0); // Check if still alive
+      process.kill(pid, 'SIGKILL'); // Escalate to force kill
+    } catch {
+      // Already dead — good
+    }
+
     removePidFile();
     return { success: true };
   } catch (err) {
