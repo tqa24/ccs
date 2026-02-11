@@ -52,9 +52,11 @@ export function getTokenStoragePath(): string {
  */
 function queryStateDb(dbPath: string, key: string): string | null {
   try {
+    // Escape single quotes to prevent SQL injection
+    const sanitizedKey = key.replace(/'/g, "''");
     const result = execFileSync(
       'sqlite3',
-      [dbPath, `SELECT value FROM itemTable WHERE key='${key}'`],
+      [dbPath, `SELECT value FROM itemTable WHERE key='${sanitizedKey}'`],
       { encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'ignore'] }
     ).trim();
     return result || null;
@@ -130,9 +132,9 @@ export function validateToken(accessToken: string, machineId: string): boolean {
     return false;
   }
 
-  // Machine ID format validation (should be UUID-like)
-  const uuidRegex = /^[a-f0-9-]{32,}$/i;
-  if (!uuidRegex.test(machineId.replace(/-/g, ''))) {
+  // Machine ID format validation (UUID without hyphens = exactly 32 hex chars)
+  const hexRegex = /^[a-f0-9]{32}$/i;
+  if (!hexRegex.test(machineId.replace(/-/g, ''))) {
     return false;
   }
 
