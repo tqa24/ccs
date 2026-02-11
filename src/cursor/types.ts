@@ -32,6 +32,8 @@ export interface CursorAuthStatus {
   credentials?: CursorCredentials;
   /** Hours since credentials were imported (if available) */
   tokenAge?: number;
+  /** Whether token has expired (>24 hours old) */
+  expired?: boolean;
 }
 
 /**

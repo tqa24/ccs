@@ -14,7 +14,7 @@
  * - storage.serviceMachineId: Machine ID for checksum
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -52,9 +52,10 @@ export function getTokenStoragePath(): string {
  */
 function queryStateDb(dbPath: string, key: string): string | null {
   try {
-    const result = execSync(
-      `sqlite3 "${dbPath}" "SELECT value FROM itemTable WHERE key='${key}'" 2>/dev/null`,
-      { encoding: 'utf8', timeout: 5000 }
+    const result = execFileSync(
+      'sqlite3',
+      [dbPath, `SELECT value FROM itemTable WHERE key='${key}'`],
+      { encoding: 'utf8', timeout: 5000, stdio: ['pipe', 'pipe', 'ignore'] }
     ).trim();
     return result || null;
   } catch {
@@ -66,6 +67,15 @@ function queryStateDb(dbPath: string, key: string): string | null {
  * Auto-detect tokens from Cursor's SQLite database
  */
 export function autoDetectTokens(): AutoDetectResult {
+  // sqlite3 CLI is not bundled with Windows
+  if (process.platform === 'win32') {
+    return {
+      found: false,
+      error:
+        'Auto-detection is not supported on Windows. Please import tokens manually using ccs cursor auth --manual.',
+    };
+  }
+
   const dbPath = getTokenStoragePath();
 
   // Check if database exists
@@ -172,13 +182,16 @@ export function saveCredentials(credentials: CursorCredentials): void {
   const credPath = getCredentialsPath();
   const dir = path.dirname(credPath);
 
-  // Ensure directory exists
+  // Ensure directory exists with restrictive permissions
   if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 
-  // Write credentials
-  fs.writeFileSync(credPath, JSON.stringify(credentials, null, 2), 'utf8');
+  // Write credentials with restrictive permissions
+  fs.writeFileSync(credPath, JSON.stringify(credentials, null, 2), {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
 }
 
 /**
@@ -230,10 +243,14 @@ export function checkAuthStatus(): CursorAuthStatus {
 
   // Calculate token age in hours
   let tokenAge: number | undefined;
+  let expired = false;
+  const TOKEN_EXPIRY_HOURS = 24;
+
   try {
     const importedDate = new Date(credentials.importedAt);
     const now = new Date();
     tokenAge = Math.floor((now.getTime() - importedDate.getTime()) / (1000 * 60 * 60));
+    expired = tokenAge >= TOKEN_EXPIRY_HOURS;
   } catch {
     // Invalid date format
   }
@@ -242,5 +259,6 @@ export function checkAuthStatus(): CursorAuthStatus {
     authenticated: true,
     credentials,
     tokenAge,
+    expired,
   };
 }
