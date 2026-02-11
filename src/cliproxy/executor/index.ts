@@ -50,6 +50,7 @@ import {
   displayWebSearchStatus,
 } from '../../utils/websearch-manager';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
+import { installImageAnalyzerHook } from '../../utils/hooks';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
 
 // Import modular components
@@ -62,6 +63,12 @@ import {
   handleQuotaCheck,
 } from './retry-handler';
 import { checkOrJoinProxy, registerProxySession, setupCleanupHandlers } from './session-bridge';
+import {
+  warnCrossProviderDuplicates,
+  cleanupStaleAutoPauses,
+  enforceProviderIsolation,
+  restoreAutoPausedAccounts,
+} from '../account-safety';
 import { getWebSearchHookEnv } from '../../utils/websearch-manager';
 
 /** Default executor configuration */
@@ -161,6 +168,9 @@ export async function execClaudeWithCLIProxy(
   ensureMcpWebSearch();
   installWebSearchHook();
   displayWebSearchStatus();
+
+  // Sync image analyzer hook from npm package to ~/.ccs/hooks/
+  installImageAnalyzerHook();
 
   const providerConfig = getProviderConfig(provider);
   log(`Provider: ${providerConfig.displayName}`);
@@ -503,6 +513,21 @@ export async function execClaudeWithCLIProxy(
     await handleQuotaCheck(provider);
   }
 
+  // 3c. Account safety: enforce cross-provider isolation
+  if (!skipLocalAuth) {
+    cleanupStaleAutoPauses();
+    const isolated = enforceProviderIsolation(provider);
+    if (isolated === 0) {
+      // No enforcement — still warn about duplicates for awareness
+      warnCrossProviderDuplicates(provider);
+    } else {
+      // 'exit' handlers must be synchronous — restoreAutoPausedAccounts uses sync fs APIs
+      process.on('exit', () => {
+        restoreAutoPausedAccounts(provider);
+      });
+    }
+  }
+
   // 4. First-run model configuration
   if (supportsModelConfig(provider) && !skipLocalAuth) {
     await configureProviderModel(provider, false, cfg.customSettingsPath);
@@ -767,6 +792,15 @@ export async function execClaudeWithCLIProxy(
       windowsHide: true,
       env,
     });
+  }
+
+  // 12b. Start runtime quota monitor (adaptive polling during session)
+  if (!skipLocalAuth) {
+    const { startQuotaMonitor } = await import('../quota-manager');
+    const monitorAccount = getDefaultAccount(provider);
+    if (monitorAccount) {
+      startQuotaMonitor(provider, monitorAccount.id);
+    }
   }
 
   // 13. Setup cleanup handlers
