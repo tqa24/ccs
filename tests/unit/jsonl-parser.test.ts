@@ -2,7 +2,7 @@
  * Unit tests for JSONL Parser
  */
 
-import { describe, expect, test, beforeEach, afterEach } from 'bun:test';
+import { describe, expect, test, beforeEach, afterEach, spyOn } from 'bun:test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -253,6 +253,19 @@ describe('parseProjectDirectory', () => {
   test('returns empty array for non-existent directory', async () => {
     const entries = await parseProjectDirectory('/nonexistent/dir');
     expect(entries.length).toBe(0);
+  });
+
+  test('returns empty array when directory read fails', async () => {
+    const existsSyncSpy = spyOn(fs, 'existsSync').mockReturnValue(true);
+    const readdirSpy = spyOn(fs.promises, 'readdir').mockRejectedValue(new Error('EACCES'));
+
+    try {
+      const entries = await parseProjectDirectory('/protected/dir');
+      expect(entries).toEqual([]);
+    } finally {
+      existsSyncSpy.mockRestore();
+      readdirSpy.mockRestore();
+    }
   });
 });
 

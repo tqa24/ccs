@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2026-02-04
+Last Updated: 2026-02-12
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -38,6 +38,15 @@ All major modularization work is complete. The codebase evolved from monolithic 
 ---
 
 ## Current Status
+
+### Maintainability Hardening Kickoff
+
+- Issue owner: Stream D for **#542**
+- Automated inventory command: `bun run report:hardening`
+- Generated report artifacts:
+  - `docs/reports/hardening-inventory.json`
+  - `docs/reports/hardening-inventory.md`
+- Debt burndown tracker: [Hardening Debt Burndown Tracker](./hardening-debt-burndown.md)
 
 ### Remaining Large Files (Acceptable)
 
@@ -198,4 +207,5 @@ All criteria achieved:
 - [Codebase Summary](./codebase-summary.md) - Current structure
 - [Code Standards](./code-standards.md) - Patterns and conventions
 - [System Architecture](./system-architecture.md) - Architecture diagrams
+- [Hardening Debt Burndown Tracker](./hardening-debt-burndown.md) - Legacy shim + sync-fs debt tracking
 - [CLAUDE.md](../CLAUDE.md) - AI development guidance
