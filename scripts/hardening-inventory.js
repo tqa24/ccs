@@ -124,6 +124,12 @@ function summarize(items, limit = 10) {
     }));
 }
 
+function isRegexLiteralStart(previousSignificantChar) {
+  return (
+    previousSignificantChar === '' || '([{:;,=!?+-*%^&|~<>'.includes(previousSignificantChar)
+  );
+}
+
 function stripComments(sourceText) {
   let output = '';
   let index = 0;
@@ -132,6 +138,9 @@ function stripComments(sourceText) {
   let inSingleQuote = false;
   let inDoubleQuote = false;
   let inTemplateLiteral = false;
+  let inRegexLiteral = false;
+  let inRegexCharClass = false;
+  let previousSignificantChar = '';
 
   while (index < sourceText.length) {
     const current = sourceText[index];
@@ -161,6 +170,50 @@ function stripComments(sourceText) {
       continue;
     }
 
+    if (inRegexLiteral) {
+      if (current === '\n' || current === '\r') {
+        output += current;
+        index += 1;
+        inRegexLiteral = false;
+        inRegexCharClass = false;
+        continue;
+      }
+
+      output += ' ';
+
+      if (current === '\\') {
+        output += next === '\n' || next === '\r' ? next : ' ';
+        index += 2;
+        continue;
+      }
+
+      if (!inRegexCharClass && current === '[') {
+        inRegexCharClass = true;
+        index += 1;
+        continue;
+      }
+
+      if (inRegexCharClass && current === ']') {
+        inRegexCharClass = false;
+        index += 1;
+        continue;
+      }
+
+      if (!inRegexCharClass && current === '/') {
+        index += 1;
+        while (index < sourceText.length && /[a-z]/i.test(sourceText[index])) {
+          output += ' ';
+          index += 1;
+        }
+        inRegexLiteral = false;
+        previousSignificantChar = 'r';
+        continue;
+      }
+
+      index += 1;
+      continue;
+    }
+
     if (inSingleQuote) {
       output += current === '\n' || current === '\r' ? current : ' ';
       if (current === '\\') {
@@ -170,6 +223,7 @@ function stripComments(sourceText) {
       }
       if (current === "'") {
         inSingleQuote = false;
+        previousSignificantChar = 's';
       }
       index += 1;
       continue;
@@ -184,6 +238,7 @@ function stripComments(sourceText) {
       }
       if (current === '"') {
         inDoubleQuote = false;
+        previousSignificantChar = 's';
       }
       index += 1;
       continue;
@@ -198,6 +253,7 @@ function stripComments(sourceText) {
       }
       if (current === '`') {
         inTemplateLiteral = false;
+        previousSignificantChar = 's';
       }
       index += 1;
       continue;
@@ -214,6 +270,14 @@ function stripComments(sourceText) {
       output += '  ';
       index += 2;
       inBlockComment = true;
+      continue;
+    }
+
+    if (current === '/' && isRegexLiteralStart(previousSignificantChar)) {
+      output += ' ';
+      index += 1;
+      inRegexLiteral = true;
+      inRegexCharClass = false;
       continue;
     }
 
@@ -239,6 +303,9 @@ function stripComments(sourceText) {
     }
 
     output += current;
+    if (!/\s/.test(current)) {
+      previousSignificantChar = current;
+    }
     index += 1;
   }
 

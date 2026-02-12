@@ -31,9 +31,9 @@ Baseline captured: `2026-02-12`.
 
 | Metric | Baseline |
 |---|---:|
-| Sync fs occurrences (all) | 807 |
+| Sync fs occurrences (all) | 835 |
 | Sync fs files affected (all) | 100 |
-| Sync fs occurrences (runtime hotpaths) | 696 |
+| Sync fs occurrences (runtime hotpaths) | 724 |
 | Sync fs files affected (runtime hotpaths) | 89 |
 | Legacy shim markers | 131 |
 | Legacy shim files affected | 56 |

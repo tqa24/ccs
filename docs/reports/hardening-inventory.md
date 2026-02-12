@@ -6,9 +6,9 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 
 | Metric | Value |
 |---|---:|
-| Sync fs occurrences (all) | 807 |
+| Sync fs occurrences (all) | 835 |
 | Sync fs files affected (all) | 100 |
-| Sync fs occurrences (runtime hotpaths) | 696 |
+| Sync fs occurrences (runtime hotpaths) | 724 |
 | Sync fs files affected (runtime hotpaths) | 89 |
 | Legacy shim markers | 131 |
 | Legacy shim files affected | 56 |
@@ -24,9 +24,9 @@ Scope: `src/**/*.{ts,tsx,js,jsx,mjs,cjs}`
 | `src/utils/claude-dir-installer.ts` | 21 | copyFileSync, cpSync, existsSync, lstatSync, mkdirSync, readdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync |
 | `src/cliproxy/binary/version-cache.ts` | 20 | existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync |
 | `src/management/recovery-manager.ts` | 20 | copyFileSync, existsSync, mkdirSync, renameSync, writeFileSync |
+| `src/web-server/routes/cliproxy-stats-routes.ts` | 20 | closeSync, existsSync, fstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, renameSync, statSync, writeFileSync |
 | `src/web-server/routes/misc-routes.ts` | 20 | copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync |
 | `src/web-server/routes/persist-routes.ts` | 17 | closeSync, copyFileSync, existsSync, lstatSync, openSync, readdirSync, readSync, renameSync, unlinkSync, writeFileSync |
-| `src/commands/cleanup-command.ts` | 16 | existsSync, lstatSync, readdirSync, unlinkSync |
 
 ## Top Legacy Shim Marker Files
 
