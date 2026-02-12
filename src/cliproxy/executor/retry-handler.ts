@@ -125,6 +125,8 @@ export function detectFailedTier(
 
 /** Check if Claude exit indicates provider error (vs normal user exit) */
 export function isProviderError(exitCode: number, stderr: string): boolean {
+  // Exit code 0 means success, even if stderr has error-like output
+  // (could be warnings, debug info, etc.)
   if (exitCode === 0) return false;
   return PROVIDER_ERROR_PATTERNS.some((p) => p.test(stderr));
 }

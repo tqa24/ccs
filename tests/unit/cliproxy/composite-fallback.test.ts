@@ -147,6 +147,20 @@ describe('detectFailedTier', () => {
     // Should still match because model name is substring
     expect(result).toBe('opus');
   });
+
+  it('should strip complex thinking suffix with comma-separated params', () => {
+    const tiersWithComplexBudget: typeof tiers = {
+      opus: { provider: 'agy', model: 'claude-opus-4-6-thinking(32768,extended)' },
+      sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking(high)' },
+      haiku: { provider: 'agy', model: 'claude-3-5-haiku' },
+    };
+
+    // Stderr contains base model name without suffix
+    const stderr = 'Error: claude-opus-4-6-thinking overloaded';
+    const result = detectFailedTier(stderr, tiersWithComplexBudget);
+    // Should match because regex strips (32768,extended) to get base name
+    expect(result).toBe('opus');
+  });
 });
 
 // ========================================
