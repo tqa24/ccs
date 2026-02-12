@@ -88,10 +88,15 @@ export async function fetchModelsFromDaemon(port: number): Promise<CursorModel[]
         timeout: 5000,
       },
       (res) => {
+        const MAX_BODY_SIZE = 1024 * 1024; // 1MB limit
         let data = '';
 
         res.on('data', (chunk) => {
           data += chunk;
+          if (data.length > MAX_BODY_SIZE) {
+            req.destroy();
+            resolve(DEFAULT_CURSOR_MODELS);
+          }
         });
 
         res.on('end', () => {

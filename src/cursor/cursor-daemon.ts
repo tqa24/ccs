@@ -48,6 +48,7 @@ export async function isDaemonRunning(port: number): Promise<boolean> {
         timeout: 3000,
       },
       (res) => {
+        res.resume(); // Drain response body
         resolve(res.statusCode === 200);
       }
     );
