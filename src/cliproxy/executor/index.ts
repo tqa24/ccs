@@ -432,10 +432,12 @@ export async function execClaudeWithCLIProxy(
       console.log(
         warn('Composite variants use per-tier config. Edit config.yaml to change tier models.')
       );
+      console.error(`    Use "ccs cliproxy edit ${provider}" to modify composite variants`);
+      process.exit(1);
     } else {
       await configureProviderModel(provider, true, cfg.customSettingsPath);
+      process.exit(0);
     }
-    process.exit(0);
   }
 
   // Handle --logout

@@ -75,6 +75,21 @@ router.post('/', (req: Request, res: Response): void => {
       return;
     }
 
+    // Validate tiers shape
+    const requiredTiers = ['opus', 'sonnet', 'haiku'] as const;
+    for (const tier of requiredTiers) {
+      if (
+        !tiers[tier] ||
+        typeof tiers[tier].provider !== 'string' ||
+        typeof tiers[tier].model !== 'string'
+      ) {
+        res.status(400).json({
+          error: `Invalid tier config for '${tier}': requires 'provider' and 'model' strings`,
+        });
+        return;
+      }
+    }
+
     const result = createCompositeVariant({ name, defaultTier: default_tier, tiers });
 
     if (!result.success) {
@@ -145,6 +160,23 @@ router.put('/:name', (req: Request, res: Response): void => {
       if (!default_tier || !tiers) {
         res.status(400).json({ error: 'Missing required fields for composite update' });
         return;
+      }
+
+      // Validate tiers shape if provided
+      if (tiers) {
+        const requiredTiers = ['opus', 'sonnet', 'haiku'] as const;
+        for (const tier of requiredTiers) {
+          if (
+            !tiers[tier] ||
+            typeof tiers[tier].provider !== 'string' ||
+            typeof tiers[tier].model !== 'string'
+          ) {
+            res.status(400).json({
+              error: `Invalid tier config for '${tier}': requires 'provider' and 'model' strings`,
+            });
+            return;
+          }
+        }
       }
 
       const result = updateCompositeVariant(name, { defaultTier: default_tier, tiers });
