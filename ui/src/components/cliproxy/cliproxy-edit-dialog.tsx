@@ -74,9 +74,18 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
     if (!variant) return;
 
     if (isComposite && variant.tiers && variant.default_tier) {
+      const mapTier = (t: { provider: string; model: string; account?: string }) => ({
+        provider: t.provider as (typeof CLIPROXY_PROVIDERS)[number],
+        model: t.model,
+        account: t.account || '',
+      });
       compositeForm.reset({
         default_tier: variant.default_tier,
-        tiers: variant.tiers,
+        tiers: {
+          opus: mapTier(variant.tiers.opus),
+          sonnet: mapTier(variant.tiers.sonnet),
+          haiku: mapTier(variant.tiers.haiku),
+        },
       });
     } else {
       singleForm.reset({
