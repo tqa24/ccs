@@ -1,8 +1,17 @@
 /**
  * Cursor IDE Type Definitions
  *
- * TypeScript interfaces for the Cursor auth module.
+ * TypeScript interfaces for the Cursor module.
  */
+
+/**
+ * Cursor daemon configuration.
+ * Temporary interface until #521 adds cursor to unified config.
+ */
+export interface CursorConfig {
+  port: number;
+  model: string;
+}
 
 /**
  * Cursor authentication credentials
@@ -48,4 +57,30 @@ export interface AutoDetectResult {
   machineId?: string;
   /** Error message (if detection failed) */
   error?: string;
+}
+
+/**
+ * Cursor daemon/process status
+ */
+export interface CursorDaemonStatus {
+  /** Whether daemon is running */
+  running: boolean;
+  /** Port number daemon is listening on */
+  port: number;
+  /** Process ID (if available) */
+  pid?: number;
+}
+
+/**
+ * Cursor AI model
+ */
+export interface CursorModel {
+  /** Model ID */
+  id: string;
+  /** Display name */
+  name: string;
+  /** Provider (e.g., 'openai', 'anthropic') */
+  provider: string;
+  /** Whether this is the default model */
+  isDefault?: boolean;
 }
