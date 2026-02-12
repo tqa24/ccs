@@ -10,8 +10,7 @@ import {
   saveCredentials,
   validateToken,
 } from '../../cursor/cursor-auth';
-import { DEFAULT_CURSOR_CONFIG } from '../../config/unified-config-types';
-import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
+import { getCursorConfig } from '../../config/unified-config-loader';
 import cursorSettingsRoutes from './cursor-settings-routes';
 
 const router = Router();
@@ -66,8 +65,7 @@ async function stopDaemon(): Promise<{ success: boolean; message: string }> {
  */
 router.get('/status', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const config = loadOrCreateUnifiedConfig();
-    const cursorConfig = config.cursor ?? DEFAULT_CURSOR_CONFIG;
+    const cursorConfig = getCursorConfig();
     const authStatus = checkAuthStatus();
     const daemonStatus = await getDaemonStatus(cursorConfig.port);
 
@@ -159,8 +157,7 @@ router.get('/models', async (_req: Request, res: Response): Promise<void> => {
  */
 router.post('/daemon/start', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const config = loadOrCreateUnifiedConfig();
-    const cursorConfig = config.cursor ?? DEFAULT_CURSOR_CONFIG;
+    const cursorConfig = getCursorConfig();
     const result = await startDaemon(cursorConfig.port, cursorConfig.ghost_mode);
     res.json(result);
   } catch (error) {

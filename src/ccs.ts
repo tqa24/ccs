@@ -554,14 +554,11 @@ async function main(): Promise<void> {
   }
 
   // Special case: cursor command (Cursor IDE integration)
-  // Route to cursor handler for known subcommands or bare 'ccs cursor' (shows help)
+  // Route all cursor args to handler — handler deals with unknown subcommands
   // Note: cursor does not have enable/disable — it uses daemon start/stop instead
-  const CURSOR_SUBCOMMANDS = ['auth', 'status', 'models', 'start', 'stop', 'help', '--help', '-h'];
   if (firstArg === 'cursor') {
     const { handleCursorCommand } = await import('./commands/cursor-command');
-    const exitCode = await handleCursorCommand(
-      args.length > 1 && CURSOR_SUBCOMMANDS.includes(args[1]) ? args.slice(1) : []
-    );
+    const exitCode = await handleCursorCommand(args.slice(1));
     process.exit(exitCode);
   }
 
