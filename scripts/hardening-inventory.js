@@ -66,6 +66,22 @@ const SYNC_CALL_CAPTURE_REGEX = new RegExp(
 );
 const LEGACY_MARKER_REGEX =
   /(?:\blegacy\b|\bshim\b|backward compatibility|backwards compatibility|compatibility layer|deprecated.*re-export|re-export.*compatibility)/i;
+const REGEX_LITERAL_KEYWORDS = new Set([
+  'return',
+  'throw',
+  'case',
+  'else',
+  'do',
+  'delete',
+  'void',
+  'typeof',
+  'instanceof',
+  'in',
+  'of',
+  'yield',
+  'await',
+  'new',
+]);
 
 function toPosixPath(filePath) {
   return filePath.split(path.sep).join('/');
@@ -124,9 +140,11 @@ function summarize(items, limit = 10) {
     }));
 }
 
-function isRegexLiteralStart(previousSignificantChar) {
+function isRegexLiteralStart(previousSignificantChar, previousIdentifier) {
   return (
-    previousSignificantChar === '' || '([{:;,=!?+-*%^&|~<>'.includes(previousSignificantChar)
+    previousSignificantChar === '' ||
+    '([{:;,=!?+-*%^&|~<>'.includes(previousSignificantChar) ||
+    REGEX_LITERAL_KEYWORDS.has(previousIdentifier)
   );
 }
 
@@ -141,6 +159,7 @@ function stripComments(sourceText) {
   let inRegexLiteral = false;
   let inRegexCharClass = false;
   let previousSignificantChar = '';
+  let previousIdentifier = '';
 
   while (index < sourceText.length) {
     const current = sourceText[index];
@@ -207,6 +226,7 @@ function stripComments(sourceText) {
         }
         inRegexLiteral = false;
         previousSignificantChar = 'r';
+        previousIdentifier = '';
         continue;
       }
 
@@ -224,6 +244,7 @@ function stripComments(sourceText) {
       if (current === "'") {
         inSingleQuote = false;
         previousSignificantChar = 's';
+        previousIdentifier = '';
       }
       index += 1;
       continue;
@@ -239,6 +260,7 @@ function stripComments(sourceText) {
       if (current === '"') {
         inDoubleQuote = false;
         previousSignificantChar = 's';
+        previousIdentifier = '';
       }
       index += 1;
       continue;
@@ -254,6 +276,7 @@ function stripComments(sourceText) {
       if (current === '`') {
         inTemplateLiteral = false;
         previousSignificantChar = 's';
+        previousIdentifier = '';
       }
       index += 1;
       continue;
@@ -273,11 +296,24 @@ function stripComments(sourceText) {
       continue;
     }
 
-    if (current === '/' && isRegexLiteralStart(previousSignificantChar)) {
+    if (current === '/' && isRegexLiteralStart(previousSignificantChar, previousIdentifier)) {
       output += ' ';
       index += 1;
       inRegexLiteral = true;
       inRegexCharClass = false;
+      continue;
+    }
+
+    if (/[A-Za-z_$]/.test(current)) {
+      let tokenEnd = index + 1;
+      while (tokenEnd < sourceText.length && /[A-Za-z0-9_$]/.test(sourceText[tokenEnd])) {
+        tokenEnd += 1;
+      }
+      const token = sourceText.slice(index, tokenEnd);
+      output += token;
+      previousSignificantChar = 'i';
+      previousIdentifier = token;
+      index = tokenEnd;
       continue;
     }
 
@@ -305,6 +341,7 @@ function stripComments(sourceText) {
     output += current;
     if (!/\s/.test(current)) {
       previousSignificantChar = current;
+      previousIdentifier = '';
     }
     index += 1;
   }
@@ -477,4 +514,13 @@ function main() {
   console.log(`[hardening-inventory] wrote ${relMd}`);
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+module.exports = {
+  buildReport,
+  collectSyncCallSites,
+  renderMarkdown,
+  stripComments,
+};
