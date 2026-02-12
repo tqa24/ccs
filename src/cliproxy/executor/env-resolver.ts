@@ -136,9 +136,9 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
   let compositeTierThinking: { opus?: string; sonnet?: string; haiku?: string } | undefined;
   if (isComposite && compositeTiers) {
     const tierThinking: { opus?: string; sonnet?: string; haiku?: string } = {};
-    if (compositeTiers.opus.thinking) tierThinking.opus = compositeTiers.opus.thinking;
-    if (compositeTiers.sonnet.thinking) tierThinking.sonnet = compositeTiers.sonnet.thinking;
-    if (compositeTiers.haiku.thinking) tierThinking.haiku = compositeTiers.haiku.thinking;
+    if (compositeTiers.opus?.thinking) tierThinking.opus = compositeTiers.opus.thinking;
+    if (compositeTiers.sonnet?.thinking) tierThinking.sonnet = compositeTiers.sonnet.thinking;
+    if (compositeTiers.haiku?.thinking) tierThinking.haiku = compositeTiers.haiku.thinking;
     if (Object.keys(tierThinking).length > 0) {
       compositeTierThinking = tierThinking;
     }

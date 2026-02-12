@@ -461,17 +461,31 @@ export function getCompositeEnvVars(
   }
 
   const validPort = validatePort(port);
-  const defaultModel = tiers[defaultTier].model;
 
-  return {
+  // Defensive: handle missing tiers gracefully
+  const opusModel = tiers.opus?.model;
+  const sonnetModel = tiers.sonnet?.model;
+  const haikuModel = tiers.haiku?.model;
+  const defaultModel = tiers[defaultTier]?.model;
+
+  // If default tier is missing, we cannot proceed meaningfully
+  if (!defaultModel) {
+    throw new Error(`Missing model for default tier '${defaultTier}'`);
+  }
+
+  const env: Record<string, string> = {
     ...globalEnv,
     ...additionalEnvVars,
     // Root URL — CLIProxyAPI routes based on model name in request body
     ANTHROPIC_BASE_URL: `http://127.0.0.1:${validPort}`,
     ANTHROPIC_AUTH_TOKEN: getEffectiveApiKey(),
     ANTHROPIC_MODEL: defaultModel,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: tiers.opus.model,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: tiers.sonnet.model,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: tiers.haiku.model,
   };
+
+  // Only set tier env vars if the tier exists
+  if (opusModel) env.ANTHROPIC_DEFAULT_OPUS_MODEL = opusModel;
+  if (sonnetModel) env.ANTHROPIC_DEFAULT_SONNET_MODEL = sonnetModel;
+  if (haikuModel) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = haikuModel;
+
+  return env;
 }

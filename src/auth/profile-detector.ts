@@ -130,10 +130,27 @@ class ProfileDetector {
       // Handle composite variants
       if ('type' in variant && variant.type === 'composite') {
         const composite = variant as CompositeVariantConfig;
+
+        // Defensive: check for missing tiers or default_tier
+        if (!composite.tiers || !composite.default_tier) {
+          console.warn(
+            `[!] Warning: Composite variant '${profileName}' has missing tiers or default_tier`
+          );
+          return null;
+        }
+
+        const defaultTierConfig = composite.tiers[composite.default_tier];
+        if (!defaultTierConfig) {
+          console.warn(
+            `[!] Warning: Composite variant '${profileName}' missing config for default tier '${composite.default_tier}'`
+          );
+          return null;
+        }
+
         return {
           type: 'cliproxy',
           name: profileName,
-          provider: composite.tiers[composite.default_tier].provider as CLIProxyProfileName,
+          provider: defaultTierConfig.provider as CLIProxyProfileName,
           settingsPath: composite.settings,
           port: composite.port,
           isComposite: true,
