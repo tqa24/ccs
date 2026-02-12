@@ -152,11 +152,20 @@ export function applyThinkingConfig(
   }
   thinkingValue = validation.value;
 
-  // Track whether to apply to main model (skip if validation says off)
-  const applyToMainModel = thinkingValue !== 'off';
-
-  // Apply thinking suffix to main model (only if not off)
-  if (applyToMainModel && result.ANTHROPIC_MODEL) {
+  // P1 FIX: If validation says 'off' AND no per-tier thinking config, skip ALL processing
+  // This distinguishes between:
+  // 1. "off" with no per-tier config → no thinking anywhere
+  // 2. "off" with per-tier config → skip main model, process tiers with their own values
+  if (thinkingValue === 'off') {
+    const hasPerTierThinking =
+      compositeTierThinking &&
+      Object.values(compositeTierThinking).some((v) => v !== undefined && v !== 'off');
+    if (!hasPerTierThinking) {
+      return result; // No thinking to apply anywhere
+    }
+    // Otherwise, continue to process tiers with their own config (skip main model)
+  } else if (result.ANTHROPIC_MODEL) {
+    // Apply thinking suffix to main model (only if not off)
     result.ANTHROPIC_MODEL = applyThinkingSuffix(result.ANTHROPIC_MODEL, thinkingValue);
   }
 

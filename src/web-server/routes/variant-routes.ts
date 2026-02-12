@@ -138,7 +138,13 @@ router.post('/', (req: Request, res: Response): void => {
       return;
     }
 
-    const result = createCompositeVariant({ name, defaultTier: default_tier, tiers });
+    let result;
+    try {
+      result = createCompositeVariant({ name, defaultTier: default_tier, tiers });
+    } catch (error) {
+      res.status(400).json({ error: (error as Error).message });
+      return;
+    }
 
     if (!result.success) {
       res.status(409).json({ error: result.error });
