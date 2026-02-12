@@ -1,9 +1,9 @@
 {
   "scope": "src/**/*.{ts,tsx,js,jsx,mjs,cjs}",
   "syncFs": {
-    "totalOccurrences": 841,
+    "totalOccurrences": 835,
     "filesAffected": 100,
-    "hotpathOccurrences": 730,
+    "hotpathOccurrences": 724,
     "hotpathFilesAffected": 89,
     "topHotpathFiles": [
       {
@@ -45,24 +45,6 @@
         "markers": []
       },
       {
-        "file": "src/utils/claude-dir-installer.ts",
-        "count": 23,
-        "calls": [
-          "copyFileSync",
-          "cpSync",
-          "existsSync",
-          "lstatSync",
-          "mkdirSync",
-          "readdirSync",
-          "renameSync",
-          "rmSync",
-          "statSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
         "file": "src/utils/shell-completion.ts",
         "count": 23,
         "calls": [
@@ -85,6 +67,24 @@
           "readFileSync",
           "renameSync",
           "statSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
+        "file": "src/utils/claude-dir-installer.ts",
+        "count": 21,
+        "calls": [
+          "copyFileSync",
+          "cpSync",
+          "existsSync",
+          "lstatSync",
+          "mkdirSync",
+          "readdirSync",
+          "renameSync",
+          "rmSync",
+          "statSync",
+          "unlinkSync",
           "writeFileSync"
         ],
         "markers": []
@@ -219,24 +219,6 @@
         "markers": []
       },
       {
-        "file": "src/utils/claude-dir-installer.ts",
-        "count": 23,
-        "calls": [
-          "copyFileSync",
-          "cpSync",
-          "existsSync",
-          "lstatSync",
-          "mkdirSync",
-          "readdirSync",
-          "renameSync",
-          "rmSync",
-          "statSync",
-          "unlinkSync",
-          "writeFileSync"
-        ],
-        "markers": []
-      },
-      {
         "file": "src/utils/shell-completion.ts",
         "count": 23,
         "calls": [
@@ -259,6 +241,24 @@
           "readFileSync",
           "renameSync",
           "statSync",
+          "writeFileSync"
+        ],
+        "markers": []
+      },
+      {
+        "file": "src/utils/claude-dir-installer.ts",
+        "count": 21,
+        "calls": [
+          "copyFileSync",
+          "cpSync",
+          "existsSync",
+          "lstatSync",
+          "mkdirSync",
+          "readdirSync",
+          "renameSync",
+          "rmSync",
+          "statSync",
+          "unlinkSync",
           "writeFileSync"
         ],
         "markers": []

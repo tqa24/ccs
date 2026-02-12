@@ -60,9 +60,10 @@ const SYNC_CALL_NAMES = [
   'writeSync',
   'writevSync',
 ];
-
-const SYNC_CALL_LINE_REGEX = new RegExp(`\\b(?:fs\\.)?(?:${SYNC_CALL_NAMES.join('|')})\\b`);
-const SYNC_CALL_CAPTURE_REGEX = new RegExp(`\\b(?:fs\\.)?(${SYNC_CALL_NAMES.join('|')})\\b`, 'g');
+const SYNC_CALL_CAPTURE_REGEX = new RegExp(
+  `(?:\\bfs(?:\\s*\\?\\.)?\\s*\\.\\s*|(?<![\\w$.]))(${SYNC_CALL_NAMES.join('|')})\\s*\\(`,
+  'g'
+);
 const LEGACY_MARKER_REGEX =
   /(?:\blegacy\b|\bshim\b|backward compatibility|backwards compatibility|compatibility layer|deprecated.*re-export|re-export.*compatibility)/i;
 
@@ -123,6 +124,142 @@ function summarize(items, limit = 10) {
     }));
 }
 
+function stripComments(sourceText) {
+  let output = '';
+  let index = 0;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let inTemplateLiteral = false;
+
+  while (index < sourceText.length) {
+    const current = sourceText[index];
+    const next = sourceText[index + 1];
+
+    if (inLineComment) {
+      if (current === '\n' || current === '\r') {
+        inLineComment = false;
+        output += current;
+      } else {
+        output += ' ';
+      }
+      index += 1;
+      continue;
+    }
+
+    if (inBlockComment) {
+      if (current === '*' && next === '/') {
+        output += '  ';
+        index += 2;
+        inBlockComment = false;
+        continue;
+      }
+
+      output += current === '\n' || current === '\r' ? current : ' ';
+      index += 1;
+      continue;
+    }
+
+    if (inSingleQuote) {
+      output += current;
+      if (current === '\\') {
+        output += next ?? '';
+        index += 2;
+        continue;
+      }
+      if (current === "'") {
+        inSingleQuote = false;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (inDoubleQuote) {
+      output += current;
+      if (current === '\\') {
+        output += next ?? '';
+        index += 2;
+        continue;
+      }
+      if (current === '"') {
+        inDoubleQuote = false;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (inTemplateLiteral) {
+      output += current;
+      if (current === '\\') {
+        output += next ?? '';
+        index += 2;
+        continue;
+      }
+      if (current === '`') {
+        inTemplateLiteral = false;
+      }
+      index += 1;
+      continue;
+    }
+
+    if (current === '/' && next === '/') {
+      output += '  ';
+      index += 2;
+      inLineComment = true;
+      continue;
+    }
+
+    if (current === '/' && next === '*') {
+      output += '  ';
+      index += 2;
+      inBlockComment = true;
+      continue;
+    }
+
+    if (current === "'") {
+      inSingleQuote = true;
+      output += current;
+      index += 1;
+      continue;
+    }
+
+    if (current === '"') {
+      inDoubleQuote = true;
+      output += current;
+      index += 1;
+      continue;
+    }
+
+    if (current === '`') {
+      inTemplateLiteral = true;
+      output += current;
+      index += 1;
+      continue;
+    }
+
+    output += current;
+    index += 1;
+  }
+
+  return output;
+}
+
+function collectSyncCallSites(sourceText) {
+  const sanitizedSource = stripComments(sourceText);
+  const captureRegex = new RegExp(SYNC_CALL_CAPTURE_REGEX.source, SYNC_CALL_CAPTURE_REGEX.flags);
+  const calls = [];
+
+  for (const match of sanitizedSource.matchAll(captureRegex)) {
+    calls.push(match[1]);
+  }
+
+  return {
+    count: calls.length,
+    calls,
+  };
+}
+
 function buildReport() {
   const files = walkFiles(SRC_DIR);
   const syncEntries = [];
@@ -130,22 +267,13 @@ function buildReport() {
 
   for (const fullPath of files) {
     const file = relativePath(fullPath);
-    const lines = fs.readFileSync(fullPath, 'utf8').split(/\r?\n/);
-
-    let syncCount = 0;
-    const syncCalls = [];
+    const sourceText = fs.readFileSync(fullPath, 'utf8');
+    const lines = sourceText.split(/\r?\n/);
+    const { count: syncCount, calls: syncCalls } = collectSyncCallSites(sourceText);
     let legacyCount = 0;
     const legacyMarkers = [];
 
     for (const line of lines) {
-      if (SYNC_CALL_LINE_REGEX.test(line)) {
-        const matches = [...line.matchAll(SYNC_CALL_CAPTURE_REGEX)];
-        syncCount += matches.length;
-        for (const match of matches) {
-          syncCalls.push(match[1]);
-        }
-      }
-
       if (LEGACY_MARKER_REGEX.test(line)) {
         legacyCount += 1;
         const normalized = line.trim();
