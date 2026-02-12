@@ -1,0 +1,140 @@
+import { describe, it, expect, beforeAll, beforeEach, afterEach, mock } from 'bun:test';
+
+type ShellTarget = 'bash' | 'zsh' | 'fish' | 'powershell' | null;
+
+interface InstallResult {
+  success: boolean;
+  alreadyInstalled?: boolean;
+  message?: string;
+  reload?: string;
+}
+
+interface InstallCall {
+  shell: ShellTarget;
+  options: { force: boolean };
+}
+
+const installCalls: InstallCall[] = [];
+let installResult: InstallResult = {
+  success: true,
+  message: 'Added to ~/.zshrc',
+  reload: 'source ~/.zshrc',
+};
+let installError: Error | null = null;
+
+mock.module('../../../src/utils/shell-completion', () => ({
+  ShellCompletionInstaller: class {
+    install(shell: ShellTarget, options: { force: boolean }): InstallResult {
+      installCalls.push({ shell, options });
+      if (installError) {
+        throw installError;
+      }
+      return installResult;
+    }
+  },
+}));
+
+mock.module('../../../src/utils/ui', () => ({
+  initUI: async () => {},
+  header: (value: string) => value,
+  ok: (value: string) => value,
+  fail: (value: string) => value,
+  color: (value: string) => value,
+}));
+
+let handleShellCompletionCommand: (args: string[]) => Promise<void>;
+let parseShellCompletionArgs: (args: string[]) => { targetShell: ShellTarget; force: boolean };
+let originalConsoleLog: typeof console.log;
+let originalConsoleError: typeof console.error;
+let originalProcessExit: typeof process.exit;
+let logLines: string[] = [];
+let errorLines: string[] = [];
+
+beforeAll(async () => {
+  const mod = await import('../../../src/commands/shell-completion-command');
+  handleShellCompletionCommand = mod.handleShellCompletionCommand;
+  parseShellCompletionArgs = mod.parseShellCompletionArgs;
+});
+
+beforeEach(() => {
+  installCalls.length = 0;
+  installError = null;
+  installResult = {
+    success: true,
+    message: 'Added to ~/.zshrc',
+    reload: 'source ~/.zshrc',
+  };
+
+  logLines = [];
+  errorLines = [];
+
+  originalConsoleLog = console.log;
+  originalConsoleError = console.error;
+  originalProcessExit = process.exit;
+
+  console.log = (...args: unknown[]) => {
+    logLines.push(args.map(String).join(' '));
+  };
+  console.error = (...args: unknown[]) => {
+    errorLines.push(args.map(String).join(' '));
+  };
+  process.exit = ((code?: number) => {
+    throw new Error(`process.exit(${code ?? 0})`);
+  }) as typeof process.exit;
+});
+
+afterEach(() => {
+  console.log = originalConsoleLog;
+  console.error = originalConsoleError;
+  process.exit = originalProcessExit;
+});
+
+describe('shell-completion command', () => {
+  it('parses shell flags and force flag', () => {
+    const parsed = parseShellCompletionArgs(['--zsh', '--force']);
+    expect(parsed).toEqual({ targetShell: 'zsh', force: true });
+  });
+
+  it('preserves existing priority when multiple shell flags are present', () => {
+    const parsed = parseShellCompletionArgs(['--zsh', '--bash']);
+    expect(parsed).toEqual({ targetShell: 'bash', force: false });
+  });
+
+  it('executes installer with parsed args and renders success output', async () => {
+    await handleShellCompletionCommand(['--zsh', '--force']);
+
+    expect(installCalls).toHaveLength(1);
+    expect(installCalls[0]).toEqual({
+      shell: 'zsh',
+      options: { force: true },
+    });
+
+    expect(logLines.some((line) => line.includes('Shell completion installed successfully!'))).toBe(
+      true
+    );
+    expect(logLines.some((line) => line.includes('source ~/.zshrc'))).toBe(true);
+  });
+
+  it('renders already-installed output without forcing reinstall', async () => {
+    installResult = {
+      success: true,
+      alreadyInstalled: true,
+      message: 'Updated completion files',
+      reload: 'source ~/.zshrc',
+    };
+
+    await handleShellCompletionCommand(['--zsh']);
+
+    expect(logLines.some((line) => line.includes('Shell completion already installed'))).toBe(true);
+    expect(logLines.some((line) => line.includes('Use --force to reinstall'))).toBe(true);
+    expect(logLines.some((line) => line.includes('installed successfully!'))).toBe(false);
+  });
+
+  it('prints usage and exits with code 1 on installer error', async () => {
+    installError = new Error('boom');
+
+    await expect(handleShellCompletionCommand([])).rejects.toThrow('process.exit(1)');
+    expect(errorLines.some((line) => line.includes('Error: boom'))).toBe(true);
+    expect(errorLines.some((line) => line.includes('ccs --shell-completion --zsh'))).toBe(true);
+  });
+});
