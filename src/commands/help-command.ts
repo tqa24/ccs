@@ -221,6 +221,25 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   );
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // MAJOR SECTION 5: Cursor IDE Integration
+  // ═══════════════════════════════════════════════════════════════════════════
+  printMajorSection(
+    'Cursor IDE Integration',
+    [
+      'Use Cursor IDE with Claude Code via cursor proxy daemon',
+      'Auto-detects token from Cursor installation',
+    ],
+    [
+      ['ccs cursor <cmd>', 'Use Cursor IDE integration'],
+      ['ccs cursor auth', 'Import Cursor token'],
+      ['ccs cursor status', 'Show connection status'],
+      ['ccs cursor models', 'List available models'],
+      ['ccs cursor start', 'Start proxy daemon'],
+      ['ccs cursor stop', 'Stop proxy daemon'],
+    ]
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // SUB-SECTIONS (simpler styling)
   // ═══════════════════════════════════════════════════════════════════════════
 
