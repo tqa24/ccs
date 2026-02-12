@@ -34,13 +34,9 @@ mock.module('../../../src/utils/shell-completion', () => ({
   },
 }));
 
-mock.module('../../../src/utils/ui', () => ({
-  initUI: async () => {},
-  header: (value: string) => value,
-  ok: (value: string) => value,
-  fail: (value: string) => value,
-  color: (value: string) => value,
-}));
+function stripAnsi(value: string): string {
+  return value.replace(/\u001b\[[0-9;]*m/g, '');
+}
 
 let handleShellCompletionCommand: (args: string[]) => Promise<void>;
 let parseShellCompletionArgs: (args: string[]) => { targetShell: ShellTarget; force: boolean };
@@ -125,16 +121,20 @@ describe('shell-completion command', () => {
 
     await handleShellCompletionCommand(['--zsh']);
 
-    expect(logLines.some((line) => line.includes('Shell completion already installed'))).toBe(true);
-    expect(logLines.some((line) => line.includes('Use --force to reinstall'))).toBe(true);
-    expect(logLines.some((line) => line.includes('installed successfully!'))).toBe(false);
+    const plainLogLines = logLines.map(stripAnsi);
+    expect(plainLogLines.some((line) => line.includes('Shell completion already installed'))).toBe(
+      true
+    );
+    expect(plainLogLines.some((line) => line.includes('Use --force to reinstall'))).toBe(true);
+    expect(plainLogLines.some((line) => line.includes('installed successfully!'))).toBe(false);
   });
 
   it('prints usage and exits with code 1 on installer error', async () => {
     installError = new Error('boom');
 
     await expect(handleShellCompletionCommand([])).rejects.toThrow('process.exit(1)');
-    expect(errorLines.some((line) => line.includes('Error: boom'))).toBe(true);
-    expect(errorLines.some((line) => line.includes('ccs --shell-completion --zsh'))).toBe(true);
+    const plainErrorLines = errorLines.map(stripAnsi);
+    expect(plainErrorLines.some((line) => line.includes('Error: boom'))).toBe(true);
+    expect(plainErrorLines.some((line) => line.includes('ccs --shell-completion --zsh'))).toBe(true);
   });
 });
