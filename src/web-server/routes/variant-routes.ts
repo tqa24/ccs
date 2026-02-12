@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express';
 import { isReservedName, RESERVED_PROFILE_NAMES } from '../../config/reserved-names';
 import type { CLIProxyProvider } from '../../cliproxy/types';
+import { CLIPROXY_SUPPORTED_PROVIDERS } from '../../config/unified-config-types';
 import {
   createVariant,
   removeVariant,
@@ -18,6 +19,33 @@ import {
 } from '../../cliproxy/services/variant-service';
 
 const router = Router();
+
+const VALID_TIERS = ['opus', 'sonnet', 'haiku'] as const;
+
+/** Validate composite tiers shape and provider/default_tier values. Returns error string or null. */
+function validateCompositeTiers(
+  tiers: Record<string, { provider?: string; model?: string }>,
+  defaultTier?: string
+): string | null {
+  // Validate default_tier
+  if (defaultTier && !VALID_TIERS.includes(defaultTier as (typeof VALID_TIERS)[number])) {
+    return `Invalid default_tier '${defaultTier}': must be one of ${VALID_TIERS.join(', ')}`;
+  }
+  // Validate each tier
+  for (const tier of VALID_TIERS) {
+    if (
+      !tiers[tier] ||
+      typeof tiers[tier].provider !== 'string' ||
+      typeof tiers[tier].model !== 'string'
+    ) {
+      return `Invalid tier config for '${tier}': requires 'provider' and 'model' strings`;
+    }
+    if (!CLIPROXY_SUPPORTED_PROVIDERS.includes(tiers[tier].provider as CLIProxyProvider)) {
+      return `Invalid provider '${tiers[tier].provider}' for tier '${tier}': must be one of ${CLIPROXY_SUPPORTED_PROVIDERS.join(', ')}`;
+    }
+  }
+  return null;
+}
 
 /**
  * GET /api/cliproxy - List cliproxy variants
@@ -75,19 +103,11 @@ router.post('/', (req: Request, res: Response): void => {
       return;
     }
 
-    // Validate tiers shape
-    const requiredTiers = ['opus', 'sonnet', 'haiku'] as const;
-    for (const tier of requiredTiers) {
-      if (
-        !tiers[tier] ||
-        typeof tiers[tier].provider !== 'string' ||
-        typeof tiers[tier].model !== 'string'
-      ) {
-        res.status(400).json({
-          error: `Invalid tier config for '${tier}': requires 'provider' and 'model' strings`,
-        });
-        return;
-      }
+    // Validate tiers shape, providers, and default_tier
+    const tierError = validateCompositeTiers(tiers, default_tier);
+    if (tierError) {
+      res.status(400).json({ error: tierError });
+      return;
     }
 
     const result = createCompositeVariant({ name, defaultTier: default_tier, tiers });
@@ -162,21 +182,21 @@ router.put('/:name', (req: Request, res: Response): void => {
         return;
       }
 
-      // Validate tiers shape if provided
+      // Validate tiers shape, providers, and default_tier if provided
       if (tiers) {
-        const requiredTiers = ['opus', 'sonnet', 'haiku'] as const;
-        for (const tier of requiredTiers) {
-          if (
-            !tiers[tier] ||
-            typeof tiers[tier].provider !== 'string' ||
-            typeof tiers[tier].model !== 'string'
-          ) {
-            res.status(400).json({
-              error: `Invalid tier config for '${tier}': requires 'provider' and 'model' strings`,
-            });
-            return;
-          }
+        const tierError = validateCompositeTiers(tiers, default_tier);
+        if (tierError) {
+          res.status(400).json({ error: tierError });
+          return;
         }
+      } else if (
+        default_tier &&
+        !VALID_TIERS.includes(default_tier as (typeof VALID_TIERS)[number])
+      ) {
+        res.status(400).json({
+          error: `Invalid default_tier '${default_tier}': must be one of ${VALID_TIERS.join(', ')}`,
+        });
+        return;
       }
 
       const result = updateCompositeVariant(name, { defaultTier: default_tier, tiers });
