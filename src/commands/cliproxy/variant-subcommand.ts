@@ -168,15 +168,6 @@ export async function handleCreate(
     process.exit(1);
   }
 
-  // Clean up old variant if --force is set
-  if (variantExists(name) && parsedArgs.force) {
-    const removeResult = removeVariant(name);
-    if (!removeResult.success) {
-      console.log(fail(`Cannot overwrite variant '${name}': ${removeResult.error}`));
-      process.exit(1);
-    }
-  }
-
   // Composite mode: select provider+model per tier
   if (parsedArgs.composite) {
     console.log(info('Composite variant — select provider and model for each tier'));

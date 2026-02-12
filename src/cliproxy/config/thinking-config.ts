@@ -152,13 +152,11 @@ export function applyThinkingConfig(
   }
   thinkingValue = validation.value;
 
-  // If validation says off, don't apply suffix
-  if (thinkingValue === 'off') {
-    return result;
-  }
+  // Track whether to apply to main model (skip if validation says off)
+  const applyToMainModel = thinkingValue !== 'off';
 
-  // Apply thinking suffix to main model
-  if (result.ANTHROPIC_MODEL) {
+  // Apply thinking suffix to main model (only if not off)
+  if (applyToMainModel && result.ANTHROPIC_MODEL) {
     result.ANTHROPIC_MODEL = applyThinkingSuffix(result.ANTHROPIC_MODEL, thinkingValue);
   }
 

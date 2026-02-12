@@ -124,15 +124,20 @@ export async function execClaudeWithCLIProxy(
 
   // 0a. Runtime backend/provider validation
   const backend: CLIProxyBackend = unifiedConfig.cliproxy?.backend ?? DEFAULT_BACKEND;
-  if (backend === 'original' && PLUS_ONLY_PROVIDERS.includes(provider)) {
-    console.error('');
-    console.error(fail(`${provider} requires CLIProxyAPIPlus backend`));
-    console.error('');
-    console.error('To use this provider, either:');
-    console.error('  1. Set `cliproxy.backend: plus` in ~/.ccs/config.yaml');
-    console.error('  2. Use --backend=plus flag: ccs ' + provider + ' --backend=plus');
-    console.error('');
-    throw new Error(`Provider ${provider} requires Plus backend`);
+
+  // Collect all providers to validate (default + composite tiers)
+  const allProviders = [provider, ...compositeProviders];
+  for (const p of allProviders) {
+    if (backend === 'original' && PLUS_ONLY_PROVIDERS.includes(p as CLIProxyProvider)) {
+      console.error('');
+      console.error(fail(`${p} requires CLIProxyAPIPlus backend`));
+      console.error('');
+      console.error('To use this provider, either:');
+      console.error('  1. Set `cliproxy.backend: plus` in ~/.ccs/config.yaml');
+      console.error('  2. Use --backend=plus flag: ccs ' + p + ' --backend=plus');
+      console.error('');
+      throw new Error(`Provider ${p} requires Plus backend`);
+    }
   }
 
   const cliproxyServerConfig = unifiedConfig.cliproxy_server;
