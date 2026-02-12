@@ -22,21 +22,14 @@ import {
 } from '../config/unified-config-types';
 import { loadUnifiedConfig, isUnifiedMode } from '../config/unified-config-loader';
 import { getCcsDir } from '../utils/config-manager';
+import type { CLIProxyProvider } from '../cliproxy/types';
+import { CLIPROXY_PROVIDER_IDS, isCLIProxyProvider } from '../cliproxy/provider-capabilities';
 
 export type ProfileType = 'settings' | 'account' | 'cliproxy' | 'copilot' | 'default';
 
 /** CLIProxy profile names (OAuth-based, zero config) */
-export const CLIPROXY_PROFILES = [
-  'gemini',
-  'codex',
-  'agy',
-  'qwen',
-  'iflow',
-  'kiro',
-  'ghcp',
-  'claude',
-] as const;
-export type CLIProxyProfileName = (typeof CLIPROXY_PROFILES)[number];
+export const CLIPROXY_PROFILES: readonly CLIProxyProvider[] = CLIPROXY_PROVIDER_IDS;
+export type CLIProxyProfileName = CLIProxyProvider;
 
 export interface ProfileDetectionResult {
   type: ProfileType;
@@ -250,11 +243,11 @@ class ProfileDetector {
     }
 
     // Priority 0: Check CLIProxy profiles (gemini, codex, agy, qwen) - OAuth-based, zero config
-    if (CLIPROXY_PROFILES.includes(profileName as CLIProxyProfileName)) {
+    if (isCLIProxyProvider(profileName)) {
       return {
         type: 'cliproxy',
         name: profileName,
-        provider: profileName as CLIProxyProfileName,
+        provider: profileName,
       };
     }
 

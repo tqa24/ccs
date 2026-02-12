@@ -11,6 +11,8 @@ export const RESERVED_PROFILE_NAMES = [
   'iflow',
   // Copilot API (GitHub Copilot proxy)
   'copilot',
+  // Cursor IDE (Cursor proxy daemon)
+  'cursor',
   // CLI commands and special names
   'default',
   'config',

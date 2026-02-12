@@ -20,6 +20,7 @@ import cliproxyAuthRoutes from './cliproxy-auth-routes';
 import cliproxyStatsRoutes from './cliproxy-stats-routes';
 import cliproxySyncRoutes from './cliproxy-sync-routes';
 import copilotRoutes from './copilot-routes';
+import cursorRoutes from './cursor-routes';
 import miscRoutes from './misc-routes';
 import cliproxyServerRoutes from './proxy-routes';
 import authRoutes from './auth-routes';
@@ -62,6 +63,9 @@ apiRoutes.use('/websearch', websearchRoutes);
 
 // ==================== Copilot ====================
 apiRoutes.use('/copilot', copilotRoutes);
+
+// ==================== Cursor ====================
+apiRoutes.use('/cursor', cursorRoutes);
 
 // ==================== CLIProxy Server Settings ====================
 apiRoutes.use('/cliproxy-server', cliproxyServerRoutes);

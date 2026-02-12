@@ -17,28 +17,20 @@ import {
   soloAccount,
 } from '../../cliproxy/account-manager';
 import type { CLIProxyProvider } from '../../cliproxy/types';
-import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
+import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
 
 const router = Router();
 const registry = new ProfileRegistry();
-
-/** Valid CLIProxy providers - derived from canonical CLIPROXY_PROFILES */
-const VALID_PROVIDERS: CLIProxyProvider[] = [...CLIPROXY_PROFILES];
-
-/** Check if provider is valid */
-function isValidProvider(provider: string): provider is CLIProxyProvider {
-  return VALID_PROVIDERS.includes(provider as CLIProxyProvider);
-}
 
 /** Parse CLIProxy account key format: "provider:accountId" */
 function parseCliproxyKey(key: string): { provider: CLIProxyProvider; accountId: string } | null {
   const colonIndex = key.indexOf(':');
   if (colonIndex === -1) return null;
 
-  const provider = key.slice(0, colonIndex) as CLIProxyProvider;
+  const provider = key.slice(0, colonIndex);
   const accountId = key.slice(colonIndex + 1);
 
-  if (!isValidProvider(provider) || !accountId) return null;
+  if (!isCLIProxyProvider(provider) || !accountId) return null;
   return { provider, accountId };
 }
 
@@ -239,7 +231,7 @@ router.post('/bulk-pause', (req: Request, res: Response): void => {
       return;
     }
 
-    if (!isValidProvider(provider)) {
+    if (!isCLIProxyProvider(provider)) {
       res.status(400).json({ error: `Invalid provider: ${provider}` });
       return;
     }
@@ -276,7 +268,7 @@ router.post('/bulk-resume', (req: Request, res: Response): void => {
       return;
     }
 
-    if (!isValidProvider(provider)) {
+    if (!isCLIProxyProvider(provider)) {
       res.status(400).json({ error: `Invalid provider: ${provider}` });
       return;
     }
@@ -313,7 +305,7 @@ router.post('/solo', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    if (!isValidProvider(provider)) {
+    if (!isCLIProxyProvider(provider)) {
       res.status(400).json({ error: `Invalid provider: ${provider}` });
       return;
     }

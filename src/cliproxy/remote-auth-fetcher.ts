@@ -9,6 +9,8 @@ import {
   buildManagementHeaders,
   ProxyTarget,
 } from './proxy-target-resolver';
+import { getProviderDisplayName, mapExternalProviderName } from './provider-capabilities';
+import type { CLIProxyProvider } from './types';
 
 /** Timeout for remote fetch requests (ms) */
 const REMOTE_FETCH_TIMEOUT_MS = 5000;
@@ -42,32 +44,6 @@ export interface RemoteAuthStatus {
   defaultAccount: string | null;
   source: 'remote';
 }
-
-/** Map CLIProxyAPI provider names to CCS internal names */
-const PROVIDER_MAP: Record<string, string> = {
-  gemini: 'gemini',
-  'gemini-cli': 'gemini', // CLIProxyAPI uses 'gemini-cli' for Gemini CLI auth
-  antigravity: 'agy',
-  codex: 'codex',
-  qwen: 'qwen',
-  iflow: 'iflow',
-  kiro: 'kiro',
-  codewhisperer: 'kiro', // CLIProxyAPI may use 'codewhisperer' for Kiro
-  ghcp: 'ghcp',
-  'github-copilot': 'ghcp',
-  copilot: 'ghcp',
-};
-
-/** Display names for providers */
-const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  gemini: 'Google Gemini',
-  agy: 'AntiGravity',
-  codex: 'Codex',
-  qwen: 'Qwen',
-  iflow: 'iFlow',
-  kiro: 'Kiro (AWS)',
-  ghcp: 'GitHub Copilot (OAuth)',
-};
 
 /**
  * Fetch auth status from remote CLIProxyAPI
@@ -124,10 +100,10 @@ export async function fetchRemoteAuthStatus(target?: ProxyTarget): Promise<Remot
  * @param files Array of auth files from remote API
  */
 function transformRemoteAuthFiles(files: RemoteAuthFile[]): RemoteAuthStatus[] {
-  const byProvider = new Map<string, RemoteAuthFile[]>();
+  const byProvider = new Map<CLIProxyProvider, RemoteAuthFile[]>();
 
   for (const file of files) {
-    const provider = PROVIDER_MAP[file.provider.toLowerCase()];
+    const provider = mapExternalProviderName(file.provider);
     if (!provider) {
       // Unknown provider, skip (could add logging in debug mode)
       continue;
@@ -154,7 +130,7 @@ function transformRemoteAuthFiles(files: RemoteAuthFile[]): RemoteAuthStatus[] {
 
     result.push({
       provider,
-      displayName: PROVIDER_DISPLAY_NAMES[provider] || provider,
+      displayName: getProviderDisplayName(provider),
       authenticated: activeFiles.length > 0,
       tokenFiles: providerFiles.length,
       accounts,

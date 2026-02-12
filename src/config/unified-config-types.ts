@@ -292,6 +292,21 @@ export interface CopilotConfig {
 }
 
 /**
+ * Cursor IDE integration configuration.
+ * Enables Cursor IDE usage via cursor proxy daemon.
+ */
+export interface CursorConfig {
+  /** Enable Cursor integration (default: false) */
+  enabled: boolean;
+  /** Port for cursor proxy daemon (default: 20129) */
+  port: number;
+  /** Auto-start daemon when CCS starts (default: false) */
+  auto_start: boolean;
+  /** Enable ghost mode to disable telemetry (default: true) */
+  ghost_mode: boolean;
+}
+
+/**
  * Remote proxy configuration.
  * Connect to a remote CLIProxyAPI instance instead of spawning local binary.
  */
@@ -670,6 +685,8 @@ export interface UnifiedConfig {
   global_env?: GlobalEnvConfig;
   /** Copilot API configuration (GitHub Copilot proxy) */
   copilot?: CopilotConfig;
+  /** Cursor IDE configuration (Cursor proxy daemon) */
+  cursor?: CursorConfig;
   /** CLIProxy server configuration for remote/local mode */
   cliproxy_server?: CliproxyServerConfig;
   /** Quota management configuration (v7+) */
@@ -695,6 +712,17 @@ export const DEFAULT_COPILOT_CONFIG: CopilotConfig = {
   rate_limit: null,
   wait_on_limit: true,
   model: 'gpt-4.1', // Free tier compatible
+};
+
+/**
+ * Default Cursor configuration.
+ * Disabled by default, ghost mode enabled for privacy.
+ */
+export const DEFAULT_CURSOR_CONFIG: CursorConfig = {
+  enabled: false,
+  port: 20129,
+  auto_start: false,
+  ghost_mode: true,
 };
 
 /**
@@ -769,6 +797,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
       env: { ...DEFAULT_GLOBAL_ENV },
     },
     copilot: { ...DEFAULT_COPILOT_CONFIG },
+    cursor: { ...DEFAULT_CURSOR_CONFIG },
     cliproxy_server: { ...DEFAULT_CLIPROXY_SERVER_CONFIG },
     quota_management: { ...DEFAULT_QUOTA_MANAGEMENT_CONFIG },
     thinking: { ...DEFAULT_THINKING_CONFIG },

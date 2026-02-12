@@ -532,6 +532,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Special case: cursor command (Cursor IDE integration)
+  // All `ccs cursor *` routes to cursor command handler — cursor has no profile-switching mode
+  if (firstArg === 'cursor') {
+    const { handleCursorCommand } = await import('./commands/cursor-command');
+    const exitCode = await handleCursorCommand(args.slice(1));
+    process.exit(exitCode);
+  }
+
   // Special case: copilot command (GitHub Copilot integration)
   // Only route to command handler for known subcommands, otherwise treat as profile
   const COPILOT_SUBCOMMANDS = [
