@@ -536,6 +536,7 @@ async function main(): Promise<void> {
   // Only route to command handler for known subcommands, otherwise treat as profile
   // Note: Bare `ccs cursor` shows help (unlike copilot which falls through to profile)
   // This is intentional — cursor has no profile-switching mode
+  // Keep in sync with cursor-command.ts switch cases
   const CURSOR_SUBCOMMANDS = ['auth', 'status', 'models', 'start', 'stop', 'help', '--help', '-h'];
   if (firstArg === 'cursor' && (args.length === 1 || CURSOR_SUBCOMMANDS.includes(args[1]))) {
     // `ccs cursor <subcommand>` - route to cursor command handler

@@ -107,7 +107,11 @@ async function handleAuth(): Promise<number> {
 
   // Fall back to manual import
   console.log('');
-  console.log('Auto-detection failed. Please provide credentials manually.');
+  if (autoResult.error) {
+    console.log(`Auto-detection failed: ${autoResult.error}`);
+  } else {
+    console.log('Auto-detection failed. Please provide credentials manually.');
+  }
   console.log('');
   console.log('To find your Cursor credentials:');
   console.log('  1. Open Cursor IDE');
