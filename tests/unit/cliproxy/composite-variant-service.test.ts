@@ -221,6 +221,67 @@ cliproxy:
     expect(result.variant?.tiers?.opus.account).toBe('team-a');
   });
 
+  it('should preserve existing custom settings path and custom settings fields', () => {
+    const customSettingsPath = path.join(tmpDir, 'custom', 'my-composite.settings.json');
+    const initialConfig: CompositeVariantConfig = {
+      type: 'composite',
+      default_tier: 'sonnet',
+      tiers: {
+        opus: { provider: 'gemini', model: 'gemini-3-pro-preview' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
+      },
+      settings: customSettingsPath,
+      port: 8318,
+    };
+    saveCompositeVariantUnified('test', initialConfig);
+
+    fs.mkdirSync(path.dirname(customSettingsPath), { recursive: true });
+    fs.writeFileSync(
+      customSettingsPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:8318',
+            ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+            ANTHROPIC_MODEL: 'claude-sonnet-4-5-thinking',
+            ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-3-pro-preview',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-5-thinking',
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
+            CUSTOM_ENV: 'preserve-this',
+          },
+          hooks: { PreToolUse: [{ matcher: 'WebSearch', hooks: [] }] },
+          customPreset: true,
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    const result = updateCompositeVariant('test', {
+      tiers: {
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking(high)' },
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.variant?.settings).toBe(customSettingsPath);
+
+    const updatedSettings = JSON.parse(fs.readFileSync(customSettingsPath, 'utf-8')) as {
+      env: Record<string, string>;
+      hooks: { PreToolUse: unknown[] };
+      customPreset: boolean;
+    };
+    expect(updatedSettings.env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-5-thinking(high)');
+    expect(updatedSettings.env.CUSTOM_ENV).toBe('preserve-this');
+    expect(updatedSettings.hooks.PreToolUse.length).toBe(1);
+    expect(updatedSettings.customPreset).toBe(true);
+
+    const variants = listVariantsFromConfig();
+    expect(variants.test.settings).toBe(customSettingsPath);
+  });
+
   it('should return error when variant does not exist', () => {
     const result = updateCompositeVariant('nonexistent', {
       tiers: {
