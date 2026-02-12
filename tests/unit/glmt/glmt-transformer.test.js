@@ -202,11 +202,11 @@ describe('GlmtTransformer', () => {
       delete process.env.CCS_DEBUG;
     });
 
-    it('uses ~/.ccs/logs by default', () => {
+    it('uses getCcsDir()/logs by default', () => {
       const transformer = new GlmtTransformer();
-      const os = require('os');
       const path = require('path');
-      const expectedPath = path.join(os.homedir(), '.ccs', 'logs');
+      const { getCcsDir } = require('../../../dist/utils/config-manager');
+      const expectedPath = path.join(getCcsDir(), 'logs');
       assert.strictEqual(transformer.debugLogDir, expectedPath);
     });
   });

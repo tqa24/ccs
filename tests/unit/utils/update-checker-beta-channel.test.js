@@ -14,7 +14,7 @@ const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const os = require('os');
+const { getCcsDir } = require('../../../dist/utils/config-manager');
 
 describe('Beta Channel Implementation (Phase 3)', function () {
   let updateCheckerModule;
@@ -268,7 +268,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
         latest_version: null,
         dismissed_version: null
       };
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);
+      mockFileSystem[path.join(getCcsDir(), 'cache', 'update-check.json')] = JSON.stringify(cacheData);
     });
 
     it('should use latest tag when targetTag is "latest"', async function () {
@@ -355,7 +355,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
       await updateCheckerModule.checkForUpdates('5.4.0', true, 'npm', 'dev');
 
       // Check cache was updated with dev version
-      const cachePath = path.join(os.homedir(), '.ccs', 'cache', 'update-check.json');
+      const cachePath = path.join(getCcsDir(), 'cache', 'update-check.json');
       const cacheData = JSON.parse(mockFileSystem[cachePath]);
 
       // Dev versions are now stored in dev_version field (not latest_version)
@@ -371,7 +371,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
         dev_version: '5.5.0',
         dismissed_version: null
       };
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);
+      mockFileSystem[path.join(getCcsDir(), 'cache', 'update-check.json')] = JSON.stringify(cacheData);
 
       // Call with force=false to use cache
       const result = await updateCheckerModule.checkForUpdates('5.4.0', false, 'npm', 'dev');
@@ -460,7 +460,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
   describe('Cache functionality', function () {
     it('should create cache directory if not exists', async function () {
       // Ensure no cache exists
-      const cacheDir = path.join(os.homedir(), '.ccs', 'cache');
+      const cacheDir = path.join(getCcsDir(), 'cache');
       delete mockFileSystem[cacheDir];
 
       await updateCheckerModule.checkForUpdates('5.4.0', true, 'npm', 'latest');
@@ -477,7 +477,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
         dev_version: '5.5.0',
         dismissed_version: '5.5.0'
       };
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);
+      mockFileSystem[path.join(getCcsDir(), 'cache', 'update-check.json')] = JSON.stringify(cacheData);
 
       const result = await updateCheckerModule.checkForUpdates('5.4.1', false, 'npm', 'dev');
 
@@ -488,7 +488,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
 
     it('should handle corrupted cache gracefully', async function () {
       // Set up corrupted cache
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = 'invalid json';
+      mockFileSystem[path.join(getCcsDir(), 'cache', 'update-check.json')] = 'invalid json';
 
       // Should not throw error
       const result = await updateCheckerModule.checkForUpdates('5.4.0', true, 'npm', 'latest');
