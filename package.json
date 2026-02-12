@@ -64,7 +64,7 @@
     "lint:fix": "eslint src/ --fix",
     "format": "prettier --write src/",
     "format:check": "prettier --check src/",
-    "validate": "bun run typecheck && bun run lint:fix && bun run format:check && bun run test:all",
+    "validate": "bun run typecheck && bun run lint:fix && bun run format:check && bun run maintainability:check && bun run test:all",
     "verify:bundle": "node scripts/verify-bundle.js",
     "maintainability:baseline": "node scripts/maintainability-baseline.js --out docs/metrics/maintainability-baseline.json",
     "maintainability:check": "node scripts/maintainability-baseline.js --check docs/metrics/maintainability-baseline.json",

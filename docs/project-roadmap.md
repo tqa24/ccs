@@ -204,7 +204,7 @@ All criteria achieved:
 The check mode supports a maintainability regression gate that blocks increases in:
 - `process.exit` references
 - synchronous fs API references
-- files over 350 LOC
+- TypeScript files over 350 LOC
 
 ---
 

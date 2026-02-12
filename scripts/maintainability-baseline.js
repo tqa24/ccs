@@ -142,7 +142,12 @@ function countLines(content) {
   if (content.length === 0) {
     return 0;
   }
-  return content.split(/\r?\n/).length;
+
+  const lineBreakMatches = content.match(/\r\n|\n|\r/g);
+  const lineBreakCount = lineBreakMatches ? lineBreakMatches.length : 0;
+  const endsWithLineBreak = content.endsWith('\n') || content.endsWith('\r');
+
+  return endsWithLineBreak ? lineBreakCount : lineBreakCount + 1;
 }
 
 function countMatches(content, pattern) {
