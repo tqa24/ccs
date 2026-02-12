@@ -55,7 +55,7 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
 
   if (isLoading) {
     return (
-      <Card className={cn('flex flex-col h-full', className)}>
+      <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0', className)}>
         <CardHeader className="px-3 py-2">
           <Skeleton className="h-5 w-32" />
         </CardHeader>
@@ -68,7 +68,7 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
 
   if (!stats) {
     return (
-      <Card className={cn('flex flex-col h-full', className)}>
+      <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0', className)}>
         <CardHeader className="px-3 py-2">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Terminal className="w-4 h-4" />
@@ -83,14 +83,16 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
   }
 
   return (
-    <Card className={cn('flex flex-col h-full shadow-sm', className)}>
+    <Card
+      className={cn('flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0 shadow-sm', className)}
+    >
       <CardHeader className="px-3 py-2">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
           <Terminal className="w-4 h-4" />
           Session Stats
         </CardTitle>
       </CardHeader>
-      <CardContent className="px-3 pb-3 pt-0 flex-1 flex flex-col gap-4">
+      <CardContent className="px-3 pb-3 pt-0 flex-1 min-h-0 flex flex-col gap-3">
         {/* Key Metrics Grid */}
         <div className="grid grid-cols-2 gap-2">
           {/* Total Sessions */}
@@ -119,12 +121,12 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
         </div>
 
         {/* Recent Activity List */}
-        <div className="flex-1 space-y-2">
+        <div className="flex-1 min-h-0 space-y-2">
           <div className="flex items-center gap-1 text-xs text-muted-foreground font-medium mb-1">
             <Clock className="w-3 h-3" />
             Recent Activity
           </div>
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 max-h-full overflow-y-auto pr-1">
             {stats.recentSessions.map((session) => (
               <div
                 key={session.sessionId}

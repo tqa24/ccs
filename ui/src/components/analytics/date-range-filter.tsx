@@ -70,7 +70,7 @@ export function DateRangeFilter({
   };
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('flex flex-wrap items-center gap-2', className)}>
       {presets.map((preset) => (
         <Button
           key={preset.label}
@@ -87,7 +87,7 @@ export function DateRangeFilter({
             id="date"
             variant={'outline'}
             className={cn(
-              'w-auto min-w-[240px] justify-start text-left font-normal',
+              'w-auto min-w-[200px] sm:min-w-[240px] justify-start text-left font-normal',
               !value && 'text-muted-foreground'
             )}
           >

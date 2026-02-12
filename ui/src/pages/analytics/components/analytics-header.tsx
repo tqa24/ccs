@@ -30,12 +30,12 @@ export function AnalyticsHeader({
   viewMode,
 }: AnalyticsHeaderProps) {
   return (
-    <div className="flex items-center justify-between shrink-0">
+    <div className="flex flex-col gap-3 shrink-0 xl:flex-row xl:items-center xl:justify-between">
       <div>
         <h1 className="text-xl font-semibold">Analytics</h1>
         <p className="text-sm text-muted-foreground">Track usage & insights</p>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 xl:justify-end">
         <Button
           variant={viewMode === 'hourly' ? 'default' : 'outline'}
           size="sm"
@@ -45,6 +45,7 @@ export function AnalyticsHeader({
           24H
         </Button>
         <DateRangeFilter
+          className="flex-wrap"
           value={dateRange}
           onChange={onDateRangeChange}
           presets={[
