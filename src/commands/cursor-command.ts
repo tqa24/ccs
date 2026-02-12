@@ -10,6 +10,6 @@
  */
 export async function handleCursorCommand(_args: string[]): Promise<number> {
   console.error('[!] Cursor command not yet implemented (task #520)');
-  console.error('    Available after cursor-command.ts is created');
+  console.error('    Full implementation coming in task #520.');
   return 1;
 }

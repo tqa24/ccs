@@ -230,7 +230,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       'Auto-detects token from Cursor installation',
     ],
     [
-      ['ccs cursor', 'Use Cursor IDE integration'],
+      ['ccs cursor <cmd>', 'Use Cursor IDE integration'],
       ['ccs cursor auth', 'Import Cursor token'],
       ['ccs cursor status', 'Show connection status'],
       ['ccs cursor models', 'List available models'],

@@ -8,7 +8,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../../utils/config-manager';
 import { DEFAULT_CURSOR_CONFIG } from '../../config/unified-config-types';
-import { loadOrCreateUnifiedConfig, saveUnifiedConfig } from '../../config/unified-config-loader';
+import {
+  loadOrCreateUnifiedConfig,
+  saveUnifiedConfig,
+  getCursorConfig,
+} from '../../config/unified-config-loader';
 
 const router = Router();
 
@@ -17,8 +21,7 @@ const router = Router();
  */
 router.get('/', (_req: Request, res: Response): void => {
   try {
-    const config = loadOrCreateUnifiedConfig();
-    const cursorConfig = config.cursor ?? DEFAULT_CURSOR_CONFIG;
+    const cursorConfig = getCursorConfig();
     res.json(cursorConfig);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -84,8 +87,7 @@ router.put('/', (req: Request, res: Response): void => {
 router.get('/raw', (_req: Request, res: Response): void => {
   try {
     const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
-    const config = loadOrCreateUnifiedConfig();
-    const cursorConfig = config.cursor ?? DEFAULT_CURSOR_CONFIG;
+    const cursorConfig = getCursorConfig();
 
     // If file doesn't exist, return default structure
     if (!fs.existsSync(settingsPath)) {
