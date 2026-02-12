@@ -416,9 +416,18 @@ export class CursorExecutor {
 
       // Register abort before response headers arrive so cancellation works at all stages
       let streamClosed = false;
+      let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
       if (signal) {
         const onAbort = () => {
           streamClosed = true;
+          // Close the ReadableStream controller so consumers don't hang on reader.read()
+          if (streamController) {
+            try {
+              streamController.close();
+            } catch {
+              /* already closed */
+            }
+          }
           req.close();
           client.close();
         };
@@ -471,6 +480,8 @@ export class CursorExecutor {
 
         const readable = new ReadableStream<Uint8Array>({
           start(controller) {
+            streamController = controller;
+
             const emitSSE = (data: string) => {
               if (streamClosed) return;
               controller.enqueue(enc.encode(`data: ${data}\n\n`));
