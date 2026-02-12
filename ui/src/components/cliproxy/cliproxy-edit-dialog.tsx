@@ -90,16 +90,20 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
     } else {
       singleForm.reset({
         provider: variant.provider,
-        model: variant.model || '',
-        account: variant.account || '',
+        model: variant.model ?? undefined,
+        account: variant.account ?? undefined,
       });
     }
   }, [variant, isComposite, singleForm, compositeForm]);
 
   const onSubmitSingle = async (data: SingleProviderFormData) => {
     if (!variant) return;
+    // Filter out undefined values - backend interprets undefined as "no change"
+    const payload = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== undefined && v !== '')
+    ) as SingleProviderFormData;
     try {
-      await updateMutation.mutateAsync({ name: variant.name, data });
+      await updateMutation.mutateAsync({ name: variant.name, data: payload });
       onOpenChange(false);
     } catch (error) {
       console.error('Failed to update variant:', error);

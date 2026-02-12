@@ -193,6 +193,8 @@ export interface ExecutorConfig {
   };
   /** Composite variant: which tier is the default */
   compositeDefaultTier?: 'opus' | 'sonnet' | 'haiku';
+  /** Original profile/variant name (e.g., "my-mix" for composite variants) */
+  profileName?: string;
 }
 
 /**

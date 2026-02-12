@@ -434,10 +434,11 @@ export async function execClaudeWithCLIProxy(
   if (forceConfig && supportsModelConfig(provider)) {
     // Block --config for composite variants (per-tier models in config.yaml)
     if (cfg.isComposite) {
+      const variantName = cfg.profileName || provider;
       console.log(
         warn('Composite variants use per-tier config. Edit config.yaml to change tier models.')
       );
-      console.error(`    Use "ccs cliproxy edit ${provider}" to modify composite variants`);
+      console.error(`    Use "ccs cliproxy edit ${variantName}" to modify composite variants`);
       process.exit(1);
     } else {
       await configureProviderModel(provider, true, cfg.customSettingsPath);
