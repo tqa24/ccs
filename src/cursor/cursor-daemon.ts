@@ -9,14 +9,8 @@ import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as http from 'http';
-import type { CursorDaemonStatus } from './types';
+import type { CursorConfig, CursorDaemonStatus } from './types';
 import { getCcsDir } from '../utils/config-manager';
-
-// Temporary interface until #521 adds cursor to unified config
-interface CursorConfig {
-  port: number;
-  model: string;
-}
 
 /**
  * Get Cursor directory path.
@@ -155,11 +149,11 @@ export async function startDaemon(
     const safeResolve = (result: { success: boolean; pid?: number; error?: string }) => {
       if (resolved) return;
       resolved = true;
-      if (checkInterval) clearInterval(checkInterval);
+      if (checkTimeout) clearTimeout(checkTimeout);
       resolve(result);
     };
 
-    let checkInterval: NodeJS.Timeout | null = null;
+    let checkTimeout: NodeJS.Timeout | null = null;
 
     try {
       // Spawn a placeholder Node.js process
@@ -185,9 +179,8 @@ export async function startDaemon(
       ];
 
       proc = spawn(process.execPath, args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: 'ignore',
         detached: true,
-        shell: process.platform === 'win32',
       });
 
       // Unref so parent can exit
@@ -200,7 +193,7 @@ export async function startDaemon(
       // Wait for daemon to be ready (poll for up to 30 seconds)
       let attempts = 0;
       const maxAttempts = 30;
-      checkInterval = setInterval(async () => {
+      const pollHealth = async () => {
         attempts++;
 
         if (await isDaemonRunning(config.port)) {
@@ -218,8 +211,11 @@ export async function startDaemon(
             success: false,
             error: 'Daemon did not start within 30 seconds',
           });
+        } else {
+          checkTimeout = setTimeout(pollHealth, 1000);
         }
-      }, 1000);
+      };
+      checkTimeout = setTimeout(pollHealth, 1000);
 
       proc.on('error', (err) => {
         safeResolve({
@@ -263,7 +259,6 @@ export async function stopDaemon(): Promise<{ success: boolean; error?: string }
 
   if (!pid) {
     // No PID file — daemon is not running or was already stopped
-    removePidFile();
     return { success: true };
   }
 
@@ -287,8 +282,7 @@ export async function stopDaemon(): Promise<{ success: boolean; error?: string }
 
     // Escalate to SIGKILL if process still alive after SIGTERM attempts
     try {
-      process.kill(pid, 0); // Check if still alive
-      process.kill(pid, 'SIGKILL'); // Escalate to force kill
+      process.kill(pid, 'SIGKILL');
     } catch {
       // Already dead — good
     }

@@ -5,6 +5,15 @@
  */
 
 /**
+ * Cursor daemon configuration.
+ * Temporary interface until #521 adds cursor to unified config.
+ */
+export interface CursorConfig {
+  port: number;
+  model: string;
+}
+
+/**
  * Cursor authentication credentials
  */
 export interface CursorCredentials {

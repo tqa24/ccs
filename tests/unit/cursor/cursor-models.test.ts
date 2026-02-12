@@ -72,8 +72,8 @@ describe('detectProvider', () => {
     expect(detectProvider('cursor-small')).toBe('cursor');
   });
 
-  it('defaults to openai for unknown models', () => {
-    expect(detectProvider('unknown-model')).toBe('openai');
+  it('defaults to unknown for unrecognized models', () => {
+    expect(detectProvider('unknown-model')).toBe('unknown');
   });
 });
 

@@ -163,7 +163,7 @@ export function detectProvider(modelId: string): string {
   if (modelId.includes('gpt') || /^o\d/.test(modelId)) return 'openai';
   if (modelId.includes('gemini')) return 'google';
   if (modelId.includes('cursor')) return 'cursor';
-  return 'openai';
+  return 'unknown';
 }
 
 /**
