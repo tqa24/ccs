@@ -48,7 +48,8 @@ export async function handleCursorCommand(args: string[]): Promise<number> {
     default:
       console.error(fail(`Unknown subcommand: ${subcommand}`));
       console.error('');
-      return handleHelp();
+      handleHelp();
+      return 1;
   }
 }
 

@@ -205,6 +205,14 @@ export async function startDaemon(
         if (await isDaemonRunning(config.port)) {
           safeResolve({ success: true, pid: proc.pid });
         } else if (attempts >= maxAttempts) {
+          // Kill orphaned process
+          if (proc.pid) {
+            try {
+              process.kill(proc.pid, 'SIGTERM');
+            } catch {
+              /* already dead */
+            }
+          }
           safeResolve({
             success: false,
             error: 'Daemon did not start within 30 seconds',
@@ -230,7 +238,7 @@ export async function startDaemon(
             success: false,
             error: 'Daemon process exited unexpectedly with code 0',
           });
-        } else if (code !== null) {
+        } else {
           safeResolve({
             success: false,
             error: `Daemon process exited with code ${code}`,
