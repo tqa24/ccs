@@ -30,13 +30,12 @@ describe('provider-capabilities', () => {
   });
 
   it('returns providers by OAuth flow capability', () => {
-    expect(getProvidersByOAuthFlow('device_code')).toEqual(['qwen', 'ghcp']);
+    expect(getProvidersByOAuthFlow('device_code')).toEqual(['qwen', 'kiro', 'ghcp']);
     expect(getProvidersByOAuthFlow('authorization_code')).toEqual([
       'gemini',
       'codex',
       'agy',
       'iflow',
-      'kiro',
       'claude',
     ]);
   });
@@ -53,6 +52,7 @@ describe('provider-capabilities', () => {
 
   it('exposes callback port and display name capabilities', () => {
     expect(getOAuthCallbackPort('qwen')).toBeNull();
+    expect(getOAuthCallbackPort('kiro')).toBeNull();
     expect(getOAuthCallbackPort('gemini')).toBe(8085);
     expect(getProviderDisplayName('agy')).toBe('AntiGravity');
   });

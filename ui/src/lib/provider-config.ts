@@ -76,7 +76,7 @@ export function getProviderDisplayName(provider: string): string {
  * Providers that use Device Code OAuth flow instead of Authorization Code flow.
  * Device Code flow requires displaying a user code for manual entry at provider's website.
  */
-export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = ['ghcp', 'qwen'];
+export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = ['ghcp', 'kiro', 'qwen'];
 
 /** Check if provider uses Device Code flow */
 export function isDeviceCodeProvider(provider: string): boolean {

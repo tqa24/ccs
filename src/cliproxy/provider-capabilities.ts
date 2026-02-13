@@ -46,8 +46,8 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
   },
   kiro: {
     displayName: 'Kiro (AWS)',
-    oauthFlow: 'authorization_code',
-    callbackPort: 9876,
+    oauthFlow: 'device_code',
+    callbackPort: null,
     aliases: ['codewhisperer'],
   },
   ghcp: {
