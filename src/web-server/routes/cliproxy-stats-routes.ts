@@ -46,6 +46,37 @@ import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 
 const router = Router();
 
+/**
+ * Cache only stable failures; avoid pinning transient network failures (timeouts, 429s).
+ */
+function shouldCacheCodexQuotaResult(result: CodexQuotaResult): boolean {
+  if (result.success) return true;
+  if (result.needsReauth || result.isForbidden) return true;
+
+  const msg = (result.error || '').toLowerCase();
+  if (!msg) return false;
+  if (msg.includes('timeout')) return false;
+  if (msg.includes('rate limited')) return false;
+  if (msg.includes('api error: 5')) return false;
+  if (msg.includes('fetch failed')) return false;
+
+  return false;
+}
+
+function shouldCacheGeminiQuotaResult(result: GeminiCliQuotaResult): boolean {
+  if (result.success) return true;
+  if (result.needsReauth) return true;
+
+  const msg = (result.error || '').toLowerCase();
+  if (!msg) return false;
+  if (msg.includes('timeout')) return false;
+  if (msg.includes('rate limited')) return false;
+  if (msg.includes('api error: 5')) return false;
+  if (msg.includes('fetch failed')) return false;
+
+  return false;
+}
+
 /** Get configured backend from config */
 function getConfiguredBackend() {
   try {
@@ -548,8 +579,8 @@ router.get('/quota/codex/:accountId', async (req: Request, res: Response): Promi
     // Fetch from external API
     const result = await fetchCodexQuota(accountId);
 
-    // Cache successful results (don't cache errors that need reauth)
-    if (result.success || !result.needsReauth) {
+    // Cache successful and stable failure states; skip transient network failures.
+    if (shouldCacheCodexQuotaResult(result)) {
       setCachedQuota('codex', accountId, result);
     }
 
@@ -589,8 +620,8 @@ router.get('/quota/gemini/:accountId', async (req: Request, res: Response): Prom
     // Fetch from external API
     const result = await fetchGeminiCliQuota(accountId);
 
-    // Cache successful results (don't cache errors that need reauth)
-    if (result.success || !result.needsReauth) {
+    // Cache successful and stable failure states; skip transient network failures.
+    if (shouldCacheGeminiQuotaResult(result)) {
       setCachedQuota('gemini', accountId, result);
     }
 
