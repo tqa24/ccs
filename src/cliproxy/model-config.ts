@@ -142,6 +142,10 @@ export async function configureProviderModel(
 
   // Get base env vars for defaults
   const baseEnv = getClaudeEnvVars(provider);
+  const codexSonnetModel =
+    provider === 'codex' && !selectedModel.match(/-(xhigh|high|medium)$/)
+      ? `${selectedModel}-high`
+      : selectedModel;
 
   // Read existing settings to preserve user customizations
   let existingSettings: Record<string, unknown> = {};
@@ -165,7 +169,7 @@ export async function configureProviderModel(
     ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN || '',
     ANTHROPIC_MODEL: selectedModel,
     ANTHROPIC_DEFAULT_OPUS_MODEL: selectedModel,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: selectedModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: codexSonnetModel,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || '',
   };
 

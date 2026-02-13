@@ -44,15 +44,24 @@ function buildSettingsEnv(
   port: number = CLIPROXY_DEFAULT_PORT
 ): SettingsEnv {
   const baseEnv = getClaudeEnvVars(provider as CLIProxyProvider, port);
+  const codexSonnetModel = normalizeCodexSonnetModel(provider, model);
 
   return {
     ANTHROPIC_BASE_URL: baseEnv.ANTHROPIC_BASE_URL || '',
     ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN || '',
     ANTHROPIC_MODEL: model,
     ANTHROPIC_DEFAULT_OPUS_MODEL: model,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: codexSonnetModel,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
   };
+}
+
+function normalizeCodexSonnetModel(
+  provider: CLIProxyProfileName | undefined,
+  model: string
+): string {
+  if (provider !== 'codex') return model;
+  return /-(xhigh|high|medium)$/.test(model) ? model : `${model}-high`;
 }
 
 /**
@@ -266,7 +275,11 @@ export function deleteSettingsFile(settingsPath: string): boolean {
 /**
  * Update model in an existing settings file
  */
-export function updateSettingsModel(settingsPath: string, model: string): void {
+export function updateSettingsModel(
+  settingsPath: string,
+  model: string,
+  provider?: CLIProxyProfileName
+): void {
   const fileName = path.basename(settingsPath);
   if (fileName.startsWith('composite-')) {
     console.log(
@@ -286,9 +299,10 @@ export function updateSettingsModel(settingsPath: string, model: string): void {
 
     if (model) {
       settings.env = settings.env || ({} as SettingsEnv);
+      const codexSonnetModel = normalizeCodexSonnetModel(provider, model);
       settings.env.ANTHROPIC_MODEL = model;
       settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
-      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = model;
+      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = codexSonnetModel;
     } else {
       // Clear model settings to use defaults
       delete (settings.env as unknown as Record<string, string>).ANTHROPIC_MODEL;

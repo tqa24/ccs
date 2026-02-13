@@ -253,7 +253,7 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
           existing.port
         );
       } else if (updates.model !== undefined) {
-        updateSettingsModel(settingsPath, updates.model);
+        updateSettingsModel(settingsPath, updates.model, existing.provider as CLIProxyProfileName);
       }
     }
 

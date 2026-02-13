@@ -107,4 +107,28 @@ cliproxy:
     const config = loadOrCreateUnifiedConfig();
     expect(config.cliproxy?.variants?.demo?.provider).toBe('codex');
   });
+
+  it('preserves codex sonnet alias on model-only updates', () => {
+    const toCodex = updateVariant('demo', {
+      provider: 'codex',
+      model: 'gpt-5.3-codex',
+    });
+    expect(toCodex.success).toBe(true);
+
+    const settingsPath = path.join(tmpDir, 'gemini-demo.settings.json');
+    let settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      env: Record<string, string>;
+    };
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
+
+    const modelOnly = updateVariant('demo', { model: 'gpt-5.3-codex' });
+    expect(modelOnly.success).toBe(true);
+
+    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      env: Record<string, string>;
+    };
+    expect(settings.env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex');
+    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex');
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
+  });
 });
