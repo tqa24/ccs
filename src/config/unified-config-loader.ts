@@ -28,6 +28,7 @@ import {
   ImageAnalysisConfig,
   CursorConfig,
 } from './unified-config-types';
+import { validateCompositeTiers } from '../cliproxy/composite-validator';
 import { isUnifiedConfigEnabled } from './feature-flags';
 
 const CONFIG_YAML = 'config.yaml';
@@ -203,6 +204,27 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
       console.error(`[X] Failed to load config: ${error}`);
     }
     return null;
+  }
+}
+
+/**
+ * Validate composite variant provider strings.
+ * Warns about invalid providers in composite variant configurations.
+ */
+function validateCompositeVariants(config: UnifiedConfig): void {
+  const variants = config.cliproxy?.variants;
+  if (!variants) return;
+
+  for (const [name, variant] of Object.entries(variants)) {
+    if ('type' in variant && variant.type === 'composite') {
+      const error = validateCompositeTiers(variant.tiers, {
+        defaultTier: variant.default_tier,
+        requireAllTiers: true,
+      });
+      if (error) {
+        console.warn(`[!] Variant '${name}': invalid composite config (${error})`);
+      }
+    }
   }
 }
 
@@ -413,7 +435,10 @@ export function loadOrCreateUnifiedConfig(): UnifiedConfig {
   const existing = loadUnifiedConfig();
   if (existing) {
     // Merge with defaults to fill any missing sections
-    return mergeWithDefaults(existing);
+    const merged = mergeWithDefaults(existing);
+    // Validate composite variant provider strings
+    validateCompositeVariants(merged);
+    return merged;
   }
 
   // Create empty config

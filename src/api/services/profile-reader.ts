@@ -72,9 +72,13 @@ export function listApiProfiles(): ApiListResult {
     }
     // CLIProxy variants
     for (const [name, variant] of Object.entries(unifiedConfig.cliproxy?.variants || {})) {
+      const provider =
+        variant && 'type' in variant && variant.type === 'composite'
+          ? 'composite'
+          : (variant as { provider?: string })?.provider || 'unknown';
       variants.push({
         name,
-        provider: variant?.provider || 'unknown',
+        provider,
         settings: variant?.settings || '-',
       });
     }

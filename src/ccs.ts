@@ -616,6 +616,10 @@ async function main(): Promise<void> {
       await execClaudeWithCLIProxy(claudeCli, provider, remainingArgs, {
         customSettingsPath,
         port: variantPort,
+        isComposite: profileInfo.isComposite,
+        compositeTiers: profileInfo.compositeTiers,
+        compositeDefaultTier: profileInfo.compositeDefaultTier,
+        profileName: profileInfo.name,
       });
     } else if (profileInfo.type === 'copilot') {
       // COPILOT FLOW: GitHub Copilot subscription via copilot-api proxy

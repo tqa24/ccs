@@ -68,24 +68,53 @@ export function getThinkingValueForTier(
 }
 
 /**
+ * Composite tier config for provider lookup (subset of full CompositeTierConfig)
+ */
+interface CompositeTierProvider {
+  provider?: CLIProxyProvider;
+}
+
+/**
  * Apply thinking configuration to env vars.
  * Modifies ANTHROPIC_MODEL and tier models with thinking suffixes.
  *
  * @param envVars - Environment variables to modify
- * @param provider - CLIProxy provider
+ * @param provider - CLIProxy provider (default provider for base model)
  * @param thinkingOverride - Optional CLI override (takes priority over config)
+ * @param compositeTierThinking - Optional per-tier thinking overrides for composite variants
+ * @param compositeTiers - Optional per-tier provider config for composite variants
  * @returns Modified env vars with thinking suffixes applied
  */
 export function applyThinkingConfig(
   envVars: NodeJS.ProcessEnv,
   provider: CLIProxyProvider,
-  thinkingOverride?: string | number
+  thinkingOverride?: string | number,
+  compositeTierThinking?: {
+    opus?: string;
+    sonnet?: string;
+    haiku?: string;
+  },
+  compositeTiers?: {
+    opus?: CompositeTierProvider;
+    sonnet?: CompositeTierProvider;
+    haiku?: CompositeTierProvider;
+  }
 ): NodeJS.ProcessEnv {
   const thinkingConfig = getThinkingConfig();
   const result = { ...envVars };
 
   // Check if thinking is off
   if (thinkingConfig.mode === 'off' && thinkingOverride === undefined) {
+    return result;
+  }
+
+  // Explicit "off" (CLI override or manual config override) must disable ALL tier thinking.
+  const explicitOffOverride =
+    thinkingOverride === 'off' ||
+    (thinkingOverride === undefined &&
+      thinkingConfig.mode === 'manual' &&
+      thinkingConfig.override === 'off');
+  if (explicitOffOverride) {
     return result;
   }
 
@@ -115,7 +144,13 @@ export function applyThinkingConfig(
   } else if (thinkingConfig.mode === 'auto') {
     // Auto mode: detect tier and apply default
     const tier = detectTierFromModel(baseModel);
-    thinkingValue = getThinkingValueForTier(tier, provider, thinkingConfig);
+    // Check per-tier config first if composite
+    const perTierValue = compositeTierThinking?.[tier];
+    if (perTierValue !== undefined) {
+      thinkingValue = perTierValue;
+    } else {
+      thinkingValue = getThinkingValueForTier(tier, provider, thinkingConfig);
+    }
   } else {
     return result; // No thinking to apply
   }
@@ -127,13 +162,18 @@ export function applyThinkingConfig(
   }
   thinkingValue = validation.value;
 
-  // If validation says off, don't apply suffix
+  // If auto-detection resolves default tier to "off", skip the main model but still allow
+  // explicit per-tier thinking values for other tiers.
   if (thinkingValue === 'off') {
-    return result;
-  }
-
-  // Apply thinking suffix to main model
-  if (result.ANTHROPIC_MODEL) {
+    const hasPerTierThinking =
+      compositeTierThinking &&
+      Object.values(compositeTierThinking).some((v) => v !== undefined && v !== 'off');
+    if (!hasPerTierThinking) {
+      return result; // No thinking to apply anywhere
+    }
+    // Otherwise, continue to process tiers with their own config (skip main model)
+  } else if (result.ANTHROPIC_MODEL) {
+    // Apply thinking suffix to main model (only if not off)
     result.ANTHROPIC_MODEL = applyThinkingSuffix(result.ANTHROPIC_MODEL, thinkingValue);
   }
 
@@ -146,15 +186,44 @@ export function applyThinkingConfig(
 
   for (const tierVar of tierModels) {
     const model = result[tierVar];
-    if (model && supportsThinking(provider, model)) {
+    if (model) {
       // Get tier-specific thinking value
       const tier = tierVar.includes('OPUS')
         ? 'opus'
         : tierVar.includes('SONNET')
           ? 'sonnet'
           : 'haiku';
-      const tierThinkingValue =
-        thinkingOverride ?? getThinkingValueForTier(tier, provider, thinkingConfig);
+
+      // P2 FIX: Use tier-specific provider from compositeTiers for mixed-provider composites
+      // Falls back to the default provider if not a composite or tier not specified
+      const tierProvider = compositeTiers?.[tier]?.provider ?? provider;
+
+      // Check if this tier's model supports thinking (using tier-specific provider)
+      if (!supportsThinking(tierProvider, model)) {
+        continue;
+      }
+
+      // Priority chain: CLI --thinking > per-tier config > global config > defaults
+      let tierThinkingValue: string | number;
+      if (thinkingOverride !== undefined) {
+        // CLI override takes priority
+        tierThinkingValue = thinkingOverride;
+      } else {
+        const perTierValue = compositeTierThinking?.[tier];
+        if (perTierValue !== undefined) {
+          // Per-tier config from composite variant
+          tierThinkingValue = perTierValue;
+        } else {
+          // Global config or defaults (use tier-specific provider for provider overrides)
+          tierThinkingValue = getThinkingValueForTier(tier, tierProvider, thinkingConfig);
+        }
+      }
+
+      // If per-tier thinking is 'off', skip this tier
+      if (tierThinkingValue === 'off') {
+        continue;
+      }
+
       result[tierVar] = applyThinkingSuffix(model, tierThinkingValue);
     }
   }

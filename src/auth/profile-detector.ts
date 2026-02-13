@@ -13,7 +13,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { findSimilarStrings, expandPath } from '../utils/helpers';
 import { Config, Settings, ProfileMetadata } from '../types';
-import { UnifiedConfig, CopilotConfig } from '../config/unified-config-types';
+import {
+  UnifiedConfig,
+  CopilotConfig,
+  CLIProxyVariantConfig,
+  CompositeVariantConfig,
+  CompositeTierConfig,
+} from '../config/unified-config-types';
 import { loadUnifiedConfig, isUnifiedMode } from '../config/unified-config-loader';
 import { getCcsDir } from '../utils/config-manager';
 import type { CLIProxyProvider } from '../cliproxy/types';
@@ -39,6 +45,16 @@ export interface ProfileDetectionResult {
   env?: Record<string, string>;
   /** For copilot profile: the copilot config */
   copilotConfig?: CopilotConfig;
+  /** For composite variants: true when variant mixes providers per tier */
+  isComposite?: boolean;
+  /** For composite variants: which tier is the default */
+  compositeDefaultTier?: 'opus' | 'sonnet' | 'haiku';
+  /** For composite variants: per-tier provider+model mappings */
+  compositeTiers?: {
+    opus: CompositeTierConfig;
+    sonnet: CompositeTierConfig;
+    haiku: CompositeTierConfig;
+  };
 }
 
 export interface AllProfiles {
@@ -103,12 +119,46 @@ class ProfileDetector {
     // Check CLIProxy variants first
     if (config.cliproxy?.variants?.[profileName]) {
       const variant = config.cliproxy.variants[profileName];
+
+      // Handle composite variants
+      if ('type' in variant && variant.type === 'composite') {
+        const composite = variant as CompositeVariantConfig;
+
+        // Defensive: check for missing tiers or default_tier
+        if (!composite.tiers || !composite.default_tier) {
+          console.warn(
+            `[!] Warning: Composite variant '${profileName}' has missing tiers or default_tier`
+          );
+          return null;
+        }
+
+        const defaultTierConfig = composite.tiers[composite.default_tier];
+        if (!defaultTierConfig) {
+          console.warn(
+            `[!] Warning: Composite variant '${profileName}' missing config for default tier '${composite.default_tier}'`
+          );
+          return null;
+        }
+
+        return {
+          type: 'cliproxy',
+          name: profileName,
+          provider: defaultTierConfig.provider as CLIProxyProfileName,
+          settingsPath: composite.settings,
+          port: composite.port,
+          isComposite: true,
+          compositeDefaultTier: composite.default_tier,
+          compositeTiers: composite.tiers,
+        };
+      }
+
+      const singleVariant = variant as CLIProxyVariantConfig;
       return {
         type: 'cliproxy',
         name: profileName,
-        provider: variant.provider as CLIProxyProfileName,
-        settingsPath: variant.settings,
-        port: variant.port,
+        provider: singleVariant.provider as CLIProxyProfileName,
+        settingsPath: singleVariant.settings,
+        port: singleVariant.port,
       };
     }
 
@@ -369,7 +419,11 @@ class ProfileDetector {
         lines.push('CLIProxy variants (unified config):');
         variants.forEach((name) => {
           const variant = unifiedConfig.cliproxy?.variants[name];
-          lines.push(`  - ${name} (${variant?.provider || 'unknown'})`);
+          const label =
+            variant && 'type' in variant && variant.type === 'composite'
+              ? 'composite'
+              : (variant as { provider?: string })?.provider || 'unknown';
+          lines.push(`  - ${name} (${label})`);
         });
       }
 

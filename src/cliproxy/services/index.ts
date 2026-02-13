@@ -9,9 +9,13 @@ export {
   variantExists,
   listVariants,
   createVariant,
+  createCompositeVariant,
+  updateCompositeVariant,
   removeVariant,
   type VariantConfig,
   type VariantOperationResult,
+  type CreateCompositeVariantOptions,
+  type UpdateCompositeVariantOptions,
 } from './variant-service';
 
 // Proxy lifecycle

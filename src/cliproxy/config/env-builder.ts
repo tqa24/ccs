@@ -10,6 +10,7 @@ import { getGlobalEnvConfig } from '../../config/unified-config-loader';
 import { getEffectiveApiKey } from '../auth-token-manager';
 import { expandPath } from '../../utils/helpers';
 import { warn } from '../../utils/ui';
+import { CompositeTierConfig } from '../../config/unified-config-types';
 import {
   validatePort,
   validateRemotePort,
@@ -410,6 +411,105 @@ export function getRemoteEnvVars(
     ANTHROPIC_BASE_URL: baseUrl,
     ANTHROPIC_AUTH_TOKEN: remoteConfig.authToken || getEffectiveApiKey(),
   };
+
+  return env;
+}
+
+/** Remote config for composite variant (passed from env-resolver) */
+export interface CompositeRemoteConfig {
+  host: string;
+  port: number;
+  protocol: 'http' | 'https';
+  authToken?: string;
+}
+
+/**
+ * Get environment variables for composite variant.
+ * Uses root URL (no /api/provider/ path) for model-based routing.
+ * Each tier maps to a different provider's model, routed by CLIProxyAPI.
+ *
+ * @param tiers Per-tier provider+model mappings
+ * @param defaultTier Which tier ANTHROPIC_MODEL equals
+ * @param port Local CLIProxy port (ignored if remoteConfig provided)
+ * @param customSettingsPath Optional path to user's custom settings file
+ * @param remoteConfig Optional remote proxy config (overrides localhost URL/auth)
+ */
+export function getCompositeEnvVars(
+  tiers: { opus: CompositeTierConfig; sonnet: CompositeTierConfig; haiku: CompositeTierConfig },
+  defaultTier: 'opus' | 'sonnet' | 'haiku',
+  port: number = CLIPROXY_DEFAULT_PORT,
+  customSettingsPath?: string,
+  remoteConfig?: CompositeRemoteConfig
+): Record<string, string> {
+  const globalEnv = getGlobalEnvVars();
+
+  // Load user settings if provided (may contain additional env vars like hooks)
+  let additionalEnvVars: Record<string, string> = {};
+  if (customSettingsPath) {
+    const expandedPath = expandPath(customSettingsPath);
+    if (fs.existsSync(expandedPath)) {
+      try {
+        const content = fs.readFileSync(expandedPath, 'utf-8');
+        const settings: ProviderSettings = JSON.parse(content);
+        if (settings.env && typeof settings.env === 'object') {
+          // Extract non-core env vars (hooks, etc.)
+          const {
+            ANTHROPIC_BASE_URL: _baseUrl,
+            ANTHROPIC_AUTH_TOKEN: _authToken,
+            ANTHROPIC_MODEL: _model,
+            ANTHROPIC_DEFAULT_OPUS_MODEL: _opus,
+            ANTHROPIC_DEFAULT_SONNET_MODEL: _sonnet,
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: _haiku,
+            ...extra
+          } = settings.env as Record<string, string>;
+          additionalEnvVars = extra;
+        }
+      } catch {
+        // Invalid JSON — ignore
+      }
+    }
+  }
+
+  const validPort = validatePort(port);
+
+  // Defensive: handle missing tiers gracefully
+  const opusModel = tiers.opus?.model;
+  const sonnetModel = tiers.sonnet?.model;
+  const haikuModel = tiers.haiku?.model;
+  const defaultModel = tiers[defaultTier]?.model;
+
+  // If default tier is missing, we cannot proceed meaningfully
+  if (!defaultModel) {
+    throw new Error(`Missing model for default tier '${defaultTier}'`);
+  }
+
+  // Determine base URL and auth token based on remote vs local mode
+  const baseUrl = remoteConfig
+    ? (() => {
+        const normalizedProtocol = normalizeProtocol(remoteConfig.protocol);
+        const effectivePort =
+          validateRemotePort(remoteConfig.port) ?? getRemoteDefaultPort(normalizedProtocol);
+        const standardWebPort = normalizedProtocol === 'https' ? 443 : 80;
+        const portSuffix = effectivePort === standardWebPort ? '' : `:${effectivePort}`;
+        return `${normalizedProtocol}://${remoteConfig.host}${portSuffix}`;
+      })()
+    : `http://127.0.0.1:${validPort}`;
+
+  const authToken = remoteConfig?.authToken ?? getEffectiveApiKey();
+
+  const env: Record<string, string> = {
+    ...globalEnv,
+    ...additionalEnvVars,
+    // Root URL — CLIProxyAPI routes based on model name in request body
+    ANTHROPIC_BASE_URL: baseUrl,
+    ANTHROPIC_AUTH_TOKEN: authToken,
+    ANTHROPIC_MODEL: defaultModel,
+  };
+
+  // Only set tier env vars if the tier exists
+  if (opusModel) env.ANTHROPIC_DEFAULT_OPUS_MODEL = opusModel;
+  if (sonnetModel) env.ANTHROPIC_DEFAULT_SONNET_MODEL = sonnetModel;
+  if (haikuModel) env.ANTHROPIC_DEFAULT_HAIKU_MODEL = haikuModel;
 
   return env;
 }

@@ -20,9 +20,12 @@ import {
   variantExists,
   listVariants,
   createVariant,
+  createCompositeVariant,
+  updateCompositeVariant,
   removeVariant,
 } from '../../cliproxy/services';
 import { DEFAULT_BACKEND } from '../../cliproxy/platform-detector';
+import { CompositeTierConfig } from '../../config/unified-config-types';
 
 interface CliproxyProfileArgs {
   name?: string;
@@ -31,6 +34,7 @@ interface CliproxyProfileArgs {
   account?: string;
   force?: boolean;
   yes?: boolean;
+  composite?: boolean;
 }
 
 function parseProfileArgs(args: string[]): CliproxyProfileArgs {
@@ -47,6 +51,8 @@ function parseProfileArgs(args: string[]): CliproxyProfileArgs {
       result.force = true;
     } else if (arg === '--yes' || arg === '-y') {
       result.yes = true;
+    } else if (arg === '--composite') {
+      result.composite = true;
     } else if (!arg.startsWith('-') && !result.name) {
       result.name = arg;
     }
@@ -66,6 +72,71 @@ function formatModelOption(model: ModelEntry): string {
 
 function getBackendLabel(backend: CLIProxyBackend): string {
   return backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
+}
+
+/**
+ * Interactive prompt to select provider + model for a single tier.
+ * Returns a CompositeTierConfig, or null if user cancelled auth.
+ */
+async function selectTierConfig(
+  tierName: string,
+  verbose: boolean
+): Promise<CompositeTierConfig | null> {
+  console.log(header(`${tierName.charAt(0).toUpperCase() + tierName.slice(1)} Tier`));
+
+  // Select provider
+  const providerOptions = CLIPROXY_PROFILES.map((p) => ({
+    id: p,
+    label: p.charAt(0).toUpperCase() + p.slice(1),
+  }));
+  const provider = (await InteractivePrompt.selectFromList(
+    `Provider for ${tierName}:`,
+    providerOptions
+  )) as CLIProxyProfileName;
+
+  // Check auth
+  const providerAccounts = getProviderAccounts(provider as CLIProxyProvider);
+  if (providerAccounts.length === 0) {
+    console.log('');
+    console.log(warn(`No accounts authenticated for ${provider}`));
+    const shouldAuth = await InteractivePrompt.confirm(`Authenticate with ${provider} now?`, {
+      default: true,
+    });
+    if (!shouldAuth) {
+      console.log(info(`Skipping auth. Run: ${color(`ccs ${provider} --auth`, 'command')}`));
+      return null;
+    }
+    const newAccount = await triggerOAuth(provider as CLIProxyProvider, {
+      add: true,
+      verbose,
+    });
+    if (!newAccount) {
+      console.log(fail('Authentication failed'));
+      process.exit(1);
+    }
+    console.log(ok(`Authenticated as ${newAccount.email || newAccount.id}`));
+  }
+
+  // Select model
+  let model: string | undefined;
+  if (supportsModelConfig(provider as CLIProxyProvider)) {
+    const catalog = getProviderCatalog(provider as CLIProxyProvider);
+    if (catalog) {
+      const modelOptions = catalog.models.map((m) => ({ id: m.id, label: formatModelOption(m) }));
+      const defaultIdx = catalog.models.findIndex((m) => m.id === catalog.defaultModel);
+      model = await InteractivePrompt.selectFromList(`Model for ${tierName}:`, modelOptions, {
+        defaultIndex: defaultIdx >= 0 ? defaultIdx : 0,
+      });
+    }
+  }
+  if (!model) {
+    model = await InteractivePrompt.input(`Model name for ${tierName}`, {
+      validate: (val) => (val ? null : 'Model is required'),
+    });
+  }
+
+  console.log('');
+  return { provider, model };
 }
 
 export async function handleCreate(
@@ -95,6 +166,71 @@ export async function handleCreate(
     console.log(fail(`Variant '${name}' already exists`));
     console.log(`    Use ${color('--force', 'command')} to overwrite`);
     process.exit(1);
+  }
+
+  // Composite mode: select provider+model per tier
+  if (parsedArgs.composite) {
+    console.log(info('Composite variant — select provider and model for each tier'));
+    console.log('');
+
+    const verbose = args.includes('--verbose');
+    const opus = await selectTierConfig('opus', verbose);
+    if (!opus) {
+      return; // User cancelled auth
+    }
+    const sonnet = await selectTierConfig('sonnet', verbose);
+    if (!sonnet) {
+      return; // User cancelled auth
+    }
+    const haiku = await selectTierConfig('haiku', verbose);
+    if (!haiku) {
+      return; // User cancelled auth
+    }
+
+    // Select default tier
+    const tierOptions = [
+      { id: 'opus' as const, label: `Opus (${opus.provider}: ${opus.model})` },
+      { id: 'sonnet' as const, label: `Sonnet (${sonnet.provider}: ${sonnet.model})` },
+      { id: 'haiku' as const, label: `Haiku (${haiku.provider}: ${haiku.model})` },
+    ];
+    const defaultTier = (await InteractivePrompt.selectFromList(
+      'Default tier (ANTHROPIC_MODEL):',
+      tierOptions
+    )) as 'opus' | 'sonnet' | 'haiku';
+
+    console.log('');
+    console.log(info(`Creating composite ${getBackendLabel(backend)} variant...`));
+    const result = createCompositeVariant({
+      name,
+      defaultTier,
+      tiers: { opus, sonnet, haiku },
+    });
+
+    if (!result.success) {
+      console.log(fail(`Failed to create composite variant: ${result.error}`));
+      process.exit(1);
+    }
+
+    console.log('');
+    const tiers = result.variant?.tiers;
+    const tierSummary = tiers
+      ? `Opus:    ${tiers.opus.provider} / ${tiers.opus.model}\n` +
+        `Sonnet:  ${tiers.sonnet.provider} / ${tiers.sonnet.model}\n` +
+        `Haiku:   ${tiers.haiku.provider} / ${tiers.haiku.model}\n` +
+        `Default: ${defaultTier}`
+      : '';
+    const portInfo = result.variant?.port ? `\nPort:    ${result.variant.port}` : '';
+    console.log(
+      infoBox(
+        `Variant: ${name} (composite)\n${tierSummary}${portInfo}\nConfig:  ~/.ccs/config.yaml`,
+        'Composite Variant Created'
+      )
+    );
+    console.log('');
+    console.log(header('Usage'));
+    console.log(`  ${color(`ccs ${name} "your prompt"`, 'command')}`);
+    console.log('');
+    return;
   }
 
   // Step 2: Provider selection
@@ -260,7 +396,11 @@ export async function handleRemove(args: string[]): Promise<void> {
     console.log(header('Remove CLIProxy Variant'));
     console.log('');
     console.log('Available variants:');
-    variantNames.forEach((n, i) => console.log(`  ${i + 1}. ${n} (${variants[n].provider})`));
+    variantNames.forEach((n, i) => {
+      const v = variants[n];
+      const label = v.type === 'composite' ? 'composite' : v.provider;
+      console.log(`  ${i + 1}. ${n} (${label})`);
+    });
     console.log('');
     name = await InteractivePrompt.input('Variant name to remove', {
       validate: (val) => {
@@ -282,7 +422,16 @@ export async function handleRemove(args: string[]): Promise<void> {
   const variant = variants[name];
   console.log('');
   console.log(`Variant '${color(name, 'command')}' will be removed.`);
-  console.log(`  Provider: ${variant.provider}`);
+  if (variant.type === 'composite') {
+    console.log(`  Type:     composite`);
+    if (variant.tiers) {
+      console.log(`  Opus:     ${variant.tiers.opus.provider} / ${variant.tiers.opus.model}`);
+      console.log(`  Sonnet:   ${variant.tiers.sonnet.provider} / ${variant.tiers.sonnet.model}`);
+      console.log(`  Haiku:    ${variant.tiers.haiku.provider} / ${variant.tiers.haiku.model}`);
+    }
+  } else {
+    console.log(`  Provider: ${variant.provider}`);
+  }
   if (variant.port) {
     console.log(`  Port:     ${variant.port}`);
   }
@@ -303,5 +452,217 @@ export async function handleRemove(args: string[]): Promise<void> {
   }
 
   console.log(ok(`Variant removed: ${name}`));
+  console.log('');
+}
+
+export async function handleEdit(
+  args: string[],
+  backend: CLIProxyBackend = DEFAULT_BACKEND
+): Promise<void> {
+  await initUI();
+  const parsedArgs = parseProfileArgs(args);
+  const variants = listVariants();
+  const variantNames = Object.keys(variants);
+
+  if (variantNames.length === 0) {
+    console.log(warn('No CLIProxy variants to edit'));
+    process.exit(0);
+  }
+
+  let name = parsedArgs.name;
+  if (!name) {
+    console.log(header(`Edit ${getBackendLabel(backend)} Variant`));
+    console.log('');
+    console.log('Available variants:');
+    variantNames.forEach((n, i) => {
+      const v = variants[n];
+      const label = v.type === 'composite' ? 'composite' : v.provider;
+      console.log(`  ${i + 1}. ${n} (${label})`);
+    });
+    console.log('');
+    name = await InteractivePrompt.input('Variant name to edit', {
+      validate: (val) => {
+        if (!val) return 'Variant name is required';
+        if (!variantNames.includes(val)) return `Variant '${val}' not found`;
+        return null;
+      },
+    });
+  }
+
+  if (!variantNames.includes(name)) {
+    console.log(fail(`Variant '${name}' not found`));
+    console.log('');
+    console.log('Available variants:');
+    variantNames.forEach((n) => console.log(`  - ${n}`));
+    process.exit(1);
+  }
+
+  const variant = variants[name];
+
+  // If not composite, use existing updateVariant() flow (interactive prompts)
+  if (variant.type !== 'composite') {
+    console.log(header(`Edit Variant: ${name}`));
+    console.log('');
+    console.log(`Current provider: ${variant.provider}`);
+    if (variant.model) {
+      console.log(`Current model:    ${variant.model}`);
+    }
+    console.log('');
+
+    const changeProvider = await InteractivePrompt.confirm('Change provider?', { default: false });
+    let newProvider: CLIProxyProfileName | undefined = undefined;
+    if (changeProvider) {
+      const providerOptions = CLIPROXY_PROFILES.map((p) => ({
+        id: p,
+        label: p.charAt(0).toUpperCase() + p.slice(1),
+      }));
+      newProvider = (await InteractivePrompt.selectFromList(
+        'Select new provider:',
+        providerOptions
+      )) as CLIProxyProfileName;
+    }
+
+    const providerChanged = !!(newProvider && newProvider !== variant.provider);
+    if (providerChanged) {
+      console.log(info('Provider changed. Model selection is required.'));
+    }
+
+    const changeModel = providerChanged
+      ? true
+      : await InteractivePrompt.confirm('Change model?', { default: false });
+    let newModel = variant.model || '';
+    if (changeModel) {
+      const providerForModel = newProvider || (variant.provider as CLIProxyProfileName);
+      if (supportsModelConfig(providerForModel as CLIProxyProvider)) {
+        const catalog = getProviderCatalog(providerForModel as CLIProxyProvider);
+        if (catalog) {
+          const modelOptions = catalog.models.map((m) => ({
+            id: m.id,
+            label: formatModelOption(m),
+          }));
+          const defaultIdx = catalog.models.findIndex((m) => m.id === catalog.defaultModel);
+          newModel = await InteractivePrompt.selectFromList('Select new model:', modelOptions, {
+            defaultIndex: defaultIdx >= 0 ? defaultIdx : 0,
+          });
+        }
+      } else {
+        newModel = await InteractivePrompt.input('New model name', {
+          validate: (val) => (val ? null : 'Model is required'),
+        });
+      }
+    }
+
+    console.log('');
+    console.log(info(`Updating ${getBackendLabel(backend)} variant...`));
+    // Use existing updateVariant from variant-service for single-provider variants
+    const { updateVariant } = await import('../../cliproxy/services/variant-service');
+    const result = updateVariant(name, {
+      provider: newProvider,
+      model: changeModel ? newModel : undefined,
+    });
+
+    if (!result.success) {
+      console.log(fail(`Failed to update variant: ${result.error}`));
+      process.exit(1);
+    }
+
+    console.log('');
+    console.log(ok(`Variant updated: ${name}`));
+    console.log('');
+    return;
+  }
+
+  // Composite variant edit flow
+  console.log(header(`Edit Composite Variant: ${name}`));
+  console.log('');
+  if (!variant.tiers) {
+    console.log(fail('Invalid composite variant: missing tier configuration'));
+    process.exit(1);
+  }
+
+  console.log(info('Current tier configuration:'));
+  console.log(`  Opus:    ${variant.tiers.opus.provider} / ${variant.tiers.opus.model}`);
+  console.log(`  Sonnet:  ${variant.tiers.sonnet.provider} / ${variant.tiers.sonnet.model}`);
+  console.log(`  Haiku:   ${variant.tiers.haiku.provider} / ${variant.tiers.haiku.model}`);
+  console.log(`  Default: ${variant.default_tier}`);
+  console.log('');
+
+  const verbose = args.includes('--verbose');
+  const updatedTiers: Partial<Record<'opus' | 'sonnet' | 'haiku', CompositeTierConfig>> = {};
+
+  // Ask per-tier edits
+  for (const tierName of ['opus', 'sonnet', 'haiku'] as const) {
+    const shouldEdit = await InteractivePrompt.confirm(`Edit ${tierName} tier?`, {
+      default: false,
+    });
+    if (shouldEdit) {
+      const newConfig = await selectTierConfig(tierName, verbose);
+      if (!newConfig) {
+        console.log(fail('Edit cancelled'));
+        process.exit(0);
+      }
+      updatedTiers[tierName] = newConfig;
+    }
+  }
+
+  // Ask for default tier change
+  let newDefaultTier = variant.default_tier;
+  const changeDefault = await InteractivePrompt.confirm('Change default tier?', { default: false });
+  if (changeDefault) {
+    const finalTiers = {
+      opus: updatedTiers.opus ?? variant.tiers.opus,
+      sonnet: updatedTiers.sonnet ?? variant.tiers.sonnet,
+      haiku: updatedTiers.haiku ?? variant.tiers.haiku,
+    };
+    const tierOptions = [
+      {
+        id: 'opus' as const,
+        label: `Opus (${finalTiers.opus.provider}: ${finalTiers.opus.model})`,
+      },
+      {
+        id: 'sonnet' as const,
+        label: `Sonnet (${finalTiers.sonnet.provider}: ${finalTiers.sonnet.model})`,
+      },
+      {
+        id: 'haiku' as const,
+        label: `Haiku (${finalTiers.haiku.provider}: ${finalTiers.haiku.model})`,
+      },
+    ];
+    newDefaultTier = (await InteractivePrompt.selectFromList(
+      'Default tier (ANTHROPIC_MODEL):',
+      tierOptions
+    )) as 'opus' | 'sonnet' | 'haiku';
+  }
+
+  console.log('');
+  console.log(info(`Updating composite ${getBackendLabel(backend)} variant...`));
+  const result = updateCompositeVariant(name, {
+    tiers: updatedTiers,
+    defaultTier: changeDefault ? newDefaultTier : undefined,
+  });
+
+  if (!result.success) {
+    console.log(fail(`Failed to update composite variant: ${result.error}`));
+    process.exit(1);
+  }
+
+  console.log('');
+  const finalVariant = result.variant;
+  if (finalVariant && finalVariant.tiers) {
+    const tierSummary =
+      `Opus:    ${finalVariant.tiers.opus.provider} / ${finalVariant.tiers.opus.model}\n` +
+      `Sonnet:  ${finalVariant.tiers.sonnet.provider} / ${finalVariant.tiers.sonnet.model}\n` +
+      `Haiku:   ${finalVariant.tiers.haiku.provider} / ${finalVariant.tiers.haiku.model}\n` +
+      `Default: ${finalVariant.default_tier}`;
+    const portInfo = finalVariant.port ? `\nPort:    ${finalVariant.port}` : '';
+    console.log(
+      infoBox(
+        `Variant: ${name} (composite)\n${tierSummary}${portInfo}\nConfig:  ~/.ccs/config.yaml`,
+        'Composite Variant Updated'
+      )
+    );
+  } else {
+    console.log(ok(`Composite variant updated: ${name}`));
+  }
   console.log('');
 }

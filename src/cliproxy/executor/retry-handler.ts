@@ -11,6 +11,7 @@
 import { fail, warn, info } from '../../utils/ui';
 import { CLIProxyProvider } from '../types';
 import { handleBanDetection } from '../account-safety';
+import { CompositeTierConfig } from '../../config/unified-config-types';
 
 /**
  * Check if error is network-related
@@ -97,4 +98,35 @@ export async function handleQuotaCheck(provider: CLIProxyProvider): Promise<void
       console.log(`    New account quota: N/A (fetch unavailable)`);
     }
   }
+}
+
+/** Error patterns indicating provider failure */
+export const PROVIDER_ERROR_PATTERNS = [
+  /Error:\s*4[0-9]{2}/i,
+  /Error:\s*5[0-9]{2}/i,
+  /overloaded/i,
+  /quota.*exceeded/i,
+  /ECONNREFUSED/i,
+  /rate.?limit/i,
+];
+
+/** Detect which composite tier failed from stderr output */
+export function detectFailedTier(
+  stderr: string,
+  tiers: { opus: CompositeTierConfig; sonnet: CompositeTierConfig; haiku: CompositeTierConfig }
+): 'opus' | 'sonnet' | 'haiku' | null {
+  for (const tier of ['opus', 'sonnet', 'haiku'] as const) {
+    // Strip thinking suffix (e.g., "model(high)" → "model") for matching
+    const model = tiers[tier].model.replace(/\([^)]+\)$/, '');
+    if (stderr.includes(model)) return tier;
+  }
+  return null;
+}
+
+/** Check if Claude exit indicates provider error (vs normal user exit) */
+export function isProviderError(exitCode: number, stderr: string): boolean {
+  // Exit code 0 means success, even if stderr has error-like output
+  // (could be warnings, debug info, etc.)
+  if (exitCode === 0) return false;
+  return PROVIDER_ERROR_PATTERNS.some((p) => p.test(stderr));
 }

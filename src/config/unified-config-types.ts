@@ -22,6 +22,21 @@
 export const UNIFIED_CONFIG_VERSION = 8;
 
 /**
+ * Supported CLIProxy providers.
+ * Includes all OAuth-based providers supported by CLIProxyAPI.
+ */
+export const CLIPROXY_SUPPORTED_PROVIDERS = [
+  'gemini',
+  'codex',
+  'agy',
+  'qwen',
+  'iflow',
+  'kiro',
+  'ghcp',
+  'claude',
+] as const;
+
+/**
  * Account configuration (formerly in profiles.json).
  * Represents an isolated Claude instance via CLAUDE_CONFIG_DIR.
  */
@@ -67,6 +82,51 @@ export interface CLIProxyVariantConfig {
   /** Path to settings file (e.g., "~/.ccs/gemini-custom.settings.json") */
   settings?: string;
   /** Unique port for variant isolation (8318-8417) */
+  port?: number;
+  /** Per-variant auth override (optional) */
+  auth?: CLIProxyAuthConfig;
+}
+
+/**
+ * Per-tier provider+model mapping for composite variants.
+ */
+export interface CompositeTierConfig {
+  /** Provider for this tier */
+  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp' | 'claude';
+  /** Model ID to use for this tier */
+  model: string;
+  /** Account nickname (optional, references oauth_accounts) */
+  account?: string;
+  /** Fallback provider+model if primary fails */
+  fallback?: {
+    provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp' | 'claude';
+    model: string;
+    account?: string;
+  };
+  /** Per-tier thinking budget override (e.g. 'xhigh', 'medium', 'off') */
+  thinking?: string;
+}
+
+/**
+ * Composite variant configuration.
+ * Mixes different providers per Claude tier (opus, sonnet, haiku) in a single profile.
+ * Uses CLIProxyAPI root endpoints (/v1/messages) for model-based routing
+ * instead of provider-specific endpoints (/api/provider/{provider}).
+ */
+export interface CompositeVariantConfig {
+  /** Discriminator for composite type */
+  type: 'composite';
+  /** Which tier ANTHROPIC_MODEL equals (default must be one of the three) */
+  default_tier: 'opus' | 'sonnet' | 'haiku';
+  /** Per-tier provider+model mapping */
+  tiers: {
+    opus: CompositeTierConfig;
+    sonnet: CompositeTierConfig;
+    haiku: CompositeTierConfig;
+  };
+  /** Path to settings file */
+  settings?: string;
+  /** Shared port for the composite profile */
   port?: number;
   /** Per-variant auth override (optional) */
   auth?: CLIProxyAuthConfig;
@@ -122,8 +182,8 @@ export interface CLIProxyConfig {
   oauth_accounts: OAuthAccounts;
   /** Built-in providers (read-only, for reference) */
   providers: readonly string[];
-  /** User-defined provider variants */
-  variants: Record<string, CLIProxyVariantConfig>;
+  /** User-defined provider variants (single-provider or composite) */
+  variants: Record<string, CLIProxyVariantConfig | CompositeVariantConfig>;
   /** Logging configuration (disabled by default) */
   logging?: CLIProxyLoggingConfig;
   /** Kiro: disable incognito browser mode (use normal browser to save credentials) */
@@ -700,7 +760,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
     cliproxy: {
       backend: 'plus',
       oauth_accounts: {},
-      providers: ['gemini', 'codex', 'agy', 'qwen', 'iflow', 'kiro', 'ghcp'],
+      providers: [...CLIPROXY_SUPPORTED_PROVIDERS],
       variants: {},
       logging: {
         enabled: false,

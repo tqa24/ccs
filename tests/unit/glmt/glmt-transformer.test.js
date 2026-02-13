@@ -1,5 +1,6 @@
 const assert = require('assert');
 const GlmtTransformer = require('../../../dist/glmt/glmt-transformer').default;
+const { getCcsDir } = require('../../../dist/utils/config-manager');
 
 describe('GlmtTransformer', () => {
   describe('Request transformation', () => {
@@ -202,10 +203,9 @@ describe('GlmtTransformer', () => {
       delete process.env.CCS_DEBUG;
     });
 
-    it('uses getCcsDir()/logs by default', () => {
+    it('uses CCS logs directory by default', () => {
       const transformer = new GlmtTransformer();
       const path = require('path');
-      const { getCcsDir } = require('../../../dist/utils/config-manager');
       const expectedPath = path.join(getCcsDir(), 'logs');
       assert.strictEqual(transformer.debugLogDir, expectedPath);
     });

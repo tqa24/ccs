@@ -1,9 +1,11 @@
 /**
  * CLIProxy Variants Table Component
  * Phase 03: REST API Routes & CRUD
+ * Phase 05: Dashboard UI full CRUD for composite variants
  * Phase 06: Multi-Account Support
  */
 
+import { useState } from 'react';
 import { useReactTable, getCoreRowModel, flexRender, type ColumnDef } from '@tanstack/react-table';
 import {
   Table,
@@ -21,8 +23,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Trash2, User } from 'lucide-react';
+import { MoreHorizontal, Trash2, User, Pencil } from 'lucide-react';
 import { useDeleteVariant } from '@/hooks/use-cliproxy';
+import { CliproxyEditDialog } from './cliproxy-edit-dialog';
 import type { Variant } from '@/lib/api-client';
 
 interface CliproxyTableProps {
@@ -41,6 +44,7 @@ const providerLabels: Record<string, string> = {
 
 export function CliproxyTable({ data }: CliproxyTableProps) {
   const deleteMutation = useDeleteVariant();
+  const [editingVariant, setEditingVariant] = useState<Variant | null>(null);
 
   const columns: ColumnDef<Variant>[] = [
     {
@@ -51,7 +55,12 @@ export function CliproxyTable({ data }: CliproxyTableProps) {
     {
       accessorKey: 'provider',
       header: 'Provider',
-      cell: ({ row }) => providerLabels[row.original.provider] || row.original.provider,
+      cell: ({ row }) => {
+        if (row.original.type === 'composite') {
+          return <Badge variant="secondary">composite</Badge>;
+        }
+        return providerLabels[row.original.provider] || row.original.provider;
+      },
     },
     {
       accessorKey: 'account',
@@ -91,6 +100,10 @@ export function CliproxyTable({ data }: CliproxyTableProps) {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="bg-white dark:bg-zinc-950">
+              <DropdownMenuItem onClick={() => setEditingVariant(row.original)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/30"
                 onClick={() => deleteMutation.mutate(row.original.name)}
@@ -124,33 +137,40 @@ export function CliproxyTable({ data }: CliproxyTableProps) {
   }
 
   return (
-    <div className="border rounded-md overflow-hidden bg-card">
-      <Table>
-        <TableHeader className="bg-muted/50">
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(header.column.columnDef.header, header.getContext())}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </div>
+    <>
+      <CliproxyEditDialog
+        variant={editingVariant}
+        open={!!editingVariant}
+        onOpenChange={(open) => !open && setEditingVariant(null)}
+      />
+      <div className="border rounded-md overflow-hidden bg-card">
+        <Table>
+          <TableHeader className="bg-muted/50">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow key={row.id}>
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }

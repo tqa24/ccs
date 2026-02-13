@@ -8,6 +8,12 @@ import * as fs from 'fs';
 import { getConfigPath, loadConfigSafe } from '../../utils/config-manager';
 import { CLIProxyProvider } from '../types';
 import {
+  CLIProxyVariantConfig,
+  CompositeVariantConfig,
+  CompositeTierConfig,
+  CLIPROXY_SUPPORTED_PROVIDERS,
+} from '../../config/unified-config-types';
+import {
   loadOrCreateUnifiedConfig,
   saveUnifiedConfig,
   isUnifiedMode,
@@ -27,6 +33,16 @@ export interface VariantConfig {
   account?: string;
   model?: string;
   port?: number;
+  /** Composite variant fields */
+  type?: 'composite';
+  default_tier?: 'opus' | 'sonnet' | 'haiku';
+  tiers?: {
+    opus: CompositeTierConfig;
+    sonnet: CompositeTierConfig;
+    haiku: CompositeTierConfig;
+  };
+  /** Whether any tier has fallback configured */
+  hasFallback?: boolean;
 }
 
 /**
@@ -82,14 +98,66 @@ export function listVariantsFromConfig(): Record<string, VariantConfig> {
       const unifiedConfig = loadOrCreateUnifiedConfig();
       const variants = unifiedConfig.cliproxy?.variants || {};
       const result: Record<string, VariantConfig> = {};
-      for (const name of Object.keys(variants)) {
-        const v = variants[name];
-        result[name] = {
-          provider: v.provider,
-          settings: v.settings,
-          account: v.account,
-          port: v.port,
-        };
+      for (const [name, variantConfig] of Object.entries(variants)) {
+        try {
+          if ('type' in variantConfig && variantConfig.type === 'composite') {
+            const composite = variantConfig as CompositeVariantConfig;
+            const tiers = composite.tiers as Partial<{
+              opus: CompositeTierConfig;
+              sonnet: CompositeTierConfig;
+              haiku: CompositeTierConfig;
+            }> | null;
+
+            if (!tiers || !tiers.opus || !tiers.sonnet || !tiers.haiku || !composite.default_tier) {
+              console.warn(
+                `[!] Skipping malformed composite variant '${name}': missing required tier configuration`
+              );
+              continue;
+            }
+
+            const defaultTierConfig = tiers[composite.default_tier];
+            if (!defaultTierConfig) {
+              console.warn(
+                `[!] Skipping malformed composite variant '${name}': missing default tier '${composite.default_tier}'`
+              );
+              continue;
+            }
+
+            const normalizedTiers = {
+              opus: tiers.opus,
+              sonnet: tiers.sonnet,
+              haiku: tiers.haiku,
+            };
+
+            const hasFallback = !!(
+              normalizedTiers.opus.fallback ||
+              normalizedTiers.sonnet.fallback ||
+              normalizedTiers.haiku.fallback
+            );
+
+            result[name] = {
+              provider: defaultTierConfig.provider,
+              settings: composite.settings,
+              port: composite.port,
+              type: 'composite',
+              default_tier: composite.default_tier,
+              tiers: normalizedTiers,
+              hasFallback,
+            };
+          } else {
+            const single = variantConfig as CLIProxyVariantConfig;
+            result[name] = {
+              provider: single.provider,
+              settings: single.settings,
+              account: single.account,
+              port: single.port,
+            };
+          }
+        } catch (error) {
+          console.warn(
+            `[!] Skipping malformed variant '${name}': ${(error as Error).message || 'invalid config'}`
+          );
+        }
       }
       return result;
     }
@@ -118,6 +186,27 @@ export function listVariantsFromConfig(): Record<string, VariantConfig> {
 }
 
 /**
+ * Save composite variant to unified config
+ */
+export function saveCompositeVariantUnified(name: string, config: CompositeVariantConfig): void {
+  const unifiedConfig = loadOrCreateUnifiedConfig();
+
+  if (!unifiedConfig.cliproxy) {
+    unifiedConfig.cliproxy = {
+      oauth_accounts: {},
+      providers: [...CLIPROXY_SUPPORTED_PROVIDERS],
+      variants: {},
+    };
+  }
+  if (!unifiedConfig.cliproxy.variants) {
+    unifiedConfig.cliproxy.variants = {};
+  }
+
+  unifiedConfig.cliproxy.variants[name] = config;
+  saveUnifiedConfig(unifiedConfig);
+}
+
+/**
  * Save variant to unified config
  */
 export function saveVariantUnified(
@@ -132,7 +221,7 @@ export function saveVariantUnified(
   if (!config.cliproxy) {
     config.cliproxy = {
       oauth_accounts: {},
-      providers: ['gemini', 'codex', 'agy', 'qwen', 'iflow', 'kiro', 'ghcp', 'claude'],
+      providers: [...CLIPROXY_SUPPORTED_PROVIDERS],
       variants: {},
     };
   }
@@ -204,7 +293,23 @@ export function removeVariantFromUnifiedConfig(name: string): VariantConfig | nu
   delete config.cliproxy.variants[name];
   saveUnifiedConfig(config);
 
-  return { provider: variant.provider, settings: variant.settings, port: variant.port };
+  if ('type' in variant && variant.type === 'composite') {
+    const composite = variant as CompositeVariantConfig;
+    return {
+      provider: composite.tiers[composite.default_tier].provider,
+      settings: composite.settings,
+      port: composite.port,
+      type: 'composite',
+      default_tier: composite.default_tier,
+      tiers: composite.tiers,
+    };
+  }
+  const singleVariant = variant as CLIProxyVariantConfig;
+  return {
+    provider: singleVariant.provider,
+    settings: singleVariant.settings,
+    port: singleVariant.port,
+  };
 }
 
 /**
