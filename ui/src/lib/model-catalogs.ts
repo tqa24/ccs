@@ -142,7 +142,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         presetMapping: {
           default: 'gpt-5.3-codex',
           opus: 'gpt-5.3-codex',
-          sonnet: 'gpt-5.3-codex',
+          sonnet: 'gpt-5.3-codex-high',
           haiku: 'gpt-5-mini',
         },
       },
@@ -153,7 +153,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         presetMapping: {
           default: 'gpt-5.2-codex',
           opus: 'gpt-5.2-codex',
-          sonnet: 'gpt-5.2-codex',
+          sonnet: 'gpt-5.2-codex-high',
           haiku: 'gpt-5-mini',
         },
       },

@@ -4,7 +4,7 @@
     "ANTHROPIC_AUTH_TOKEN": "ccs-internal-managed",
     "ANTHROPIC_MODEL": "gpt-5.3-codex",
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "gpt-5.3-codex",
-    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.3-codex",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-5.3-codex"
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "gpt-5.3-codex-high",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "gpt-5-mini"
   }
 }

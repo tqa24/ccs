@@ -44,13 +44,15 @@ function buildSettingsEnv(
   port: number = CLIPROXY_DEFAULT_PORT
 ): SettingsEnv {
   const baseEnv = getClaudeEnvVars(provider as CLIProxyProvider, port);
+  const codexSonnetModel =
+    provider === 'codex' && !model.match(/-(xhigh|high|medium)$/) ? `${model}-high` : model;
 
   return {
     ANTHROPIC_BASE_URL: baseEnv.ANTHROPIC_BASE_URL || '',
     ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN || '',
     ANTHROPIC_MODEL: model,
     ANTHROPIC_DEFAULT_OPUS_MODEL: model,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: model,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: codexSonnetModel,
     ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
   };
 }
