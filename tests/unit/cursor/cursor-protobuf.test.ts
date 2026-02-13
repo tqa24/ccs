@@ -19,6 +19,7 @@ import { buildCursorRequest } from '../../../src/cursor/cursor-translator';
 import { generateCursorBody } from '../../../src/cursor/cursor-protobuf';
 import { CursorExecutor } from '../../../src/cursor/cursor-executor';
 import { WIRE_TYPE, FIELD } from '../../../src/cursor/cursor-protobuf-schema';
+import { StreamingFrameParser, decompressPayload } from '../../../src/cursor/cursor-stream-parser';
 
 describe('Protobuf Encoding/Decoding', () => {
   describe('encodeVarint / decodeVarint round-trip', () => {
@@ -372,11 +373,11 @@ describe('Request Encoding', () => {
 
       // Create two simple frames
       const frame1 = wrapConnectRPCFrame(
-        encodeField(FIELD.RESPONSE_TEXT, WIRE_TYPE.LEN, 'Frame 1'),
+        encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, 'Frame 1'),
         false
       );
       const frame2 = wrapConnectRPCFrame(
-        encodeField(FIELD.RESPONSE_TEXT, WIRE_TYPE.LEN, ' Frame 2'),
+        encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, ' Frame 2'),
         false
       );
 
@@ -497,8 +498,8 @@ describe('CursorExecutor', () => {
     it('should handle basic text response', async () => {
       // Create minimal protobuf response with text
       const textContent = 'Hello, world!';
-      const responseField = encodeField(FIELD.RESPONSE_TEXT, WIRE_TYPE.LEN, textContent);
-      const responseMsg = encodeField(FIELD.RESPONSE, WIRE_TYPE.LEN, responseField);
+      const responseField = encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, textContent);
+      const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, responseField);
       const frame = wrapConnectRPCFrame(responseMsg, false);
 
       const result = executor.transformProtobufToJSON(Buffer.from(frame), 'gpt-4', {
@@ -536,8 +537,8 @@ describe('CursorExecutor', () => {
     it('should output SSE format', async () => {
       // Create minimal protobuf response with text
       const textContent = 'Hello';
-      const responseField = encodeField(FIELD.RESPONSE_TEXT, WIRE_TYPE.LEN, textContent);
-      const responseMsg = encodeField(FIELD.RESPONSE, WIRE_TYPE.LEN, responseField);
+      const responseField = encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, textContent);
+      const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, responseField);
       const frame = wrapConnectRPCFrame(responseMsg, false);
 
       const result = executor.transformProtobufToSSE(Buffer.from(frame), 'gpt-4', {
@@ -653,5 +654,190 @@ describe('CursorExecutor', () => {
         process.env.CCS_DEBUG = originalDebug;
       }
     });
+  });
+});
+
+/**
+ * Helper: build a ConnectRPC frame from raw payload bytes
+ */
+function buildFrame(payload: Uint8Array, flags = 0): Buffer {
+  const header = Buffer.alloc(5);
+  header[0] = flags;
+  header.writeUInt32BE(payload.length, 1);
+  return Buffer.concat([header, Buffer.from(payload)]);
+}
+
+/**
+ * Helper: build a protobuf text response frame
+ */
+function buildTextFrame(text: string): Buffer {
+  const responseField = encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, text);
+  const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, responseField);
+  return buildFrame(responseMsg);
+}
+
+describe('StreamingFrameParser', () => {
+  it('should parse a complete single frame', () => {
+    const parser = new StreamingFrameParser();
+    const frame = buildTextFrame('Hello');
+    const results = parser.push(frame);
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('text');
+    if (results[0].type === 'text') {
+      expect(results[0].text).toBe('Hello');
+    }
+    expect(parser.hasPartial()).toBe(false);
+  });
+
+  it('should buffer partial frame header (< 5 bytes)', () => {
+    const parser = new StreamingFrameParser();
+    const frame = buildTextFrame('Hi');
+
+    // Send only first 3 bytes (partial header)
+    const results1 = parser.push(frame.slice(0, 3));
+    expect(results1.length).toBe(0);
+    expect(parser.hasPartial()).toBe(true);
+
+    // Send rest of the frame
+    const results2 = parser.push(frame.slice(3));
+    expect(results2.length).toBe(1);
+    expect(results2[0].type).toBe('text');
+    expect(parser.hasPartial()).toBe(false);
+  });
+
+  it('should buffer partial frame payload', () => {
+    const parser = new StreamingFrameParser();
+    const frame = buildTextFrame('Hello world');
+
+    // Send header + partial payload
+    const splitPoint = 8; // past the 5-byte header but not full payload
+    const results1 = parser.push(frame.slice(0, splitPoint));
+    expect(results1.length).toBe(0);
+    expect(parser.hasPartial()).toBe(true);
+
+    // Complete the frame
+    const results2 = parser.push(frame.slice(splitPoint));
+    expect(results2.length).toBe(1);
+    expect(results2[0].type).toBe('text');
+    if (results2[0].type === 'text') {
+      expect(results2[0].text).toBe('Hello world');
+    }
+  });
+
+  it('should parse multiple frames from single chunk', () => {
+    const parser = new StreamingFrameParser();
+    const frame1 = buildTextFrame('First');
+    const frame2 = buildTextFrame('Second');
+    const combined = Buffer.concat([frame1, frame2]);
+
+    const results = parser.push(combined);
+    expect(results.length).toBe(2);
+    expect(results[0].type).toBe('text');
+    expect(results[1].type).toBe('text');
+    if (results[0].type === 'text' && results[1].type === 'text') {
+      expect(results[0].text).toBe('First');
+      expect(results[1].text).toBe('Second');
+    }
+  });
+
+  it('should handle frame split across two chunks', () => {
+    const parser = new StreamingFrameParser();
+    const frame1 = buildTextFrame('AAA');
+    const frame2 = buildTextFrame('BBB');
+    const combined = Buffer.concat([frame1, frame2]);
+
+    // Split in the middle of frame2
+    const splitPoint = frame1.length + 3;
+    const results1 = parser.push(combined.slice(0, splitPoint));
+    expect(results1.length).toBe(1); // frame1 complete
+    expect(results1[0].type).toBe('text');
+
+    const results2 = parser.push(combined.slice(splitPoint));
+    expect(results2.length).toBe(1); // frame2 complete
+    expect(results2[0].type).toBe('text');
+    if (results2[0].type === 'text') {
+      expect(results2[0].text).toBe('BBB');
+    }
+  });
+
+  it('should detect JSON error mid-stream', () => {
+    const parser = new StreamingFrameParser();
+
+    // First: a valid text frame
+    const textFrame = buildTextFrame('Before error');
+    const results1 = parser.push(textFrame);
+    expect(results1.length).toBe(1);
+
+    // Then: a JSON error frame
+    const errorJson = JSON.stringify({
+      error: { code: 'resource_exhausted', message: 'Rate limit' },
+    });
+    const errorFrame = buildFrame(new TextEncoder().encode(errorJson));
+    const results2 = parser.push(errorFrame);
+
+    expect(results2.length).toBe(1);
+    expect(results2[0].type).toBe('error');
+    if (results2[0].type === 'error') {
+      expect(results2[0].status).toBe(429);
+      expect(results2[0].errorType).toBe('rate_limit_error');
+    }
+  });
+
+  it('should report hasPartial() correctly', () => {
+    const parser = new StreamingFrameParser();
+    expect(parser.hasPartial()).toBe(false);
+
+    // Push partial data
+    parser.push(Buffer.from([0x00, 0x00]));
+    expect(parser.hasPartial()).toBe(true);
+
+    // Push enough to complete the frame (empty payload)
+    // header: flags=0, length=0 → 5 bytes total
+    const emptyFrame = Buffer.alloc(5);
+    emptyFrame[0] = 0;
+    emptyFrame.writeUInt32BE(0, 1);
+
+    const parser2 = new StreamingFrameParser();
+    parser2.push(emptyFrame);
+    expect(parser2.hasPartial()).toBe(false);
+  });
+});
+
+describe('decompressPayload', () => {
+  it('should pass through uncompressed payload', () => {
+    const payload = Buffer.from('raw protobuf data');
+    const result = decompressPayload(payload, 0x00);
+    expect(result).toEqual(payload);
+  });
+
+  it('should skip decompression for JSON error payloads', () => {
+    const errorPayload = Buffer.from('{"error":"something went wrong"}');
+    const result = decompressPayload(errorPayload, 0x01); // GZIP flag but JSON error
+    expect(result).toEqual(errorPayload);
+  });
+
+  it('should return empty buffer on invalid gzip data', () => {
+    const invalidGzip = Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05]);
+    const result = decompressPayload(invalidGzip, 0x01);
+    expect(result.length).toBe(0);
+  });
+
+  it('should decompress valid gzip payload', () => {
+    const zlib = require('zlib');
+    const original = Buffer.from('Hello compressed world');
+    const compressed = zlib.gzipSync(original);
+
+    const result = decompressPayload(compressed, 0x01);
+    expect(result.toString()).toBe('Hello compressed world');
+  });
+
+  it('should handle GZIP_ALT and GZIP_BOTH flags', () => {
+    const zlib = require('zlib');
+    const original = Buffer.from('test data');
+    const compressed = zlib.gzipSync(original);
+
+    expect(decompressPayload(compressed, 0x02).toString()).toBe('test data');
+    expect(decompressPayload(compressed, 0x03).toString()).toBe('test data');
   });
 });

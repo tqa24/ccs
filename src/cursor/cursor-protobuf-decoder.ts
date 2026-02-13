@@ -160,8 +160,8 @@ function extractToolCall(toolCallData: Uint8Array): {
   let isLast = false;
 
   // Extract tool call ID
-  if (toolCall.has(FIELD.TOOL_ID)) {
-    const idField = toolCall.get(FIELD.TOOL_ID);
+  if (toolCall.has(FIELD.ToolCall.ID)) {
+    const idField = toolCall.get(FIELD.ToolCall.ID);
     if (idField && idField[0]) {
       const fullId = new TextDecoder().decode(idField[0].value as Uint8Array);
       toolCallId = fullId.split('\n')[0]; // Take first line
@@ -169,44 +169,44 @@ function extractToolCall(toolCallData: Uint8Array): {
   }
 
   // Extract tool name
-  if (toolCall.has(FIELD.TOOL_NAME)) {
-    const nameField = toolCall.get(FIELD.TOOL_NAME);
+  if (toolCall.has(FIELD.ToolCall.NAME)) {
+    const nameField = toolCall.get(FIELD.ToolCall.NAME);
     if (nameField && nameField[0]) {
       toolName = new TextDecoder().decode(nameField[0].value as Uint8Array);
     }
   }
 
   // Extract is_last flag
-  if (toolCall.has(FIELD.TOOL_IS_LAST)) {
-    const lastField = toolCall.get(FIELD.TOOL_IS_LAST);
+  if (toolCall.has(FIELD.ToolCall.IS_LAST)) {
+    const lastField = toolCall.get(FIELD.ToolCall.IS_LAST);
     if (lastField && lastField[0]) {
       isLast = (lastField[0].value as number) !== 0;
     }
   }
 
   // Extract MCP params - nested real tool info
-  if (toolCall.has(FIELD.TOOL_MCP_PARAMS)) {
+  if (toolCall.has(FIELD.ToolCall.MCP_PARAMS)) {
     try {
-      const mcpField = toolCall.get(FIELD.TOOL_MCP_PARAMS);
+      const mcpField = toolCall.get(FIELD.ToolCall.MCP_PARAMS);
       if (!mcpField || !mcpField[0]) return null;
 
       const mcpParams = decodeMessage(mcpField[0].value as Uint8Array);
 
-      if (mcpParams.has(FIELD.MCP_TOOLS_LIST)) {
-        const toolsList = mcpParams.get(FIELD.MCP_TOOLS_LIST);
+      if (mcpParams.has(FIELD.McpParams.TOOLS_LIST)) {
+        const toolsList = mcpParams.get(FIELD.McpParams.TOOLS_LIST);
         if (!toolsList || !toolsList[0]) return null;
 
         const tool = decodeMessage(toolsList[0].value as Uint8Array);
 
-        if (tool.has(FIELD.MCP_NESTED_NAME)) {
-          const nestedName = tool.get(FIELD.MCP_NESTED_NAME);
+        if (tool.has(FIELD.McpNested.NAME)) {
+          const nestedName = tool.get(FIELD.McpNested.NAME);
           if (nestedName && nestedName[0]) {
             toolName = new TextDecoder().decode(nestedName[0].value as Uint8Array);
           }
         }
 
-        if (tool.has(FIELD.MCP_NESTED_PARAMS)) {
-          const nestedParams = tool.get(FIELD.MCP_NESTED_PARAMS);
+        if (tool.has(FIELD.McpNested.PARAMS)) {
+          const nestedParams = tool.get(FIELD.McpNested.PARAMS);
           if (nestedParams && nestedParams[0]) {
             rawArgs = new TextDecoder().decode(nestedParams[0].value as Uint8Array);
           }
@@ -221,8 +221,8 @@ function extractToolCall(toolCallData: Uint8Array): {
   }
 
   // Fallback to raw_args
-  if (!rawArgs && toolCall.has(FIELD.TOOL_RAW_ARGS)) {
-    const rawArgsField = toolCall.get(FIELD.TOOL_RAW_ARGS);
+  if (!rawArgs && toolCall.has(FIELD.ToolCall.RAW_ARGS)) {
+    const rawArgsField = toolCall.get(FIELD.ToolCall.RAW_ARGS);
     if (rawArgsField && rawArgsField[0]) {
       rawArgs = new TextDecoder().decode(rawArgsField[0].value as Uint8Array);
     }
@@ -255,21 +255,21 @@ function extractTextAndThinking(responseData: Uint8Array): {
   let thinking: string | null = null;
 
   // Extract text
-  if (nested.has(FIELD.RESPONSE_TEXT)) {
-    const textField = nested.get(FIELD.RESPONSE_TEXT);
+  if (nested.has(FIELD.ChatResponse.TEXT)) {
+    const textField = nested.get(FIELD.ChatResponse.TEXT);
     if (textField && textField[0]) {
       text = new TextDecoder().decode(textField[0].value as Uint8Array);
     }
   }
 
   // Extract thinking
-  if (nested.has(FIELD.THINKING)) {
+  if (nested.has(FIELD.ChatResponse.THINKING)) {
     try {
-      const thinkingField = nested.get(FIELD.THINKING);
+      const thinkingField = nested.get(FIELD.ChatResponse.THINKING);
       if (thinkingField && thinkingField[0]) {
         const thinkingMsg = decodeMessage(thinkingField[0].value as Uint8Array);
-        if (thinkingMsg.has(FIELD.THINKING_TEXT)) {
-          const thinkingTextField = thinkingMsg.get(FIELD.THINKING_TEXT);
+        if (thinkingMsg.has(FIELD.Thinking.TEXT)) {
+          const thinkingTextField = thinkingMsg.get(FIELD.Thinking.TEXT);
           if (thinkingTextField && thinkingTextField[0]) {
             thinking = new TextDecoder().decode(thinkingTextField[0].value as Uint8Array);
           }
@@ -304,8 +304,8 @@ export function extractTextFromResponse(payload: Uint8Array): {
     const fields = decodeMessage(payload);
 
     // Field 1: ClientSideToolV2Call
-    if (fields.has(FIELD.TOOL_CALL)) {
-      const toolCallField = fields.get(FIELD.TOOL_CALL);
+    if (fields.has(FIELD.Response.TOOL_CALL)) {
+      const toolCallField = fields.get(FIELD.Response.TOOL_CALL);
       if (toolCallField && toolCallField[0]) {
         const toolCall = extractToolCall(toolCallField[0].value as Uint8Array);
         if (toolCall) {
@@ -315,8 +315,8 @@ export function extractTextFromResponse(payload: Uint8Array): {
     }
 
     // Field 2: StreamUnifiedChatResponse
-    if (fields.has(FIELD.RESPONSE)) {
-      const responseField = fields.get(FIELD.RESPONSE);
+    if (fields.has(FIELD.Response.RESPONSE)) {
+      const responseField = fields.get(FIELD.Response.RESPONSE);
       if (responseField && responseField[0]) {
         const { text, thinking } = extractTextAndThinking(responseField[0].value as Uint8Array);
 

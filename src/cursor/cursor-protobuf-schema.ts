@@ -30,113 +30,102 @@ export const THINKING_LEVEL = {
   HIGH: 2,
 } as const;
 
-/** Field numbers for all protobuf messages */
+/** Field numbers namespaced by protobuf message type */
 export const FIELD = {
-  // ===== StreamUnifiedChatRequestWithTools (top level) =====
-  REQUEST: 1,
+  /** StreamUnifiedChatRequestWithTools (top level) */
+  Request: { REQUEST: 1 },
 
-  // ===== StreamUnifiedChatRequest =====
-  MESSAGES: 1,
-  UNKNOWN_2: 2,
-  INSTRUCTION: 3,
-  UNKNOWN_4: 4,
-  MODEL: 5,
-  WEB_TOOL: 8,
-  UNKNOWN_13: 13,
-  CURSOR_SETTING: 15,
-  UNKNOWN_19: 19,
-  CONVERSATION_ID: 23,
-  METADATA: 26,
-  IS_AGENTIC: 27,
-  SUPPORTED_TOOLS: 29,
-  MESSAGE_IDS: 30,
-  MCP_TOOLS: 34,
-  LARGE_CONTEXT: 35,
-  UNKNOWN_38: 38,
-  UNIFIED_MODE: 46,
-  UNKNOWN_47: 47,
-  SHOULD_DISABLE_TOOLS: 48,
-  THINKING_LEVEL: 49,
-  UNKNOWN_51: 51,
-  UNKNOWN_53: 53,
-  UNIFIED_MODE_NAME: 54,
+  /** StreamUnifiedChatRequest */
+  Chat: {
+    MESSAGES: 1,
+    UNKNOWN_2: 2,
+    INSTRUCTION: 3,
+    UNKNOWN_4: 4,
+    MODEL: 5,
+    WEB_TOOL: 8,
+    UNKNOWN_13: 13,
+    CURSOR_SETTING: 15,
+    UNKNOWN_19: 19,
+    CONVERSATION_ID: 23,
+    METADATA: 26,
+    IS_AGENTIC: 27,
+    SUPPORTED_TOOLS: 29,
+    MESSAGE_IDS: 30,
+    MCP_TOOLS: 34,
+    LARGE_CONTEXT: 35,
+    UNKNOWN_38: 38,
+    UNIFIED_MODE: 46,
+    UNKNOWN_47: 47,
+    SHOULD_DISABLE_TOOLS: 48,
+    THINKING_LEVEL: 49,
+    UNKNOWN_51: 51,
+    UNKNOWN_53: 53,
+    UNIFIED_MODE_NAME: 54,
+  },
 
-  // ===== ConversationMessage =====
-  MSG_CONTENT: 1,
-  MSG_ROLE: 2,
-  MSG_ID: 13,
-  MSG_TOOL_RESULTS: 18,
-  MSG_IS_AGENTIC: 29,
-  MSG_UNIFIED_MODE: 47,
-  MSG_SUPPORTED_TOOLS: 51,
+  /** ConversationMessage */
+  Message: {
+    CONTENT: 1,
+    ROLE: 2,
+    ID: 13,
+    TOOL_RESULTS: 18,
+    IS_AGENTIC: 29,
+    UNIFIED_MODE: 47,
+    SUPPORTED_TOOLS: 51,
+  },
 
-  // ===== ConversationMessage.ToolResult =====
-  TOOL_RESULT_CALL_ID: 1,
-  TOOL_RESULT_NAME: 2,
-  TOOL_RESULT_INDEX: 3,
-  TOOL_RESULT_RAW_ARGS: 5,
-  TOOL_RESULT_RESULT: 8, // Reserved for future tool result parsing
+  /** ConversationMessage.ToolResult */
+  ToolResult: {
+    CALL_ID: 1,
+    NAME: 2,
+    INDEX: 3,
+    RAW_ARGS: 5,
+    RESULT: 8,
+  },
 
-  // ===== Model =====
-  MODEL_NAME: 1,
-  MODEL_EMPTY: 4,
+  /** Model */
+  Model: { NAME: 1, EMPTY: 4 },
 
-  // ===== Instruction =====
-  INSTRUCTION_TEXT: 1,
+  /** Instruction */
+  Instruction: { TEXT: 1 },
 
-  // ===== CursorSetting =====
-  SETTING_PATH: 1,
-  SETTING_UNKNOWN_3: 3,
-  SETTING_UNKNOWN_6: 6,
-  SETTING_UNKNOWN_8: 8,
-  SETTING_UNKNOWN_9: 9,
+  /** CursorSetting (U6_FIELD_* are sub-fields of Unknown6 nested message) */
+  Setting: {
+    PATH: 1,
+    UNKNOWN_3: 3,
+    UNKNOWN_6: 6,
+    UNKNOWN_8: 8,
+    UNKNOWN_9: 9,
+    U6_FIELD_1: 1,
+    U6_FIELD_2: 2,
+  },
 
-  // ===== CursorSetting.Unknown6 =====
-  SETTING6_FIELD_1: 1,
-  SETTING6_FIELD_2: 2,
+  /** Metadata */
+  Metadata: { PLATFORM: 1, ARCH: 2, VERSION: 3, CWD: 4, TIMESTAMP: 5 },
 
-  // ===== Metadata =====
-  META_PLATFORM: 1,
-  META_ARCH: 2,
-  META_VERSION: 3,
-  META_CWD: 4,
-  META_TIMESTAMP: 5,
+  /** MessageId */
+  MessageId: { ID: 1, SUMMARY: 2, ROLE: 3 },
 
-  // ===== MessageId =====
-  MSGID_ID: 1,
-  MSGID_SUMMARY: 2,
-  MSGID_ROLE: 3,
+  /** MCPTool */
+  McpTool: { NAME: 1, DESC: 2, PARAMS: 3, SERVER: 4 },
 
-  // ===== MCPTool =====
-  MCP_TOOL_NAME: 1,
-  MCP_TOOL_DESC: 2,
-  MCP_TOOL_PARAMS: 3,
-  MCP_TOOL_SERVER: 4,
+  /** StreamUnifiedChatResponseWithTools (response top-level) */
+  Response: { TOOL_CALL: 1, RESPONSE: 2 },
 
-  // ===== StreamUnifiedChatResponseWithTools (response) =====
-  TOOL_CALL: 1,
-  RESPONSE: 2,
+  /** ClientSideToolV2Call */
+  ToolCall: { ID: 3, NAME: 9, RAW_ARGS: 10, IS_LAST: 11, MCP_PARAMS: 27 },
 
-  // ===== ClientSideToolV2Call =====
-  TOOL_ID: 3,
-  TOOL_NAME: 9,
-  TOOL_RAW_ARGS: 10,
-  TOOL_IS_LAST: 11,
-  TOOL_MCP_PARAMS: 27,
+  /** MCPParams */
+  McpParams: { TOOLS_LIST: 1 },
 
-  // ===== MCPParams =====
-  MCP_TOOLS_LIST: 1,
+  /** MCPParams.Tool (nested) */
+  McpNested: { NAME: 1, PARAMS: 3 },
 
-  // ===== MCPParams.Tool (nested) =====
-  MCP_NESTED_NAME: 1,
-  MCP_NESTED_PARAMS: 3,
+  /** StreamUnifiedChatResponse */
+  ChatResponse: { TEXT: 1, THINKING: 25 },
 
-  // ===== StreamUnifiedChatResponse =====
-  RESPONSE_TEXT: 1,
-  THINKING: 25,
-
-  // ===== Thinking =====
-  THINKING_TEXT: 1,
+  /** Thinking */
+  Thinking: { TEXT: 1 },
 } as const;
 
 /** Type definitions */
@@ -144,7 +133,6 @@ export type WireType = (typeof WIRE_TYPE)[keyof typeof WIRE_TYPE];
 export type RoleType = (typeof ROLE)[keyof typeof ROLE];
 export type UnifiedModeType = (typeof UNIFIED_MODE)[keyof typeof UNIFIED_MODE];
 export type ThinkingLevelType = (typeof THINKING_LEVEL)[keyof typeof THINKING_LEVEL];
-export type FieldNumber = (typeof FIELD)[keyof typeof FIELD];
 
 /** Cursor credentials structure */
 export interface CursorCredentials {

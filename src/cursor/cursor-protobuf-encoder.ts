@@ -84,10 +84,10 @@ export function encodeToolResult(toolResult: CursorToolResult): Uint8Array {
   const rawArgs = toolResult.raw_args || '{}';
 
   return concatArrays(
-    encodeField(FIELD.TOOL_RESULT_CALL_ID, WIRE_TYPE.LEN, toolCallId),
-    encodeField(FIELD.TOOL_RESULT_NAME, WIRE_TYPE.LEN, toolName),
-    encodeField(FIELD.TOOL_RESULT_INDEX, WIRE_TYPE.VARINT, toolIndex),
-    encodeField(FIELD.TOOL_RESULT_RAW_ARGS, WIRE_TYPE.LEN, rawArgs)
+    encodeField(FIELD.ToolResult.CALL_ID, WIRE_TYPE.LEN, toolCallId),
+    encodeField(FIELD.ToolResult.NAME, WIRE_TYPE.LEN, toolName),
+    encodeField(FIELD.ToolResult.INDEX, WIRE_TYPE.VARINT, toolIndex),
+    encodeField(FIELD.ToolResult.RAW_ARGS, WIRE_TYPE.LEN, rawArgs)
   );
 }
 
@@ -103,22 +103,22 @@ export function encodeMessage(
   toolResults: CursorToolResult[]
 ): Uint8Array {
   return concatArrays(
-    encodeField(FIELD.MSG_CONTENT, WIRE_TYPE.LEN, content),
-    encodeField(FIELD.MSG_ROLE, WIRE_TYPE.VARINT, role),
-    encodeField(FIELD.MSG_ID, WIRE_TYPE.LEN, messageId),
+    encodeField(FIELD.Message.CONTENT, WIRE_TYPE.LEN, content),
+    encodeField(FIELD.Message.ROLE, WIRE_TYPE.VARINT, role),
+    encodeField(FIELD.Message.ID, WIRE_TYPE.LEN, messageId),
     ...(toolResults.length > 0
       ? toolResults.map((tr) =>
-          encodeField(FIELD.MSG_TOOL_RESULTS, WIRE_TYPE.LEN, encodeToolResult(tr))
+          encodeField(FIELD.Message.TOOL_RESULTS, WIRE_TYPE.LEN, encodeToolResult(tr))
         )
       : []),
-    encodeField(FIELD.MSG_IS_AGENTIC, WIRE_TYPE.VARINT, hasTools ? 1 : 0),
+    encodeField(FIELD.Message.IS_AGENTIC, WIRE_TYPE.VARINT, hasTools ? 1 : 0),
     encodeField(
-      FIELD.MSG_UNIFIED_MODE,
+      FIELD.Message.UNIFIED_MODE,
       WIRE_TYPE.VARINT,
       hasTools ? UNIFIED_MODE.AGENT : UNIFIED_MODE.CHAT
     ),
     ...(isLast && hasTools
-      ? [encodeField(FIELD.MSG_SUPPORTED_TOOLS, WIRE_TYPE.LEN, encodeVarint(1))]
+      ? [encodeField(FIELD.Message.SUPPORTED_TOOLS, WIRE_TYPE.LEN, encodeVarint(1))]
       : [])
   );
 }
@@ -127,7 +127,7 @@ export function encodeMessage(
  * Encode instruction text
  */
 export function encodeInstruction(text: string): Uint8Array {
-  return text ? encodeField(FIELD.INSTRUCTION_TEXT, WIRE_TYPE.LEN, text) : new Uint8Array(0);
+  return text ? encodeField(FIELD.Instruction.TEXT, WIRE_TYPE.LEN, text) : new Uint8Array(0);
 }
 
 /**
@@ -135,8 +135,8 @@ export function encodeInstruction(text: string): Uint8Array {
  */
 export function encodeModel(modelName: string): Uint8Array {
   return concatArrays(
-    encodeField(FIELD.MODEL_NAME, WIRE_TYPE.LEN, modelName),
-    encodeField(FIELD.MODEL_EMPTY, WIRE_TYPE.LEN, new Uint8Array(0))
+    encodeField(FIELD.Model.NAME, WIRE_TYPE.LEN, modelName),
+    encodeField(FIELD.Model.EMPTY, WIRE_TYPE.LEN, new Uint8Array(0))
   );
 }
 
@@ -145,16 +145,16 @@ export function encodeModel(modelName: string): Uint8Array {
  */
 export function encodeCursorSetting(): Uint8Array {
   const unknown6 = concatArrays(
-    encodeField(FIELD.SETTING6_FIELD_1, WIRE_TYPE.LEN, new Uint8Array(0)),
-    encodeField(FIELD.SETTING6_FIELD_2, WIRE_TYPE.LEN, new Uint8Array(0))
+    encodeField(FIELD.Setting.U6_FIELD_1, WIRE_TYPE.LEN, new Uint8Array(0)),
+    encodeField(FIELD.Setting.U6_FIELD_2, WIRE_TYPE.LEN, new Uint8Array(0))
   );
 
   return concatArrays(
-    encodeField(FIELD.SETTING_PATH, WIRE_TYPE.LEN, 'cursor\\aisettings'),
-    encodeField(FIELD.SETTING_UNKNOWN_3, WIRE_TYPE.LEN, new Uint8Array(0)),
-    encodeField(FIELD.SETTING_UNKNOWN_6, WIRE_TYPE.LEN, unknown6),
-    encodeField(FIELD.SETTING_UNKNOWN_8, WIRE_TYPE.VARINT, 1),
-    encodeField(FIELD.SETTING_UNKNOWN_9, WIRE_TYPE.VARINT, 1)
+    encodeField(FIELD.Setting.PATH, WIRE_TYPE.LEN, 'cursor\\aisettings'),
+    encodeField(FIELD.Setting.UNKNOWN_3, WIRE_TYPE.LEN, new Uint8Array(0)),
+    encodeField(FIELD.Setting.UNKNOWN_6, WIRE_TYPE.LEN, unknown6),
+    encodeField(FIELD.Setting.UNKNOWN_8, WIRE_TYPE.VARINT, 1),
+    encodeField(FIELD.Setting.UNKNOWN_9, WIRE_TYPE.VARINT, 1)
   );
 }
 
@@ -163,11 +163,11 @@ export function encodeCursorSetting(): Uint8Array {
  */
 export function encodeMetadata(): Uint8Array {
   return concatArrays(
-    encodeField(FIELD.META_PLATFORM, WIRE_TYPE.LEN, process.platform || 'linux'),
-    encodeField(FIELD.META_ARCH, WIRE_TYPE.LEN, process.arch || 'x64'),
-    encodeField(FIELD.META_VERSION, WIRE_TYPE.LEN, process.version || 'v20.0.0'),
-    encodeField(FIELD.META_CWD, WIRE_TYPE.LEN, process.cwd() || '/'),
-    encodeField(FIELD.META_TIMESTAMP, WIRE_TYPE.LEN, new Date().toISOString())
+    encodeField(FIELD.Metadata.PLATFORM, WIRE_TYPE.LEN, process.platform || 'linux'),
+    encodeField(FIELD.Metadata.ARCH, WIRE_TYPE.LEN, process.arch || 'x64'),
+    encodeField(FIELD.Metadata.VERSION, WIRE_TYPE.LEN, process.version || 'v20.0.0'),
+    encodeField(FIELD.Metadata.CWD, WIRE_TYPE.LEN, process.cwd() || '/'),
+    encodeField(FIELD.Metadata.TIMESTAMP, WIRE_TYPE.LEN, new Date().toISOString())
   );
 }
 
@@ -176,9 +176,9 @@ export function encodeMetadata(): Uint8Array {
  */
 export function encodeMessageId(messageId: string, role: RoleType, summaryId?: string): Uint8Array {
   return concatArrays(
-    encodeField(FIELD.MSGID_ID, WIRE_TYPE.LEN, messageId),
-    ...(summaryId ? [encodeField(FIELD.MSGID_SUMMARY, WIRE_TYPE.LEN, summaryId)] : []),
-    encodeField(FIELD.MSGID_ROLE, WIRE_TYPE.VARINT, role)
+    encodeField(FIELD.MessageId.ID, WIRE_TYPE.LEN, messageId),
+    ...(summaryId ? [encodeField(FIELD.MessageId.SUMMARY, WIRE_TYPE.LEN, summaryId)] : []),
+    encodeField(FIELD.MessageId.ROLE, WIRE_TYPE.VARINT, role)
   );
 }
 
@@ -191,12 +191,12 @@ export function encodeMcpTool(tool: CursorTool): Uint8Array {
   const inputSchema = tool.function?.parameters || tool.input_schema || {};
 
   return concatArrays(
-    ...(toolName ? [encodeField(FIELD.MCP_TOOL_NAME, WIRE_TYPE.LEN, toolName)] : []),
-    ...(toolDesc ? [encodeField(FIELD.MCP_TOOL_DESC, WIRE_TYPE.LEN, toolDesc)] : []),
+    ...(toolName ? [encodeField(FIELD.McpTool.NAME, WIRE_TYPE.LEN, toolName)] : []),
+    ...(toolDesc ? [encodeField(FIELD.McpTool.DESC, WIRE_TYPE.LEN, toolDesc)] : []),
     ...(Object.keys(inputSchema).length > 0
-      ? [encodeField(FIELD.MCP_TOOL_PARAMS, WIRE_TYPE.LEN, JSON.stringify(inputSchema))]
+      ? [encodeField(FIELD.McpTool.PARAMS, WIRE_TYPE.LEN, JSON.stringify(inputSchema))]
       : []),
-    encodeField(FIELD.MCP_TOOL_SERVER, WIRE_TYPE.LEN, 'custom')
+    encodeField(FIELD.McpTool.SERVER, WIRE_TYPE.LEN, 'custom')
   );
 }
 

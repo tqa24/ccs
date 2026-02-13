@@ -4,13 +4,12 @@
  */
 
 import * as crypto from 'crypto';
-import * as zlib from 'zlib';
 import type { IncomingHttpHeaders } from 'http';
 import { generateCursorBody, extractTextFromResponse } from './cursor-protobuf.js';
 import { buildCursorRequest } from './cursor-translator.js';
 import type { CursorTool, CursorCredentials } from './cursor-protobuf-schema.js';
 
-import { COMPRESS_FLAG } from './cursor-protobuf-schema.js';
+import { StreamingFrameParser, decompressPayload } from './cursor-stream-parser.js';
 
 /** Executor parameters */
 interface ExecutorParams {
@@ -55,42 +54,6 @@ async function getHttp2() {
     }
     return null;
   }
-}
-
-/**
- * Decompress payload if needed
- * NOTE: Uses synchronous gzip for single-request CLI tool. Async not warranted for small payloads.
- */
-function decompressPayload(payload: Buffer, flags: number): Buffer {
-  // Check if payload is JSON error
-  if (payload.length > 10 && payload[0] === 0x7b && payload[1] === 0x22) {
-    try {
-      const text = payload.toString('utf-8');
-      if (text.startsWith('{"error"')) {
-        return payload;
-      }
-    } catch (err) {
-      if (process.env.CCS_DEBUG) {
-        console.error('[cursor] JSON error detection failed:', err);
-      }
-    }
-  }
-
-  if (
-    flags === COMPRESS_FLAG.GZIP ||
-    flags === COMPRESS_FLAG.GZIP_ALT ||
-    flags === COMPRESS_FLAG.GZIP_BOTH
-  ) {
-    try {
-      return zlib.gunzipSync(payload);
-    } catch (err) {
-      if (process.env.CCS_DEBUG) {
-        console.error('[cursor] gzip decompression failed:', err);
-      }
-      return Buffer.alloc(0);
-    }
-  }
-  return payload;
 }
 
 /**
@@ -342,6 +305,20 @@ export class CursorExecutor {
     const transformedBody = this.transformRequest(model, body, stream, credentials);
 
     try {
+      // Streaming requests use incremental HTTP/2 → SSE pipeline
+      if (stream) {
+        const response = await this.executeStreaming(
+          url,
+          headers,
+          transformedBody,
+          model,
+          body,
+          signal
+        );
+        return { response, url, headers, transformedBody: body };
+      }
+
+      // Non-streaming: buffer entire response then transform to JSON
       const http2 = await getHttp2();
       const response = http2
         ? await this.makeHttp2Request(url, headers, transformedBody, signal)
@@ -365,11 +342,7 @@ export class CursorExecutor {
         return { response: errorResponse, url, headers, transformedBody: body };
       }
 
-      const transformedResponse =
-        stream === true
-          ? this.transformProtobufToSSE(response.body, model, body)
-          : this.transformProtobufToJSON(response.body, model, body);
-
+      const transformedResponse = this.transformProtobufToJSON(response.body, model, body);
       return { response: transformedResponse, url, headers, transformedBody: body };
     } catch (error) {
       const errorResponse = new Response(
@@ -387,6 +360,296 @@ export class CursorExecutor {
       );
       return { response: errorResponse, url, headers, transformedBody: body };
     }
+  }
+
+  /**
+   * Execute a streaming request, piping HTTP/2 data events through
+   * StreamingFrameParser for incremental SSE output.
+   * Falls back to buffered transformProtobufToSSE when http2 is unavailable.
+   */
+  private async executeStreaming(
+    url: string,
+    headers: Record<string, string>,
+    body: Uint8Array,
+    model: string,
+    requestBody: ExecutorParams['body'],
+    signal?: AbortSignal
+  ): Promise<Response> {
+    const http2 = await getHttp2();
+    if (!http2) {
+      const response = await this.makeFetchRequest(url, headers, body, signal);
+      if (response.status !== 200) {
+        const errorText = response.body?.toString() || 'Unknown error';
+        return new Response(
+          JSON.stringify({
+            error: {
+              message: `[${response.status}]: ${errorText}`,
+              type: response.status === 429 ? 'rate_limit_error' : 'invalid_request_error',
+              code: '',
+            },
+          }),
+          { status: response.status, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+      return this.transformProtobufToSSE(response.body, model, requestBody);
+    }
+
+    const responseId = `chatcmpl-cursor-${Date.now()}`;
+    const created = Math.floor(Date.now() / 1000);
+
+    return new Promise((resolve, reject) => {
+      const urlObj = new URL(url);
+      const client = http2.connect(`https://${urlObj.host}`);
+
+      client.on('error', (err) => {
+        client.close();
+        reject(err);
+      });
+
+      const req = client.request({
+        ':method': 'POST',
+        ':path': urlObj.pathname,
+        ':authority': urlObj.host,
+        ':scheme': 'https',
+        ...headers,
+      });
+
+      // Register abort before response headers arrive so cancellation works at all stages
+      let streamClosed = false;
+      let streamController: ReadableStreamDefaultController<Uint8Array> | null = null;
+      if (signal) {
+        const onAbort = () => {
+          streamClosed = true;
+          // Close the ReadableStream controller so consumers don't hang on reader.read()
+          if (streamController) {
+            try {
+              streamController.close();
+            } catch {
+              /* already closed */
+            }
+          }
+          req.close();
+          client.close();
+        };
+        signal.addEventListener('abort', onAbort, { once: true });
+        const cleanup = () => signal.removeEventListener('abort', onAbort);
+        req.on('end', cleanup);
+        req.on('error', cleanup);
+      }
+
+      req.on('response', (hdrs) => {
+        const status = Number(hdrs[':status']) || 500;
+
+        if (status !== 200) {
+          const errorChunks: Buffer[] = [];
+          req.on('data', (c: Buffer) => errorChunks.push(c));
+          req.on('end', () => {
+            client.close();
+            const errorText = Buffer.concat(errorChunks).toString();
+            resolve(
+              new Response(
+                JSON.stringify({
+                  error: {
+                    message: `[${status}]: ${errorText}`,
+                    type: 'invalid_request_error',
+                    code: '',
+                  },
+                }),
+                { status, headers: { 'Content-Type': 'application/json' } }
+              )
+            );
+          });
+          return;
+        }
+
+        // Status 200: set up incremental streaming pipeline
+        const parser = new StreamingFrameParser();
+        const enc = new TextEncoder();
+        const toolCallsMap = new Map<
+          string,
+          {
+            id: string;
+            type: string;
+            function: { name: string; arguments: string };
+            isLast: boolean;
+            index: number;
+          }
+        >();
+        let chunkCount = 0;
+        let toolCallCount = 0;
+
+        const readable = new ReadableStream<Uint8Array>({
+          start(controller) {
+            streamController = controller;
+
+            const emitSSE = (data: string) => {
+              if (streamClosed) return;
+              controller.enqueue(enc.encode(`data: ${data}\n\n`));
+            };
+
+            const closeStream = () => {
+              if (streamClosed) return;
+              streamClosed = true;
+              try {
+                controller.close();
+              } catch {
+                /* already closed */
+              }
+              client.close();
+            };
+
+            const buildChunk = (delta: Record<string, unknown>, finishReason: string | null) =>
+              JSON.stringify({
+                id: responseId,
+                object: 'chat.completion.chunk',
+                created,
+                model,
+                choices: [{ index: 0, delta, finish_reason: finishReason }],
+              });
+
+            req.on('data', (chunk: Buffer) => {
+              if (streamClosed) return;
+              for (const frame of parser.push(chunk)) {
+                if (frame.type === 'error') {
+                  emitSSE(
+                    JSON.stringify({
+                      error: { message: frame.message, type: frame.errorType, code: '' },
+                    })
+                  );
+                  emitSSE('[DONE]');
+                  closeStream();
+                  return;
+                }
+
+                if (frame.type === 'toolCall') {
+                  const tc = frame.toolCall;
+
+                  // Emit role chunk on first content
+                  if (chunkCount === 0) {
+                    emitSSE(buildChunk({ role: 'assistant', content: '' }, null));
+                    chunkCount++;
+                  }
+
+                  if (toolCallsMap.has(tc.id)) {
+                    const existing = toolCallsMap.get(tc.id);
+                    if (!existing) continue;
+                    existing.function.arguments += tc.function.arguments;
+                    existing.isLast = tc.isLast;
+                    if (tc.function.arguments) {
+                      emitSSE(
+                        buildChunk(
+                          {
+                            tool_calls: [
+                              {
+                                index: existing.index,
+                                id: tc.id,
+                                type: 'function',
+                                function: {
+                                  name: tc.function.name,
+                                  arguments: tc.function.arguments,
+                                },
+                              },
+                            ],
+                          },
+                          null
+                        )
+                      );
+                      chunkCount++;
+                    }
+                  } else {
+                    const idx = toolCallCount++;
+                    toolCallsMap.set(tc.id, { ...tc, index: idx });
+                    emitSSE(
+                      buildChunk(
+                        {
+                          tool_calls: [
+                            {
+                              index: idx,
+                              id: tc.id,
+                              type: 'function',
+                              function: {
+                                name: tc.function.name,
+                                arguments: tc.function.arguments,
+                              },
+                            },
+                          ],
+                        },
+                        null
+                      )
+                    );
+                    chunkCount++;
+                  }
+                }
+
+                if (frame.type === 'text') {
+                  const delta =
+                    chunkCount === 0 && toolCallCount === 0
+                      ? { role: 'assistant', content: frame.text }
+                      : { content: frame.text };
+                  emitSSE(buildChunk(delta, null));
+                  chunkCount++;
+                }
+              }
+            });
+
+            req.on('end', () => {
+              if (streamClosed) return;
+              if (chunkCount === 0 && toolCallCount === 0) {
+                emitSSE(buildChunk({ role: 'assistant', content: '' }, null));
+              }
+              emitSSE(
+                JSON.stringify({
+                  id: responseId,
+                  object: 'chat.completion.chunk',
+                  created,
+                  model,
+                  choices: [
+                    {
+                      index: 0,
+                      delta: {},
+                      finish_reason: toolCallCount > 0 ? 'tool_calls' : 'stop',
+                    },
+                  ],
+                  usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+                })
+              );
+              emitSSE('[DONE]');
+              closeStream();
+            });
+
+            req.on('error', (err) => {
+              if (!streamClosed) {
+                try {
+                  controller.error(err);
+                } catch {
+                  /* already closed */
+                }
+              }
+              client.close();
+            });
+          },
+        });
+
+        resolve(
+          new Response(readable, {
+            status: 200,
+            headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              Connection: 'keep-alive',
+            },
+          })
+        );
+      });
+
+      req.on('error', (err) => {
+        client.close();
+        reject(err);
+      });
+
+      req.write(body);
+      req.end();
+    });
   }
 
   /**
@@ -590,11 +853,8 @@ export class CursorExecutor {
     });
   }
 
+  /** @deprecated Use executeStreaming() for real-time SSE. Retained for fetch fallback. */
   transformProtobufToSSE(buffer: Buffer, model: string, _body: ExecutorParams['body']): Response {
-    // TODO(#531): Implement true streaming — currently buffers entire response before transforming.
-    // This should pipe HTTP/2 data events through a TransformStream for incremental SSE output.
-    // See: https://github.com/kaitranntt/ccs/issues/531
-    // NOTE: Chunk boundary splits may emit duplicate SSE messages if a frame spans multiple chunks.
     const responseId = `chatcmpl-cursor-${Date.now()}`;
     const created = Math.floor(Date.now() / 1000);
 

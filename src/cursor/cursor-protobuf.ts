@@ -82,55 +82,55 @@ export function encodeRequest(
   // Build arrays for messages and tools
   const messageFields = formattedMessages.map((fm) =>
     encodeField(
-      FIELD.MESSAGES,
+      FIELD.Chat.MESSAGES,
       WIRE_TYPE.LEN,
       encodeMessage(fm.content, fm.role, fm.messageId, fm.isLast, fm.hasTools, fm.toolResults)
     )
   );
 
   const messageIdFields = messageIds.map((mid) =>
-    encodeField(FIELD.MESSAGE_IDS, WIRE_TYPE.LEN, encodeMessageId(mid.messageId, mid.role))
+    encodeField(FIELD.Chat.MESSAGE_IDS, WIRE_TYPE.LEN, encodeMessageId(mid.messageId, mid.role))
   );
 
   const toolFields =
     tools?.length > 0
-      ? tools.map((tool) => encodeField(FIELD.MCP_TOOLS, WIRE_TYPE.LEN, encodeMcpTool(tool)))
+      ? tools.map((tool) => encodeField(FIELD.Chat.MCP_TOOLS, WIRE_TYPE.LEN, encodeMcpTool(tool)))
       : [];
 
   const supportedToolsField = isAgentic
-    ? [encodeField(FIELD.SUPPORTED_TOOLS, WIRE_TYPE.LEN, encodeVarint(1))]
+    ? [encodeField(FIELD.Chat.SUPPORTED_TOOLS, WIRE_TYPE.LEN, encodeVarint(1))]
     : [];
 
   // Concatenate all parts
   const parts: Uint8Array[] = [
     ...messageFields,
-    encodeField(FIELD.UNKNOWN_2, WIRE_TYPE.VARINT, 1),
-    encodeField(FIELD.INSTRUCTION, WIRE_TYPE.LEN, encodeInstruction('')),
-    encodeField(FIELD.UNKNOWN_4, WIRE_TYPE.VARINT, 1),
-    encodeField(FIELD.MODEL, WIRE_TYPE.LEN, encodeModel(modelName)),
-    encodeField(FIELD.WEB_TOOL, WIRE_TYPE.LEN, ''),
-    encodeField(FIELD.UNKNOWN_13, WIRE_TYPE.VARINT, 1),
-    encodeField(FIELD.CURSOR_SETTING, WIRE_TYPE.LEN, encodeCursorSetting()),
-    encodeField(FIELD.UNKNOWN_19, WIRE_TYPE.VARINT, 1),
-    encodeField(FIELD.CONVERSATION_ID, WIRE_TYPE.LEN, randomUUID()),
-    encodeField(FIELD.METADATA, WIRE_TYPE.LEN, encodeMetadata()),
-    encodeField(FIELD.IS_AGENTIC, WIRE_TYPE.VARINT, isAgentic ? 1 : 0),
+    encodeField(FIELD.Chat.UNKNOWN_2, WIRE_TYPE.VARINT, 1),
+    encodeField(FIELD.Chat.INSTRUCTION, WIRE_TYPE.LEN, encodeInstruction('')),
+    encodeField(FIELD.Chat.UNKNOWN_4, WIRE_TYPE.VARINT, 1),
+    encodeField(FIELD.Chat.MODEL, WIRE_TYPE.LEN, encodeModel(modelName)),
+    encodeField(FIELD.Chat.WEB_TOOL, WIRE_TYPE.LEN, ''),
+    encodeField(FIELD.Chat.UNKNOWN_13, WIRE_TYPE.VARINT, 1),
+    encodeField(FIELD.Chat.CURSOR_SETTING, WIRE_TYPE.LEN, encodeCursorSetting()),
+    encodeField(FIELD.Chat.UNKNOWN_19, WIRE_TYPE.VARINT, 1),
+    encodeField(FIELD.Chat.CONVERSATION_ID, WIRE_TYPE.LEN, randomUUID()),
+    encodeField(FIELD.Chat.METADATA, WIRE_TYPE.LEN, encodeMetadata()),
+    encodeField(FIELD.Chat.IS_AGENTIC, WIRE_TYPE.VARINT, isAgentic ? 1 : 0),
     ...supportedToolsField,
     ...messageIdFields,
     ...toolFields,
-    encodeField(FIELD.LARGE_CONTEXT, WIRE_TYPE.VARINT, 0),
-    encodeField(FIELD.UNKNOWN_38, WIRE_TYPE.VARINT, 0),
+    encodeField(FIELD.Chat.LARGE_CONTEXT, WIRE_TYPE.VARINT, 0),
+    encodeField(FIELD.Chat.UNKNOWN_38, WIRE_TYPE.VARINT, 0),
     encodeField(
-      FIELD.UNIFIED_MODE,
+      FIELD.Chat.UNIFIED_MODE,
       WIRE_TYPE.VARINT,
       isAgentic ? UNIFIED_MODE.AGENT : UNIFIED_MODE.CHAT
     ),
-    encodeField(FIELD.UNKNOWN_47, WIRE_TYPE.LEN, ''),
-    encodeField(FIELD.SHOULD_DISABLE_TOOLS, WIRE_TYPE.VARINT, isAgentic ? 0 : 1),
-    encodeField(FIELD.THINKING_LEVEL, WIRE_TYPE.VARINT, thinkingLevel),
-    encodeField(FIELD.UNKNOWN_51, WIRE_TYPE.VARINT, 0),
-    encodeField(FIELD.UNKNOWN_53, WIRE_TYPE.VARINT, 1),
-    encodeField(FIELD.UNIFIED_MODE_NAME, WIRE_TYPE.LEN, isAgentic ? 'Agent' : 'Ask'),
+    encodeField(FIELD.Chat.UNKNOWN_47, WIRE_TYPE.LEN, ''),
+    encodeField(FIELD.Chat.SHOULD_DISABLE_TOOLS, WIRE_TYPE.VARINT, isAgentic ? 0 : 1),
+    encodeField(FIELD.Chat.THINKING_LEVEL, WIRE_TYPE.VARINT, thinkingLevel),
+    encodeField(FIELD.Chat.UNKNOWN_51, WIRE_TYPE.VARINT, 0),
+    encodeField(FIELD.Chat.UNKNOWN_53, WIRE_TYPE.VARINT, 1),
+    encodeField(FIELD.Chat.UNIFIED_MODE_NAME, WIRE_TYPE.LEN, isAgentic ? 'Agent' : 'Ask'),
   ];
 
   return concatArrays(...parts);
@@ -146,7 +146,7 @@ export function buildChatRequest(
   reasoningEffort: string | null = null
 ): Uint8Array {
   return encodeField(
-    FIELD.REQUEST,
+    FIELD.Request.REQUEST,
     WIRE_TYPE.LEN,
     encodeRequest(messages, modelName, tools, reasoningEffort)
   );

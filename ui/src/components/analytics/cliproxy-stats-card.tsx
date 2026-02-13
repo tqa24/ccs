@@ -32,7 +32,7 @@ export function CliproxyStatsCard({
 
   if (isLoading) {
     return (
-      <Card className={cn('flex flex-col h-full', className)}>
+      <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0', className)}>
         <CardHeader className="px-3 py-2">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <Server className="h-4 w-4" />
@@ -52,7 +52,12 @@ export function CliproxyStatsCard({
   // Proxy not running
   if (!status?.running) {
     return (
-      <Card className={cn('flex flex-col h-full border-dashed', className)}>
+      <Card
+        className={cn(
+          'flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0 border-dashed',
+          className
+        )}
+      >
         <CardHeader className="px-3 py-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -76,7 +81,12 @@ export function CliproxyStatsCard({
   // Error fetching stats
   if (error) {
     return (
-      <Card className={cn('flex flex-col h-full border-destructive/50', className)}>
+      <Card
+        className={cn(
+          'flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0 border-destructive/50',
+          className
+        )}
+      >
         <CardHeader className="px-3 py-2">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -110,7 +120,7 @@ export function CliproxyStatsCard({
   const maxModelRequests = models.length > 0 ? models[0][1] : 1;
 
   return (
-    <Card className={cn('flex flex-col h-full overflow-hidden', className)}>
+    <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0', className)}>
       <CardHeader className="px-3 py-2 border-b bg-muted/5">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">

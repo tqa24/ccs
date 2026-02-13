@@ -44,9 +44,9 @@ export function ChartsGrid({
   const { privacyMode } = usePrivacy();
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 gap-4">
+    <div className="min-h-0 grid gap-4 lg:grid-rows-[minmax(260px,1.2fr)_minmax(220px,0.9fr)]">
       {/* Usage Trend Chart - Full Width */}
-      <Card className="flex flex-col flex-1 min-h-0 max-h-[500px] overflow-hidden shadow-sm">
+      <Card className="flex flex-col h-full min-h-[220px] lg:min-h-[240px] overflow-hidden gap-0 py-0 shadow-sm">
         <CardHeader className="px-3 py-2 shrink-0">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
             <TrendingUp className="w-4 h-4" />
@@ -63,7 +63,7 @@ export function ChartsGrid({
       </Card>
 
       {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 h-auto lg:h-[180px] shrink-0">
+      <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 h-auto min-h-[220px] lg:h-full lg:min-h-[220px] lg:grid-rows-[minmax(0,1fr)] lg:[&>*]:min-h-0">
         {/* Cost by Model */}
         <CostByModelCard
           models={models}
@@ -73,7 +73,7 @@ export function ChartsGrid({
         />
 
         {/* Model Distribution */}
-        <Card className="flex flex-col h-full min-h-0 shadow-sm lg:col-span-2">
+        <Card className="flex flex-col h-full min-h-0 overflow-hidden gap-0 py-0 shadow-sm lg:col-span-2">
           <CardHeader className="px-3 py-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <PieChart className="w-4 h-4" />
