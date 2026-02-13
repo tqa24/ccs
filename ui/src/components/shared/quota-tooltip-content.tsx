@@ -87,7 +87,7 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
             className="flex justify-between gap-4"
           >
             <span className={cn(w.remainingPercent < 20 && 'text-red-500')}>
-              {getCodexWindowDisplayLabel(w)}
+              {getCodexWindowDisplayLabel(w, orderedWindows)}
             </span>
             <span className="font-mono">{w.remainingPercent}%</span>
           </div>

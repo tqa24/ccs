@@ -528,21 +528,37 @@ describe('getCodexResetTime', () => {
 });
 
 describe('getCodexWindowDisplayLabel', () => {
-  it('labels code review primary window as weekly when reset cadence is weekly', () => {
+  it('labels code review primary as weekly when it matches usage weekly window', () => {
+    const windows: Array<{ label: string; resetAfterSeconds: number | null }> = [
+      { label: 'Primary', resetAfterSeconds: 18000 },
+      { label: 'Secondary', resetAfterSeconds: 604800 },
+      { label: 'Code Review (Primary)', resetAfterSeconds: 600000 },
+    ];
     expect(
-      getCodexWindowDisplayLabel({
-        label: 'Code Review (Primary)',
-        resetAfterSeconds: 604800,
-      })
+      getCodexWindowDisplayLabel(
+        {
+          label: 'Code Review (Primary)',
+          resetAfterSeconds: 600000,
+        },
+        windows
+      )
     ).toBe('Code review (weekly)');
   });
 
-  it('labels code review primary window as 5h when reset cadence is short', () => {
+  it('labels code review primary as 5h when it matches usage 5h window', () => {
+    const windows: Array<{ label: string; resetAfterSeconds: number | null }> = [
+      { label: 'Primary', resetAfterSeconds: 18000 },
+      { label: 'Secondary', resetAfterSeconds: 604800 },
+      { label: 'Code Review (Primary)', resetAfterSeconds: 17000 },
+    ];
     expect(
-      getCodexWindowDisplayLabel({
-        label: 'Code Review (Primary)',
-        resetAfterSeconds: 18000,
-      })
+      getCodexWindowDisplayLabel(
+        {
+          label: 'Code Review (Primary)',
+          resetAfterSeconds: 17000,
+        },
+        windows
+      )
     ).toBe('Code review (5h)');
   });
 
@@ -550,8 +566,13 @@ describe('getCodexWindowDisplayLabel', () => {
     expect(getCodexWindowDisplayLabel('Secondary')).toBe('Weekly usage limit');
   });
 
-  it('uses cadence override when provided with string label', () => {
-    expect(getCodexWindowDisplayLabel('Primary', 604800)).toBe('Weekly usage limit');
+  it('falls back to generic code review label when cadence cannot be inferred', () => {
+    expect(
+      getCodexWindowDisplayLabel({
+        label: 'Code Review (Primary)',
+        resetAfterSeconds: 604800,
+      })
+    ).toBe('Code review');
   });
 });
 

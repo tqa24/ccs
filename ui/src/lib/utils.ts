@@ -334,51 +334,68 @@ export function getCodexWindowKind(label: string): CodexWindowKind {
   return 'unknown';
 }
 
-/**
- * Convert raw Codex window labels into user-facing labels.
- */
-function getCodexWindowCadence(
-  resetAfterSeconds: number | null | undefined
-): '5h' | 'weekly' | null {
-  if (
-    typeof resetAfterSeconds !== 'number' ||
-    !isFinite(resetAfterSeconds) ||
-    resetAfterSeconds <= 0
-  ) {
-    return null;
-  }
+type CodexWindowSummary = Pick<CodexQuotaWindow, 'label' | 'resetAfterSeconds'>;
 
-  if (resetAfterSeconds <= 6 * 60 * 60) return '5h';
-  if (resetAfterSeconds >= 24 * 60 * 60) return 'weekly';
-  return null;
+/**
+ * Infer code-review window cadence by comparing against usage windows.
+ * This keeps labels stable as countdown values decrease over time.
+ */
+function inferCodeReviewCadence(
+  window: CodexWindowSummary,
+  allWindows: CodexWindowSummary[]
+): '5h' | 'weekly' | null {
+  const kind = getCodexWindowKind(window.label);
+  if (kind === 'code-review-weekly') return 'weekly';
+
+  const reset = window.resetAfterSeconds;
+  if (typeof reset !== 'number' || !isFinite(reset) || reset <= 0) return null;
+
+  const usage5h = allWindows.find(
+    (w) =>
+      getCodexWindowKind(w.label) === 'usage-5h' &&
+      typeof w.resetAfterSeconds === 'number' &&
+      isFinite(w.resetAfterSeconds) &&
+      w.resetAfterSeconds > 0
+  );
+  const usageWeekly = allWindows.find(
+    (w) =>
+      getCodexWindowKind(w.label) === 'usage-weekly' &&
+      typeof w.resetAfterSeconds === 'number' &&
+      isFinite(w.resetAfterSeconds) &&
+      w.resetAfterSeconds > 0
+  );
+
+  if (!usage5h || !usageWeekly) return null;
+
+  const diffTo5h = Math.abs(reset - (usage5h.resetAfterSeconds as number));
+  const diffToWeekly = Math.abs(reset - (usageWeekly.resetAfterSeconds as number));
+  return diffToWeekly <= diffTo5h ? 'weekly' : '5h';
 }
 
 export function getCodexWindowDisplayLabel(
-  labelOrWindow: string | Pick<CodexQuotaWindow, 'label' | 'resetAfterSeconds'>,
-  resetAfterSecondsOverride?: number | null
+  labelOrWindow: string | CodexWindowSummary,
+  allWindows: CodexWindowSummary[] = []
 ): string {
   const label = typeof labelOrWindow === 'string' ? labelOrWindow : labelOrWindow.label;
-  const cadence = getCodexWindowCadence(
-    typeof labelOrWindow === 'string' ? resetAfterSecondsOverride : labelOrWindow.resetAfterSeconds
-  );
+  const currentWindow: CodexWindowSummary =
+    typeof labelOrWindow === 'string'
+      ? { label, resetAfterSeconds: null }
+      : { label, resetAfterSeconds: labelOrWindow.resetAfterSeconds };
+  const context = allWindows.length > 0 ? allWindows : [currentWindow];
 
   switch (getCodexWindowKind(label)) {
     case 'usage-5h':
-      if (cadence === 'weekly') return 'Weekly usage limit';
       return '5h usage limit';
     case 'usage-weekly':
-      if (cadence === '5h') return '5h usage limit';
       return 'Weekly usage limit';
     case 'code-review-5h':
-      if (cadence === 'weekly') return 'Code review (weekly)';
-      return 'Code review (5h)';
     case 'code-review-weekly':
-      if (cadence === '5h') return 'Code review (5h)';
-      return 'Code review (weekly)';
-    case 'code-review':
-      if (cadence === '5h') return 'Code review (5h)';
-      if (cadence === 'weekly') return 'Code review (weekly)';
+    case 'code-review': {
+      const inferred = inferCodeReviewCadence(currentWindow, context);
+      if (inferred === '5h') return 'Code review (5h)';
+      if (inferred === 'weekly') return 'Code review (weekly)';
       return 'Code review';
+    }
     case 'unknown':
       return label;
   }
