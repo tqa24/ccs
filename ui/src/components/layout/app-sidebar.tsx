@@ -11,8 +11,8 @@ import {
   BarChart3,
   Gauge,
   Github,
-  Bot,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -35,8 +35,34 @@ import { useCliproxyUpdateCheck } from '@/hooks/use-cliproxy';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
+interface SidebarBadge {
+  text: string;
+  icon: string;
+}
+
+interface SidebarChildItem {
+  path: string;
+  label: string;
+  icon?: LucideIcon;
+}
+
+interface SidebarItem {
+  path: string;
+  label: string;
+  icon?: LucideIcon;
+  iconSrc?: string;
+  badge?: SidebarBadge;
+  isCollapsible?: boolean;
+  children?: SidebarChildItem[];
+}
+
+interface SidebarGroupDef {
+  title: string;
+  items: SidebarItem[];
+}
+
 // Define navigation groups
-const navGroups = [
+const navGroups: SidebarGroupDef[] = [
   {
     title: 'General',
     items: [
@@ -64,7 +90,7 @@ const navGroups = [
         ],
       },
       { path: '/copilot', icon: Github, label: 'GitHub Copilot' },
-      { path: '/cursor', icon: Bot, label: 'Cursor IDE' },
+      { path: '/cursor', iconSrc: '/assets/sidebar/cursor.svg', label: 'Cursor IDE' },
       {
         path: '/accounts',
         icon: Users,
@@ -114,6 +140,17 @@ export function AppSidebar() {
     );
   };
 
+  const renderMenuIcon = (item: Pick<SidebarItem, 'icon' | 'iconSrc'>) => {
+    if (item.iconSrc) {
+      return <img src={item.iconSrc} alt="" className="w-4 h-4 object-contain" />;
+    }
+    if (item.icon) {
+      const Icon = item.icon;
+      return <Icon className="w-4 h-4" />;
+    }
+    return null;
+  };
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="h-12 flex items-center justify-center">
@@ -141,7 +178,7 @@ export function AppSidebar() {
                               isActive={isParentActive(item.children)}
                               onClick={() => navigate(item.path)}
                             >
-                              {item.icon && <item.icon className="w-4 h-4" />}
+                              {renderMenuIcon(item)}
                               <span className="group-data-[collapsible=icon]:hidden">
                                 {getItemLabel(item)}
                               </span>
@@ -173,7 +210,7 @@ export function AppSidebar() {
                         tooltip={getItemLabel(item)}
                       >
                         <Link to={item.path}>
-                          {item.icon && <item.icon className="w-4 h-4" />}
+                          {renderMenuIcon(item)}
                           <span className="group-data-[collapsible=icon]:hidden flex-1">
                             {getItemLabel(item)}
                           </span>

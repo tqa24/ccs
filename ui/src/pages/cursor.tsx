@@ -6,9 +6,9 @@
 import { useMemo, useState, type ElementType } from 'react';
 import { toast } from 'sonner';
 import {
-  Bot,
+  AlertTriangle,
   CheckCircle2,
-  FileCode,
+  Code2,
   Key,
   Loader2,
   Play,
@@ -18,19 +18,30 @@ import {
   Save,
   Server,
   ShieldCheck,
+  Sparkles,
+  Zap,
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCursor } from '@/hooks/use-cursor';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CodeEditor } from '@/components/shared/code-editor';
+import { Separator } from '@/components/ui/separator';
+import { RawEditorSection } from '@/components/copilot/config-form/raw-editor-section';
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -44,18 +55,164 @@ interface CursorConfigDraft {
   port: string;
   auto_start: boolean;
   ghost_mode: boolean;
+  model: string;
+  opus_model: string;
+  sonnet_model: string;
+  haiku_model: string;
+}
+
+interface RawSettingsParseResult {
+  isValid: boolean;
+  settings?: { env?: Record<string, string> };
+  error?: string;
 }
 
 function buildConfigDraft(config?: {
   port?: number;
   auto_start?: boolean;
   ghost_mode?: boolean;
+  model?: string;
+  opus_model?: string;
+  sonnet_model?: string;
+  haiku_model?: string;
 }): CursorConfigDraft {
   return {
     port: String(config?.port ?? 20129),
     auto_start: config?.auto_start ?? false,
     ghost_mode: config?.ghost_mode ?? true,
+    model: config?.model?.trim() || 'gpt-5.3-codex',
+    opus_model: config?.opus_model?.trim() || '',
+    sonnet_model: config?.sonnet_model?.trim() || '',
+    haiku_model: config?.haiku_model?.trim() || '',
   };
+}
+
+function pickModelByPatterns(
+  models: Array<{ id: string }>,
+  patterns: RegExp[],
+  fallback: string
+): string {
+  const matched = models.find((model) => patterns.some((pattern) => pattern.test(model.id)));
+  return matched?.id ?? fallback;
+}
+
+function normalizeModelKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function pickModelByAliases(
+  models: Array<{ id: string; name: string }>,
+  aliases: string[],
+  fallback: string
+): string {
+  const normalizedAliasSet = new Set(aliases.map(normalizeModelKey));
+  const direct = models.find((model) => normalizedAliasSet.has(normalizeModelKey(model.id)));
+  if (direct) return direct.id;
+
+  const byName = models.find((model) => normalizedAliasSet.has(normalizeModelKey(model.name)));
+  if (byName) return byName.id;
+
+  return fallback;
+}
+
+function parseRawSettings(value: string): RawSettingsParseResult {
+  try {
+    const parsed = JSON.parse(value || '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {
+        isValid: false,
+        error: 'Raw settings must be a JSON object',
+      };
+    }
+
+    return {
+      isValid: true,
+      settings: parsed as { env?: Record<string, string> },
+    };
+  } catch (error) {
+    return {
+      isValid: false,
+      error: (error as Error).message || 'Invalid JSON',
+    };
+  }
+}
+
+function CursorModelSelector({
+  label,
+  description,
+  value,
+  models,
+  disabled,
+  allowDefaultFallback = false,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  value: string;
+  models: Array<{ id: string; name: string; provider: string }>;
+  disabled?: boolean;
+  allowDefaultFallback?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const selectorValue = value || (allowDefaultFallback ? '__default' : '');
+  const selected = models.find((model) => model.id === value);
+
+  return (
+    <div className="space-y-1.5">
+      <div>
+        <Label className="text-xs font-medium">{label}</Label>
+        <p className="text-[10px] text-muted-foreground">{description}</p>
+      </div>
+      <Select
+        value={selectorValue}
+        onValueChange={(nextValue) => {
+          if (allowDefaultFallback && nextValue === '__default') {
+            onChange('');
+            return;
+          }
+          onChange(nextValue);
+        }}
+        disabled={disabled}
+      >
+        <SelectTrigger className="h-9">
+          <SelectValue placeholder="Select model">
+            {selectorValue && (
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="truncate font-mono text-xs">
+                  {allowDefaultFallback && selectorValue === '__default'
+                    ? 'Use Default Model'
+                    : selected?.name || selectorValue}
+                </span>
+                {selected?.provider && (
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 capitalize">
+                    {selected.provider}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent className="max-h-[300px]">
+          <SelectGroup>
+            <SelectLabel className="text-xs text-muted-foreground">
+              Available Models ({models.length})
+            </SelectLabel>
+            {allowDefaultFallback && <SelectItem value="__default">Use Default Model</SelectItem>}
+            {models.map((model) => (
+              <SelectItem key={model.id} value={model.id}>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="truncate text-xs font-mono">{model.name || model.id}</span>
+                  <Badge variant="outline" className="text-[9px] h-4 px-1 capitalize">
+                    {model.provider}
+                  </Badge>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+    </div>
+  );
 }
 
 function StatusItem({
@@ -131,11 +288,47 @@ export function CursorPage() {
   const effectivePort = configDirty ? configDraft.port : pristineConfigDraft.port;
   const effectiveAutoStart = configDirty ? configDraft.auto_start : pristineConfigDraft.auto_start;
   const effectiveGhostMode = configDirty ? configDraft.ghost_mode : pristineConfigDraft.ghost_mode;
+  const effectiveModel = configDirty ? configDraft.model : pristineConfigDraft.model;
+  const effectiveOpusModel = configDirty ? configDraft.opus_model : pristineConfigDraft.opus_model;
+  const effectiveSonnetModel = configDirty
+    ? configDraft.sonnet_model
+    : pristineConfigDraft.sonnet_model;
+  const effectiveHaikuModel = configDirty
+    ? configDraft.haiku_model
+    : pristineConfigDraft.haiku_model;
   const effectiveRawConfigText = rawConfigDirty
     ? rawConfigText
     : JSON.stringify(rawSettings?.settings ?? {}, null, 2);
   const rawSettingsReady = Boolean(rawSettings);
-  const disableRawSave = isSavingRawSettings || rawSettingsLoading || !rawSettingsReady;
+  const rawParseResult = useMemo(
+    () => parseRawSettings(effectiveRawConfigText),
+    [effectiveRawConfigText]
+  );
+  const isRawJsonValid = rawParseResult.isValid;
+  const hasChanges = configDirty || rawConfigDirty;
+  const canSave = !rawConfigDirty || (rawSettingsReady && isRawJsonValid);
+  const orderedModels = useMemo(() => {
+    const seen = new Set<string>();
+    const sorted = [...models].sort((a, b) => a.name.localeCompare(b.name));
+    const deduped = sorted.filter((model) => {
+      if (seen.has(model.id)) return false;
+      seen.add(model.id);
+      return true;
+    });
+
+    if (effectiveModel && !sorted.some((model) => model.id === effectiveModel)) {
+      return [
+        {
+          id: effectiveModel,
+          name: effectiveModel,
+          provider: 'custom',
+        },
+        ...deduped,
+      ];
+    }
+
+    return deduped;
+  }, [models, effectiveModel]);
 
   const updateConfigDraft = (updater: (draft: CursorConfigDraft) => CursorConfigDraft) => {
     setConfigDraft((previousDraft) => {
@@ -151,11 +344,17 @@ export function CursorPage() {
     [status?.enabled]
   );
 
-  const handleSaveConfig = async () => {
+  const handleSaveConfig = async ({
+    suppressSuccessToast = false,
+  }: { suppressSuccessToast?: boolean } = {}) => {
     const parsedPort = Number(effectivePort);
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
       toast.error('Port must be an integer between 1 and 65535');
-      return;
+      return false;
+    }
+    if (!effectiveModel.trim()) {
+      toast.error('Default model is required');
+      return false;
     }
 
     try {
@@ -163,6 +362,10 @@ export function CursorPage() {
         port: parsedPort,
         auto_start: effectiveAutoStart,
         ghost_mode: effectiveGhostMode,
+        model: effectiveModel,
+        opus_model: effectiveOpusModel || undefined,
+        sonnet_model: effectiveSonnetModel || undefined,
+        haiku_model: effectiveHaikuModel || undefined,
       });
       setConfigDirty(false);
       setConfigDraft(
@@ -170,12 +373,102 @@ export function CursorPage() {
           port: parsedPort,
           auto_start: effectiveAutoStart,
           ghost_mode: effectiveGhostMode,
+          model: effectiveModel,
+          opus_model: effectiveOpusModel || undefined,
+          sonnet_model: effectiveSonnetModel || undefined,
+          haiku_model: effectiveHaikuModel || undefined,
         })
       );
-      toast.success('Cursor config saved');
+      if (!suppressSuccessToast) {
+        toast.success('Cursor config and model mapping saved');
+      }
+      return true;
     } catch (error) {
       toast.error((error as Error).message || 'Failed to save config');
+      return false;
     }
+  };
+
+  const applyPreset = (preset: 'codex53' | 'claude46' | 'gemini3') => {
+    const fallbackModel = effectiveModel || currentModel || models[0]?.id || 'gpt-5.3-codex';
+    const codex53 = pickModelByAliases(
+      models,
+      ['gpt-5.3-codex', 'gpt53codex', 'GPT-5.3 Codex'],
+      pickModelByPatterns(models, [/gpt[-.]?5.*codex/i], fallbackModel)
+    );
+    const codexMax = pickModelByAliases(
+      models,
+      ['gpt-5.1-codex-max', 'gpt51codexmax', 'GPT-5.1 Codex Max'],
+      pickModelByPatterns(models, [/gpt[-.]?5.*codex.*max/i], codex53)
+    );
+    const codexFast = pickModelByAliases(
+      models,
+      ['gpt-5-fast', 'gpt5fast', 'GPT-5 Fast'],
+      pickModelByPatterns(models, [/gpt[-.]?5.*fast/i], codex53)
+    );
+    const codexMini = pickModelByAliases(
+      models,
+      ['gpt-5-mini', 'gpt5mini', 'GPT-5 Mini'],
+      pickModelByPatterns(models, [/gpt[-.]?5.*mini/i], codexFast)
+    );
+    const opus46 = pickModelByAliases(
+      models,
+      ['claude-4.6-opus', 'claude46opus', 'Claude 4.6 Opus'],
+      pickModelByPatterns(models, [/claude[-.]?4\.?6.*opus/i, /claude.*opus/i], codex53)
+    );
+    const sonnet45 = pickModelByAliases(
+      models,
+      ['claude-4.5-sonnet', 'claude45sonnet', 'Claude 4.5 Sonnet'],
+      pickModelByPatterns(models, [/claude[-.]?4\.?5.*sonnet/i, /claude.*sonnet/i], codex53)
+    );
+    const haiku45 = pickModelByAliases(
+      models,
+      ['claude-4.5-haiku', 'claude45haiku', 'Claude 4.5 Haiku'],
+      pickModelByPatterns(models, [/claude[-.]?4\.?5.*haiku/i, /haiku/i], sonnet45)
+    );
+    const gemini3Pro = pickModelByAliases(
+      models,
+      ['gemini-3-pro', 'gemini3pro', 'Gemini 3 Pro'],
+      pickModelByPatterns(models, [/gemini[-.]?3.*pro/i], codex53)
+    );
+    const gemini3Flash = pickModelByAliases(
+      models,
+      ['gemini-3-flash', 'gemini3flash', 'Gemini 3 Flash'],
+      pickModelByPatterns(models, [/gemini[-.]?3.*flash/i, /gemini[-.]?2\.?5.*flash/i], gemini3Pro)
+    );
+
+    if (preset === 'codex53') {
+      updateConfigDraft((draft) => ({
+        ...draft,
+        model: codex53,
+        opus_model: codexMax,
+        sonnet_model: codex53,
+        haiku_model: codexMini,
+      }));
+      toast.success('Applied GPT-5.3 Codex preset');
+      return;
+    }
+
+    if (preset === 'claude46') {
+      updateConfigDraft((draft) => ({
+        ...draft,
+        model: opus46,
+        opus_model: opus46,
+        sonnet_model: sonnet45,
+        haiku_model: haiku45,
+      }));
+      toast.success('Applied Claude 4.6 preset');
+      return;
+    }
+
+    updateConfigDraft((draft) => ({
+      ...draft,
+      model: gemini3Pro,
+      opus_model: gemini3Pro,
+      sonnet_model: gemini3Pro,
+      haiku_model: gemini3Flash,
+    }));
+    toast.success('Applied Gemini 3 preset');
   };
 
   const handleToggleEnabled = async (enabled: boolean) => {
@@ -242,32 +535,29 @@ export function CursorPage() {
     }
   };
 
-  const handleSaveRawSettings = async () => {
+  const handleSaveRawSettings = async ({
+    suppressSuccessToast = false,
+  }: { suppressSuccessToast?: boolean } = {}) => {
     if (!rawSettingsReady) {
       toast.error('Raw settings are still loading. Please wait and try again.');
-      return;
+      return false;
     }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(effectiveRawConfigText || '{}');
-    } catch (error) {
-      toast.error((error as Error).message || 'Invalid JSON');
-      return;
-    }
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      toast.error('Raw settings must be a JSON object');
-      return;
+    if (!rawParseResult.isValid || !rawParseResult.settings) {
+      toast.error(rawParseResult.error || 'Invalid JSON');
+      return false;
     }
 
     try {
       await saveRawSettingsAsync({
-        settings: parsed as { env?: Record<string, string> },
+        settings: rawParseResult.settings,
         expectedMtime: rawSettings?.mtime,
       });
       setRawConfigDirty(false);
-      toast.success('Raw settings saved');
+      if (!suppressSuccessToast) {
+        toast.success('Raw settings saved');
+      }
+      return true;
     } catch (error) {
       const message = (error as Error).message || 'Failed to save raw settings';
       if (message === 'CONFLICT') {
@@ -275,7 +565,39 @@ export function CursorPage() {
       } else {
         toast.error(message);
       }
+      return false;
     }
+  };
+
+  const handleSaveAll = async () => {
+    if (!hasChanges) return;
+
+    const saveConfig = configDirty;
+    const saveRawSettings = rawConfigDirty;
+
+    if (saveConfig) {
+      const saved = await handleSaveConfig({
+        suppressSuccessToast: saveRawSettings,
+      });
+      if (!saved) return;
+    }
+
+    if (saveRawSettings) {
+      const saved = await handleSaveRawSettings({
+        suppressSuccessToast: saveConfig,
+      });
+      if (!saved) return;
+    }
+
+    if (saveConfig && saveRawSettings) {
+      toast.success('Cursor configuration saved');
+    }
+  };
+
+  const handleHeaderRefresh = () => {
+    setRawConfigDirty(false);
+    refetchStatus();
+    refetchRawSettings();
   };
 
   return (
@@ -285,7 +607,11 @@ export function CursorPage() {
           <div className="p-4 border-b bg-background">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2">
-                <Bot className="w-5 h-5 text-primary" />
+                <img
+                  src="/assets/sidebar/cursor.svg"
+                  alt=""
+                  className="w-5 h-5 object-contain shrink-0"
+                />
                 <h1 className="font-semibold">Cursor</h1>
                 {integrationBadge}
               </div>
@@ -304,6 +630,20 @@ export function CursorPage() {
 
           <ScrollArea className="flex-1">
             <div className="p-3 space-y-4">
+              <div className="rounded-md border border-yellow-500/50 bg-yellow-500/15 p-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 shrink-0" />
+                  <span className="text-xs font-semibold text-yellow-800 dark:text-yellow-200">
+                    Unofficial API - Use at Your Own Risk
+                  </span>
+                </div>
+                <ul className="text-[11px] text-yellow-700 dark:text-yellow-300 space-y-0.5 pl-6 list-disc">
+                  <li>Reverse-engineered integration may break anytime</li>
+                  <li>Abuse or excessive usage may risk account restrictions</li>
+                  <li>No warranty, no responsibility from CCS</li>
+                </ul>
+              </div>
+
               <div className="space-y-2">
                 <StatusItem
                   icon={ShieldCheck}
@@ -427,169 +767,334 @@ export function CursorPage() {
         </div>
 
         <div className="flex-1 min-w-0 bg-background overflow-hidden">
-          <div className="h-full overflow-auto p-4 md:p-6">
-            <Tabs defaultValue="config" className="space-y-4">
-              <TabsList className="grid grid-cols-3 w-full max-w-md">
-                <TabsTrigger value="config">Config</TabsTrigger>
-                <TabsTrigger value="models">Models</TabsTrigger>
-                <TabsTrigger value="raw">Raw Settings</TabsTrigger>
-              </TabsList>
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b bg-background flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-lg font-semibold">Cursor Configuration</h2>
+                    {rawSettings && (
+                      <Badge variant="outline" className="text-xs">
+                        cursor.settings.json
+                      </Badge>
+                    )}
+                  </div>
+                  {rawSettings && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Last modified:{' '}
+                      {rawSettings.exists
+                        ? new Date(rawSettings.mtime).toLocaleString()
+                        : 'Never saved'}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleHeaderRefresh}
+                  disabled={statusLoading || rawSettingsLoading}
+                >
+                  <RefreshCw
+                    className={cn(
+                      'w-4 h-4',
+                      (statusLoading || rawSettingsLoading) && 'animate-spin'
+                    )}
+                  />
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSaveAll}
+                  disabled={isUpdatingConfig || isSavingRawSettings || !hasChanges || !canSave}
+                >
+                  {isUpdatingConfig || isSavingRawSettings ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4 mr-1" />
+                      Save
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
 
-              <TabsContent value="config" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Cursor Runtime Config</CardTitle>
-                    <CardDescription>
-                      Controls daemon behavior for local Cursor OpenAI-compatible endpoint.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-5">
-                    <div className="space-y-2">
-                      <Label htmlFor="cursor-port">Port</Label>
-                      <Input
-                        id="cursor-port"
-                        type="number"
-                        min={1}
-                        max={65535}
-                        value={effectivePort}
-                        onChange={(e) => {
-                          updateConfigDraft((draft) => ({ ...draft, port: e.target.value }));
-                        }}
-                      />
-                    </div>
+            <div className="flex-1 flex divide-x overflow-hidden">
+              <div className="w-[540px] shrink-0 flex flex-col overflow-hidden bg-muted/5">
+                <Tabs defaultValue="config" className="h-full flex flex-col">
+                  <div className="px-4 pt-4 shrink-0">
+                    <TabsList className="w-full">
+                      <TabsTrigger value="config" className="flex-1">
+                        Model Config
+                      </TabsTrigger>
+                      <TabsTrigger value="settings" className="flex-1">
+                        Settings
+                      </TabsTrigger>
+                      <TabsTrigger value="info" className="flex-1">
+                        Info
+                      </TabsTrigger>
+                    </TabsList>
+                  </div>
 
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <Label htmlFor="cursor-auto-start">Auto-start</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Start cursor daemon automatically when integration is used.
-                        </p>
-                      </div>
-                      <Switch
-                        id="cursor-auto-start"
-                        checked={effectiveAutoStart}
-                        onCheckedChange={(value) => {
-                          updateConfigDraft((draft) => ({ ...draft, auto_start: value }));
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                      <div>
-                        <Label htmlFor="cursor-ghost-mode">Ghost Mode</Label>
-                        <p className="text-xs text-muted-foreground">
-                          Requests `x-ghost-mode` to reduce telemetry.
-                        </p>
-                      </div>
-                      <Switch
-                        id="cursor-ghost-mode"
-                        checked={effectiveGhostMode}
-                        onCheckedChange={(value) => {
-                          updateConfigDraft((draft) => ({ ...draft, ghost_mode: value }));
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex justify-end">
-                      <Button onClick={handleSaveConfig} disabled={isUpdatingConfig}>
-                        {isUpdatingConfig ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="w-4 h-4 mr-2" />
-                        )}
-                        Save Config
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              <TabsContent value="models" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Available Models</CardTitle>
-                    <CardDescription>
-                      Cursor forwards the requested model from each client request.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {modelsLoading ? (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Loading models...
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        {models.map((model) => (
-                          <div
-                            key={model.id}
-                            className="rounded-lg border px-3 py-2 flex items-center justify-between"
-                          >
-                            <div>
-                              <p className="text-sm font-medium">{model.id}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {model.name} • {model.provider}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {model.id === currentModel && <Badge>Default</Badge>}
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    <TabsContent
+                      value="config"
+                      className="flex-1 mt-0 border-0 p-0 data-[state=inactive]:hidden flex flex-col overflow-hidden"
+                    >
+                      <ScrollArea className="flex-1">
+                        <div className="p-4 space-y-6">
+                          <div>
+                            <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
+                              <Sparkles className="w-4 h-4" />
+                              Presets
+                            </h3>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              Apply pre-configured model mappings
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 gap-1"
+                                onClick={() => applyPreset('codex53')}
+                                title="OpenAI-only mapping: GPT-5.3 Codex / Codex Max / GPT-5 Mini"
+                              >
+                                <Zap className="w-3 h-3" />
+                                GPT-5.3 Codex
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 gap-1"
+                                onClick={() => applyPreset('claude46')}
+                                title="Claude-first mapping: Opus 4.6 / Sonnet 4.5 / Haiku 4.5"
+                              >
+                                <Zap className="w-3 h-3" />
+                                Claude 4.6
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-xs h-7 gap-1"
+                                onClick={() => applyPreset('gemini3')}
+                                title="Gemini-first mapping: Gemini 3 Pro + Gemini 3 Flash"
+                              >
+                                <Zap className="w-3 h-3" />
+                                Gemini 3 Pro
+                              </Button>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
 
-              <TabsContent value="raw" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <FileCode className="w-4 h-4 text-primary" />
-                      cursor.settings.json
-                    </CardTitle>
-                    <CardDescription>
-                      {rawSettings?.path ?? '~/.ccs/cursor.settings.json'}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <CodeEditor
-                      value={effectiveRawConfigText}
-                      onChange={(value) => {
-                        setRawConfigDirty(true);
-                        setRawConfigText(value);
-                      }}
-                      language="json"
-                    />
+                          <Separator />
 
-                    <div className="flex gap-2 justify-end">
-                      <Button
-                        variant="outline"
-                        onClick={() => {
-                          setRawConfigDirty(false);
-                          refetchRawSettings();
-                        }}
-                        disabled={rawSettingsLoading}
-                      >
-                        <RefreshCw
-                          className={cn('w-4 h-4 mr-2', rawSettingsLoading && 'animate-spin')}
-                        />
-                        Refresh
-                      </Button>
-                      <Button onClick={handleSaveRawSettings} disabled={disableRawSave}>
-                        {isSavingRawSettings ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="w-4 h-4 mr-2" />
-                        )}
-                        Save Raw Settings
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
+                          <div>
+                            <h3 className="text-sm font-medium mb-2">Model Mapping</h3>
+                            <p className="text-xs text-muted-foreground mb-4">
+                              Configure which models to use for each tier
+                            </p>
+                            <div className="space-y-4">
+                              <CursorModelSelector
+                                label="Default Model"
+                                description="Used when no specific tier is requested."
+                                value={effectiveModel}
+                                models={orderedModels}
+                                disabled={modelsLoading}
+                                onChange={(value) => {
+                                  updateConfigDraft((draft) => ({ ...draft, model: value }));
+                                }}
+                              />
+                              <CursorModelSelector
+                                label="Opus (Most capable)"
+                                description="Complex reasoning and highest quality responses."
+                                value={effectiveOpusModel}
+                                models={orderedModels}
+                                disabled={modelsLoading}
+                                allowDefaultFallback
+                                onChange={(value) => {
+                                  updateConfigDraft((draft) => ({ ...draft, opus_model: value }));
+                                }}
+                              />
+                              <CursorModelSelector
+                                label="Sonnet (Balanced)"
+                                description="General coding and day-to-day chat workloads."
+                                value={effectiveSonnetModel}
+                                models={orderedModels}
+                                disabled={modelsLoading}
+                                allowDefaultFallback
+                                onChange={(value) => {
+                                  updateConfigDraft((draft) => ({ ...draft, sonnet_model: value }));
+                                }}
+                              />
+                              <CursorModelSelector
+                                label="Haiku (Fast)"
+                                description="Low-latency and lightweight request paths."
+                                value={effectiveHaikuModel}
+                                models={orderedModels}
+                                disabled={modelsLoading}
+                                allowDefaultFallback
+                                onChange={(value) => {
+                                  updateConfigDraft((draft) => ({ ...draft, haiku_model: value }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent
+                      value="settings"
+                      className="flex-1 mt-0 border-0 p-0 data-[state=inactive]:hidden flex flex-col overflow-hidden"
+                    >
+                      <ScrollArea className="flex-1">
+                        <div className="p-4 space-y-6">
+                          <div className="space-y-4">
+                            <h3 className="text-sm font-medium">Runtime Settings</h3>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="cursor-port" className="text-xs">
+                                Port
+                              </Label>
+                              <Input
+                                id="cursor-port"
+                                type="number"
+                                min={1}
+                                max={65535}
+                                className="max-w-[150px] h-8"
+                                value={effectivePort}
+                                onChange={(e) => {
+                                  updateConfigDraft((draft) => ({
+                                    ...draft,
+                                    port: e.target.value,
+                                  }));
+                                }}
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between rounded-lg border p-3">
+                              <div className="space-y-0.5">
+                                <Label htmlFor="cursor-auto-start" className="text-xs">
+                                  Auto-start Daemon
+                                </Label>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Start Cursor daemon automatically when integration is used.
+                                </p>
+                              </div>
+                              <Switch
+                                id="cursor-auto-start"
+                                checked={effectiveAutoStart}
+                                onCheckedChange={(value) => {
+                                  updateConfigDraft((draft) => ({ ...draft, auto_start: value }));
+                                }}
+                              />
+                            </div>
+
+                            <div className="flex items-center justify-between rounded-lg border p-3">
+                              <div className="space-y-0.5">
+                                <Label htmlFor="cursor-ghost-mode" className="text-xs">
+                                  Ghost Mode
+                                </Label>
+                                <p className="text-[10px] text-muted-foreground">
+                                  Request `x-ghost-mode` to reduce telemetry.
+                                </p>
+                              </div>
+                              <Switch
+                                id="cursor-ghost-mode"
+                                checked={effectiveGhostMode}
+                                onCheckedChange={(value) => {
+                                  updateConfigDraft((draft) => ({ ...draft, ghost_mode: value }));
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+
+                    <TabsContent
+                      value="info"
+                      className="h-full mt-0 border-0 p-0 data-[state=inactive]:hidden"
+                    >
+                      <ScrollArea className="h-full">
+                        <div className="p-4 space-y-6">
+                          <div>
+                            <h3 className="text-sm font-medium mb-3">Available Models</h3>
+                            {modelsLoading ? (
+                              <div className="flex items-center gap-2 text-muted-foreground">
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                Loading models...
+                              </div>
+                            ) : models.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">
+                                No model metadata available yet. Start daemon and refresh.
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {models.map((model) => (
+                                  <div
+                                    key={model.id}
+                                    className="rounded-lg border px-3 py-2 flex items-center justify-between"
+                                  >
+                                    <div>
+                                      <p className="text-sm font-medium">{model.id}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {model.name} • {model.provider}
+                                      </p>
+                                    </div>
+                                    {model.id === currentModel && <Badge>Default</Badge>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-3 bg-card rounded-lg border p-4 shadow-sm">
+                            <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
+                              <span className="font-medium text-muted-foreground">Provider</span>
+                              <span className="font-mono">Cursor IDE</span>
+                            </div>
+                            <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
+                              <span className="font-medium text-muted-foreground">File Path</span>
+                              <code className="bg-muted px-1.5 py-0.5 rounded text-xs break-all">
+                                {rawSettings?.path ?? '~/.ccs/cursor.settings.json'}
+                              </code>
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Model mapping writes `ANTHROPIC_MODEL`,
+                              `ANTHROPIC_DEFAULT_OPUS_MODEL`, `ANTHROPIC_DEFAULT_SONNET_MODEL`, and
+                              `ANTHROPIC_DEFAULT_HAIKU_MODEL` in `cursor.settings.json`.
+                            </p>
+                          </div>
+                        </div>
+                      </ScrollArea>
+                    </TabsContent>
+                  </div>
+                </Tabs>
+              </div>
+
+              <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+                <div className="px-6 py-2 bg-muted/30 border-b flex items-center gap-2 shrink-0 h-[45px]">
+                  <Code2 className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">
+                    Raw Configuration (JSON)
+                  </span>
+                </div>
+                <RawEditorSection
+                  rawJsonContent={effectiveRawConfigText}
+                  isRawJsonValid={isRawJsonValid}
+                  rawJsonEdits={rawConfigDirty ? rawConfigText : null}
+                  rawSettingsEnv={rawSettings?.settings?.env}
+                  onChange={(value) => {
+                    setRawConfigDirty(true);
+                    setRawConfigText(value);
+                  }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>

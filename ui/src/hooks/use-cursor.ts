@@ -26,6 +26,10 @@ export interface CursorConfig {
   port: number;
   auto_start: boolean;
   ghost_mode: boolean;
+  model: string;
+  opus_model?: string;
+  sonnet_model?: string;
+  haiku_model?: string;
 }
 
 export interface CursorModel {
