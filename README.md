@@ -60,7 +60,7 @@ Want to run the dashboard in Docker? See `docker/README.md`.
 The dashboard provides visual management for all account types:
 
 - **Claude Accounts**: Create isolated instances (work, personal, client)
-- **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity
+- **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity, Kiro, Copilot
 - **API Profiles**: Configure GLM, Kimi with your keys
 - **Health Monitor**: Real-time status across all profiles
 
@@ -92,7 +92,8 @@ The dashboard provides visual management for all account types:
 | **Gemini** | OAuth | `ccs gemini` | Zero-config, fast iteration |
 | **Codex** | OAuth | `ccs codex` | Code generation |
 | **Copilot** | OAuth | `ccs copilot` or `ccs ghcp` | GitHub Copilot models |
-| **Kiro** | OAuth | `ccs kiro` | AWS CodeWhisperer (Claude-powered) |
+| **Cursor IDE** | Local Token | `ccs cursor` | Cursor subscription models via local daemon |
+| **Kiro** | OAuth (AWS default) | `ccs kiro` | AWS CodeWhisperer (Claude-powered) |
 | **Antigravity** | OAuth | `ccs agy` | Alternative routing |
 | **OpenRouter** | API Key | `ccs openrouter` | 300+ models, unified API |
 | **Ollama** | Local | `ccs ollama` | Local open-source models, privacy |
@@ -132,12 +133,48 @@ The dashboard provides visual management for all account types:
 ccs           # Default Claude session
 ccs gemini    # Gemini (OAuth)
 ccs codex     # OpenAI Codex (OAuth)
+ccs cursor    # Cursor IDE integration (token import + local daemon)
 ccs kiro      # Kiro/AWS CodeWhisperer (OAuth)
 ccs ghcp      # GitHub Copilot (OAuth device flow)
 ccs agy       # Antigravity (OAuth)
 ccs ollama    # Local Ollama (no API key needed)
 ccs glm       # GLM (API key)
 ```
+
+### Kiro Auth Methods
+
+`ccs kiro --auth` defaults to AWS Builder ID Device OAuth (best support for AWS org accounts).
+
+```bash
+ccs kiro --auth --kiro-auth-method aws           # AWS Builder ID device code (default)
+ccs kiro --auth --kiro-auth-method aws-authcode  # AWS Builder ID auth code
+ccs kiro --auth --kiro-auth-method google        # Google OAuth
+ccs kiro --auth --kiro-auth-method github        # Dashboard management OAuth flow
+```
+
+Dashboard parity: `ccs config` -> Accounts -> Add Kiro account -> choose `Auth Method`.
+
+### Cursor IDE Quick Start
+
+```bash
+ccs cursor enable
+ccs cursor auth
+ccs cursor start
+ccs cursor status
+```
+
+If auto-detect is unavailable:
+
+```bash
+ccs cursor auth --manual --token <token> --machine-id <machine-id>
+```
+
+Defaults:
+- Port: `20129`
+- Ghost mode: enabled
+- Dashboard page: `ccs config` -> `Cursor IDE`
+
+Detailed guide: [`docs/cursor-integration.md`](./docs/cursor-integration.md)
 
 ### Parallel Workflows
 
@@ -204,6 +241,15 @@ ccs cliproxy doctor     # Check quota status for all agy accounts
 ```
 
 **Auto-Failover**: When an Antigravity account runs out of quota, CCS automatically switches to another account with remaining capacity. Shared GCP project accounts are excluded (pooled quota).
+
+### CLIProxy Lifecycle
+
+```bash
+ccs cliproxy start      # Start CLIProxy background service
+ccs cliproxy status     # Check running status
+ccs cliproxy restart    # Restart CLIProxy service
+ccs cliproxy stop       # Stop running CLIProxy service
+```
 
 <br>
 
@@ -325,6 +371,7 @@ See [Remote Proxy documentation](https://docs.ccs.kaitran.ca/features/remote-pro
 | Multi-Account Claude | [docs.ccs.kaitran.ca/providers/claude-accounts](https://docs.ccs.kaitran.ca/providers/claude-accounts) |
 | API Profiles | [docs.ccs.kaitran.ca/providers/api-profiles](https://docs.ccs.kaitran.ca/providers/api-profiles) |
 | Remote Proxy | [docs.ccs.kaitran.ca/features/remote-proxy](https://docs.ccs.kaitran.ca/features/remote-proxy) |
+| Cursor IDE (local guide) | [./docs/cursor-integration.md](./docs/cursor-integration.md) |
 | CLI Reference | [docs.ccs.kaitran.ca/reference/cli-commands](https://docs.ccs.kaitran.ca/reference/cli-commands) |
 | Architecture | [docs.ccs.kaitran.ca/reference/architecture](https://docs.ccs.kaitran.ca/reference/architecture) |
 | Troubleshooting | [docs.ccs.kaitran.ca/reference/troubleshooting](https://docs.ccs.kaitran.ca/reference/troubleshooting) |

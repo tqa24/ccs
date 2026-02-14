@@ -19,12 +19,15 @@ interface AuthFlowState {
   oauthState: string | null;
   /** Whether callback is being submitted */
   isSubmittingCallback: boolean;
-  /** Whether this is a device code flow (ghcp, qwen) - dialog handled separately via WebSocket */
+  /** Whether this is a device code flow (ghcp, qwen, kiro) - dialog handled separately via WebSocket */
   isDeviceCodeFlow: boolean;
 }
 
 interface StartAuthOptions {
   nickname?: string;
+  kiroMethod?: string;
+  flowType?: 'authorization_code' | 'device_code';
+  startEndpoint?: 'start' | 'start-url';
 }
 
 /** Polling interval for OAuth status check (3 seconds) */
@@ -49,6 +52,7 @@ export function useCliproxyAuthFlow() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollStartRef = useRef<number>(0);
+  const openedAuthUrlRef = useRef(false);
   const queryClient = useQueryClient();
 
   // Clear polling
@@ -64,6 +68,7 @@ export function useCliproxyAuthFlow() {
     return () => {
       abortControllerRef.current?.abort();
       stopPolling();
+      openedAuthUrlRef.current = false;
     };
   }, [stopPolling]);
 
@@ -85,14 +90,46 @@ export function useCliproxyAuthFlow() {
         const response = await fetch(
           `/api/cliproxy/auth/${provider}/status?state=${encodeURIComponent(oauthState)}`
         );
-        const data = await response.json();
+        const data = (await response.json()) as {
+          status?: string;
+          error?: string;
+          url?: string;
+          auth_url?: string;
+          verification_url?: string;
+          user_code?: string;
+        };
 
         if (data.status === 'ok') {
           stopPolling();
           queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
           queryClient.invalidateQueries({ queryKey: ['account-quota'] });
           toast.success(`${provider} authentication successful`);
+          openedAuthUrlRef.current = false;
           setState(INITIAL_STATE);
+        } else if (data.status === 'auth_url') {
+          const authUrl = data.url || data.auth_url;
+          if (authUrl) {
+            setState((prev) => ({
+              ...prev,
+              authUrl,
+            }));
+            if (!openedAuthUrlRef.current) {
+              openedAuthUrlRef.current = true;
+              window.open(authUrl, '_blank');
+            }
+          }
+        } else if (data.status === 'device_code') {
+          stopPolling();
+          const details =
+            data.user_code && data.verification_url
+              ? `Open ${data.verification_url} and enter code: ${data.user_code}`
+              : 'Switch to Device Code method and try again.';
+          toast.error('Provider returned Device Code flow in callback mode');
+          setState((prev) => ({
+            ...prev,
+            isAuthenticating: false,
+            error: details,
+          }));
         } else if (data.status === 'error') {
           stopPolling();
           const errorMsg = data.error || 'Authentication failed';
@@ -103,7 +140,7 @@ export function useCliproxyAuthFlow() {
             error: errorMsg,
           }));
         }
-        // status === 'pending' means continue polling
+        // status === 'wait' (or pending) means continue polling
       } catch {
         // Network error - continue polling
       }
@@ -124,12 +161,21 @@ export function useCliproxyAuthFlow() {
       // Abort any in-progress auth
       abortControllerRef.current?.abort();
       stopPolling();
+      openedAuthUrlRef.current = false;
 
       // Create fresh controller and capture locally to avoid race with cancelAuth
       const controller = new AbortController();
       abortControllerRef.current = controller;
 
-      const deviceCodeFlow = isDeviceCodeProvider(provider);
+      const flowType =
+        options?.flowType ||
+        (isDeviceCodeProvider(provider) ? 'device_code' : 'authorization_code');
+      const deviceCodeFlow = flowType === 'device_code';
+      const startEndpoint = options?.startEndpoint || (deviceCodeFlow ? 'start' : 'start-url');
+      const payload = {
+        nickname: options?.nickname,
+        kiroMethod: options?.kiroMethod,
+      };
 
       setState({
         provider,
@@ -142,14 +188,13 @@ export function useCliproxyAuthFlow() {
       });
 
       try {
-        if (deviceCodeFlow) {
-          // Device Code Flow: Call /start endpoint which spawns CLIProxyAPI binary.
-          // This emits WebSocket events with userCode that DeviceCodeDialog will display.
-          // The /start endpoint blocks until completion, so we don't await it here.
+        if (startEndpoint === 'start') {
+          // /start spawns CLIProxy binary and blocks until completion.
+          // For Device Code flows, userCode is delivered via WebSocket.
           fetch(`/api/cliproxy/auth/${provider}/start`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nickname: options?.nickname }),
+            body: JSON.stringify(payload),
             signal: controller.signal,
           })
             .then(async (response) => {
@@ -159,6 +204,7 @@ export function useCliproxyAuthFlow() {
                 queryClient.invalidateQueries({ queryKey: ['account-quota'] });
                 // Note: No toast here - DeviceCodeDialog's useDeviceCode hook handles success toast
                 // via deviceCodeCompleted WebSocket event to avoid duplicate toasts
+                openedAuthUrlRef.current = false;
                 setState(INITIAL_STATE);
               } else {
                 const errorMsg = data.error || 'Authentication failed';
@@ -183,13 +229,13 @@ export function useCliproxyAuthFlow() {
                 error: message,
               }));
             });
-          // Don't await - let the request run in background while DeviceCodeDialog handles UI
+          // Don't await - keeps UI responsive while backend auth is in progress
         } else {
-          // Authorization Code Flow: Call /start-url to get auth URL immediately (non-blocking)
+          // /start-url uses management API to bootstrap callback/social flows.
           const response = await fetch(`/api/cliproxy/auth/${provider}/start-url`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nickname: options?.nickname }),
+            body: JSON.stringify(payload),
             signal: controller.signal,
           });
 
@@ -202,12 +248,13 @@ export function useCliproxyAuthFlow() {
           // Update state with auth URL
           setState((prev) => ({
             ...prev,
-            authUrl: data.authUrl,
+            authUrl: data.authUrl || null,
             oauthState: data.state,
           }));
 
           // Auto-open auth URL in new browser tab (fallback URL still shown in dialog)
           if (data.authUrl) {
+            openedAuthUrlRef.current = true;
             window.open(data.authUrl, '_blank');
           }
 
@@ -221,6 +268,7 @@ export function useCliproxyAuthFlow() {
         }
       } catch (error) {
         if (error instanceof Error && error.name === 'AbortError') {
+          openedAuthUrlRef.current = false;
           setState(INITIAL_STATE);
           return;
         }
@@ -240,6 +288,7 @@ export function useCliproxyAuthFlow() {
     const currentProvider = state.provider;
     abortControllerRef.current?.abort();
     stopPolling();
+    openedAuthUrlRef.current = false;
     setState(INITIAL_STATE);
     // Also cancel on backend
     if (currentProvider) {

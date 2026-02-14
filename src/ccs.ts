@@ -532,6 +532,14 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Special case: cursor command (Cursor IDE integration)
+  // All `ccs cursor *` routes to cursor command handler — cursor has no profile-switching mode
+  if (firstArg === 'cursor') {
+    const { handleCursorCommand } = await import('./commands/cursor-command');
+    const exitCode = await handleCursorCommand(args.slice(1));
+    process.exit(exitCode);
+  }
+
   // Special case: copilot command (GitHub Copilot integration)
   // Only route to command handler for known subcommands, otherwise treat as profile
   const COPILOT_SUBCOMMANDS = [
@@ -555,10 +563,29 @@ async function main(): Promise<void> {
 
   // Special case: headless delegation (-p flag)
   if (args.includes('-p') || args.includes('--prompt')) {
-    const { DelegationHandler } = await import('./delegation/delegation-handler');
-    const handler = new DelegationHandler();
-    await handler.route(args);
-    return;
+    // CLIProxy profiles (codex/gemini/agy/etc, including user variants) must stay on
+    // the normal CLIProxy path so provider-specific flags (e.g. --effort/--thinking)
+    // and proxy chains are applied consistently.
+    let shouldUseDelegation = true;
+    const { profile } = detectProfile(args);
+    try {
+      const ProfileDetectorModule = await import('./auth/profile-detector');
+      const ProfileDetector = ProfileDetectorModule.default;
+      const detector = new ProfileDetector();
+      const profileInfo = detector.detectProfileType(profile);
+      if (profileInfo.type === 'cliproxy') {
+        shouldUseDelegation = false;
+      }
+    } catch {
+      // Best effort detection only; keep delegation fallback behavior.
+    }
+
+    if (shouldUseDelegation) {
+      const { DelegationHandler } = await import('./delegation/delegation-handler');
+      const handler = new DelegationHandler();
+      await handler.route(args);
+      return;
+    }
   }
 
   // First-time install: offer setup wizard for interactive users
@@ -608,6 +635,10 @@ async function main(): Promise<void> {
       await execClaudeWithCLIProxy(claudeCli, provider, remainingArgs, {
         customSettingsPath,
         port: variantPort,
+        isComposite: profileInfo.isComposite,
+        compositeTiers: profileInfo.compositeTiers,
+        compositeDefaultTier: profileInfo.compositeDefaultTier,
+        profileName: profileInfo.name,
       });
     } else if (profileInfo.type === 'copilot') {
       // COPILOT FLOW: GitHub Copilot subscription via copilot-api proxy

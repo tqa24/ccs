@@ -15,6 +15,7 @@ import {
   createEmptyUnifiedConfig,
   UNIFIED_CONFIG_VERSION,
   DEFAULT_COPILOT_CONFIG,
+  DEFAULT_CURSOR_CONFIG,
   DEFAULT_GLOBAL_ENV,
   DEFAULT_CLIPROXY_SERVER_CONFIG,
   DEFAULT_QUOTA_MANAGEMENT_CONFIG,
@@ -25,7 +26,9 @@ import {
   ThinkingConfig,
   DashboardAuthConfig,
   ImageAnalysisConfig,
+  CursorConfig,
 } from './unified-config-types';
+import { validateCompositeTiers } from '../cliproxy/composite-validator';
 import { isUnifiedConfigEnabled } from './feature-flags';
 
 const CONFIG_YAML = 'config.yaml';
@@ -205,6 +208,27 @@ export function loadUnifiedConfig(): UnifiedConfig | null {
 }
 
 /**
+ * Validate composite variant provider strings.
+ * Warns about invalid providers in composite variant configurations.
+ */
+function validateCompositeVariants(config: UnifiedConfig): void {
+  const variants = config.cliproxy?.variants;
+  if (!variants) return;
+
+  for (const [name, variant] of Object.entries(variants)) {
+    if ('type' in variant && variant.type === 'composite') {
+      const error = validateCompositeTiers(variant.tiers, {
+        defaultTier: variant.default_tier,
+        requireAllTiers: true,
+      });
+      if (error) {
+        console.warn(`[!] Variant '${name}': invalid composite config (${error})`);
+      }
+    }
+  }
+}
+
+/**
  * Merge partial config with defaults.
  * Preserves existing data while filling in missing sections.
  */
@@ -275,6 +299,13 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
       rate_limit: partial.copilot?.rate_limit ?? DEFAULT_COPILOT_CONFIG.rate_limit,
       wait_on_limit: partial.copilot?.wait_on_limit ?? DEFAULT_COPILOT_CONFIG.wait_on_limit,
       model: partial.copilot?.model ?? DEFAULT_COPILOT_CONFIG.model,
+    },
+    // Cursor config - disabled by default, merge with defaults
+    cursor: {
+      enabled: partial.cursor?.enabled ?? DEFAULT_CURSOR_CONFIG.enabled,
+      port: partial.cursor?.port ?? DEFAULT_CURSOR_CONFIG.port,
+      auto_start: partial.cursor?.auto_start ?? DEFAULT_CURSOR_CONFIG.auto_start,
+      ghost_mode: partial.cursor?.ghost_mode ?? DEFAULT_CURSOR_CONFIG.ghost_mode,
     },
     // Global env - injected into all non-Claude subscription profiles
     global_env: {
@@ -404,7 +435,10 @@ export function loadOrCreateUnifiedConfig(): UnifiedConfig {
   const existing = loadUnifiedConfig();
   if (existing) {
     // Merge with defaults to fill any missing sections
-    return mergeWithDefaults(existing);
+    const merged = mergeWithDefaults(existing);
+    // Validate composite variant provider strings
+    validateCompositeVariants(merged);
+    return merged;
   }
 
   // Create empty config
@@ -559,6 +593,23 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('');
   }
 
+  // Cursor section (Cursor IDE proxy daemon)
+  if (config.cursor) {
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push('# Cursor: Cursor IDE proxy daemon');
+    lines.push('# Enables Cursor IDE integration via local proxy daemon.');
+    lines.push('#');
+    lines.push('# enabled: Enable/disable Cursor integration (default: false)');
+    lines.push('# port: Port for cursor proxy daemon (default: 20129)');
+    lines.push('# auto_start: Auto-start daemon when CCS starts (default: false)');
+    lines.push('# ghost_mode: Disable telemetry for privacy (default: true)');
+    lines.push('# ----------------------------------------------------------------------------');
+    lines.push(
+      yaml.dump({ cursor: config.cursor }, { indent: 2, lineWidth: -1, quotingType: '"' }).trim()
+    );
+    lines.push('');
+  }
+
   // Global env section
   if (config.global_env) {
     lines.push('# ----------------------------------------------------------------------------');
@@ -587,7 +638,9 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('# Thinking: Extended thinking/reasoning budget configuration');
     lines.push('# Controls reasoning depth for supported providers (agy, gemini, codex).');
     lines.push('#');
-    lines.push('# Modes: auto (use tier_defaults), off (disable), manual (--thinking flag only)');
+    lines.push(
+      '# Modes: auto (use tier_defaults), off (disable), manual (--thinking/--effort flags)'
+    );
     lines.push('# Levels: minimal (512), low (1K), medium (8K), high (24K), xhigh (32K), auto');
     lines.push('# Override: Set global override value (number or level name)');
     lines.push('# Provider overrides: Per-provider tier defaults');
@@ -899,4 +952,13 @@ export function getImageAnalysisConfig(): ImageAnalysisConfig {
     provider_models:
       config.image_analysis?.provider_models ?? DEFAULT_IMAGE_ANALYSIS_CONFIG.provider_models,
   };
+}
+
+/**
+ * Get cursor configuration.
+ * Returns defaults if not configured.
+ */
+export function getCursorConfig(): CursorConfig {
+  const config = loadOrCreateUnifiedConfig();
+  return config.cursor ?? { ...DEFAULT_CURSOR_CONFIG };
 }

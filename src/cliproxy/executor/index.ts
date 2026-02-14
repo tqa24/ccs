@@ -52,6 +52,7 @@ import {
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { installImageAnalyzerHook } from '../../utils/hooks';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
+import { isKiroAuthMethod, KiroAuthMethod, normalizeKiroAuthMethod } from '../auth/auth-types';
 
 // Import modular components
 import { waitForProxyReadyWithSpinner, spawnProxy } from './lifecycle-manager';
@@ -63,6 +64,7 @@ import {
   handleQuotaCheck,
 } from './retry-handler';
 import { checkOrJoinProxy, registerProxySession, setupCleanupHandlers } from './session-bridge';
+import { parseThinkingOverride } from './thinking-arg-parser';
 import {
   warnCrossProviderDuplicates,
   cleanupStaleAutoPauses,
@@ -113,20 +115,31 @@ export async function execClaudeWithCLIProxy(
     }
   };
 
+  // Helper: Extract unique providers from composite tiers
+  const compositeProviders =
+    cfg.isComposite && cfg.compositeTiers
+      ? [...new Set(Object.values(cfg.compositeTiers).map((t) => t.provider))]
+      : [];
+
   // 0. Resolve proxy configuration (CLI > ENV > config.yaml > defaults)
   const unifiedConfig = loadOrCreateUnifiedConfig();
 
   // 0a. Runtime backend/provider validation
   const backend: CLIProxyBackend = unifiedConfig.cliproxy?.backend ?? DEFAULT_BACKEND;
-  if (backend === 'original' && PLUS_ONLY_PROVIDERS.includes(provider)) {
-    console.error('');
-    console.error(fail(`${provider} requires CLIProxyAPIPlus backend`));
-    console.error('');
-    console.error('To use this provider, either:');
-    console.error('  1. Set `cliproxy.backend: plus` in ~/.ccs/config.yaml');
-    console.error('  2. Use --backend=plus flag: ccs ' + provider + ' --backend=plus');
-    console.error('');
-    throw new Error(`Provider ${provider} requires Plus backend`);
+
+  // Collect all providers to validate (default + composite tiers)
+  const allProviders = [provider, ...compositeProviders];
+  for (const p of allProviders) {
+    if (backend === 'original' && PLUS_ONLY_PROVIDERS.includes(p as CLIProxyProvider)) {
+      console.error('');
+      console.error(fail(`${p} requires CLIProxyAPIPlus backend`));
+      console.error('');
+      console.error('To use this provider, either:');
+      console.error('  1. Set `cliproxy.backend: plus` in ~/.ccs/config.yaml');
+      console.error('  2. Use --backend=plus flag: ccs ' + p + ' --backend=plus');
+      console.error('');
+      throw new Error(`Provider ${p} requires Plus backend`);
+    }
   }
 
   const cliproxyServerConfig = unifiedConfig.cliproxy_server;
@@ -295,50 +308,63 @@ export async function execClaudeWithCLIProxy(
     setNickname = argsWithoutProxy[nicknameIdx + 1];
   }
 
-  // Parse --thinking flag
-  let thinkingOverride: string | number | undefined;
-  const thinkingEqArg = argsWithoutProxy.find((arg) => arg.startsWith('--thinking='));
-  if (thinkingEqArg) {
-    const val = thinkingEqArg.substring('--thinking='.length);
-    if (!val || val.trim() === '') {
-      console.error(fail('--thinking requires a value'));
-      console.error('    Examples: --thinking=low, --thinking=8192, --thinking=off');
+  // Parse --kiro-auth-method flag
+  let kiroAuthMethod: KiroAuthMethod | undefined;
+  const kiroMethodIdx = argsWithoutProxy.indexOf('--kiro-auth-method');
+  if (kiroMethodIdx !== -1) {
+    const rawMethod = argsWithoutProxy[kiroMethodIdx + 1];
+    if (!rawMethod || rawMethod.startsWith('-')) {
+      console.error(fail('--kiro-auth-method requires a value'));
+      console.error('    Supported values: aws, aws-authcode, google, github');
+      process.exitCode = 1;
+      return;
+    }
+    const normalized = rawMethod.trim().toLowerCase();
+    if (!isKiroAuthMethod(normalized)) {
+      console.error(fail(`Invalid --kiro-auth-method value: ${rawMethod}`));
+      console.error('    Supported values: aws, aws-authcode, google, github');
+      process.exitCode = 1;
+      return;
+    }
+    kiroAuthMethod = normalizeKiroAuthMethod(normalized);
+  }
+
+  if (kiroAuthMethod && provider !== 'kiro' && !compositeProviders.includes('kiro')) {
+    console.error(fail('--kiro-auth-method is only valid for ccs kiro'));
+    process.exitCode = 1;
+    return;
+  }
+
+  // Parse --thinking / --effort flags (aliases; first occurrence wins)
+  const thinkingParse = parseThinkingOverride(argsWithoutProxy);
+  if (thinkingParse.error) {
+    const { flag } = thinkingParse.error;
+    console.error(fail(`${flag} requires a value`));
+
+    if (provider === 'codex') {
+      console.error('    Codex examples: --effort xhigh, --effort high, --effort medium');
+      console.error('    Alias: --thinking xhigh (same behavior)');
+    } else {
+      console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
       console.error('    Levels: minimal, low, medium, high, xhigh, auto');
-      process.exit(1);
     }
-    const numVal = parseInt(val, 10);
-    thinkingOverride = !isNaN(numVal) ? numVal : val;
 
-    const allThinkingFlags = argsWithoutProxy.filter(
-      (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
+    process.exit(1);
+  }
+
+  const thinkingOverride = thinkingParse.value;
+  if (thinkingParse.duplicateDisplays.length > 0) {
+    console.warn(
+      `[!] Multiple reasoning flags detected. Using first occurrence: ${thinkingParse.sourceDisplay}`
     );
-    if (allThinkingFlags.length > 1) {
-      console.warn(
-        `[!] Multiple --thinking flags detected. Using first occurrence: ${thinkingEqArg}`
-      );
-    }
-  } else {
-    const thinkingIdx = argsWithoutProxy.indexOf('--thinking');
-    if (thinkingIdx !== -1) {
-      const nextArg = argsWithoutProxy[thinkingIdx + 1];
-      if (!nextArg || nextArg.startsWith('-')) {
-        console.error(fail('--thinking requires a value'));
-        console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
-        console.error('    Levels: minimal, low, medium, high, xhigh, auto');
-        process.exit(1);
-      }
-      const numVal = parseInt(nextArg, 10);
-      thinkingOverride = !isNaN(numVal) ? numVal : nextArg;
+  }
 
-      const allThinkingFlags = argsWithoutProxy.filter(
-        (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
-      );
-      if (allThinkingFlags.length > 1) {
-        console.warn(
-          `[!] Multiple --thinking flags detected. Using first occurrence: --thinking ${nextArg}`
-        );
-      }
-    }
+  if (thinkingParse.sourceFlag === '--effort' && provider !== 'codex') {
+    console.warn(
+      warn(
+        '`--effort` is primarily for codex. Continuing as alias of `--thinking` for compatibility.'
+      )
+    );
   }
 
   // Parse --1m / --no-1m flags for extended context (1M token window)
@@ -421,8 +447,18 @@ export async function execClaudeWithCLIProxy(
 
   // Handle --config
   if (forceConfig && supportsModelConfig(provider)) {
-    await configureProviderModel(provider, true, cfg.customSettingsPath);
-    process.exit(0);
+    // Block --config for composite variants (per-tier models in config.yaml)
+    if (cfg.isComposite) {
+      const variantName = cfg.profileName || provider;
+      console.log(
+        warn('Composite variants use per-tier config. Edit config.yaml to change tier models.')
+      );
+      console.error(`    Use "ccs cliproxy edit ${variantName}" to modify composite variants`);
+      process.exit(1);
+    } else {
+      await configureProviderModel(provider, true, cfg.customSettingsPath);
+      process.exit(0);
+    }
   }
 
   // Handle --logout
@@ -457,6 +493,7 @@ export async function execClaudeWithCLIProxy(
     const authSuccess = await triggerOAuth(provider, {
       verbose,
       import: true,
+      ...(kiroAuthMethod ? { kiroMethod: kiroAuthMethod } : {}),
       ...(setNickname ? { nickname: setNickname } : {}),
     });
     if (!authSuccess) {
@@ -477,11 +514,58 @@ export async function execClaudeWithCLIProxy(
   if (providerConfig.requiresOAuth && !skipLocalAuth) {
     log(`Checking authentication for ${provider}`);
 
-    if (forceAuth || !isAuthenticated(provider)) {
+    // Multi-provider auth check for composite variants
+    if (compositeProviders.length > 0) {
+      // Handle forceAuth for composite providers
+      if (forceAuth) {
+        const { triggerOAuth } = await import('../auth-handler');
+        const failures: string[] = [];
+        for (const p of compositeProviders) {
+          const authSuccess = await triggerOAuth(p, {
+            verbose,
+            add: addAccount,
+            ...(kiroAuthMethod && p === 'kiro' ? { kiroMethod: kiroAuthMethod } : {}),
+            ...(forceHeadless ? { headless: true } : {}),
+            ...(setNickname ? { nickname: setNickname } : {}),
+            ...(noIncognito ? { noIncognito: true } : {}),
+            ...(pasteCallback ? { pasteCallback: true } : {}),
+            ...(portForward ? { portForward: true } : {}),
+          });
+          if (!authSuccess) {
+            failures.push(p);
+          }
+        }
+        if (failures.length > 0) {
+          const succeeded = compositeProviders.filter((p) => !failures.includes(p));
+          console.error(fail(`Auth failed for: ${failures.join(', ')}`));
+          if (succeeded.length > 0) {
+            console.error(info(`Succeeded: ${succeeded.join(', ')}`));
+          }
+          process.exit(1);
+        }
+        process.exit(0);
+      }
+
+      // Check for unauthenticated providers
+      const unauthenticatedProviders: string[] = [];
+      for (const p of compositeProviders) {
+        if (!isAuthenticated(p)) {
+          unauthenticatedProviders.push(p);
+        }
+      }
+      if (unauthenticatedProviders.length > 0) {
+        console.error(fail('Composite variant requires authentication for multiple providers:'));
+        for (const p of unauthenticatedProviders) {
+          console.error(`    - ${p} (run "ccs ${p} --auth")`);
+        }
+        process.exit(1);
+      }
+    } else if (forceAuth || !isAuthenticated(provider)) {
       const { triggerOAuth } = await import('../auth-handler');
       const authSuccess = await triggerOAuth(provider, {
         verbose,
         add: addAccount,
+        ...(kiroAuthMethod ? { kiroMethod: kiroAuthMethod } : {}),
         ...(forceHeadless ? { headless: true } : {}),
         ...(setNickname ? { nickname: setNickname } : {}),
         ...(noIncognito ? { noIncognito: true } : {}),
@@ -498,8 +582,14 @@ export async function execClaudeWithCLIProxy(
       log(`${provider} already authenticated`);
     }
 
-    // 3a. Proactive token refresh
-    await handleTokenExpiration(provider, verbose);
+    // 3a. Proactive token refresh (multi-provider for composite)
+    if (compositeProviders.length > 0) {
+      for (const p of compositeProviders) {
+        await handleTokenExpiration(p, verbose);
+      }
+    } else {
+      await handleTokenExpiration(provider, verbose);
+    }
 
     // 3a-1. Update lastUsedAt
     const usedAccount = getDefaultAccount(provider);
@@ -510,7 +600,14 @@ export async function execClaudeWithCLIProxy(
 
   // 3b. Preflight quota check (Antigravity only)
   if (!skipLocalAuth) {
-    await handleQuotaCheck(provider);
+    // Multi-tier quota check for composite variants (check if ANY tier uses 'agy')
+    if (compositeProviders.length > 0) {
+      if (compositeProviders.includes('agy')) {
+        await handleQuotaCheck('agy');
+      }
+    } else {
+      await handleQuotaCheck(provider);
+    }
   }
 
   // 3c. Account safety: enforce cross-provider isolation
@@ -529,27 +626,50 @@ export async function execClaudeWithCLIProxy(
   }
 
   // 4. First-run model configuration
-  if (supportsModelConfig(provider) && !skipLocalAuth) {
+  if (!cfg.isComposite && supportsModelConfig(provider) && !skipLocalAuth) {
     await configureProviderModel(provider, false, cfg.customSettingsPath);
   }
 
-  // 5. Check for broken models
-  const currentModel = getCurrentModel(provider, cfg.customSettingsPath);
-  if (currentModel && isModelBroken(provider, currentModel)) {
-    const modelEntry = findModel(provider, currentModel);
-    const issueUrl = getModelIssueUrl(provider, currentModel);
-    console.error('');
-    console.error(warn(`${modelEntry?.name || currentModel} has known issues with Claude Code`));
-    console.error('    Tool calls will fail. Use "gemini-3-pro-preview" instead.');
-    if (issueUrl) {
-      console.error(`    Tracking: ${issueUrl}`);
+  // 5. Check for broken models (multi-tier for composite)
+  if (compositeProviders.length > 0 && cfg.compositeTiers) {
+    // Check all tier models in composite variant
+    const tiers: Array<'opus' | 'sonnet' | 'haiku'> = ['opus', 'sonnet', 'haiku'];
+    for (const tier of tiers) {
+      const tierConfig = cfg.compositeTiers[tier];
+      if (tierConfig && isModelBroken(tierConfig.provider, tierConfig.model)) {
+        const modelEntry = findModel(tierConfig.provider, tierConfig.model);
+        const issueUrl = getModelIssueUrl(tierConfig.provider, tierConfig.model);
+        console.error('');
+        console.error(
+          warn(
+            `${tier} tier: ${modelEntry?.name || tierConfig.model} has known issues with Claude Code`
+          )
+        );
+        console.error('    Tool calls will fail. Consider changing the model in config.yaml.');
+        if (issueUrl) {
+          console.error(`    Tracking: ${issueUrl}`);
+        }
+        console.error('');
+      }
     }
-    if (skipLocalAuth) {
-      console.error('    Note: Model may be overridden by remote proxy configuration.');
-    } else {
-      console.error(`    Run "ccs ${provider} --config" to change model.`);
+  } else {
+    const currentModel = getCurrentModel(provider, cfg.customSettingsPath);
+    if (currentModel && isModelBroken(provider, currentModel)) {
+      const modelEntry = findModel(provider, currentModel);
+      const issueUrl = getModelIssueUrl(provider, currentModel);
+      console.error('');
+      console.error(warn(`${modelEntry?.name || currentModel} has known issues with Claude Code`));
+      console.error('    Tool calls will fail. Use "gemini-3-pro-preview" instead.');
+      if (issueUrl) {
+        console.error(`    Tracking: ${issueUrl}`);
+      }
+      if (skipLocalAuth) {
+        console.error('    Note: Model may be overridden by remote proxy configuration.');
+      } else {
+        console.error(`    Run "ccs ${provider} --config" to change model.`);
+      }
+      console.error('');
     }
-    console.error('');
   }
 
   // 6. Ensure user settings file exists
@@ -640,6 +760,9 @@ export async function execClaudeWithCLIProxy(
     thinkingOverride,
     extendedContextOverride,
     verbose,
+    isComposite: cfg.isComposite,
+    compositeTiers: cfg.compositeTiers,
+    compositeDefaultTier: cfg.compositeDefaultTier,
   });
 
   if (initialEnvVars.ANTHROPIC_BASE_URL) {
@@ -665,11 +788,12 @@ export async function execClaudeWithCLIProxy(
     ? `http://127.0.0.1:${toolSanitizationPort}`
     : initialEnvVars.ANTHROPIC_BASE_URL;
 
-  // 10. Setup Codex reasoning proxy (Codex only)
+  // 10. Setup Codex reasoning proxy (single-provider Codex only)
   let codexReasoningProxy: CodexReasoningProxy | null = null;
   let codexReasoningPort: number | null = null;
 
-  if (provider === 'codex') {
+  // Composite variants require root model-routed endpoints, never provider-pinned codex endpoints.
+  if (provider === 'codex' && !cfg.isComposite) {
     if (!postSanitizationBaseUrl) {
       log('ANTHROPIC_BASE_URL not set for Codex, reasoning proxy disabled');
     } else {
@@ -729,7 +853,22 @@ export async function execClaudeWithCLIProxy(
     thinkingOverride,
     extendedContextOverride,
     verbose,
+    isComposite: cfg.isComposite,
+    compositeTiers: cfg.compositeTiers,
+    compositeDefaultTier: cfg.compositeDefaultTier,
   });
+
+  if (cfg.isComposite && cfg.compositeTiers && cfg.compositeDefaultTier) {
+    const mode = useRemoteProxy
+      ? proxyConfig.protocol === 'https'
+        ? 'remote-https'
+        : 'remote-http'
+      : 'local';
+    const defaultTierProvider = cfg.compositeTiers[cfg.compositeDefaultTier]?.provider ?? provider;
+    log(
+      `Composite self-check: mode=${mode}, baseUrl=${env.ANTHROPIC_BASE_URL || 'unset'}, defaultTier=${cfg.compositeDefaultTier}, defaultProvider=${defaultTierProvider}`
+    );
+  }
 
   const webSearchEnv = getWebSearchHookEnv();
   logEnvironment(env, webSearchEnv, verbose);
@@ -746,7 +885,9 @@ export async function execClaudeWithCLIProxy(
     '--accounts',
     '--use',
     '--nickname',
+    '--kiro-auth-method',
     '--thinking',
+    '--effort',
     '--1m',
     '--no-1m',
     '--incognito',
@@ -758,11 +899,14 @@ export async function execClaudeWithCLIProxy(
   const claudeArgs = argsWithoutProxy.filter((arg, idx) => {
     if (ccsFlags.includes(arg)) return false;
     if (arg.startsWith('--thinking=')) return false;
+    if (arg.startsWith('--effort=')) return false;
     if (arg.startsWith('--1m=') || arg.startsWith('--no-1m=')) return false;
     if (
       argsWithoutProxy[idx - 1] === '--use' ||
       argsWithoutProxy[idx - 1] === '--nickname' ||
-      argsWithoutProxy[idx - 1] === '--thinking'
+      argsWithoutProxy[idx - 1] === '--kiro-auth-method' ||
+      argsWithoutProxy[idx - 1] === '--thinking' ||
+      argsWithoutProxy[idx - 1] === '--effort'
     )
       return false;
     return true;

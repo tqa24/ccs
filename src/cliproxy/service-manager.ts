@@ -76,7 +76,7 @@ async function waitForPort(
 }
 
 /**
- * Register cleanup handlers to stop proxy on process exit
+ * Register process-exit cleanup handlers for in-process workers.
  */
 function registerCleanup(): void {
   if (cleanupRegistered) return;
@@ -87,11 +87,8 @@ function registerCleanup(): void {
       tokenRefreshWorker.stop();
       tokenRefreshWorker = null;
     }
-    // Then stop proxy process
-    if (proxyProcess && !proxyProcess.killed) {
-      proxyProcess.kill('SIGTERM');
-      proxyProcess = null;
-    }
+    // Do not stop detached CLIProxy on parent exit.
+    // Persistence is expected across CCS command lifecycles.
   };
 
   process.once('exit', cleanup);

@@ -306,12 +306,191 @@ export function groupModelsByTier(models: TieredModel[]): Map<ModelTier, TieredM
   return groups;
 }
 
+export type CodexWindowKind =
+  | 'usage-5h'
+  | 'usage-weekly'
+  | 'code-review-5h'
+  | 'code-review-weekly'
+  | 'code-review'
+  | 'unknown';
+
+/**
+ * Map raw Codex API window labels into semantic buckets.
+ */
+export function getCodexWindowKind(label: string): CodexWindowKind {
+  const lower = (label || '').toLowerCase();
+  const isCodeReview = lower.includes('code review') || lower.includes('code_review');
+  const isPrimary = lower.includes('primary');
+  const isSecondary = lower.includes('secondary');
+
+  if (isCodeReview) {
+    if (isPrimary) return 'code-review-5h';
+    if (isSecondary) return 'code-review-weekly';
+    return 'code-review';
+  }
+
+  if (isPrimary) return 'usage-5h';
+  if (isSecondary) return 'usage-weekly';
+  return 'unknown';
+}
+
+type CodexWindowSummary = Pick<CodexQuotaWindow, 'label' | 'resetAfterSeconds'>;
+
+/**
+ * Infer code-review window cadence by comparing against usage windows.
+ * This keeps labels stable as countdown values decrease over time.
+ */
+function inferCodeReviewCadence(
+  window: CodexWindowSummary,
+  allWindows: CodexWindowSummary[]
+): '5h' | 'weekly' | null {
+  const kind = getCodexWindowKind(window.label);
+  if (kind === 'code-review-weekly') return 'weekly';
+
+  const reset = window.resetAfterSeconds;
+  if (typeof reset !== 'number' || !isFinite(reset) || reset <= 0) return null;
+
+  const usage5h = allWindows.find(
+    (w) =>
+      getCodexWindowKind(w.label) === 'usage-5h' &&
+      typeof w.resetAfterSeconds === 'number' &&
+      isFinite(w.resetAfterSeconds) &&
+      w.resetAfterSeconds > 0
+  );
+  const usageWeekly = allWindows.find(
+    (w) =>
+      getCodexWindowKind(w.label) === 'usage-weekly' &&
+      typeof w.resetAfterSeconds === 'number' &&
+      isFinite(w.resetAfterSeconds) &&
+      w.resetAfterSeconds > 0
+  );
+
+  if (!usage5h || !usageWeekly) return null;
+
+  const diffTo5h = Math.abs(reset - (usage5h.resetAfterSeconds as number));
+  const diffToWeekly = Math.abs(reset - (usageWeekly.resetAfterSeconds as number));
+  return diffToWeekly <= diffTo5h ? 'weekly' : '5h';
+}
+
+export function getCodexWindowDisplayLabel(
+  labelOrWindow: string | CodexWindowSummary,
+  allWindows: CodexWindowSummary[] = []
+): string {
+  const label = typeof labelOrWindow === 'string' ? labelOrWindow : labelOrWindow.label;
+  const currentWindow: CodexWindowSummary =
+    typeof labelOrWindow === 'string'
+      ? { label, resetAfterSeconds: null }
+      : { label, resetAfterSeconds: labelOrWindow.resetAfterSeconds };
+  const context = allWindows.length > 0 ? allWindows : [currentWindow];
+
+  switch (getCodexWindowKind(label)) {
+    case 'usage-5h':
+      return '5h usage limit';
+    case 'usage-weekly':
+      return 'Weekly usage limit';
+    case 'code-review-5h':
+    case 'code-review-weekly':
+    case 'code-review': {
+      const inferred = inferCodeReviewCadence(currentWindow, context);
+      if (inferred === '5h') return 'Code review (5h)';
+      if (inferred === 'weekly') return 'Code review (weekly)';
+      return 'Code review';
+    }
+    case 'unknown':
+      return label;
+  }
+}
+
+export interface CodexQuotaBreakdown {
+  fiveHourWindow: CodexQuotaWindow | null;
+  weeklyWindow: CodexQuotaWindow | null;
+  codeReviewWindows: CodexQuotaWindow[];
+  unknownWindows: CodexQuotaWindow[];
+}
+
+/**
+ * Break down Codex windows into core usage windows (5h + weekly) and auxiliary windows.
+ */
+export function getCodexQuotaBreakdown(windows: CodexQuotaWindow[]): CodexQuotaBreakdown {
+  if (!windows || windows.length === 0) {
+    return {
+      fiveHourWindow: null,
+      weeklyWindow: null,
+      codeReviewWindows: [],
+      unknownWindows: [],
+    };
+  }
+
+  let fiveHourWindow: CodexQuotaWindow | null = null;
+  let weeklyWindow: CodexQuotaWindow | null = null;
+  const codeReviewWindows: CodexQuotaWindow[] = [];
+  const unknownWindows: CodexQuotaWindow[] = [];
+  const nonCodeReviewWindows: CodexQuotaWindow[] = [];
+
+  for (const window of windows) {
+    const kind = getCodexWindowKind(window.label);
+
+    switch (kind) {
+      case 'usage-5h':
+        if (!fiveHourWindow) fiveHourWindow = window;
+        nonCodeReviewWindows.push(window);
+        break;
+      case 'usage-weekly':
+        if (!weeklyWindow) weeklyWindow = window;
+        nonCodeReviewWindows.push(window);
+        break;
+      case 'code-review-5h':
+      case 'code-review-weekly':
+      case 'code-review':
+        codeReviewWindows.push(window);
+        break;
+      case 'unknown':
+        unknownWindows.push(window);
+        nonCodeReviewWindows.push(window);
+        break;
+    }
+  }
+
+  // Fallback for API label changes: infer 5h/weekly from reset horizon when explicit labels are absent.
+  if ((!fiveHourWindow || !weeklyWindow) && nonCodeReviewWindows.length > 0) {
+    const withReset = nonCodeReviewWindows
+      .filter((w) => typeof w.resetAfterSeconds === 'number' && w.resetAfterSeconds >= 0)
+      .sort((a, b) => (a.resetAfterSeconds || 0) - (b.resetAfterSeconds || 0));
+
+    if (!fiveHourWindow) {
+      fiveHourWindow = withReset[0] || nonCodeReviewWindows[0] || null;
+    }
+
+    if (!weeklyWindow) {
+      weeklyWindow =
+        withReset.length > 1
+          ? withReset[withReset.length - 1]
+          : nonCodeReviewWindows.find((w) => w !== fiveHourWindow) || null;
+    }
+  }
+
+  return {
+    fiveHourWindow,
+    weeklyWindow,
+    codeReviewWindows,
+    unknownWindows,
+  };
+}
+
 /**
  * Get minimum remaining percentage across Codex rate limit windows
  */
 export function getMinCodexQuota(windows: CodexQuotaWindow[]): number | null {
   if (!windows || windows.length === 0) return null;
-  const percentages = windows.map((w) => w.remainingPercent);
+
+  const { fiveHourWindow, weeklyWindow } = getCodexQuotaBreakdown(windows);
+  const usageWindows = [fiveHourWindow, weeklyWindow].filter(
+    (w, index, arr): w is CodexQuotaWindow => !!w && arr.indexOf(w) === index
+  );
+
+  // Primary account quota should be driven by core usage windows, not code-review windows.
+  const sourceWindows = usageWindows.length > 0 ? usageWindows : windows;
+  const percentages = sourceWindows.map((w) => w.remainingPercent);
   return Math.min(...percentages);
 }
 
@@ -320,7 +499,13 @@ export function getMinCodexQuota(windows: CodexQuotaWindow[]): number | null {
  */
 export function getCodexResetTime(windows: CodexQuotaWindow[]): string | null {
   if (!windows || windows.length === 0) return null;
-  const resets = windows.map((w) => w.resetAt).filter((t): t is string => t !== null);
+
+  const { fiveHourWindow, weeklyWindow } = getCodexQuotaBreakdown(windows);
+  const usageWindows = [fiveHourWindow, weeklyWindow].filter(
+    (w, index, arr): w is CodexQuotaWindow => !!w && arr.indexOf(w) === index
+  );
+  const sourceWindows = usageWindows.length > 0 ? usageWindows : windows;
+  const resets = sourceWindows.map((w) => w.resetAt).filter((t): t is string => t !== null);
   if (resets.length === 0) return null;
   return resets.sort()[0];
 }

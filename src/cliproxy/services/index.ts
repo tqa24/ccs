@@ -9,19 +9,25 @@ export {
   variantExists,
   listVariants,
   createVariant,
+  createCompositeVariant,
+  updateCompositeVariant,
   removeVariant,
   type VariantConfig,
   type VariantOperationResult,
+  type CreateCompositeVariantOptions,
+  type UpdateCompositeVariantOptions,
 } from './variant-service';
 
 // Proxy lifecycle
 export {
   getProxyStatus,
   stopProxy,
+  startProxy,
   isProxyRunning,
   getActiveSessionCount,
   type ProxyStatusResult,
   type StopProxyResult,
+  type StartProxyResult,
 } from './proxy-lifecycle-service';
 
 // Binary management

@@ -23,7 +23,7 @@ export function UsageSummaryCards({ data, isLoading }: UsageSummaryCardsProps) {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {[1, 2, 3, 4, 5].map((i) => (
           <Card key={i}>
             <CardContent className="p-6">
@@ -95,7 +95,7 @@ export function UsageSummaryCards({ data, isLoading }: UsageSummaryCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
       {cards.map((card, index) => {
         const Icon = card.icon;
         return (

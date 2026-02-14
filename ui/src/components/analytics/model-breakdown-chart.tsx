@@ -34,12 +34,12 @@ export function ModelBreakdownChart({ data, isLoading, className }: ModelBreakdo
   }, [data]);
 
   if (isLoading) {
-    return <Skeleton className={cn('h-[300px] w-full', className)} />;
+    return <Skeleton className={cn('h-full min-h-[100px] w-full', className)} />;
   }
 
   if (!data || data.length === 0) {
     return (
-      <div className={cn('h-[300px] flex items-center justify-center', className)}>
+      <div className={cn('h-full min-h-[100px] flex items-center justify-center', className)}>
         <p className="text-muted-foreground">No model data available</p>
       </div>
     );
@@ -72,8 +72,8 @@ export function ModelBreakdownChart({ data, isLoading, className }: ModelBreakdo
   };
 
   return (
-    <div className={cn('w-full', className)}>
-      <ResponsiveContainer width="100%" height={250}>
+    <div className={cn('w-full h-full min-h-[100px]', className)}>
+      <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
             data={chartData}

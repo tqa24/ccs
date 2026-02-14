@@ -160,12 +160,23 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
   codex: {
     provider: 'codex',
     displayName: 'Copilot Codex',
-    defaultModel: 'gpt-5.2-codex',
+    defaultModel: 'gpt-5.3-codex',
     models: [
+      {
+        id: 'gpt-5.3-codex',
+        name: 'GPT-5.3 Codex',
+        description: 'Supports up to xhigh effort',
+        thinking: {
+          type: 'levels',
+          levels: ['medium', 'high', 'xhigh'],
+          maxLevel: 'xhigh',
+          dynamicAllowed: false,
+        },
+      },
       {
         id: 'gpt-5.2-codex',
         name: 'GPT-5.2 Codex',
-        description: 'Full reasoning support (xhigh)',
+        description: 'Previous stable Codex model',
         thinking: {
           type: 'levels',
           levels: ['medium', 'high', 'xhigh'],
@@ -176,7 +187,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'gpt-5-mini',
         name: 'GPT-5 Mini',
-        description: 'Capped at high reasoning (no xhigh)',
+        description: 'Capped at high effort (no xhigh)',
         thinking: {
           type: 'levels',
           levels: ['medium', 'high'],

@@ -9,7 +9,7 @@
  * - Codex: 1455
  * - Agy: 51121
  * - iFlow: 11451
- * - Kiro: 9876
+ * - Kiro: Device Code Flow (no port needed)
  * - Claude: 54545
  * - Qwen: Device Code Flow (no port needed)
  * - GHCP: Device Code Flow (no port needed)
@@ -26,40 +26,44 @@ import {
 } from '../utils/port-utils';
 import { CLIProxyProvider } from '../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../auth/profile-detector';
+import {
+  CLIPROXY_PROVIDER_IDS,
+  getOAuthCallbackPort,
+  getOAuthFlowType,
+  type OAuthFlowType as ProviderOAuthFlowType,
+} from '../cliproxy/provider-capabilities';
 
 /**
- * OAuth callback ports for each provider
- * Extracted from CLIProxyAPI source
+ * Build provider-indexed records from canonical provider capabilities.
+ * Keeps diagnostics in sync with runtime OAuth flow metadata.
  */
-export const OAUTH_CALLBACK_PORTS: Record<CLIProxyProvider, number | null> = {
-  gemini: 8085,
-  codex: 1455,
-  agy: 51121,
-  qwen: null, // Device Code Flow - no callback port
-  iflow: 11451, // Authorization Code Flow
-  kiro: 9876, // Authorization Code Flow
-  ghcp: null, // Device Code Flow - no callback port
-  claude: 54545, // Authorization Code Flow (Anthropic OAuth)
-};
+function buildProviderMap<T>(
+  valueFor: (provider: CLIProxyProvider) => T
+): Record<CLIProxyProvider, T> {
+  return CLIPROXY_PROVIDER_IDS.reduce(
+    (acc, provider) => {
+      acc[provider] = valueFor(provider);
+      return acc;
+    },
+    {} as Record<CLIProxyProvider, T>
+  );
+}
+
+export const OAUTH_CALLBACK_PORTS: Record<CLIProxyProvider, number | null> = buildProviderMap(
+  (provider) => getOAuthCallbackPort(provider)
+);
 
 /**
  * OAuth flow types
  */
-export type OAuthFlowType = 'authorization_code' | 'device_code';
+export type OAuthFlowType = ProviderOAuthFlowType;
 
 /**
  * OAuth flow type per provider
  */
-export const OAUTH_FLOW_TYPES: Record<CLIProxyProvider, OAuthFlowType> = {
-  gemini: 'authorization_code',
-  codex: 'authorization_code',
-  agy: 'authorization_code',
-  qwen: 'device_code',
-  iflow: 'authorization_code',
-  kiro: 'authorization_code',
-  ghcp: 'device_code',
-  claude: 'authorization_code',
-};
+export const OAUTH_FLOW_TYPES: Record<CLIProxyProvider, OAuthFlowType> = buildProviderMap(
+  (provider) => getOAuthFlowType(provider)
+);
 
 /**
  * Port diagnostic result

@@ -7,6 +7,8 @@ import { Clock } from 'lucide-react';
 import {
   cn,
   formatResetTime,
+  getCodexQuotaBreakdown,
+  getCodexWindowDisplayLabel,
   getModelsWithTiers,
   groupModelsByTier,
   isAgyQuotaResult,
@@ -64,13 +66,29 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
 
   // Codex provider tooltip
   if (isCodexQuotaResult(quota)) {
+    const { fiveHourWindow, weeklyWindow, codeReviewWindows, unknownWindows } =
+      getCodexQuotaBreakdown(quota.windows);
+    const orderedWindows = [fiveHourWindow, weeklyWindow, ...codeReviewWindows, ...unknownWindows]
+      .filter((w): w is NonNullable<typeof w> => !!w)
+      .filter(
+        (w, index, arr) =>
+          arr.findIndex(
+            (candidate) => candidate.label === w.label && candidate.resetAt === w.resetAt
+          ) === index
+      );
+
     return (
       <div className="text-xs space-y-1">
         <p className="font-medium">Rate Limits:</p>
         {quota.planType && <p className="text-muted-foreground">Plan: {quota.planType}</p>}
-        {quota.windows.map((w) => (
-          <div key={w.label} className="flex justify-between gap-4">
-            <span className={cn(w.remainingPercent < 20 && 'text-red-500')}>{w.label}</span>
+        {orderedWindows.map((w, index) => (
+          <div
+            key={`${w.label}-${w.resetAt ?? 'no-reset'}-${index}`}
+            className="flex justify-between gap-4"
+          >
+            <span className={cn(w.remainingPercent < 20 && 'text-red-500')}>
+              {getCodexWindowDisplayLabel(w, orderedWindows)}
+            </span>
             <span className="font-mono">{w.remainingPercent}%</span>
           </div>
         ))}

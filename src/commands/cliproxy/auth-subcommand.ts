@@ -43,8 +43,9 @@ export async function handleList(): Promise<void> {
     console.log(subheader('Custom Variants'));
     const rows = variantNames.map((name) => {
       const variant = variants[name];
+      const providerDisplay = variant.type === 'composite' ? 'composite' : variant.provider;
       const portStr = variant.port ? String(variant.port) : '-';
-      return [name, variant.provider, portStr, variant.settings || '-'];
+      return [name, providerDisplay, portStr, variant.settings || '-'];
     });
     console.log(
       table(rows, { head: ['Variant', 'Provider', 'Port', 'Settings'], colWidths: [15, 12, 8, 30] })

@@ -9,9 +9,15 @@
  * - WebSearch and ImageAnalysis hook integration
  */
 
-import { getEffectiveEnvVars, getRemoteEnvVars, applyThinkingConfig } from '../config-generator';
+import {
+  getEffectiveEnvVars,
+  getRemoteEnvVars,
+  getCompositeEnvVars,
+  applyThinkingConfig,
+} from '../config-generator';
 import { applyExtendedContextConfig } from '../config/extended-context-config';
 import { CLIProxyProvider } from '../types';
+import { CompositeTierConfig } from '../../config/unified-config-types';
 import { getWebSearchHookEnv } from '../../utils/websearch-manager';
 import { getImageAnalysisHookEnv } from '../../utils/hooks/get-image-analysis-hook-env';
 import { CodexReasoningProxy } from '../codex-reasoning-proxy';
@@ -41,6 +47,16 @@ export interface ProxyChainConfig {
   /** Extended context override: true = force on, false = force off, undefined = auto */
   extendedContextOverride?: boolean;
   verbose: boolean;
+  /** Composite variant: true when mixing providers per tier */
+  isComposite?: boolean;
+  /** Composite variant: per-tier provider+model mappings */
+  compositeTiers?: {
+    opus: CompositeTierConfig;
+    sonnet: CompositeTierConfig;
+    haiku: CompositeTierConfig;
+  };
+  /** Composite variant: which tier is the default */
+  compositeDefaultTier?: 'opus' | 'sonnet' | 'haiku';
 }
 
 /**
@@ -60,53 +76,113 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
     extendedContextOverride,
     codexReasoningPort,
     toolSanitizationPort,
+    isComposite,
+    compositeTiers,
+    compositeDefaultTier,
   } = config;
 
-  // Build base env vars - remote or local
+  // Build base env vars - check remote mode first
   let envVars: NodeJS.ProcessEnv;
 
   if (useRemoteProxy && remoteConfig) {
     if (httpsTunnel && tunnelPort) {
-      // HTTPS remote via local tunnel - use HTTP to tunnel
-      envVars = getRemoteEnvVars(
-        provider,
-        {
-          host: '127.0.0.1',
-          port: tunnelPort,
-          protocol: 'http', // Tunnel speaks HTTP locally
-          authToken: remoteConfig.authToken,
-        },
-        customSettingsPath
-      );
+      // HTTPS remote via local tunnel
+      if (isComposite && compositeTiers && compositeDefaultTier) {
+        envVars = getCompositeEnvVars(
+          compositeTiers,
+          compositeDefaultTier,
+          tunnelPort,
+          customSettingsPath,
+          {
+            host: '127.0.0.1',
+            port: tunnelPort,
+            protocol: 'http',
+            authToken: remoteConfig.authToken,
+          }
+        );
+      } else {
+        envVars = getRemoteEnvVars(
+          provider,
+          {
+            host: '127.0.0.1',
+            port: tunnelPort,
+            protocol: 'http', // Tunnel speaks HTTP locally
+            authToken: remoteConfig.authToken,
+          },
+          customSettingsPath
+        );
+      }
     } else {
       // HTTP remote - direct connection
-      envVars = getRemoteEnvVars(
-        provider,
-        {
-          host: remoteConfig.host,
-          port: remoteConfig.port,
-          protocol: remoteConfig.protocol,
-          authToken: remoteConfig.authToken,
-        },
-        customSettingsPath
-      );
+      if (isComposite && compositeTiers && compositeDefaultTier) {
+        envVars = getCompositeEnvVars(
+          compositeTiers,
+          compositeDefaultTier,
+          remoteConfig.port,
+          customSettingsPath,
+          {
+            host: remoteConfig.host,
+            port: remoteConfig.port,
+            protocol: remoteConfig.protocol,
+            authToken: remoteConfig.authToken,
+          }
+        );
+      } else {
+        envVars = getRemoteEnvVars(
+          provider,
+          {
+            host: remoteConfig.host,
+            port: remoteConfig.port,
+            protocol: remoteConfig.protocol,
+            authToken: remoteConfig.authToken,
+          },
+          customSettingsPath
+        );
+      }
     }
   } else {
     // Local proxy mode
-    const remoteRewriteConfig = remoteConfig
-      ? {
-          host: remoteConfig.host,
-          port: remoteConfig.port,
-          protocol: remoteConfig.protocol,
-          authToken: remoteConfig.authToken,
-        }
-      : undefined;
+    if (isComposite && compositeTiers && compositeDefaultTier) {
+      envVars = getCompositeEnvVars(
+        compositeTiers,
+        compositeDefaultTier,
+        localPort,
+        customSettingsPath
+      );
+    } else {
+      const remoteRewriteConfig = remoteConfig
+        ? {
+            host: remoteConfig.host,
+            port: remoteConfig.port,
+            protocol: remoteConfig.protocol,
+            authToken: remoteConfig.authToken,
+          }
+        : undefined;
 
-    envVars = getEffectiveEnvVars(provider, localPort, customSettingsPath, remoteRewriteConfig);
+      envVars = getEffectiveEnvVars(provider, localPort, customSettingsPath, remoteRewriteConfig);
+    }
+  }
+
+  // Extract per-tier thinking from composite config
+  let compositeTierThinking: { opus?: string; sonnet?: string; haiku?: string } | undefined;
+  if (isComposite && compositeTiers) {
+    const tierThinking: { opus?: string; sonnet?: string; haiku?: string } = {};
+    if (compositeTiers.opus?.thinking) tierThinking.opus = compositeTiers.opus.thinking;
+    if (compositeTiers.sonnet?.thinking) tierThinking.sonnet = compositeTiers.sonnet.thinking;
+    if (compositeTiers.haiku?.thinking) tierThinking.haiku = compositeTiers.haiku.thinking;
+    if (Object.keys(tierThinking).length > 0) {
+      compositeTierThinking = tierThinking;
+    }
   }
 
   // Apply thinking configuration to model (auto tier-based or manual override)
-  applyThinkingConfig(envVars, provider, thinkingOverride);
+  envVars = applyThinkingConfig(
+    envVars,
+    provider,
+    thinkingOverride,
+    compositeTierThinking,
+    compositeTiers
+  );
 
   // Apply extended context suffix for 1M token context window
   // Auto-enabled for Gemini, opt-in for Claude (--1m flag)
@@ -175,4 +251,25 @@ export function logEnvironment(
   if (env.DISABLE_TELEMETRY || env.DISABLE_ERROR_REPORTING || env.DISABLE_BUG_COMMAND) {
     log(`Claude env: Global env applied (telemetry/reporting disabled)`);
   }
+}
+
+/** Apply fallback provider config to env vars for a failed tier */
+export function applyFallback(
+  env: Record<string, string>,
+  failedTier: 'opus' | 'sonnet' | 'haiku',
+  fallback: { provider: string; model: string }
+): Record<string, string> {
+  const tierEnvMap = {
+    opus: 'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    sonnet: 'ANTHROPIC_DEFAULT_SONNET_MODEL',
+    haiku: 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  } as const;
+  const result = { ...env };
+  const originalModel = result[tierEnvMap[failedTier]];
+  result[tierEnvMap[failedTier]] = fallback.model;
+  // If failed tier is default tier, also update ANTHROPIC_MODEL
+  if (result.ANTHROPIC_MODEL === originalModel) {
+    result.ANTHROPIC_MODEL = fallback.model;
+  }
+  return result;
 }

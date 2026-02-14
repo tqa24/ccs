@@ -9,18 +9,24 @@ import * as os from 'os';
 import * as path from 'path';
 import { CLIProxyProfileName } from '../../auth/profile-detector';
 import { CLIProxyProvider, CLIProxyBackend, PLUS_ONLY_PROVIDERS } from '../types';
+import { CompositeTierConfig, CompositeVariantConfig } from '../../config/unified-config-types';
 import { isReservedName, isWindowsReservedName } from '../../config/reserved-names';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { DEFAULT_BACKEND } from '../platform-detector';
 import { isUnifiedMode } from '../../config/unified-config-loader';
 import { deleteConfigForPort } from '../config-generator';
-import { deleteSessionLockForPort } from '../session-tracker';
+import { hasActiveSessions, deleteSessionLockForPort } from '../session-tracker';
+import { warn } from '../../utils/ui';
+import { getCcsDir } from '../../utils/config-manager';
+import { validateCompositeTiers } from '../composite-validator';
 import {
   createSettingsFile,
   createSettingsFileUnified,
+  createCompositeSettingsFile,
   deleteSettingsFile,
   getRelativeSettingsPath,
   updateSettingsModel,
+  updateSettingsProviderAndModel,
 } from './variant-settings';
 import {
   VariantConfig,
@@ -28,6 +34,7 @@ import {
   listVariantsFromConfig,
   saveVariantUnified,
   saveVariantLegacy,
+  saveCompositeVariantUnified,
   removeVariantFromUnifiedConfig,
   removeVariantFromLegacyConfig,
   getNextAvailablePort,
@@ -149,6 +156,22 @@ export function createVariant(
  */
 export function removeVariant(name: string): VariantOperationResult {
   try {
+    // First check if variant exists and has active sessions
+    const variants = listVariantsFromConfig();
+    const existingVariant = variants[name];
+
+    if (!existingVariant) {
+      return { success: false, error: `Variant '${name}' not found` };
+    }
+
+    // Check for active sessions on this variant's port before deletion
+    if (existingVariant.port && hasActiveSessions(existingVariant.port)) {
+      return {
+        success: false,
+        error: `Cannot delete variant '${name}': CLIProxy is running with active sessions. Stop the session first.`,
+      };
+    }
+
     let variant: VariantConfig | null;
 
     if (isUnifiedMode()) {
@@ -174,11 +197,7 @@ export function removeVariant(name: string): VariantOperationResult {
       }
     }
 
-    if (!variant) {
-      return { success: false, error: `Variant '${name}' not found` };
-    }
-
-    return { success: true, variant };
+    return { success: true, variant: variant ?? undefined };
   } catch (error) {
     return { success: false, error: (error as Error).message };
   }
@@ -203,10 +222,39 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
       return { success: false, error: `Variant '${name}' not found` };
     }
 
-    // Update model in settings file if provided
-    if (updates.model !== undefined && existing.settings) {
+    if (existing.type === 'composite') {
+      console.log(
+        warn(
+          'Cannot update composite variant properties directly. Remove and recreate, or edit config.yaml.'
+        )
+      );
+      return { success: false, error: 'Composite variant update not supported' };
+    }
+
+    const providerChanged =
+      updates.provider !== undefined && updates.provider !== existing.provider;
+    const hasModelUpdate = updates.model !== undefined && updates.model.trim().length > 0;
+
+    if (providerChanged && !hasModelUpdate) {
+      return {
+        success: false,
+        error: 'Changing provider requires model update in the same request',
+      };
+    }
+
+    // Update settings file
+    if (existing.settings) {
       const settingsPath = existing.settings.replace(/^~/, os.homedir());
-      updateSettingsModel(settingsPath, updates.model);
+      if (providerChanged) {
+        updateSettingsProviderAndModel(
+          settingsPath,
+          updates.provider as CLIProxyProfileName,
+          updates.model?.trim() || '',
+          existing.port
+        );
+      } else if (updates.model !== undefined) {
+        updateSettingsModel(settingsPath, updates.model, existing.provider as CLIProxyProfileName);
+      }
     }
 
     // Update config entry if provider or account changed
@@ -245,10 +293,181 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
       success: true,
       variant: {
         provider: updates.provider ?? existing.provider,
-        model: updates.model ?? existing.model,
+        model: updates.model?.trim() || existing.model,
         account: updates.account !== undefined ? updates.account : existing.account,
         port: existing.port,
         settings: existing.settings,
+      },
+    };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/** Composite variant creation options */
+export interface CreateCompositeVariantOptions {
+  name: string;
+  defaultTier: 'opus' | 'sonnet' | 'haiku';
+  tiers: {
+    opus: CompositeTierConfig;
+    sonnet: CompositeTierConfig;
+    haiku: CompositeTierConfig;
+  };
+}
+
+/**
+ * Create a new composite CLIProxy variant.
+ * Mixes different providers per tier using CLIProxyAPI root endpoints.
+ */
+export function createCompositeVariant(
+  options: CreateCompositeVariantOptions
+): VariantOperationResult {
+  if (!isUnifiedMode()) {
+    throw new Error(
+      'Composite variants require unified config (config.yaml). Run "ccs migrate" first.'
+    );
+  }
+
+  try {
+    const { name, defaultTier, tiers } = options;
+
+    const validationError = validateCompositeTiers(tiers, {
+      defaultTier,
+      requireAllTiers: true,
+    });
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
+    // Validate all tier providers against backend compatibility
+    const tierNames: Array<'opus' | 'sonnet' | 'haiku'> = ['opus', 'sonnet', 'haiku'];
+    for (const tier of tierNames) {
+      const backendError = validateProviderBackend(tiers[tier].provider);
+      if (backendError) {
+        return { success: false, error: `${tier} tier: ${backendError}` };
+      }
+    }
+
+    // Allocate unique port for this composite variant
+    const port = getNextAvailablePort();
+
+    // Create settings file with root URL + per-tier models
+    const settingsPath = createCompositeSettingsFile(name, tiers, defaultTier, port);
+
+    // Save composite config to unified config
+    const compositeConfig: CompositeVariantConfig = {
+      type: 'composite',
+      default_tier: defaultTier,
+      tiers,
+      settings: settingsPath,
+      port,
+    };
+    saveCompositeVariantUnified(name, compositeConfig);
+
+    return {
+      success: true,
+      settingsPath,
+      variant: {
+        provider: tiers[defaultTier].provider,
+        type: 'composite',
+        default_tier: defaultTier,
+        tiers,
+        port,
+      },
+    };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
+  }
+}
+
+/** Update options for composite variant */
+export interface UpdateCompositeVariantOptions {
+  defaultTier?: 'opus' | 'sonnet' | 'haiku';
+  tiers?: Partial<Record<'opus' | 'sonnet' | 'haiku', CompositeTierConfig>>;
+}
+
+/**
+ * Update an existing composite CLIProxy variant.
+ * Merges changes with existing config and regenerates settings file.
+ */
+export function updateCompositeVariant(
+  name: string,
+  updates: UpdateCompositeVariantOptions
+): VariantOperationResult {
+  if (!isUnifiedMode()) {
+    throw new Error('Composite variants require unified config (config.yaml).');
+  }
+
+  try {
+    const variants = listVariantsFromConfig();
+    const existing = variants[name];
+
+    if (!existing) {
+      return { success: false, error: `Variant '${name}' not found` };
+    }
+
+    if (existing.type !== 'composite' || !existing.tiers) {
+      return { success: false, error: `Variant '${name}' is not a composite variant` };
+    }
+
+    // Deep merge tiers to preserve optional fields (fallback, thinking, account)
+    const mergedTiers = {
+      opus: { ...existing.tiers.opus, ...updates.tiers?.opus },
+      sonnet: { ...existing.tiers.sonnet, ...updates.tiers?.sonnet },
+      haiku: { ...existing.tiers.haiku, ...updates.tiers?.haiku },
+    };
+
+    const newDefaultTier = updates.defaultTier ?? existing.default_tier ?? 'sonnet';
+    const validationError = validateCompositeTiers(mergedTiers, {
+      defaultTier: newDefaultTier,
+      requireAllTiers: true,
+    });
+    if (validationError) {
+      return { success: false, error: validationError };
+    }
+
+    // Validate all tier providers against backend compatibility
+    const tierNames: Array<'opus' | 'sonnet' | 'haiku'> = ['opus', 'sonnet', 'haiku'];
+    for (const tier of tierNames) {
+      const backendError = validateProviderBackend(mergedTiers[tier].provider);
+      if (backendError) {
+        return { success: false, error: `${tier} tier: ${backendError}` };
+      }
+    }
+
+    // Preserve existing settings path when configured; otherwise use default path.
+    const settingsRef =
+      existing.settings || path.join(getCcsDir(), `composite-${name}.settings.json`);
+
+    // Create new settings file with updated config
+    const settingsPath = createCompositeSettingsFile(
+      name,
+      mergedTiers,
+      newDefaultTier,
+      existing.port,
+      settingsRef
+    );
+
+    // Save updated composite config to unified config
+    const compositeConfig: CompositeVariantConfig = {
+      type: 'composite',
+      default_tier: newDefaultTier,
+      tiers: mergedTiers,
+      settings: settingsRef,
+      port: existing.port,
+    };
+    saveCompositeVariantUnified(name, compositeConfig);
+
+    return {
+      success: true,
+      settingsPath,
+      variant: {
+        provider: mergedTiers[newDefaultTier].provider,
+        type: 'composite',
+        default_tier: newDefaultTier,
+        tiers: mergedTiers,
+        port: existing.port,
+        settings: settingsRef,
       },
     };
   } catch (error) {

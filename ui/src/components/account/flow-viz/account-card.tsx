@@ -2,7 +2,13 @@
  * Account Card Component for Flow Visualization
  */
 
-import { cn, getProviderMinQuota, getProviderResetTime } from '@/lib/utils';
+import {
+  cn,
+  getCodexQuotaBreakdown,
+  getProviderMinQuota,
+  getProviderResetTime,
+  isCodexQuotaResult,
+} from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { GripVertical, Loader2, Pause, Play, KeyRound } from 'lucide-react';
 import { useAccountQuota, QUOTA_SUPPORTED_PROVIDERS } from '@/hooks/use-cliproxy-stats';
@@ -96,6 +102,14 @@ export function AccountCard({
   // Use shared helper for provider-specific minimum quota
   const minQuota = getProviderMinQuota(account.provider, quota);
   const resetTime = getProviderResetTime(account.provider, quota);
+  const codexBreakdown =
+    account.provider === 'codex' && quota && isCodexQuotaResult(quota)
+      ? getCodexQuotaBreakdown(quota.windows)
+      : null;
+  const codexQuotaRows = [
+    { label: '5h', value: codexBreakdown?.fiveHourWindow?.remainingPercent ?? null },
+    { label: 'Wk', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
+  ].filter((row): row is { label: string; value: number } => row.value !== null);
 
   // Tier badge (AGY only) - show P for Pro, U for Ultra
   const showTierBadge =
@@ -229,6 +243,15 @@ export function AccountCard({
                         {minQuota}%
                       </span>
                     </div>
+                    {account.provider === 'codex' && codexQuotaRows.length > 0 && (
+                      <div className="flex items-center justify-between text-[7px] text-muted-foreground/70">
+                        {codexQuotaRows.map((row) => (
+                          <span key={row.label}>
+                            {row.label} {row.value}%
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <div className="w-full bg-muted dark:bg-zinc-800/50 h-1 rounded-full overflow-hidden">
                       <div
                         className={cn(

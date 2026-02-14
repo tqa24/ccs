@@ -29,10 +29,15 @@ import {
 } from '../../management/oauth-port-diagnostics';
 import {
   OAuthOptions,
-  OAUTH_CALLBACK_PORTS,
+  DEFAULT_KIRO_AUTH_METHOD,
+  getKiroCallbackPort,
+  getKiroCLIAuthFlag,
+  isKiroCLIAuthMethod,
+  isKiroDeviceCodeMethod,
   getOAuthConfig,
   ProviderOAuthConfig,
   CLIPROXY_CALLBACK_PROVIDER_MAP,
+  normalizeKiroAuthMethod,
 } from './auth-types';
 import { isHeadlessEnvironment, killProcessOnPort, showStep } from './environment-detector';
 import { getProviderTokenDir, isAuthenticated, registerAccountFromToken } from './token-manager';
@@ -414,6 +419,8 @@ export async function triggerOAuth(
   const oauthConfig = getOAuthConfig(provider);
   const { verbose = false, add = false, fromUI = false, noIncognito = true } = options;
   let { nickname } = options;
+  const resolvedKiroMethod =
+    provider === 'kiro' ? normalizeKiroAuthMethod(options.kiroMethod) : DEFAULT_KIRO_AUTH_METHOD;
 
   // Check for existing accounts
   const existingAccounts = getProviderAccounts(provider);
@@ -444,10 +451,28 @@ export async function triggerOAuth(
     return null;
   }
 
-  const callbackPort = OAUTH_PORTS[provider];
+  if (provider === 'kiro' && resolvedKiroMethod === 'github') {
+    console.log(fail('Kiro GitHub login is only available in Dashboard management OAuth flow.'));
+    console.log('    Use: ccs config -> Accounts -> Add Kiro account -> Method: GitHub OAuth');
+    return null;
+  }
+
+  const callbackPort =
+    provider === 'kiro' ? getKiroCallbackPort(resolvedKiroMethod) : OAUTH_PORTS[provider];
   const isCLI = !fromUI;
   const headless = options.headless ?? isHeadlessEnvironment();
-  const isDeviceCodeFlow = callbackPort === null;
+  const isDeviceCodeFlow =
+    provider === 'kiro' ? isKiroDeviceCodeMethod(resolvedKiroMethod) : callbackPort === null;
+
+  let authFlag = oauthConfig.authFlag;
+  if (provider === 'kiro') {
+    if (!isKiroCLIAuthMethod(resolvedKiroMethod)) {
+      console.log(fail(`Kiro auth method '${resolvedKiroMethod}' is not supported by CLI flow.`));
+      console.log('    Use Dashboard management OAuth for this method.');
+      return null;
+    }
+    authFlag = getKiroCLIAuthFlag(resolvedKiroMethod);
+  }
 
   // Interactive mode selection for headless environments
   // Skip if explicit mode flag provided or device code flow (no callback needed)
@@ -493,7 +518,7 @@ export async function triggerOAuth(
   const { binaryPath, tokenDir, configPath } = prepared;
 
   // Free callback port if needed (only for authorization code flows)
-  const localCallbackPort = OAUTH_CALLBACK_PORTS[provider];
+  const localCallbackPort = callbackPort;
   if (localCallbackPort) {
     const killed = killProcessOnPort(localCallbackPort, verbose);
     if (killed && verbose) {
@@ -502,7 +527,7 @@ export async function triggerOAuth(
   }
 
   // Build args
-  const args = ['--config', configPath, oauthConfig.authFlag];
+  const args = ['--config', configPath, authFlag];
   if (headless) {
     args.push('--no-browser');
   }

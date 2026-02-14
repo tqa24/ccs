@@ -26,6 +26,8 @@ export async function showHelp(): Promise<void> {
       'Profile Commands:',
       [
         ['create [name]', 'Create new CLIProxy variant profile'],
+        ['create --composite', 'Create composite variant (mix providers per tier)'],
+        ['edit [name]', 'Edit an existing CLIProxy variant profile'],
         ['list', 'List all CLIProxy variant profiles'],
         ['remove <name>', 'Remove a CLIProxy variant profile'],
       ],
@@ -59,6 +61,8 @@ export async function showHelp(): Promise<void> {
     [
       'Proxy Lifecycle:',
       [
+        ['start', 'Start CLIProxy instance in background'],
+        ['restart', 'Restart CLIProxy instance'],
         ['status', 'Show running CLIProxy status'],
         ['stop', 'Stop running CLIProxy instance'],
         ['doctor', 'Quota diagnostics and shared project detection'],

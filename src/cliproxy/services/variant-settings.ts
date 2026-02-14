@@ -13,11 +13,15 @@ import { getCcsDir } from '../../utils/config-manager';
 import { expandPath } from '../../utils/helpers';
 import { getClaudeEnvVars, CLIPROXY_DEFAULT_PORT } from '../config-generator';
 import { CLIProxyProvider } from '../types';
+import { CompositeTierConfig } from '../../config/unified-config-types';
 import { ensureProfileHooks } from '../../utils/websearch/profile-hook-injector';
 import { ensureProfileHooks as ensureImageAnalyzerHooks } from '../../utils/hooks/image-analyzer-profile-hook-injector';
+import { getEffectiveApiKey } from '../auth-token-manager';
+import { warn } from '../../utils/ui';
 
 /** Environment settings structure */
 interface SettingsEnv {
+  [key: string]: string;
   ANTHROPIC_BASE_URL: string;
   ANTHROPIC_AUTH_TOKEN: string;
   ANTHROPIC_MODEL: string;
@@ -27,7 +31,23 @@ interface SettingsEnv {
 }
 
 interface SettingsFile {
-  env: SettingsEnv;
+  env: Record<string, string>;
+  [key: string]: unknown;
+}
+
+const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+
+function hasCodexEffortSuffix(model: string): boolean {
+  return CODEX_EFFORT_SUFFIX_REGEX.test(model);
+}
+
+function normalizeCodexTierModel(
+  provider: CLIProxyProfileName | undefined,
+  model: string,
+  fallbackEffort: 'medium' | 'high' | 'xhigh'
+): string {
+  if (provider !== 'codex') return model;
+  return hasCodexEffortSuffix(model) ? model : `${model}-${fallbackEffort}`;
 }
 
 /**
@@ -39,14 +59,22 @@ function buildSettingsEnv(
   port: number = CLIPROXY_DEFAULT_PORT
 ): SettingsEnv {
   const baseEnv = getClaudeEnvVars(provider as CLIProxyProvider, port);
+  const defaultModel = normalizeCodexTierModel(provider, model, 'xhigh');
+  const opusModel = normalizeCodexTierModel(provider, model, 'xhigh');
+  const sonnetModel = normalizeCodexTierModel(provider, model, 'high');
+  const haikuModel = normalizeCodexTierModel(
+    provider,
+    baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
+    'medium'
+  );
 
   return {
     ANTHROPIC_BASE_URL: baseEnv.ANTHROPIC_BASE_URL || '',
     ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN || '',
-    ANTHROPIC_MODEL: model,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: model,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: model,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
+    ANTHROPIC_MODEL: defaultModel,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel,
   };
 }
 
@@ -60,10 +88,13 @@ function ensureDir(dir: string): void {
 }
 
 /**
- * Write settings file atomically
+ * Write settings file atomically using temp file + rename.
+ * The renameSync is atomic on POSIX systems, preventing partial writes on crash.
  */
 function writeSettings(filePath: string, settings: SettingsFile): void {
-  fs.writeFileSync(filePath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  const tempPath = `${filePath}.tmp.${process.pid}`;
+  fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+  fs.renameSync(tempPath, filePath);
 }
 
 /**
@@ -145,6 +176,104 @@ export function createSettingsFileUnified(
 }
 
 /**
+ * Build settings env object for a composite variant.
+ * Uses root URL (no /api/provider/ path) for model-based routing.
+ */
+function buildCompositeSettingsEnv(
+  tiers: { opus: CompositeTierConfig; sonnet: CompositeTierConfig; haiku: CompositeTierConfig },
+  defaultTier: 'opus' | 'sonnet' | 'haiku',
+  port: number = CLIPROXY_DEFAULT_PORT
+): SettingsEnv {
+  const defaultModel = tiers[defaultTier].model;
+
+  return {
+    // Root URL — CLIProxyAPI routes based on model name, no provider prefix
+    ANTHROPIC_BASE_URL: `http://127.0.0.1:${port}`,
+    ANTHROPIC_AUTH_TOKEN: getEffectiveApiKey(),
+    ANTHROPIC_MODEL: defaultModel,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: tiers.opus.model,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: tiers.sonnet.model,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: tiers.haiku.model,
+  };
+}
+
+/**
+ * Create settings.json file for a composite variant.
+ */
+export function createCompositeSettingsFile(
+  name: string,
+  tiers: { opus: CompositeTierConfig; sonnet: CompositeTierConfig; haiku: CompositeTierConfig },
+  defaultTier: 'opus' | 'sonnet' | 'haiku',
+  port: number = CLIPROXY_DEFAULT_PORT,
+  settingsPathOverride?: string
+): string {
+  const ccsDir = getCcsDir();
+  const defaultSettingsPath = path.join(ccsDir, `composite-${name}.settings.json`);
+  const settingsPath = settingsPathOverride
+    ? (() => {
+        const expanded = expandPath(settingsPathOverride);
+        return path.isAbsolute(expanded) ? expanded : path.join(ccsDir, expanded);
+      })()
+    : defaultSettingsPath;
+  const settingsDir = path.dirname(settingsPath);
+
+  const coreEnv = buildCompositeSettingsEnv(tiers, defaultTier, port);
+  let settings: SettingsFile = { env: coreEnv };
+
+  // Preserve non-core env vars and non-env fields (hooks/presets/etc.) when regenerating.
+  if (fs.existsSync(settingsPath)) {
+    try {
+      const content = fs.readFileSync(settingsPath, 'utf-8');
+      const parsed = JSON.parse(content) as SettingsFile;
+
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const existingEnv =
+          parsed.env && typeof parsed.env === 'object' && !Array.isArray(parsed.env)
+            ? (parsed.env as Record<string, string>)
+            : {};
+        const {
+          ANTHROPIC_BASE_URL: _baseUrl,
+          ANTHROPIC_AUTH_TOKEN: _authToken,
+          ANTHROPIC_MODEL: _model,
+          ANTHROPIC_DEFAULT_OPUS_MODEL: _opus,
+          ANTHROPIC_DEFAULT_SONNET_MODEL: _sonnet,
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: _haiku,
+          ...extraEnv
+        } = existingEnv;
+
+        settings = {
+          ...parsed,
+          env: {
+            ...extraEnv,
+            ...coreEnv,
+          },
+        };
+      }
+    } catch {
+      // Invalid JSON — overwrite with a clean settings object.
+    }
+  }
+
+  ensureDir(settingsDir);
+  writeSettings(settingsPath, settings);
+
+  // Hook injectors target ~/.ccs/<profile>.settings.json; only run for default path.
+  if (path.resolve(settingsPath) === path.resolve(defaultSettingsPath)) {
+    ensureProfileHooks(`composite-${name}`);
+    ensureImageAnalyzerHooks(`composite-${name}`);
+  }
+
+  return settingsPath;
+}
+
+/**
+ * Get relative settings path for a composite variant
+ */
+export function getCompositeRelativeSettingsPath(name: string): string {
+  return `~/.ccs/composite-${name}.settings.json`;
+}
+
+/**
  * Delete settings file if it exists.
  * Uses expandPath() for cross-platform path handling.
  */
@@ -160,7 +289,19 @@ export function deleteSettingsFile(settingsPath: string): boolean {
 /**
  * Update model in an existing settings file
  */
-export function updateSettingsModel(settingsPath: string, model: string): void {
+export function updateSettingsModel(
+  settingsPath: string,
+  model: string,
+  provider?: CLIProxyProfileName
+): void {
+  const fileName = path.basename(settingsPath);
+  if (fileName.startsWith('composite-')) {
+    console.log(
+      warn('Cannot update model for composite variant. Edit config.yaml tiers directly.')
+    );
+    return;
+  }
+
   const resolvedPath = settingsPath.replace(/^~/, os.homedir());
   if (!fs.existsSync(resolvedPath)) {
     return;
@@ -172,16 +313,87 @@ export function updateSettingsModel(settingsPath: string, model: string): void {
 
     if (model) {
       settings.env = settings.env || ({} as SettingsEnv);
-      settings.env.ANTHROPIC_MODEL = model;
-      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
-      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = model;
+      settings.env.ANTHROPIC_MODEL = normalizeCodexTierModel(provider, model, 'xhigh');
+      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = normalizeCodexTierModel(provider, model, 'xhigh');
+      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = normalizeCodexTierModel(
+        provider,
+        model,
+        'high'
+      );
+      if (provider === 'codex' && settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL) {
+        settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = normalizeCodexTierModel(
+          provider,
+          settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+          'medium'
+        );
+      }
     } else {
       // Clear model settings to use defaults
       delete (settings.env as unknown as Record<string, string>).ANTHROPIC_MODEL;
     }
 
-    fs.writeFileSync(resolvedPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+    const tempPath = `${resolvedPath}.tmp.${process.pid}`;
+    fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
+    fs.renameSync(tempPath, resolvedPath);
   } catch {
     // Ignore errors - settings file may be invalid
   }
+}
+
+/**
+ * Update provider + model core env vars in an existing single-provider settings file.
+ * Preserves non-core env vars and top-level settings keys (hooks, presets, etc.).
+ */
+export function updateSettingsProviderAndModel(
+  settingsPath: string,
+  provider: CLIProxyProfileName,
+  model: string,
+  port: number = CLIPROXY_DEFAULT_PORT
+): void {
+  const resolvedPath = expandPath(settingsPath);
+  const fileName = path.basename(resolvedPath);
+  if (fileName.startsWith('composite-')) {
+    console.log(
+      warn('Cannot update provider/model for composite variant. Edit config.yaml tiers directly.')
+    );
+    return;
+  }
+
+  const coreEnv = buildSettingsEnv(provider, model, port);
+  let settings: SettingsFile = { env: coreEnv };
+
+  if (fs.existsSync(resolvedPath)) {
+    try {
+      const content = fs.readFileSync(resolvedPath, 'utf8');
+      const parsed = JSON.parse(content) as SettingsFile;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const existingEnv =
+          parsed.env && typeof parsed.env === 'object' && !Array.isArray(parsed.env)
+            ? (parsed.env as Record<string, string>)
+            : {};
+        const {
+          ANTHROPIC_BASE_URL: _baseUrl,
+          ANTHROPIC_AUTH_TOKEN: _authToken,
+          ANTHROPIC_MODEL: _model,
+          ANTHROPIC_DEFAULT_OPUS_MODEL: _opus,
+          ANTHROPIC_DEFAULT_SONNET_MODEL: _sonnet,
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: _haiku,
+          ...extraEnv
+        } = existingEnv;
+
+        settings = {
+          ...parsed,
+          env: {
+            ...extraEnv,
+            ...coreEnv,
+          },
+        };
+      }
+    } catch {
+      // Keep default and overwrite malformed file.
+    }
+  }
+
+  ensureDir(path.dirname(resolvedPath));
+  writeSettings(resolvedPath, settings);
 }

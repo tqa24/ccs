@@ -78,6 +78,134 @@ function formatResetTimeISO(isoTime: string): string {
   return formatResetTime(seconds);
 }
 
+type CodexWindowKind =
+  | 'usage-5h'
+  | 'usage-weekly'
+  | 'code-review-5h'
+  | 'code-review-weekly'
+  | 'code-review'
+  | 'unknown';
+
+function getCodexWindowKind(label: string): CodexWindowKind {
+  const lower = (label || '').toLowerCase();
+  const isCodeReview = lower.includes('code review') || lower.includes('code_review');
+  const isPrimary = lower.includes('primary');
+  const isSecondary = lower.includes('secondary');
+
+  if (isCodeReview) {
+    if (isPrimary) return 'code-review-5h';
+    if (isSecondary) return 'code-review-weekly';
+    return 'code-review';
+  }
+
+  if (isPrimary) return 'usage-5h';
+  if (isSecondary) return 'usage-weekly';
+  return 'unknown';
+}
+
+type CodexWindowSummary = Pick<CodexQuotaResult['windows'][number], 'label' | 'resetAfterSeconds'>;
+
+function inferCodeReviewCadence(
+  window: CodexWindowSummary,
+  allWindows: CodexWindowSummary[]
+): '5h' | 'weekly' | null {
+  const kind = getCodexWindowKind(window.label);
+  if (kind === 'code-review-weekly') return 'weekly';
+
+  const reset = window.resetAfterSeconds;
+  if (typeof reset !== 'number' || !isFinite(reset) || reset <= 0) return null;
+
+  const usage5h = allWindows.find(
+    (w) =>
+      getCodexWindowKind(w.label) === 'usage-5h' &&
+      typeof w.resetAfterSeconds === 'number' &&
+      isFinite(w.resetAfterSeconds) &&
+      w.resetAfterSeconds > 0
+  );
+  const usageWeekly = allWindows.find(
+    (w) =>
+      getCodexWindowKind(w.label) === 'usage-weekly' &&
+      typeof w.resetAfterSeconds === 'number' &&
+      isFinite(w.resetAfterSeconds) &&
+      w.resetAfterSeconds > 0
+  );
+
+  if (!usage5h || !usageWeekly) return null;
+
+  const diffTo5h = Math.abs(reset - (usage5h.resetAfterSeconds as number));
+  const diffToWeekly = Math.abs(reset - (usageWeekly.resetAfterSeconds as number));
+  return diffToWeekly <= diffTo5h ? 'weekly' : '5h';
+}
+
+function getCodexWindowDisplayLabel(
+  window: CodexWindowSummary,
+  allWindows: CodexWindowSummary[] = []
+): string {
+  const context = allWindows.length > 0 ? allWindows : [window];
+
+  switch (getCodexWindowKind(window.label)) {
+    case 'usage-5h':
+      return '5h usage limit';
+    case 'usage-weekly':
+      return 'Weekly usage limit';
+    case 'code-review-5h':
+    case 'code-review-weekly':
+    case 'code-review': {
+      const inferred = inferCodeReviewCadence(window, context);
+      if (inferred === '5h') return 'Code review (5h)';
+      if (inferred === 'weekly') return 'Code review (weekly)';
+      return 'Code review';
+    }
+    case 'unknown':
+      return window.label;
+  }
+}
+
+function getCodexCoreUsageWindows(windows: CodexQuotaResult['windows']): {
+  fiveHourWindow: CodexQuotaResult['windows'][number] | null;
+  weeklyWindow: CodexQuotaResult['windows'][number] | null;
+} {
+  let fiveHourWindow: CodexQuotaResult['windows'][number] | null = null;
+  let weeklyWindow: CodexQuotaResult['windows'][number] | null = null;
+  const nonCodeReviewWindows: CodexQuotaResult['windows'] = [];
+
+  for (const window of windows) {
+    const kind = getCodexWindowKind(window.label);
+    if (kind === 'usage-5h') {
+      if (!fiveHourWindow) fiveHourWindow = window;
+      nonCodeReviewWindows.push(window);
+      continue;
+    }
+    if (kind === 'usage-weekly') {
+      if (!weeklyWindow) weeklyWindow = window;
+      nonCodeReviewWindows.push(window);
+      continue;
+    }
+    if (kind === 'unknown') {
+      nonCodeReviewWindows.push(window);
+    }
+  }
+
+  if ((!fiveHourWindow || !weeklyWindow) && nonCodeReviewWindows.length > 0) {
+    const withReset = nonCodeReviewWindows
+      .filter((w) => typeof w.resetAfterSeconds === 'number' && w.resetAfterSeconds >= 0)
+      .sort((a, b) => (a.resetAfterSeconds || 0) - (b.resetAfterSeconds || 0));
+
+    if (!fiveHourWindow) {
+      fiveHourWindow = withReset[0] || nonCodeReviewWindows[0] || null;
+    }
+
+    if (!weeklyWindow) {
+      weeklyWindow =
+        withReset.length > 1
+          ? withReset[withReset.length - 1]
+          : nonCodeReviewWindows.find((w) => w !== fiveHourWindow) || null;
+    }
+  }
+
+  return { fiveHourWindow, weeklyWindow };
+}
+
 function displayAntigravityQuotaSection(
   quotaResult: Awaited<ReturnType<typeof fetchAllProviderQuotas>>
 ): void {
@@ -143,22 +271,32 @@ function displayCodexQuotaSection(results: { account: string; quota: CodexQuotaR
       continue;
     }
 
+    const { fiveHourWindow, weeklyWindow } = getCodexCoreUsageWindows(quota.windows);
+    const coreUsageWindows = [fiveHourWindow, weeklyWindow].filter(
+      (w, index, arr): w is NonNullable<typeof w> => !!w && arr.indexOf(w) === index
+    );
+    const statusWindows = coreUsageWindows.length > 0 ? coreUsageWindows : quota.windows;
+
     const avgQuota =
-      quota.windows.length > 0
-        ? quota.windows.reduce((sum, w) => sum + w.remainingPercent, 0) / quota.windows.length
+      statusWindows.length > 0
+        ? statusWindows.reduce((sum, w) => sum + w.remainingPercent, 0) / statusWindows.length
         : 0;
     const statusIcon = avgQuota > 50 ? ok('') : avgQuota > 10 ? warn('') : fail('');
     const planBadge = quota.planType ? color(` [${quota.planType}]`, 'info') : '';
 
     console.log(`  ${statusIcon}${account}${defaultMark}${planBadge}`);
 
-    for (const window of quota.windows) {
+    const orderedWindows = [fiveHourWindow, weeklyWindow, ...quota.windows].filter(
+      (w, index, arr): w is NonNullable<typeof w> => !!w && arr.indexOf(w) === index
+    );
+
+    for (const window of orderedWindows) {
       const bar = formatQuotaBar(window.remainingPercent);
       const resetLabel = window.resetAfterSeconds
         ? dim(` Resets ${formatResetTime(window.resetAfterSeconds)}`)
         : '';
       console.log(
-        `    ${window.label.padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}%${resetLabel}`
+        `    ${getCodexWindowDisplayLabel(window, orderedWindows).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}%${resetLabel}`
       );
     }
     console.log('');

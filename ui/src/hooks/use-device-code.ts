@@ -3,7 +3,7 @@
  *
  * Listens for WebSocket device code events and manages dialog state.
  * Similar to useProjectSelection but for Device Code OAuth flows
- * (GitHub Copilot, Qwen, etc.)
+ * (GitHub Copilot, Qwen, Kiro, etc.)
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
@@ -26,6 +26,7 @@ interface DeviceCodeState {
 /** Provider display names for user-friendly messages */
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   ghcp: 'GitHub Copilot',
+  kiro: 'Kiro (AWS)',
   qwen: 'Qwen Code',
 };
 

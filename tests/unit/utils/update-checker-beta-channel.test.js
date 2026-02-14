@@ -25,6 +25,8 @@ describe('Beta Channel Implementation (Phase 3)', function () {
   let originalHttpsGet;
   let mockFileSystem = {};
   let httpsRequests = [];
+  let cacheFilePath;
+  let cacheDirPath;
 
   beforeAll(async function () {
     // Note: Build is handled by CI before tests run (bun run build:all)
@@ -36,6 +38,8 @@ describe('Beta Channel Implementation (Phase 3)', function () {
     // Reset mocks
     mockFileSystem = {};
     httpsRequests = [];
+    cacheFilePath = undefined;
+    cacheDirPath = undefined;
 
     // Store original functions
     originalFsExistsSync = fs.existsSync;
@@ -46,26 +50,44 @@ describe('Beta Channel Implementation (Phase 3)', function () {
 
     // Mock fs.existsSync
     fs.existsSync = (filePath) => {
-      return mockFileSystem[filePath] !== undefined;
+      const key = String(filePath);
+      if (key.endsWith('/update-check.json') || key.endsWith('\\update-check.json')) {
+        cacheFilePath = key;
+        cacheDirPath = path.dirname(key);
+      }
+      if (key.endsWith('/cache') || key.endsWith('\\cache')) {
+        cacheDirPath = key;
+      }
+      return mockFileSystem[key] !== undefined;
     };
 
     // Mock fs.readFileSync
     fs.readFileSync = (filePath, encoding) => {
-      if (mockFileSystem[filePath]) {
-        return mockFileSystem[filePath];
+      const key = String(filePath);
+      if (mockFileSystem[key]) {
+        return mockFileSystem[key];
       }
       throw new Error(`ENOENT: no such file or directory, open '${filePath}'`);
     };
 
     // Mock fs.writeFileSync
     fs.writeFileSync = (filePath, data, encoding) => {
-      mockFileSystem[filePath] = data;
+      const key = String(filePath);
+      if (key.endsWith('/update-check.json') || key.endsWith('\\update-check.json')) {
+        cacheFilePath = key;
+        cacheDirPath = path.dirname(key);
+      }
+      mockFileSystem[key] = data;
     };
 
     // Mock fs.mkdirSync
     fs.mkdirSync = (dirPath, options) => {
+      const key = String(dirPath);
+      if (key.endsWith('/cache') || key.endsWith('\\cache')) {
+        cacheDirPath = key;
+      }
       // Just mark as created for testing
-      mockFileSystem[dirPath] = 'directory';
+      mockFileSystem[key] = 'directory';
     };
 
     // Mock https.get
@@ -110,6 +132,9 @@ describe('Beta Channel Implementation (Phase 3)', function () {
         }
       };
     };
+
+    // Force path discovery from module internals to avoid hardcoded ~/.ccs assumptions.
+    updateCheckerModule.readCache();
   });
 
   afterEach(function () {
@@ -261,6 +286,10 @@ describe('Beta Channel Implementation (Phase 3)', function () {
   });
 
   describe('checkForUpdates with targetTag parameter', function () {
+    function getCacheFilePath() {
+      return cacheFilePath || path.join(os.homedir(), '.ccs', 'cache', 'update-check.json');
+    }
+
     beforeEach(function () {
       // Set up a fresh cache
       const cacheData = {
@@ -268,7 +297,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
         latest_version: null,
         dismissed_version: null
       };
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);
+      mockFileSystem[getCacheFilePath()] = JSON.stringify(cacheData);
     });
 
     it('should use latest tag when targetTag is "latest"', async function () {
@@ -355,7 +384,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
       await updateCheckerModule.checkForUpdates('5.4.0', true, 'npm', 'dev');
 
       // Check cache was updated with dev version
-      const cachePath = path.join(os.homedir(), '.ccs', 'cache', 'update-check.json');
+      const cachePath = getCacheFilePath();
       const cacheData = JSON.parse(mockFileSystem[cachePath]);
 
       // Dev versions are now stored in dev_version field (not latest_version)
@@ -371,7 +400,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
         dev_version: '5.5.0',
         dismissed_version: null
       };
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);
+      mockFileSystem[getCacheFilePath()] = JSON.stringify(cacheData);
 
       // Call with force=false to use cache
       const result = await updateCheckerModule.checkForUpdates('5.4.0', false, 'npm', 'dev');
@@ -458,9 +487,17 @@ describe('Beta Channel Implementation (Phase 3)', function () {
   });
 
   describe('Cache functionality', function () {
+    function getCacheFilePath() {
+      return cacheFilePath || path.join(os.homedir(), '.ccs', 'cache', 'update-check.json');
+    }
+
+    function getCacheDirPath() {
+      return cacheDirPath || path.dirname(getCacheFilePath());
+    }
+
     it('should create cache directory if not exists', async function () {
       // Ensure no cache exists
-      const cacheDir = path.join(os.homedir(), '.ccs', 'cache');
+      const cacheDir = getCacheDirPath();
       delete mockFileSystem[cacheDir];
 
       await updateCheckerModule.checkForUpdates('5.4.0', true, 'npm', 'latest');
@@ -477,7 +514,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
         dev_version: '5.5.0',
         dismissed_version: '5.5.0'
       };
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = JSON.stringify(cacheData);
+      mockFileSystem[getCacheFilePath()] = JSON.stringify(cacheData);
 
       const result = await updateCheckerModule.checkForUpdates('5.4.1', false, 'npm', 'dev');
 
@@ -488,7 +525,7 @@ describe('Beta Channel Implementation (Phase 3)', function () {
 
     it('should handle corrupted cache gracefully', async function () {
       // Set up corrupted cache
-      mockFileSystem[path.join(os.homedir(), '.ccs', 'cache', 'update-check.json')] = 'invalid json';
+      mockFileSystem[getCacheFilePath()] = 'invalid json';
 
       // Should not throw error
       const result = await updateCheckerModule.checkForUpdates('5.4.0', true, 'npm', 'latest');

@@ -146,7 +146,7 @@ export async function parseProjectDirectory(projectDir: string): Promise<RawUsag
   const projectPath = path.basename(projectDir).replace(/-/g, '/');
 
   try {
-    const files = fs.readdirSync(projectDir);
+    const files = await fs.promises.readdir(projectDir);
     const jsonlFiles = files.filter((f) => f.endsWith('.jsonl'));
 
     // Parse files sequentially within a project to avoid too many open handles

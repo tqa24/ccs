@@ -30,7 +30,13 @@ import {
   Check,
   KeyRound,
 } from 'lucide-react';
-import { cn, getProviderMinQuota, getProviderResetTime } from '@/lib/utils';
+import {
+  cn,
+  getCodexQuotaBreakdown,
+  getProviderMinQuota,
+  getProviderResetTime,
+  isCodexQuotaResult,
+} from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { useAccountQuota, useCliproxyStats } from '@/hooks/use-cliproxy-stats';
 import { QuotaTooltipContent } from '@/components/shared/quota-tooltip-content';
@@ -115,6 +121,14 @@ export function AccountItem({
   // Use shared utility functions for provider-specific quota handling
   const minQuota = getProviderMinQuota(account.provider, quota);
   const nextReset = getProviderResetTime(account.provider, quota);
+  const codexBreakdown =
+    account.provider === 'codex' && quota && isCodexQuotaResult(quota)
+      ? getCodexQuotaBreakdown(quota.windows)
+      : null;
+  const codexQuotaRows = [
+    { label: '5h', value: codexBreakdown?.fiveHourWindow?.remainingPercent ?? null },
+    { label: 'Weekly', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
+  ].filter((row): row is { label: string; value: number } => row.value !== null);
 
   return (
     <div
@@ -337,14 +351,34 @@ export function AccountItem({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2">
-                      <Progress
-                        value={Math.max(0, Math.min(100, minQuota))}
-                        className="h-2 flex-1"
-                        indicatorClassName={getQuotaColor(minQuota)}
-                      />
-                      <span className="text-xs font-medium w-10 text-right">{minQuota}%</span>
-                    </div>
+                    {account.provider === 'codex' && codexQuotaRows.length > 0 ? (
+                      <div className="space-y-1.5">
+                        {codexQuotaRows.map((row) => (
+                          <div key={row.label} className="flex items-center gap-2">
+                            <span className="w-10 text-[10px] text-muted-foreground">
+                              {row.label}
+                            </span>
+                            <Progress
+                              value={Math.max(0, Math.min(100, row.value))}
+                              className="h-2 flex-1"
+                              indicatorClassName={getQuotaColor(row.value)}
+                            />
+                            <span className="text-xs font-medium w-10 text-right">
+                              {row.value}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Progress
+                          value={Math.max(0, Math.min(100, minQuota))}
+                          className="h-2 flex-1"
+                          indicatorClassName={getQuotaColor(minQuota)}
+                        />
+                        <span className="text-xs font-medium w-10 text-right">{minQuota}%</span>
+                      </div>
+                    )}
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
                     {quota && <QuotaTooltipContent quota={quota} resetTime={nextReset} />}

@@ -37,7 +37,13 @@ import { getProviderTokenDir } from '../../cliproxy/auth/token-manager';
 import {
   CLIPROXY_CALLBACK_PROVIDER_MAP,
   CLIPROXY_AUTH_URL_PROVIDER_MAP,
+  isKiroAuthMethod,
+  isKiroDeviceCodeMethod,
+  KiroAuthMethod,
+  normalizeKiroAuthMethod,
+  toKiroManagementMethod,
 } from '../../cliproxy/auth/auth-types';
+import { getOAuthFlowType } from '../../cliproxy/provider-capabilities';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 
@@ -45,6 +51,44 @@ const router = Router();
 
 // Valid providers list - derived from canonical CLIPROXY_PROFILES
 const validProviders: CLIProxyProvider[] = [...CLIPROXY_PROFILES];
+
+function parseKiroMethod(raw: unknown): { method: KiroAuthMethod; invalid: boolean } {
+  if (raw === undefined || raw === null) {
+    return { method: normalizeKiroAuthMethod(), invalid: false };
+  }
+  if (typeof raw !== 'string') {
+    return { method: normalizeKiroAuthMethod(), invalid: true };
+  }
+  if (raw.trim() === '') {
+    return { method: normalizeKiroAuthMethod(), invalid: false };
+  }
+  const normalized = raw.trim().toLowerCase();
+  if (!isKiroAuthMethod(normalized)) {
+    return { method: normalizeKiroAuthMethod(), invalid: true };
+  }
+  return { method: normalizeKiroAuthMethod(normalized), invalid: false };
+}
+
+export function getStartUrlUnsupportedReason(
+  provider: CLIProxyProvider,
+  options?: { kiroMethod?: KiroAuthMethod }
+): string | null {
+  if (provider === 'kiro') {
+    const kiroMethod = options?.kiroMethod ?? normalizeKiroAuthMethod();
+    if (kiroMethod === 'aws-authcode') {
+      return "Kiro method 'aws-authcode' uses CLI auth flow. Use /api/cliproxy/auth/kiro/start instead.";
+    }
+    if (isKiroDeviceCodeMethod(kiroMethod)) {
+      return "Kiro method 'aws' uses Device Code flow. Use /api/cliproxy/auth/kiro/start instead.";
+    }
+    return null;
+  }
+
+  if (getOAuthFlowType(provider) === 'device_code') {
+    return `Provider '${provider}' uses Device Code flow. Use /api/cliproxy/auth/${provider}/start instead.`;
+  }
+  return null;
+}
 
 /**
  * GET /api/cliproxy/auth - Get auth status for built-in CLIProxy profiles
@@ -343,13 +387,26 @@ router.post('/accounts/:provider/:accountId/resume', (req: Request, res: Respons
  */
 router.post('/:provider/start', async (req: Request, res: Response): Promise<void> => {
   const { provider } = req.params;
-  const { nickname: nicknameRaw, noIncognito: noIncognitoBody } = req.body;
+  const {
+    nickname: nicknameRaw,
+    noIncognito: noIncognitoBody,
+    kiroMethod: kiroMethodRaw,
+  } = req.body;
   // Trim nickname for consistency with CLI (oauth-handler.ts trims input)
   const nickname = typeof nicknameRaw === 'string' ? nicknameRaw.trim() : nicknameRaw;
+  const { method: kiroMethod, invalid: invalidKiroMethod } = parseKiroMethod(kiroMethodRaw);
 
   // Validate provider
   if (!validProviders.includes(provider as CLIProxyProvider)) {
     res.status(400).json({ error: `Invalid provider: ${provider}` });
+    return;
+  }
+
+  if (provider === 'kiro' && invalidKiroMethod) {
+    res.status(400).json({
+      error: 'Invalid kiroMethod. Supported: aws, aws-authcode, google, github',
+      code: 'INVALID_KIRO_METHOD',
+    });
     return;
   }
 
@@ -400,6 +457,7 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       add: true, // Always add mode from UI
       headless: false, // Force interactive mode
       nickname: nickname || undefined,
+      kiroMethod: provider === 'kiro' ? kiroMethod : undefined,
       fromUI: true, // Enable project selection prompt in UI
       noIncognito, // Kiro: use normal browser if enabled
     });
@@ -544,6 +602,8 @@ router.post('/kiro/import', async (_req: Request, res: Response): Promise<void> 
  */
 router.post('/:provider/start-url', async (req: Request, res: Response): Promise<void> => {
   const { provider } = req.params;
+  const { kiroMethod: kiroMethodRaw } = req.body ?? {};
+  const { method: kiroMethod, invalid: invalidKiroMethod } = parseKiroMethod(kiroMethodRaw);
 
   // Check remote mode
   const target = getProxyTarget();
@@ -558,14 +618,34 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
     return;
   }
 
+  if (provider === 'kiro' && invalidKiroMethod) {
+    res.status(400).json({
+      error: 'Invalid kiroMethod. Supported: aws, aws-authcode, google, github',
+      code: 'INVALID_KIRO_METHOD',
+    });
+    return;
+  }
+
+  const unsupportedReason = getStartUrlUnsupportedReason(provider as CLIProxyProvider, {
+    kiroMethod: provider === 'kiro' ? kiroMethod : undefined,
+  });
+  if (unsupportedReason) {
+    res.status(400).json({ error: unsupportedReason });
+    return;
+  }
+
   try {
     const authUrlProvider =
       CLIPROXY_AUTH_URL_PROVIDER_MAP[provider as CLIProxyProvider] || provider;
+    const kiroQuery =
+      provider === 'kiro'
+        ? `&method=${encodeURIComponent(toKiroManagementMethod(kiroMethod))}`
+        : '';
 
     // Call CLIProxyAPI to start OAuth and get auth URL
     // CLIProxyAPI management routes are under /v0/management prefix
     const response = await fetch(
-      buildProxyUrl(target, `/v0/management/${authUrlProvider}-auth-url?is_webui=true`),
+      buildProxyUrl(target, `/v0/management/${authUrlProvider}-auth-url?is_webui=true${kiroQuery}`),
       { headers: buildManagementHeaders(target) }
     );
 
@@ -575,18 +655,27 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       return;
     }
 
-    const data = (await response.json()) as { url?: string; auth_url?: string; state?: string };
+    const data = (await response.json()) as {
+      url?: string;
+      auth_url?: string;
+      state?: string;
+      method?: string;
+    };
     const authUrl = data.url || data.auth_url;
 
-    if (!authUrl) {
-      res.status(500).json({ error: 'No authorization URL received from CLIProxyAPI' });
+    // Some upstream flows return state first and provide auth_url in subsequent status polling.
+    if (!authUrl && !data.state) {
+      res
+        .status(500)
+        .json({ error: 'No OAuth state or authorization URL received from CLIProxyAPI' });
       return;
     }
 
     res.json({
       success: true,
-      authUrl,
-      state: data.state,
+      authUrl: authUrl || null,
+      state: data.state || null,
+      method: data.method || null,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to start OAuth';

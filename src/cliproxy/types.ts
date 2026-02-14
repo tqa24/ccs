@@ -3,6 +3,8 @@
  * Types for CLIProxyAPI binary management and execution
  */
 
+import { CompositeTierConfig } from '../config/unified-config-types';
+
 /**
  * Supported operating systems
  */
@@ -181,6 +183,18 @@ export interface ExecutorConfig {
   pollInterval: number;
   /** Custom settings path for user-defined CLIProxy variants */
   customSettingsPath?: string;
+  /** Composite variant: true when mixing providers per tier */
+  isComposite?: boolean;
+  /** Composite variant: per-tier provider+model mappings */
+  compositeTiers?: {
+    opus: CompositeTierConfig;
+    sonnet: CompositeTierConfig;
+    haiku: CompositeTierConfig;
+  };
+  /** Composite variant: which tier is the default */
+  compositeDefaultTier?: 'opus' | 'sonnet' | 'haiku';
+  /** Original profile/variant name (e.g., "my-mix" for composite variants) */
+  profileName?: string;
 }
 
 /**

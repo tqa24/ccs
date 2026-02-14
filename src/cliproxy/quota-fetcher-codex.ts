@@ -14,6 +14,8 @@ import type { CodexQuotaResult, CodexQuotaWindow } from './quota-types';
 
 /** ChatGPT backend API base URL */
 const CODEX_API_BASE = 'https://chatgpt.com/backend-api';
+const CODEX_QUOTA_TIMEOUT_MS = 12000;
+const CODEX_QUOTA_MAX_ATTEMPTS = 2;
 
 /**
  * User agent matching Codex CLI for API compatibility.
@@ -222,114 +224,134 @@ export async function fetchCodexQuota(
   }
 
   const url = `${CODEX_API_BASE}/wham/usage`;
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  let lastErrorMsg = 'Unknown error';
 
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        Authorization: `Bearer ${authData.accessToken}`,
-        'ChatGPT-Account-Id': authData.accountId,
-        'User-Agent': USER_AGENT,
-      },
-    });
+  for (let attempt = 1; attempt <= CODEX_QUOTA_MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), CODEX_QUOTA_TIMEOUT_MS);
 
-    clearTimeout(timeoutId);
+    try {
+      const response = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${authData.accessToken}`,
+          'ChatGPT-Account-Id': authData.accountId,
+          'User-Agent': USER_AGENT,
+        },
+      });
 
-    if (verbose) console.error(`[i] Codex API status: ${response.status}`);
+      clearTimeout(timeoutId);
 
-    if (response.status === 401) {
+      if (verbose) console.error(`[i] Codex API status: ${response.status} (attempt ${attempt})`);
+
+      if (response.status === 401) {
+        return {
+          success: false,
+          windows: [],
+          planType: null,
+          lastUpdated: Date.now(),
+          error: 'Token expired or invalid',
+          accountId,
+          needsReauth: true,
+        };
+      }
+
+      if (response.status === 403) {
+        // 403 = account lacks API access (not same as quota exhausted)
+        // Keep success=false with isForbidden flag for UI to show distinct "403" badge
+        return {
+          success: false,
+          windows: [],
+          planType: null,
+          lastUpdated: Date.now(),
+          error: '403 Forbidden - No quota API access',
+          accountId,
+          isForbidden: true,
+        };
+      }
+
+      if (response.status === 429) {
+        return {
+          success: false,
+          windows: [],
+          planType: null,
+          lastUpdated: Date.now(),
+          error: 'Rate limited - try again later',
+          accountId,
+        };
+      }
+
+      if (!response.ok) {
+        return {
+          success: false,
+          windows: [],
+          planType: null,
+          lastUpdated: Date.now(),
+          error: `API error: ${response.status}`,
+          accountId,
+        };
+      }
+
+      const data = (await response.json()) as CodexUsageResponse;
+      const windows = buildCodexQuotaWindows(data);
+
+      // Extract plan type
+      const planTypeRaw = data.plan_type || data.planType;
+      let planType: 'free' | 'plus' | 'team' | null = null;
+      if (planTypeRaw) {
+        const normalized = planTypeRaw.toLowerCase();
+        if (normalized === 'free') planType = 'free';
+        else if (normalized === 'plus') planType = 'plus';
+        else if (normalized === 'team') planType = 'team';
+      }
+
+      if (verbose) console.error(`[i] Codex windows found: ${windows.length}`);
+
       return {
-        success: false,
-        windows: [],
-        planType: null,
+        success: true,
+        windows,
+        planType,
         lastUpdated: Date.now(),
-        error: 'Token expired or invalid',
-        accountId,
-        needsReauth: true,
-      };
-    }
-
-    if (response.status === 403) {
-      // 403 = account lacks API access (not same as quota exhausted)
-      // Keep success=false with isForbidden flag for UI to show distinct "403" badge
-      return {
-        success: false,
-        windows: [],
-        planType: null,
-        lastUpdated: Date.now(),
-        error: '403 Forbidden - No quota API access',
-        accountId,
-        isForbidden: true,
-      };
-    }
-
-    if (response.status === 429) {
-      return {
-        success: false,
-        windows: [],
-        planType: null,
-        lastUpdated: Date.now(),
-        error: 'Rate limited - try again later',
         accountId,
       };
-    }
-
-    if (!response.ok) {
-      return {
-        success: false,
-        windows: [],
-        planType: null,
-        lastUpdated: Date.now(),
-        error: `API error: ${response.status}`,
-        accountId,
-      };
-    }
-
-    const data = (await response.json()) as CodexUsageResponse;
-    const windows = buildCodexQuotaWindows(data);
-
-    // Extract plan type
-    const planTypeRaw = data.plan_type || data.planType;
-    let planType: 'free' | 'plus' | 'team' | null = null;
-    if (planTypeRaw) {
-      const normalized = planTypeRaw.toLowerCase();
-      if (normalized === 'free') planType = 'free';
-      else if (normalized === 'plus') planType = 'plus';
-      else if (normalized === 'team') planType = 'team';
-    }
-
-    if (verbose) console.error(`[i] Codex windows found: ${windows.length}`);
-
-    return {
-      success: true,
-      windows,
-      planType,
-      lastUpdated: Date.now(),
-      accountId,
-    };
-  } catch (err) {
-    clearTimeout(timeoutId);
-    const errorMsg =
-      err instanceof Error && err.name === 'AbortError'
+    } catch (err) {
+      clearTimeout(timeoutId);
+      const isAbortError = err instanceof Error && err.name === 'AbortError';
+      lastErrorMsg = isAbortError
         ? 'Request timeout'
         : err instanceof Error
           ? err.message
           : 'Unknown error';
 
-    if (verbose) console.error(`[!] Codex quota error: ${errorMsg}`);
+      if (verbose) {
+        console.error(`[!] Codex quota error (attempt ${attempt}): ${lastErrorMsg}`);
+      }
 
-    return {
-      success: false,
-      windows: [],
-      planType: null,
-      lastUpdated: Date.now(),
-      error: errorMsg,
-      accountId,
-    };
+      // Retry timeout once; other failures return immediately.
+      if (isAbortError && attempt < CODEX_QUOTA_MAX_ATTEMPTS) {
+        continue;
+      }
+
+      return {
+        success: false,
+        windows: [],
+        planType: null,
+        lastUpdated: Date.now(),
+        error: lastErrorMsg,
+        accountId,
+      };
+    }
   }
+
+  return {
+    success: false,
+    windows: [],
+    planType: null,
+    lastUpdated: Date.now(),
+    error: lastErrorMsg,
+    accountId,
+  };
 }
 
 /**

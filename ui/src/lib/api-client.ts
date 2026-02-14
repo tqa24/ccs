@@ -54,6 +54,13 @@ export interface Variant {
   account?: string;
   port?: number;
   model?: string;
+  type?: 'composite';
+  default_tier?: 'opus' | 'sonnet' | 'haiku';
+  tiers?: {
+    opus: { provider: string; model: string; account?: string; thinking?: string };
+    sonnet: { provider: string; model: string; account?: string; thinking?: string };
+    haiku: { provider: string; model: string; account?: string; thinking?: string };
+  };
 }
 
 export interface CreateVariant {
@@ -61,12 +68,26 @@ export interface CreateVariant {
   provider: CLIProxyProvider;
   model?: string;
   account?: string;
+  type?: 'composite';
+  default_tier?: 'opus' | 'sonnet' | 'haiku';
+  tiers?: {
+    opus: { provider: string; model: string; account?: string; thinking?: string };
+    sonnet: { provider: string; model: string; account?: string; thinking?: string };
+    haiku: { provider: string; model: string; account?: string; thinking?: string };
+  };
 }
 
 export interface UpdateVariant {
   provider?: CLIProxyProvider;
   model?: string;
   account?: string;
+  type?: 'composite';
+  default_tier?: 'opus' | 'sonnet' | 'haiku';
+  tiers?: {
+    opus: { provider: string; model: string; account?: string; thinking?: string };
+    sonnet: { provider: string; model: string; account?: string; thinking?: string };
+    haiku: { provider: string; model: string; account?: string; thinking?: string };
+  };
 }
 
 /** OAuth account info for multi-account support */

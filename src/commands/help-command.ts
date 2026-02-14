@@ -168,7 +168,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ],
     [
       ['ccs gemini', 'Google Gemini (gemini-2.5-pro or 3-pro)'],
-      ['ccs codex', 'OpenAI Codex (gpt-5.1-codex-max)'],
+      ['ccs codex', 'OpenAI Codex (supports -medium/-high/-xhigh model suffixes)'],
       ['ccs agy', 'Antigravity (Claude/Gemini models)'],
       ['ccs qwen', 'Qwen Code (qwen3-coder)'],
       ['ccs kiro', 'Kiro (AWS CodeWhisperer Claude models)'],
@@ -187,11 +187,16 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
         'ccs <provider> --thinking <value>',
         'Set thinking budget (low/medium/high/xhigh/auto/off or number)',
       ],
+      ['ccs codex --effort <level>', 'Set codex reasoning effort (medium/high/xhigh)'],
       ['ccs <provider> --1m', 'Enable 1M token context window'],
       ['ccs <provider> --no-1m', 'Disable 1M context (use 200K default)'],
       ['ccs <provider> --logout', 'Clear authentication'],
       ['ccs <provider> --headless', 'Headless auth (for SSH)'],
       ['ccs <provider> --port-forward', 'Force port-forwarding mode (skip prompt)'],
+      ['ccs kiro --auth --kiro-auth-method aws', 'Kiro via AWS Builder ID (device code)'],
+      ['ccs kiro --auth --kiro-auth-method aws-authcode', 'Kiro via AWS auth code flow'],
+      ['ccs kiro --auth --kiro-auth-method google', 'Kiro via Google OAuth'],
+      ['ccs kiro --auth --kiro-auth-method github', 'Kiro via GitHub OAuth (Dashboard flow)'],
       ['ccs kiro --import', 'Import token from Kiro IDE'],
       ['ccs kiro --incognito', 'Use incognito browser (default: normal)'],
       ['ccs codex "explain code"', 'Use with prompt'],
@@ -217,6 +222,28 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       ['ccs copilot stop', 'Stop copilot-api daemon'],
       ['ccs copilot enable', 'Enable integration'],
       ['ccs copilot disable', 'Disable integration'],
+    ]
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MAJOR SECTION 5: Cursor IDE Integration
+  // ═══════════════════════════════════════════════════════════════════════════
+  printMajorSection(
+    'Cursor IDE Integration',
+    [
+      'Use Cursor IDE with Claude Code via cursor proxy daemon',
+      'Auto-detects token from Cursor installation',
+    ],
+    [
+      ['ccs cursor <cmd>', 'Use Cursor IDE integration'],
+      ['ccs cursor auth', 'Import Cursor token'],
+      ['ccs cursor auth --manual --token <t> --machine-id <id>', 'Manual token import'],
+      ['ccs cursor status', 'Show connection status'],
+      ['ccs cursor models', 'List available models'],
+      ['ccs cursor start', 'Start proxy daemon'],
+      ['ccs cursor stop', 'Stop proxy daemon'],
+      ['ccs cursor enable', 'Enable cursor integration'],
+      ['ccs cursor disable', 'Disable cursor integration'],
     ]
   );
 
@@ -313,7 +340,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   ]);
 
   // W3: Thinking Budget explanation
-  printSubSection('Extended Thinking (--thinking)', [
+  printSubSection('Extended Thinking / Reasoning', [
     ['--thinking off', 'Disable extended thinking'],
     ['--thinking auto', 'Let model decide dynamically'],
     ['--thinking low', '1K tokens - Quick responses'],
@@ -322,8 +349,13 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['--thinking xhigh', '32K tokens - Maximum depth'],
     ['--thinking <number>', 'Custom token budget (512-100000)'],
     ['', ''],
+    ['--effort <level>', 'Codex alias for reasoning effort (medium/high/xhigh)'],
+    ['--effort xhigh', 'Pin Codex effort to xhigh for this run'],
+    ['', ''],
     ['Note:', 'Extended thinking allocates compute for step-by-step reasoning'],
-    ['', 'before responding. Supported: agy, gemini (thinking models).'],
+    ['', 'before responding.'],
+    ['', 'Providers: agy/gemini use --thinking, codex uses --effort (or --thinking alias).'],
+    ['', 'Codex model suffixes also pin effort: -medium / -high / -xhigh.'],
   ]);
 
   // Extended Context (1M)

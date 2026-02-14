@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Agent Guidelines
 
-AI-facing guidance for Claude Code when working with this repository.
+AI-facing guidance for agent tooling when working with this repository.
 
 ## Critical Constraints (NEVER VIOLATE)
 
@@ -17,7 +17,7 @@ Tests set `process.env.CCS_HOME` to a temp directory. Code using `os.homedir()` 
 
 ## Core Function
 
-CLI wrapper for instant switching between multiple Claude accounts and alternative models (GLM, GLMT, Kimi). See README.md for user documentation.
+CLI wrapper for instant switching between multiple provider accounts and alternative models (GLM, GLMT, Kimi). See README.md for user documentation.
 
 ## Design Principles (ENFORCE STRICTLY)
 
@@ -113,7 +113,7 @@ bun run validate            # Step 3: Final check (must pass)
    - **Scope:** CCS CLI terminal output (`src/` code that prints to stdout/stderr)
    - **Does NOT apply to:** PR descriptions, commit messages, documentation, comments, AI conversations
 2. **TTY-aware colors** - Respect NO_COLOR env var
-3. **Non-invasive** - NEVER modify `~/.claude/settings.json` without explicit user request and confirmation (exception: `ccs persist` command)
+3. **Non-invasive** - NEVER modify external tool settings (`~/.claude/settings.json`) without explicit user request and confirmation (exception: `ccs persist` command)
 4. **Cross-platform parity** - bash/PowerShell/Node.js must behave identically
 5. **CLI documentation** - ALL CLI changes MUST update respective `--help` handler (see table below)
 6. **Idempotent** - All install operations safe to run multiple times
@@ -129,6 +129,7 @@ bun run validate            # Step 3: Final check (must pass)
 | `ccs cliproxy --help` | `src/commands/cliproxy-command.ts` → `showHelp()` |
 | `ccs config --help` | `src/commands/config-command.ts` → `showHelp()` |
 | `ccs copilot --help` | `src/commands/copilot-command.ts` → `handleHelp()` |
+| `ccs cursor --help` | `src/commands/cursor-command.ts` → `handleHelp()` |
 | `ccs doctor --help` | `src/commands/doctor-command.ts` → `showHelp()` |
 | `ccs migrate --help` | `src/commands/migrate-command.ts` → `printMigrateHelp()` |
 | `ccs env --help` | `src/commands/env-command.ts` → `showHelp()` |
