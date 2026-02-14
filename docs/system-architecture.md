@@ -86,7 +86,7 @@ CCS v7.34 adds Image Analysis Hook for vision model proxying through CLIProxy wi
         v
   1. CLIProxy Hardcoded ----+---> gemini, codex, agy, kiro, ghcp
      (OAuth-based)          |     Zero-config OAuth providers
-                            |     (kiro: Auth Code, ghcp: Device Code)
+                            |     (kiro: method-aware, ghcp: Device Code)
                             |
   2. CLIProxy Variants -----+---> config.cliproxy section
      (User-defined)         |     Custom provider configurations
@@ -570,10 +570,10 @@ CCS v7.34 adds Image Analysis Hook for vision model proxying through CLIProxy wi
 |                      Authentication Flow                                   |
 +===========================================================================+
 
-  OAuth Providers - Authorization Code Flow (Gemini, Codex, AGY, Kiro)
-  --------------------------------------------------------------------
+  OAuth Providers - Authorization Code Flow (Gemini, Codex, AGY)
+  --------------------------------------------------------------
 
-  1. User runs: ccs gemini (or ccs kiro)
+  1. User runs: ccs gemini
         |
         v
   2. Check token cache (~/.ccs/cliproxy/auth/)
@@ -584,7 +584,6 @@ CCS v7.34 adds Image Analysis Hook for vision model proxying through CLIProxy wi
                     |
                     v
   3. Open browser for OAuth (localhost:PORT callback)
-        |         - Kiro uses port 9876
         v
   4. Callback with auth code
         |
@@ -593,6 +592,21 @@ CCS v7.34 adds Image Analysis Hook for vision model proxying through CLIProxy wi
         |
         v
   6. Cache token locally
+
+
+  Kiro OAuth - Method-Aware Flow (CLI + Dashboard parity)
+  -------------------------------------------------------
+
+  Supported methods:
+    - aws: Device Code (default, AWS org friendly)
+    - aws-authcode: Authorization Code via CLI flow
+    - google: Social OAuth via management API
+    - github: Social OAuth via management API (Dashboard flow)
+
+  Key behavior:
+    - Device Code method uses /start route (no callback port)
+    - Callback/social methods use /start-url + status polling
+    - Some management flows return state first, auth_url later
 
 
   OAuth Providers - Device Code Flow (GitHub Copilot/ghcp)

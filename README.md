@@ -60,7 +60,7 @@ Want to run the dashboard in Docker? See `docker/README.md`.
 The dashboard provides visual management for all account types:
 
 - **Claude Accounts**: Create isolated instances (work, personal, client)
-- **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity
+- **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity, Kiro, Copilot
 - **API Profiles**: Configure GLM, Kimi with your keys
 - **Health Monitor**: Real-time status across all profiles
 
@@ -93,7 +93,7 @@ The dashboard provides visual management for all account types:
 | **Codex** | OAuth | `ccs codex` | Code generation |
 | **Copilot** | OAuth | `ccs copilot` or `ccs ghcp` | GitHub Copilot models |
 | **Cursor IDE** | Local Token | `ccs cursor` | Cursor subscription models via local daemon |
-| **Kiro** | OAuth | `ccs kiro` | AWS CodeWhisperer (Claude-powered) |
+| **Kiro** | OAuth (AWS default) | `ccs kiro` | AWS CodeWhisperer (Claude-powered) |
 | **Antigravity** | OAuth | `ccs agy` | Alternative routing |
 | **OpenRouter** | API Key | `ccs openrouter` | 300+ models, unified API |
 | **Ollama** | Local | `ccs ollama` | Local open-source models, privacy |
@@ -140,6 +140,19 @@ ccs agy       # Antigravity (OAuth)
 ccs ollama    # Local Ollama (no API key needed)
 ccs glm       # GLM (API key)
 ```
+
+### Kiro Auth Methods
+
+`ccs kiro --auth` defaults to AWS Builder ID Device OAuth (best support for AWS org accounts).
+
+```bash
+ccs kiro --auth --kiro-auth-method aws           # AWS Builder ID device code (default)
+ccs kiro --auth --kiro-auth-method aws-authcode  # AWS Builder ID auth code
+ccs kiro --auth --kiro-auth-method google        # Google OAuth
+ccs kiro --auth --kiro-auth-method github        # Dashboard management OAuth flow
+```
+
+Dashboard parity: `ccs config` -> Accounts -> Add Kiro account -> choose `Auth Method`.
 
 ### Cursor IDE Quick Start
 
