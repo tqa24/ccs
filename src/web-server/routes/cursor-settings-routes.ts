@@ -5,6 +5,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import * as fs from 'fs';
+import { promises as fsp } from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../../utils/config-manager';
 import { DEFAULT_CURSOR_CONFIG } from '../../config/unified-config-types';
@@ -61,19 +62,17 @@ function getDefaultCursorSettings(cursorConfig: CursorConfig): { env: Record<str
   };
 }
 
-function syncRawSettingsFromCursorConfig(cursorConfig: CursorConfig): void {
+async function syncRawSettingsFromCursorConfig(cursorConfig: CursorConfig): Promise<void> {
   const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
 
   let settings: Record<string, unknown> = {};
-  if (fs.existsSync(settingsPath)) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-        settings = parsed as Record<string, unknown>;
-      }
-    } catch {
-      settings = {};
+  try {
+    const parsed = JSON.parse(await fsp.readFile(settingsPath, 'utf-8'));
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      settings = parsed as Record<string, unknown>;
     }
+  } catch {
+    settings = {};
   }
 
   const envSource = settings.env;
@@ -101,8 +100,8 @@ function syncRawSettingsFromCursorConfig(cursorConfig: CursorConfig): void {
   };
 
   const tempPath = settingsPath + '.tmp';
-  fs.writeFileSync(tempPath, JSON.stringify(nextSettings, null, 2) + '\n');
-  fs.renameSync(tempPath, settingsPath);
+  await fsp.writeFile(tempPath, JSON.stringify(nextSettings, null, 2) + '\n');
+  await fsp.rename(tempPath, settingsPath);
 }
 
 /**
@@ -120,7 +119,7 @@ router.get('/', (_req: Request, res: Response): void => {
 /**
  * PUT /api/cursor/settings - Update cursor config
  */
-router.put('/', (req: Request, res: Response): void => {
+router.put('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const updates = req.body;
 
@@ -213,7 +212,7 @@ router.put('/', (req: Request, res: Response): void => {
     };
 
     saveUnifiedConfig(config);
-    syncRawSettingsFromCursorConfig(config.cursor);
+    await syncRawSettingsFromCursorConfig(config.cursor);
     res.json({ success: true, cursor: config.cursor });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
