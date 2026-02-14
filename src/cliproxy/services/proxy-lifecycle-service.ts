@@ -2,13 +2,15 @@
  * CLIProxy Proxy Lifecycle Service
  *
  * Handles start/stop/status operations for CLIProxy instances.
- * Delegates to session-tracker for actual process management.
+ * Delegates to session-tracker and service-manager for actual process management.
  */
 
 import {
   stopProxy as stopProxySession,
   getProxyStatus as getProxyStatusSession,
 } from '../session-tracker';
+import { ensureCliproxyService } from '../service-manager';
+import { CLIPROXY_DEFAULT_PORT } from '../config-generator';
 
 /** Proxy status result */
 export interface ProxyStatusResult {
@@ -27,6 +29,15 @@ export interface StopProxyResult {
   error?: string;
 }
 
+/** Start proxy result */
+export interface StartProxyResult {
+  started: boolean;
+  alreadyRunning: boolean;
+  port: number;
+  configRegenerated?: boolean;
+  error?: string;
+}
+
 /**
  * Get current proxy status
  */
@@ -39,6 +50,16 @@ export function getProxyStatus(): ProxyStatusResult {
  */
 export async function stopProxy(): Promise<StopProxyResult> {
   return stopProxySession();
+}
+
+/**
+ * Start CLIProxy service (or reuse existing running instance)
+ */
+export async function startProxy(
+  port: number = CLIPROXY_DEFAULT_PORT,
+  verbose: boolean = false
+): Promise<StartProxyResult> {
+  return ensureCliproxyService(port, verbose);
 }
 
 /**

@@ -2,14 +2,67 @@
  * CLIProxy Lifecycle Management
  *
  * Handles:
+ * - ccs cliproxy start
+ * - ccs cliproxy restart
  * - ccs cliproxy status
  * - ccs cliproxy stop
  */
 
 import { initUI, header, color, dim, ok, warn, info } from '../../utils/ui';
-import { getProxyStatus, stopProxy } from '../../cliproxy/services';
+import { getProxyStatus, startProxy, stopProxy } from '../../cliproxy/services';
 import { detectRunningProxy } from '../../cliproxy/proxy-detector';
 import { CLIPROXY_DEFAULT_PORT } from '../../cliproxy/config-generator';
+
+export async function handleStart(verbose = false): Promise<void> {
+  await initUI();
+  console.log(header('Start CLIProxy'));
+  console.log('');
+
+  const result = await startProxy(CLIPROXY_DEFAULT_PORT, verbose);
+  if (result.started) {
+    if (result.alreadyRunning) {
+      console.log(info(`CLIProxy already running on port ${result.port}`));
+      if (result.configRegenerated) {
+        console.log(warn('Config updated - restart CLIProxy to apply changes'));
+      }
+    } else {
+      console.log(ok(`CLIProxy started on port ${result.port}`));
+    }
+    console.log(dim('To stop: ccs cliproxy stop'));
+  } else {
+    console.log(warn(result.error || 'Failed to start CLIProxy'));
+  }
+  console.log('');
+}
+
+export async function handleRestart(verbose = false): Promise<void> {
+  await initUI();
+  console.log(header('Restart CLIProxy'));
+  console.log('');
+
+  const stopResult = await stopProxy();
+  if (stopResult.stopped) {
+    console.log(ok(`CLIProxy stopped (PID ${stopResult.pid})`));
+  } else if (stopResult.error === 'No active CLIProxy session found') {
+    console.log(info('No active CLIProxy session found, starting a new instance'));
+  } else {
+    console.log(warn(stopResult.error || 'Failed to stop existing CLIProxy'));
+    console.log(info('Attempting to start a fresh instance...'));
+  }
+
+  const startResult = await startProxy(CLIPROXY_DEFAULT_PORT, verbose);
+  if (startResult.started) {
+    if (startResult.alreadyRunning) {
+      console.log(info(`CLIProxy already running on port ${startResult.port}`));
+    } else {
+      console.log(ok(`CLIProxy started on port ${startResult.port}`));
+    }
+  } else {
+    console.log(warn(startResult.error || 'Failed to restart CLIProxy'));
+  }
+
+  console.log('');
+}
 
 export async function handleProxyStatus(): Promise<void> {
   await initUI();

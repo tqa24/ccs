@@ -61,6 +61,8 @@ export async function showHelp(): Promise<void> {
     [
       'Proxy Lifecycle:',
       [
+        ['start', 'Start CLIProxy instance in background'],
+        ['restart', 'Restart CLIProxy instance'],
         ['status', 'Show running CLIProxy status'],
         ['stop', 'Stop running CLIProxy instance'],
         ['doctor', 'Quota diagnostics and shared project detection'],

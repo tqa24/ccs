@@ -229,6 +229,15 @@ ccs cliproxy doctor     # Check quota status for all agy accounts
 
 **Auto-Failover**: When an Antigravity account runs out of quota, CCS automatically switches to another account with remaining capacity. Shared GCP project accounts are excluded (pooled quota).
 
+### CLIProxy Lifecycle
+
+```bash
+ccs cliproxy start      # Start CLIProxy background service
+ccs cliproxy status     # Check running status
+ccs cliproxy restart    # Restart CLIProxy service
+ccs cliproxy stop       # Stop running CLIProxy service
+```
+
 <br>
 
 ## Configuration

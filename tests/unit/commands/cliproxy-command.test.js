@@ -491,6 +491,18 @@ describe('CLIProxy Command - Proxy Lifecycle', () => {
   });
 
   describe('Command Routing', () => {
+    it('routes "start" subcommand correctly', () => {
+      const args = ['cliproxy', 'start'];
+      const subcommand = args[1];
+      assert.strictEqual(subcommand, 'start');
+    });
+
+    it('routes "restart" subcommand correctly', () => {
+      const args = ['cliproxy', 'restart'];
+      const subcommand = args[1];
+      assert.strictEqual(subcommand, 'restart');
+    });
+
     it('routes "stop" subcommand correctly', () => {
       const args = ['cliproxy', 'stop'];
       const subcommand = args[1];
@@ -504,7 +516,7 @@ describe('CLIProxy Command - Proxy Lifecycle', () => {
     });
 
     it('handles unknown subcommand', () => {
-      const validSubcommands = ['stop', 'status', 'create', 'list', 'remove'];
+      const validSubcommands = ['start', 'restart', 'stop', 'status', 'create', 'list', 'remove'];
       const unknownCommand = 'invalid';
       assert.strictEqual(validSubcommands.includes(unknownCommand), false);
     });

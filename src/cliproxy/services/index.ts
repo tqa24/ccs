@@ -22,10 +22,12 @@ export {
 export {
   getProxyStatus,
   stopProxy,
+  startProxy,
   isProxyRunning,
   getActiveSessionCount,
   type ProxyStatusResult,
   type StopProxyResult,
+  type StartProxyResult,
 } from './proxy-lifecycle-service';
 
 // Binary management
