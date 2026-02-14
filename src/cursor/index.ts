@@ -8,7 +8,14 @@
 export * from './types';
 
 // Auth
-export { autoDetectTokens, saveCredentials, loadCredentials, checkAuthStatus } from './cursor-auth';
+export {
+  autoDetectTokens,
+  validateToken,
+  saveCredentials,
+  loadCredentials,
+  deleteCredentials,
+  checkAuthStatus,
+} from './cursor-auth';
 
 // Daemon
 export {

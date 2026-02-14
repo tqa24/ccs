@@ -11,6 +11,7 @@ import {
   BarChart3,
   Gauge,
   Github,
+  Bot,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -63,6 +64,7 @@ const navGroups = [
         ],
       },
       { path: '/copilot', icon: Github, label: 'GitHub Copilot' },
+      { path: '/cursor', icon: Bot, label: 'Cursor IDE' },
       {
         path: '/accounts',
         icon: Users,

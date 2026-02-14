@@ -1,0 +1,283 @@
+/**
+ * Cursor Daemon Entry
+ *
+ * Dedicated child-process entrypoint for local OpenAI-compatible Cursor proxy.
+ */
+
+import * as http from 'http';
+import { Readable } from 'stream';
+import { CursorExecutor } from './cursor-executor';
+import { checkAuthStatus } from './cursor-auth';
+import { DEFAULT_CURSOR_MODEL, DEFAULT_CURSOR_MODELS } from './cursor-models';
+import type { CursorTool } from './cursor-protobuf-schema';
+
+interface DaemonRuntimeOptions {
+  port: number;
+  ghostMode: boolean;
+}
+
+interface OpenAIMessage {
+  role: string;
+  content?: string | Array<{ type: string; text?: string }> | null;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: string;
+    function: { name: string; arguments: string };
+  }>;
+}
+
+interface NormalizedOpenAIMessage {
+  role: string;
+  content: string | Array<{ type: string; text?: string }>;
+  name?: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id: string;
+    type: string;
+    function: { name: string; arguments: string };
+  }>;
+}
+
+interface OpenAIChatRequest {
+  model?: string;
+  stream?: boolean;
+  reasoning_effort?: string;
+  tools?: CursorTool[];
+  messages?: OpenAIMessage[];
+}
+
+const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB
+
+function writeJson(res: http.ServerResponse, statusCode: number, payload: unknown): void {
+  res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(payload));
+}
+
+function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    let total = 0;
+
+    req.on('data', (chunk: Buffer) => {
+      total += chunk.length;
+      if (total > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error('Request body too large (max 10MB)'));
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8').trim();
+      if (!raw) {
+        resolve({});
+        return;
+      }
+      try {
+        resolve(JSON.parse(raw));
+      } catch {
+        reject(new Error('Invalid JSON in request body'));
+      }
+    });
+
+    req.on('error', reject);
+  });
+}
+
+function normalizeMessages(raw: unknown): NormalizedOpenAIMessage[] {
+  if (!Array.isArray(raw)) {
+    throw new Error('messages must be an array');
+  }
+
+  return raw.map((message, index) => {
+    if (typeof message !== 'object' || message === null) {
+      throw new Error(`messages[${index}] must be an object`);
+    }
+
+    const m = message as Record<string, unknown>;
+    if (typeof m.role !== 'string' || !m.role) {
+      throw new Error(`messages[${index}].role must be a non-empty string`);
+    }
+
+    const content = m.content;
+    if (
+      content !== undefined &&
+      content !== null &&
+      typeof content !== 'string' &&
+      !Array.isArray(content)
+    ) {
+      throw new Error(`messages[${index}].content must be string, array, or null`);
+    }
+
+    return {
+      role: m.role,
+      content: (content ?? '') as NormalizedOpenAIMessage['content'],
+      name: typeof m.name === 'string' ? m.name : undefined,
+      tool_call_id: typeof m.tool_call_id === 'string' ? m.tool_call_id : undefined,
+      tool_calls: Array.isArray(m.tool_calls)
+        ? (m.tool_calls as NormalizedOpenAIMessage['tool_calls'])
+        : undefined,
+    };
+  });
+}
+
+async function pipeWebResponseToNode(response: Response, res: http.ServerResponse): Promise<void> {
+  res.statusCode = response.status;
+  response.headers.forEach((value, key) => {
+    res.setHeader(key, value);
+  });
+
+  if (!response.body) {
+    res.end();
+    return;
+  }
+
+  const nodeStream = Readable.fromWeb(response.body as unknown as ReadableStream<Uint8Array>);
+
+  await new Promise<void>((resolve, reject) => {
+    nodeStream.on('error', reject);
+    nodeStream.on('end', resolve);
+    nodeStream.pipe(res);
+  });
+}
+
+function parseArgs(argv: string[]): DaemonRuntimeOptions {
+  let port = 20129;
+  let ghostMode = true;
+
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === '--port' && argv[i + 1]) {
+      const parsed = parseInt(argv[i + 1], 10);
+      if (Number.isInteger(parsed) && parsed > 0 && parsed <= 65535) {
+        port = parsed;
+      }
+      i++;
+      continue;
+    }
+
+    if (arg === '--ghost-mode' && argv[i + 1]) {
+      const value = argv[i + 1];
+      ghostMode = value !== 'false' && value !== '0';
+      i++;
+      continue;
+    }
+  }
+
+  return { port, ghostMode };
+}
+
+export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Server {
+  const executor = new CursorExecutor();
+
+  const server = http.createServer(async (req, res) => {
+    try {
+      const method = req.method || 'GET';
+      const requestUrl = req.url || '/';
+
+      if (method === 'GET' && requestUrl === '/health') {
+        writeJson(res, 200, { ok: true, service: 'cursor-daemon' });
+        return;
+      }
+
+      if (method === 'GET' && requestUrl === '/v1/models') {
+        const data = DEFAULT_CURSOR_MODELS.map((model) => ({
+          id: model.id,
+          object: 'model',
+          created: 0,
+          owned_by: model.provider,
+        }));
+        writeJson(res, 200, { object: 'list', data });
+        return;
+      }
+
+      if (method !== 'POST' || requestUrl !== '/v1/chat/completions') {
+        writeJson(res, 404, { error: 'Not found' });
+        return;
+      }
+
+      const parsedBody = (await readJsonBody(req)) as OpenAIChatRequest;
+      const messages = normalizeMessages(parsedBody.messages);
+      const model =
+        typeof parsedBody.model === 'string' && parsedBody.model
+          ? parsedBody.model
+          : DEFAULT_CURSOR_MODEL;
+      const stream = parsedBody.stream === true;
+
+      const authStatus = checkAuthStatus();
+      if (!authStatus.authenticated || !authStatus.credentials) {
+        writeJson(res, 401, {
+          error: {
+            type: 'authentication_error',
+            message: 'Cursor credentials not found. Run `ccs cursor auth` first.',
+          },
+        });
+        return;
+      }
+
+      if (authStatus.expired) {
+        writeJson(res, 401, {
+          error: {
+            type: 'authentication_error',
+            message: 'Cursor credentials expired. Run `ccs cursor auth` again.',
+          },
+        });
+        return;
+      }
+
+      const abortController = new AbortController();
+      req.on('close', () => {
+        if (!res.writableEnded) {
+          abortController.abort();
+        }
+      });
+
+      const result = await executor.execute({
+        model,
+        stream,
+        signal: abortController.signal,
+        credentials: {
+          accessToken: authStatus.credentials.accessToken,
+          machineId: authStatus.credentials.machineId,
+          ghostMode: options.ghostMode,
+        },
+        body: {
+          messages,
+          tools: Array.isArray(parsedBody.tools) ? parsedBody.tools : undefined,
+          reasoning_effort:
+            typeof parsedBody.reasoning_effort === 'string'
+              ? parsedBody.reasoning_effort
+              : undefined,
+        },
+      });
+
+      await pipeWebResponseToNode(result.response, res);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      writeJson(res, 400, {
+        error: {
+          type: 'invalid_request_error',
+          message,
+        },
+      });
+    }
+  });
+
+  server.listen(options.port, '127.0.0.1');
+  return server;
+}
+
+if (require.main === module) {
+  const options = parseArgs(process.argv.slice(2));
+  const server = startCursorDaemonServer(options);
+
+  const shutdown = () => {
+    server.close();
+  };
+
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
+}

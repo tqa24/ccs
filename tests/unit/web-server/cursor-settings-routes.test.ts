@@ -284,6 +284,32 @@ describe('Cursor Settings Routes Logic', () => {
       expect(hasConflict).toBe(true);
     });
 
+    it('requires expectedMtime when file already exists', () => {
+      const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
+      fs.writeFileSync(settingsPath, JSON.stringify({ env: { test: 'existing' } }));
+
+      const expectedMtime = undefined;
+      const shouldRequireMtime =
+        fs.existsSync(settingsPath) &&
+        (typeof expectedMtime !== 'number' || !Number.isFinite(expectedMtime));
+
+      expect(shouldRequireMtime).toBe(true);
+    });
+
+    it('does not require expectedMtime when file does not exist', () => {
+      const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
+      if (fs.existsSync(settingsPath)) {
+        fs.rmSync(settingsPath, { force: true });
+      }
+
+      const expectedMtime = undefined;
+      const shouldRequireMtime =
+        fs.existsSync(settingsPath) &&
+        (typeof expectedMtime !== 'number' || !Number.isFinite(expectedMtime));
+
+      expect(shouldRequireMtime).toBe(false);
+    });
+
     it('allows write when mtime matches', () => {
       const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
       const initialSettings = { env: { test: 'initial' } };

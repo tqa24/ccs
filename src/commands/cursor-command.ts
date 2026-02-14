@@ -6,22 +6,23 @@
 
 import {
   autoDetectTokens,
+  validateToken,
   saveCredentials,
   checkAuthStatus,
   startDaemon,
   stopDaemon,
   getDaemonStatus,
   getAvailableModels,
-  DEFAULT_CURSOR_PORT,
-  DEFAULT_CURSOR_MODEL,
+  getDefaultModel,
 } from '../cursor';
-import { ok, fail, info, color } from '../utils/ui';
-
-// Temporary default config until #521 adds cursor to unified config
-const DEFAULT_CURSOR_CONFIG = {
-  port: DEFAULT_CURSOR_PORT,
-  model: DEFAULT_CURSOR_MODEL,
-};
+import {
+  getCursorConfig,
+  loadOrCreateUnifiedConfig,
+  saveUnifiedConfig,
+} from '../config/unified-config-loader';
+import { DEFAULT_CURSOR_CONFIG } from '../config/unified-config-types';
+import { renderCursorHelp, renderCursorModels, renderCursorStatus } from './cursor-command-display';
+import { ok, fail, info } from '../utils/ui';
 
 /** Valid cursor subcommands — imported by ccs.ts for routing */
 export const CURSOR_SUBCOMMANDS = [
@@ -30,6 +31,8 @@ export const CURSOR_SUBCOMMANDS = [
   'models',
   'start',
   'stop',
+  'enable',
+  'disable',
   'help',
   '--help',
   '-h',
@@ -43,7 +46,7 @@ export async function handleCursorCommand(args: string[]): Promise<number> {
 
   switch (subcommand) {
     case 'auth':
-      return handleAuth();
+      return handleAuth(args.slice(1));
     case 'status':
       return handleStatus();
     case 'models':
@@ -52,6 +55,10 @@ export async function handleCursorCommand(args: string[]): Promise<number> {
       return handleStart();
     case 'stop':
       return handleStop();
+    case 'enable':
+      return handleEnable();
+    case 'disable':
+      return handleDisable();
     case undefined:
     case 'help':
     case '--help':
@@ -65,41 +72,70 @@ export async function handleCursorCommand(args: string[]): Promise<number> {
   }
 }
 
-/**
- * Show help for cursor commands.
- */
 function handleHelp(): number {
-  console.log('Cursor IDE Integration');
-  console.log('');
-  console.log('Usage: ccs cursor <subcommand>');
-  console.log('');
-  console.log('Subcommands:');
-  console.log('  auth      Import Cursor IDE authentication token');
-  console.log('  status    Show authentication and daemon status');
-  console.log('  models    List available models');
-  console.log('  start     Start cursor daemon');
-  console.log('  stop      Stop cursor daemon');
-  console.log('  help      Show this help message');
-  console.log('');
-  console.log('Quick start:');
-  console.log('  1. ccs cursor auth     # Import Cursor IDE token');
-  console.log('  2. ccs cursor start    # Start daemon');
-  console.log('  3. Use cursor models   # Via daemon on configured port');
-  console.log('');
-  console.log('Or use the web UI: ccs config → Cursor tab');
-  console.log('');
-  return 0;
+  return renderCursorHelp();
+}
+
+function parseOptionValue(args: string[], key: string): string | undefined {
+  const exactIndex = args.findIndex((arg) => arg === key);
+  if (exactIndex !== -1 && args[exactIndex + 1]) {
+    return args[exactIndex + 1];
+  }
+
+  const prefix = `${key}=`;
+  const withEquals = args.find((arg) => arg.startsWith(prefix));
+  if (withEquals) {
+    return withEquals.slice(prefix.length);
+  }
+
+  return undefined;
 }
 
 /**
  * Handle auth subcommand.
  */
-async function handleAuth(): Promise<number> {
+async function handleAuth(args: string[]): Promise<number> {
+  const manual = args.includes('--manual');
+
+  if (manual) {
+    const accessToken =
+      parseOptionValue(args, '--token') ?? parseOptionValue(args, '--access-token') ?? '';
+    const machineId =
+      parseOptionValue(args, '--machine-id') ?? parseOptionValue(args, '--machineId') ?? '';
+
+    if (!accessToken || !machineId) {
+      console.error(
+        fail(
+          'Manual auth requires both token and machine ID.\n\nExample:\n  ccs cursor auth --manual --token <token> --machine-id <machine-id>'
+        )
+      );
+      return 1;
+    }
+
+    if (!validateToken(accessToken, machineId)) {
+      console.error(fail('Invalid token or machine ID format'));
+      return 1;
+    }
+
+    saveCredentials({
+      accessToken,
+      machineId,
+      authMethod: 'manual',
+      importedAt: new Date().toISOString(),
+    });
+
+    console.log(ok('Cursor credentials imported (manual mode)'));
+    console.log('');
+    console.log('Next steps:');
+    console.log('  1. Enable integration: ccs cursor enable');
+    console.log('  2. Start daemon:       ccs cursor start');
+    return 0;
+  }
+
   console.log(info('Importing Cursor IDE authentication...'));
   console.log('');
-
-  // Try auto-detection first
   console.log(info('Attempting auto-detection...'));
+
   const autoResult = autoDetectTokens();
 
   if (autoResult.found && autoResult.accessToken && autoResult.machineId) {
@@ -109,113 +145,39 @@ async function handleAuth(): Promise<number> {
       authMethod: 'auto-detect',
       importedAt: new Date().toISOString(),
     });
+
     console.log(ok('Auto-detected Cursor credentials'));
     console.log('');
     console.log('Next steps:');
-    console.log('  1. Start daemon: ccs cursor start');
-    console.log('  2. Check status: ccs cursor status');
+    console.log('  1. Enable integration: ccs cursor enable');
+    console.log('  2. Start daemon:       ccs cursor start');
+    console.log('  3. Check status:       ccs cursor status');
     return 0;
   }
 
-  // Fall back to manual import
   console.log('');
-  if (autoResult.error) {
-    console.log(`Auto-detection failed: ${autoResult.error}`);
-  } else {
-    console.log('Auto-detection failed. Please provide credentials manually.');
-  }
+  console.error(fail(`Auto-detection failed: ${autoResult.error ?? 'Unknown error'}`));
   console.log('');
-  console.log('To find your Cursor credentials:');
-  console.log('  1. Open Cursor IDE');
-  console.log('  2. Check application data directory');
-  console.log('  3. Look for access token and machine ID');
+  console.log('Manual fallback:');
+  console.log('  ccs cursor auth --manual --token <token> --machine-id <machine-id>');
   console.log('');
-
-  // For now, just show instructions
-  // Manual import flow will be implemented when needed
-  console.error(fail('Manual import not yet implemented'));
-  console.error('');
-  console.error('Use auto-detection for now or wait for manual import feature.');
 
   return 1;
 }
 
-/**
- * Handle status subcommand.
- */
 async function handleStatus(): Promise<number> {
-  // TODO: Load from unified config when #521 is complete
-  const cursorConfig = DEFAULT_CURSOR_CONFIG;
-
+  const cursorConfig = getCursorConfig();
   const authStatus = checkAuthStatus();
   const daemonStatus = await getDaemonStatus(cursorConfig.port);
-
-  console.log('Cursor IDE Status');
-  console.log('─────────────────');
-  console.log('');
-
-  // Auth status
-  const authIcon = authStatus.authenticated ? color('[OK]', 'success') : color('[X]', 'error');
-  const authText = authStatus.authenticated ? 'Authenticated' : 'Not authenticated';
-  console.log(`Authentication: ${authIcon} ${authText}`);
-
-  if (authStatus.authenticated && authStatus.tokenAge !== undefined) {
-    console.log(`  Token age:    ${authStatus.tokenAge} hours`);
-  }
-
-  // Daemon status
-  const daemonIcon = daemonStatus.running ? color('[OK]', 'success') : color('[X]', 'error');
-  const daemonText = daemonStatus.running ? 'Running' : 'Not running';
-  console.log(`Daemon:         ${daemonIcon} ${daemonText}`);
-
-  if (daemonStatus.pid) {
-    console.log(`  PID:          ${daemonStatus.pid}`);
-  }
-
-  console.log('');
-  console.log('Configuration:');
-  console.log(`  Port:         ${cursorConfig.port}`);
-  console.log(`  Model:        ${cursorConfig.model}`);
-
-  console.log('');
-
-  // Show next steps if not fully configured
-  if (!authStatus.authenticated || !daemonStatus.running) {
-    console.log('Next steps:');
-    if (!authStatus.authenticated) {
-      console.log('  - Auth:        ccs cursor auth');
-    }
-    if (!daemonStatus.running) {
-      console.log('  - Start:       ccs cursor start');
-    }
-  }
-
+  renderCursorStatus(cursorConfig, authStatus, daemonStatus);
   return 0;
 }
 
-/**
- * Handle models subcommand.
- */
 async function handleModels(): Promise<number> {
-  // TODO: Load from unified config when #521 is complete
-  const cursorConfig = DEFAULT_CURSOR_CONFIG;
-
-  console.log('Available Cursor Models');
-  console.log('───────────────────────');
-  console.log('');
-
+  const cursorConfig = getCursorConfig();
   const models = await getAvailableModels(cursorConfig.port);
-
-  for (const model of models) {
-    const current = model.id === cursorConfig.model ? ' [CURRENT]' : '';
-    const defaultMark = model.isDefault ? ' (default)' : '';
-    console.log(`  ${model.id}${current}${defaultMark}`);
-    console.log(`    Provider: ${model.provider}`);
-  }
-
-  console.log('');
-  console.log('To change model: ccs config (Cursor section)');
-
+  const defaultModel = getDefaultModel();
+  renderCursorModels(models, defaultModel);
   return 0;
 }
 
@@ -223,19 +185,29 @@ async function handleModels(): Promise<number> {
  * Handle start subcommand.
  */
 async function handleStart(): Promise<number> {
-  // TODO: Load from unified config when #521 is complete
-  const cursorConfig = DEFAULT_CURSOR_CONFIG;
+  const cursorConfig = getCursorConfig();
 
-  // Check auth first
+  if (!cursorConfig.enabled) {
+    console.error(fail('Cursor integration is disabled. Run: ccs cursor enable'));
+    return 1;
+  }
+
   const authStatus = checkAuthStatus();
   if (!authStatus.authenticated) {
     console.error(fail('Not authenticated. Run: ccs cursor auth'));
     return 1;
   }
+  if (authStatus.expired) {
+    console.error(fail('Credentials expired. Run: ccs cursor auth'));
+    return 1;
+  }
 
   console.log(info(`Starting cursor daemon on port ${cursorConfig.port}...`));
 
-  const result = await startDaemon(cursorConfig);
+  const result = await startDaemon({
+    port: cursorConfig.port,
+    ghost_mode: cursorConfig.ghost_mode,
+  });
 
   if (result.success) {
     console.log(ok(`Daemon started (PID: ${result.pid})`));
@@ -261,4 +233,42 @@ async function handleStop(): Promise<number> {
     console.error(fail(result.error || 'Failed to stop daemon'));
     return 1;
   }
+}
+
+/**
+ * Handle enable subcommand.
+ */
+async function handleEnable(): Promise<number> {
+  const config = loadOrCreateUnifiedConfig();
+
+  if (!config.cursor) {
+    config.cursor = { ...DEFAULT_CURSOR_CONFIG };
+  }
+
+  config.cursor.enabled = true;
+  saveUnifiedConfig(config);
+
+  console.log(ok('Cursor integration enabled'));
+  console.log('');
+  console.log('Next steps:');
+  console.log('  1. Authenticate: ccs cursor auth');
+  console.log('  2. Start daemon: ccs cursor start');
+  console.log('  3. Check status: ccs cursor status');
+
+  return 0;
+}
+
+/**
+ * Handle disable subcommand.
+ */
+async function handleDisable(): Promise<number> {
+  const config = loadOrCreateUnifiedConfig();
+
+  if (config.cursor) {
+    config.cursor.enabled = false;
+    saveUnifiedConfig(config);
+  }
+
+  console.log(ok('Cursor integration disabled'));
+  return 0;
 }

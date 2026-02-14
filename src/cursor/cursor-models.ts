@@ -10,7 +10,7 @@ import type { CursorModel } from './types';
 import { isDaemonRunning } from './cursor-daemon';
 
 /** Default daemon port */
-export const DEFAULT_CURSOR_PORT = 4242;
+export const DEFAULT_CURSOR_PORT = 20129;
 
 /** Default model ID */
 export const DEFAULT_CURSOR_MODEL = 'gpt-4.1';

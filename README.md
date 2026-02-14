@@ -92,6 +92,7 @@ The dashboard provides visual management for all account types:
 | **Gemini** | OAuth | `ccs gemini` | Zero-config, fast iteration |
 | **Codex** | OAuth | `ccs codex` | Code generation |
 | **Copilot** | OAuth | `ccs copilot` or `ccs ghcp` | GitHub Copilot models |
+| **Cursor IDE** | Local Token | `ccs cursor` | Cursor subscription models via local daemon |
 | **Kiro** | OAuth | `ccs kiro` | AWS CodeWhisperer (Claude-powered) |
 | **Antigravity** | OAuth | `ccs agy` | Alternative routing |
 | **OpenRouter** | API Key | `ccs openrouter` | 300+ models, unified API |
@@ -132,12 +133,35 @@ The dashboard provides visual management for all account types:
 ccs           # Default Claude session
 ccs gemini    # Gemini (OAuth)
 ccs codex     # OpenAI Codex (OAuth)
+ccs cursor    # Cursor IDE integration (token import + local daemon)
 ccs kiro      # Kiro/AWS CodeWhisperer (OAuth)
 ccs ghcp      # GitHub Copilot (OAuth device flow)
 ccs agy       # Antigravity (OAuth)
 ccs ollama    # Local Ollama (no API key needed)
 ccs glm       # GLM (API key)
 ```
+
+### Cursor IDE Quick Start
+
+```bash
+ccs cursor enable
+ccs cursor auth
+ccs cursor start
+ccs cursor status
+```
+
+If auto-detect is unavailable:
+
+```bash
+ccs cursor auth --manual --token <token> --machine-id <machine-id>
+```
+
+Defaults:
+- Port: `20129`
+- Ghost mode: enabled
+- Dashboard page: `ccs config` -> `Cursor IDE`
+
+Detailed guide: [`docs/cursor-integration.md`](./docs/cursor-integration.md)
 
 ### Parallel Workflows
 
@@ -325,6 +349,7 @@ See [Remote Proxy documentation](https://docs.ccs.kaitran.ca/features/remote-pro
 | Multi-Account Claude | [docs.ccs.kaitran.ca/providers/claude-accounts](https://docs.ccs.kaitran.ca/providers/claude-accounts) |
 | API Profiles | [docs.ccs.kaitran.ca/providers/api-profiles](https://docs.ccs.kaitran.ca/providers/api-profiles) |
 | Remote Proxy | [docs.ccs.kaitran.ca/features/remote-proxy](https://docs.ccs.kaitran.ca/features/remote-proxy) |
+| Cursor IDE (local guide) | [./docs/cursor-integration.md](./docs/cursor-integration.md) |
 | CLI Reference | [docs.ccs.kaitran.ca/reference/cli-commands](https://docs.ccs.kaitran.ca/reference/cli-commands) |
 | Architecture | [docs.ccs.kaitran.ca/reference/architecture](https://docs.ccs.kaitran.ca/reference/architecture) |
 | Troubleshooting | [docs.ccs.kaitran.ca/reference/troubleshooting](https://docs.ccs.kaitran.ca/reference/troubleshooting) |

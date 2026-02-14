@@ -16,6 +16,24 @@ import {
 
 const router = Router();
 
+function parseLocalCursorPort(settings: unknown): number | null {
+  if (typeof settings !== 'object' || settings === null) return null;
+  const env = (settings as { env?: unknown }).env;
+  if (typeof env !== 'object' || env === null) return null;
+  const baseUrl = (env as { ANTHROPIC_BASE_URL?: unknown }).ANTHROPIC_BASE_URL;
+  if (typeof baseUrl !== 'string' || !baseUrl) return null;
+
+  try {
+    const parsed = new URL(baseUrl);
+    if (parsed.hostname !== '127.0.0.1' && parsed.hostname !== 'localhost') return null;
+    const port = Number(parsed.port);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+    return port;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/cursor/settings - Get cursor config (port, auto_start, ghost_mode)
  */
@@ -108,7 +126,7 @@ router.get('/raw', (_req: Request, res: Response): void => {
       res.json({
         settings: defaultSettings,
         mtime: Date.now(),
-        path: settingsPath,
+        path: '~/.ccs/cursor.settings.json',
         exists: false,
       });
       return;
@@ -121,7 +139,7 @@ router.get('/raw', (_req: Request, res: Response): void => {
     res.json({
       settings,
       mtime: stat.mtimeMs,
-      path: settingsPath,
+      path: '~/.ccs/cursor.settings.json',
       exists: true,
     });
   } catch (error) {
@@ -144,9 +162,17 @@ router.put('/raw', (req: Request, res: Response): void => {
 
     const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
 
-    // Check for conflict if file exists and expectedMtime provided
-    if (fs.existsSync(settingsPath) && expectedMtime) {
+    // For existing files, expectedMtime is required to prevent blind overwrite races.
+    if (fs.existsSync(settingsPath)) {
       const stat = fs.statSync(settingsPath);
+      if (typeof expectedMtime !== 'number' || !Number.isFinite(expectedMtime)) {
+        res.status(409).json({
+          error: 'File metadata not loaded. Refresh and retry.',
+          mtime: stat.mtimeMs,
+        });
+        return;
+      }
+
       if (Math.abs(stat.mtimeMs - expectedMtime) > 1000) {
         res.status(409).json({ error: 'File modified externally', mtime: stat.mtimeMs });
         return;
@@ -158,7 +184,16 @@ router.put('/raw', (req: Request, res: Response): void => {
     fs.writeFileSync(tempPath, JSON.stringify(settings, null, 2) + '\n');
     fs.renameSync(tempPath, settingsPath);
 
-    // TODO: Sync raw settings back to unified config when cursor-daemon is integrated (#520)
+    // Keep unified config aligned with raw settings edits (parity with Copilot raw editor).
+    const parsedPort = parseLocalCursorPort(settings);
+    if (parsedPort) {
+      const config = loadOrCreateUnifiedConfig();
+      config.cursor = {
+        ...(config.cursor ?? DEFAULT_CURSOR_CONFIG),
+        port: parsedPort,
+      };
+      saveUnifiedConfig(config);
+    }
 
     const stat = fs.statSync(settingsPath);
     res.json({ success: true, mtime: stat.mtimeMs });

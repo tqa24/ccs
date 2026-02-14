@@ -5,12 +5,11 @@
  */
 
 /**
- * Cursor daemon configuration.
- * Temporary interface until #521 adds cursor to unified config.
+ * Cursor daemon runtime configuration.
  */
-export interface CursorConfig {
+export interface CursorDaemonConfig {
   port: number;
-  model: string;
+  ghost_mode?: boolean;
 }
 
 /**

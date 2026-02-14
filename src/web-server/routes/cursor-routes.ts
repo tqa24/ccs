@@ -5,60 +5,61 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import {
+  getDaemonStatus,
+  getAvailableModels,
+  getDefaultModel,
+  startDaemon,
+  stopDaemon,
   checkAuthStatus,
   autoDetectTokens,
   saveCredentials,
   validateToken,
-} from '../../cursor/cursor-auth';
+} from '../../cursor';
 import { getCursorConfig } from '../../config/unified-config-loader';
 import cursorSettingsRoutes from './cursor-settings-routes';
 
 const router = Router();
 
+interface DaemonStartPreconditionInput {
+  enabled: boolean;
+  authenticated: boolean;
+  tokenExpired?: boolean;
+}
+
+interface DaemonStartPreconditionError {
+  status: number;
+  error: string;
+}
+
+export function getDaemonStartPreconditionError(
+  input: DaemonStartPreconditionInput
+): DaemonStartPreconditionError | null {
+  if (!input.enabled) {
+    return {
+      status: 400,
+      error: 'Cursor integration is disabled. Enable it before starting daemon.',
+    };
+  }
+
+  if (!input.authenticated) {
+    return {
+      status: 401,
+      error: 'Cursor authentication required. Import credentials before starting daemon.',
+    };
+  }
+
+  if (input.tokenExpired) {
+    return {
+      status: 401,
+      error: 'Cursor credentials expired. Re-authenticate before starting daemon.',
+    };
+  }
+
+  return null;
+}
+
 // Mount settings sub-routes
 router.use('/settings', cursorSettingsRoutes);
-
-/**
- * Get daemon status
- * TODO: Implement in cursor-executor.ts (#520)
- */
-async function getDaemonStatus(port: number): Promise<{ running: boolean; port?: number }> {
-  // Stub - will be implemented in #520
-  return { running: false, port };
-}
-
-/**
- * Get available models
- * TODO: Implement in cursor-executor.ts (#520)
- */
-async function getAvailableModels(): Promise<string[]> {
-  // Stub - will be implemented in #520
-  return []; // TODO: populated by cursor-models.ts (#520)
-}
-
-/**
- * Start daemon
- * TODO: Implement in cursor-executor.ts (#520)
- */
-async function startDaemon(
-  port: number,
-  ghostMode: boolean
-): Promise<{ success: boolean; message: string }> {
-  // Stub - will be implemented in #520
-  return {
-    success: false,
-    message: `Daemon start not implemented (port: ${port}, ghost: ${ghostMode})`,
-  };
-}
-
-/**
- * Stop daemon
- * TODO: Implement in cursor-executor.ts (#520)
- */
-async function stopDaemon(): Promise<{ success: boolean; message: string }> {
-  // Stub - will be implemented in #520
-  return { success: false, message: 'Daemon stop not implemented' };
-}
 
 /**
  * GET /api/cursor/status - Get Cursor status (auth + daemon)
@@ -72,6 +73,9 @@ router.get('/status', async (_req: Request, res: Response): Promise<void> => {
     res.json({
       enabled: cursorConfig.enabled,
       authenticated: authStatus.authenticated,
+      auth_method: authStatus.credentials?.authMethod ?? null,
+      token_age: authStatus.tokenAge ?? null,
+      token_expired: authStatus.expired ?? false,
       daemon_running: daemonStatus.running,
       port: cursorConfig.port,
       auto_start: cursorConfig.auto_start,
@@ -144,8 +148,9 @@ router.post('/auth/auto-detect', async (_req: Request, res: Response): Promise<v
  */
 router.get('/models', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const models = await getAvailableModels();
-    res.json({ models });
+    const cursorConfig = getCursorConfig();
+    const models = await getAvailableModels(cursorConfig.port);
+    res.json({ models, current: getDefaultModel() });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
@@ -158,7 +163,25 @@ router.get('/models', async (_req: Request, res: Response): Promise<void> => {
 router.post('/daemon/start', async (_req: Request, res: Response): Promise<void> => {
   try {
     const cursorConfig = getCursorConfig();
-    const result = await startDaemon(cursorConfig.port, cursorConfig.ghost_mode);
+    const authStatus = checkAuthStatus();
+    const preconditionError = getDaemonStartPreconditionError({
+      enabled: cursorConfig.enabled,
+      authenticated: authStatus.authenticated,
+      tokenExpired: authStatus.expired ?? false,
+    });
+
+    if (preconditionError) {
+      res.status(preconditionError.status).json({
+        success: false,
+        error: preconditionError.error,
+      });
+      return;
+    }
+
+    const result = await startDaemon({
+      port: cursorConfig.port,
+      ghost_mode: cursorConfig.ghost_mode,
+    });
     res.json(result);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });

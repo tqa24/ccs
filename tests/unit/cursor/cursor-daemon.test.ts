@@ -17,6 +17,7 @@ import {
 } from '../../../src/cursor/cursor-daemon';
 import { getCcsDir } from '../../../src/utils/config-manager';
 import { handleCursorCommand } from '../../../src/commands/cursor-command';
+import { loadCredentials } from '../../../src/cursor/cursor-auth';
 
 // Test isolation
 let originalCcsHome: string | undefined;
@@ -121,19 +122,19 @@ describe('removePidFile', () => {
 
 describe('startDaemon', () => {
   it('rejects invalid port (0)', async () => {
-    const result = await startDaemon({ port: 0, model: 'test' });
+    const result = await startDaemon({ port: 0 });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid port');
   });
 
   it('rejects invalid port (65536)', async () => {
-    const result = await startDaemon({ port: 65536, model: 'test' });
+    const result = await startDaemon({ port: 65536 });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid port');
   });
 
   it('rejects non-integer port', async () => {
-    const result = await startDaemon({ port: 3.14, model: 'test' });
+    const result = await startDaemon({ port: 3.14 });
     expect(result.success).toBe(false);
     expect(result.error).toContain('Invalid port');
   });
@@ -142,13 +143,24 @@ describe('startDaemon', () => {
     'starts and stops daemon successfully',
     async () => {
       const port = 10000 + Math.floor(Math.random() * 50000);
-      const result = await startDaemon({ port, model: 'test' });
+      const result = await startDaemon({ port, ghost_mode: true });
       expect(result.success).toBe(true);
       expect(result.pid).toBeDefined();
 
       // Verify health
       const running = await isDaemonRunning(port);
       expect(running).toBe(true);
+
+      // Verify chat endpoint exists (requires auth, should not be 404)
+      const chatResponse = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4.1',
+          messages: [{ role: 'user', content: 'hello' }],
+        }),
+      });
+      expect(chatResponse.status).toBe(401);
 
       // Stop
       const stopResult = await stopDaemon();
@@ -211,5 +223,26 @@ describe('handleCursorCommand', () => {
   it('returns exit code 1 for unknown subcommand', async () => {
     const exitCode = await handleCursorCommand(['nonexistent']);
     expect(exitCode).toBe(1);
+  });
+
+  it('supports manual auth import from CLI flags', async () => {
+    const token = 'a'.repeat(60);
+    const machineId = '1234567890abcdef1234567890abcdef';
+
+    const exitCode = await handleCursorCommand([
+      'auth',
+      '--manual',
+      '--token',
+      token,
+      '--machine-id',
+      machineId,
+    ]);
+
+    expect(exitCode).toBe(0);
+
+    const credentials = loadCredentials();
+    expect(credentials).not.toBeNull();
+    expect(credentials?.authMethod).toBe('manual');
+    expect(credentials?.machineId).toBe(machineId);
   });
 });

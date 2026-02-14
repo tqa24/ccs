@@ -232,10 +232,13 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     [
       ['ccs cursor <cmd>', 'Use Cursor IDE integration'],
       ['ccs cursor auth', 'Import Cursor token'],
+      ['ccs cursor auth --manual --token <t> --machine-id <id>', 'Manual token import'],
       ['ccs cursor status', 'Show connection status'],
       ['ccs cursor models', 'List available models'],
       ['ccs cursor start', 'Start proxy daemon'],
       ['ccs cursor stop', 'Stop proxy daemon'],
+      ['ccs cursor enable', 'Enable cursor integration'],
+      ['ccs cursor disable', 'Disable cursor integration'],
     ]
   );
 

@@ -29,8 +29,8 @@ describe('DEFAULT_CURSOR_MODELS', () => {
 });
 
 describe('DEFAULT_CURSOR_PORT', () => {
-  it('is 4242', () => {
-    expect(DEFAULT_CURSOR_PORT).toBe(4242);
+  it('is 20129', () => {
+    expect(DEFAULT_CURSOR_PORT).toBe(20129);
   });
 });
 
