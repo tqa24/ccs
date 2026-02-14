@@ -140,7 +140,8 @@ export default function ThinkingSection() {
                     <p className="text-sm text-muted-foreground">
                       {mode === 'auto' && 'Automatically set thinking based on model tier'}
                       {mode === 'off' && 'Disable extended thinking'}
-                      {mode === 'manual' && 'Use --thinking flag to control manually'}
+                      {mode === 'manual' &&
+                        'Use --thinking (agy/gemini) or --effort (codex) per run'}
                     </p>
                   </div>
                   <div
@@ -208,13 +209,15 @@ export default function ThinkingSection() {
           <div className="p-4 rounded-lg border bg-muted/30">
             <h4 className="text-sm font-medium mb-2">CLI Override</h4>
             <p className="text-sm text-muted-foreground mb-2">
-              Use <code className="px-1.5 py-0.5 rounded bg-muted">--thinking</code> flag to
-              override settings per session:
+              Override per session with{' '}
+              <code className="px-1.5 py-0.5 rounded bg-muted">--thinking</code> (agy/gemini) or{' '}
+              <code className="px-1.5 py-0.5 rounded bg-muted">--effort</code> (codex):
             </p>
             <div className="space-y-1 text-sm font-mono text-muted-foreground">
               <p>ccs gemini --thinking high</p>
               <p>ccs agy --thinking 16384</p>
-              <p>ccs gemini --thinking off</p>
+              <p>ccs codex --effort xhigh</p>
+              <p>ccs codex -p "Refactor this module" --effort xhigh</p>
             </div>
           </div>
         </div>

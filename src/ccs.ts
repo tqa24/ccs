@@ -563,10 +563,29 @@ async function main(): Promise<void> {
 
   // Special case: headless delegation (-p flag)
   if (args.includes('-p') || args.includes('--prompt')) {
-    const { DelegationHandler } = await import('./delegation/delegation-handler');
-    const handler = new DelegationHandler();
-    await handler.route(args);
-    return;
+    // CLIProxy profiles (codex/gemini/agy/etc, including user variants) must stay on
+    // the normal CLIProxy path so provider-specific flags (e.g. --effort/--thinking)
+    // and proxy chains are applied consistently.
+    let shouldUseDelegation = true;
+    const { profile } = detectProfile(args);
+    try {
+      const ProfileDetectorModule = await import('./auth/profile-detector');
+      const ProfileDetector = ProfileDetectorModule.default;
+      const detector = new ProfileDetector();
+      const profileInfo = detector.detectProfileType(profile);
+      if (profileInfo.type === 'cliproxy') {
+        shouldUseDelegation = false;
+      }
+    } catch {
+      // Best effort detection only; keep delegation fallback behavior.
+    }
+
+    if (shouldUseDelegation) {
+      const { DelegationHandler } = await import('./delegation/delegation-handler');
+      const handler = new DelegationHandler();
+      await handler.route(args);
+      return;
+    }
   }
 
   // First-time install: offer setup wizard for interactive users

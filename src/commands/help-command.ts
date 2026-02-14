@@ -168,7 +168,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ],
     [
       ['ccs gemini', 'Google Gemini (gemini-2.5-pro or 3-pro)'],
-      ['ccs codex', 'OpenAI Codex (gpt-5.1-codex-max)'],
+      ['ccs codex', 'OpenAI Codex (gpt-5.3-codex)'],
       ['ccs agy', 'Antigravity (Claude/Gemini models)'],
       ['ccs qwen', 'Qwen Code (qwen3-coder)'],
       ['ccs kiro', 'Kiro (AWS CodeWhisperer Claude models)'],
@@ -187,6 +187,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
         'ccs <provider> --thinking <value>',
         'Set thinking budget (low/medium/high/xhigh/auto/off or number)',
       ],
+      ['ccs codex --effort <level>', 'Set codex reasoning effort (medium/high/xhigh)'],
       ['ccs <provider> --1m', 'Enable 1M token context window'],
       ['ccs <provider> --no-1m', 'Disable 1M context (use 200K default)'],
       ['ccs <provider> --logout', 'Clear authentication'],
@@ -335,7 +336,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   ]);
 
   // W3: Thinking Budget explanation
-  printSubSection('Extended Thinking (--thinking)', [
+  printSubSection('Extended Thinking / Reasoning', [
     ['--thinking off', 'Disable extended thinking'],
     ['--thinking auto', 'Let model decide dynamically'],
     ['--thinking low', '1K tokens - Quick responses'],
@@ -344,8 +345,12 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['--thinking xhigh', '32K tokens - Maximum depth'],
     ['--thinking <number>', 'Custom token budget (512-100000)'],
     ['', ''],
+    ['--effort <level>', 'Codex alias for reasoning effort (medium/high/xhigh)'],
+    ['--effort xhigh', 'Codex 5.3 full-depth reasoning'],
+    ['', ''],
     ['Note:', 'Extended thinking allocates compute for step-by-step reasoning'],
-    ['', 'before responding. Supported: agy, gemini (thinking models).'],
+    ['', 'before responding.'],
+    ['', 'Providers: agy/gemini use --thinking, codex uses --effort (or --thinking alias).'],
   ]);
 
   // Extended Context (1M)

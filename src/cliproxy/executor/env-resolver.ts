@@ -176,7 +176,13 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
   }
 
   // Apply thinking configuration to model (auto tier-based or manual override)
-  applyThinkingConfig(envVars, provider, thinkingOverride, compositeTierThinking, compositeTiers);
+  envVars = applyThinkingConfig(
+    envVars,
+    provider,
+    thinkingOverride,
+    compositeTierThinking,
+    compositeTiers
+  );
 
   // Apply extended context suffix for 1M token context window
   // Auto-enabled for Gemini, opt-in for Claude (--1m flag)

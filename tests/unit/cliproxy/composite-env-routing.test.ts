@@ -57,4 +57,18 @@ describe('buildClaudeEnvironment - composite remote routing', () => {
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe('remote-auth-token');
     expect(env.ANTHROPIC_BASE_URL).not.toContain('/api/provider/');
   });
+
+  it('applies thinking override to resolved env models', () => {
+    const env = buildClaudeEnvironment({
+      provider: 'gemini',
+      useRemoteProxy: false,
+      localPort: 8318,
+      verbose: false,
+      thinkingOverride: 'high',
+    });
+
+    expect(env.ANTHROPIC_MODEL).toContain('gemini');
+    // Gemini thinking overrides may be normalized to numeric budgets, and [1m] may be auto-appended.
+    expect(env.ANTHROPIC_MODEL).toMatch(/\([^)]+\)(\[1m\])?$/);
+  });
 });

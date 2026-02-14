@@ -476,4 +476,36 @@ describe('applyThinkingConfig - composite variant integration', () => {
     // Opus stays unchanged because function returned early
     expect(result.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
   });
+
+  it('should use codex effort suffix style when provider is codex', () => {
+    const envVars: NodeJS.ProcessEnv = {
+      ANTHROPIC_MODEL: 'gpt-5.3-codex',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.3-codex',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.3-codex',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5-mini',
+    };
+
+    const result = applyThinkingConfig(
+      envVars,
+      'codex' as CLIProxyProvider,
+      'xhigh', // Explicit CLI override
+      undefined
+    );
+
+    expect(result.ANTHROPIC_MODEL).toBe('gpt-5.3-codex-xhigh');
+    expect(result.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
+    expect(result.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-xhigh');
+    expect(result.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5-mini-xhigh');
+  });
+
+  it('should normalize legacy codex parenthesized tier suffix to effort suffix format', () => {
+    const envVars: NodeJS.ProcessEnv = {
+      ANTHROPIC_MODEL: 'gpt-5.3-codex',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.3-codex(high)',
+    };
+
+    const result = applyThinkingConfig(envVars, 'codex' as CLIProxyProvider, 'high');
+
+    expect(result.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-high');
+  });
 });

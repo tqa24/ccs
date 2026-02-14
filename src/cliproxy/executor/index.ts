@@ -63,6 +63,7 @@ import {
   handleQuotaCheck,
 } from './retry-handler';
 import { checkOrJoinProxy, registerProxySession, setupCleanupHandlers } from './session-bridge';
+import { parseThinkingOverride } from './thinking-arg-parser';
 import {
   warnCrossProviderDuplicates,
   cleanupStaleAutoPauses,
@@ -306,50 +307,36 @@ export async function execClaudeWithCLIProxy(
     setNickname = argsWithoutProxy[nicknameIdx + 1];
   }
 
-  // Parse --thinking flag
-  let thinkingOverride: string | number | undefined;
-  const thinkingEqArg = argsWithoutProxy.find((arg) => arg.startsWith('--thinking='));
-  if (thinkingEqArg) {
-    const val = thinkingEqArg.substring('--thinking='.length);
-    if (!val || val.trim() === '') {
-      console.error(fail('--thinking requires a value'));
-      console.error('    Examples: --thinking=low, --thinking=8192, --thinking=off');
+  // Parse --thinking / --effort flags (aliases; first occurrence wins)
+  const thinkingParse = parseThinkingOverride(argsWithoutProxy);
+  if (thinkingParse.error) {
+    const { flag } = thinkingParse.error;
+    console.error(fail(`${flag} requires a value`));
+
+    if (provider === 'codex') {
+      console.error('    Codex examples: --effort xhigh, --effort high, --effort medium');
+      console.error('    Alias: --thinking xhigh (same behavior)');
+    } else {
+      console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
       console.error('    Levels: minimal, low, medium, high, xhigh, auto');
-      process.exit(1);
     }
-    const numVal = parseInt(val, 10);
-    thinkingOverride = !isNaN(numVal) ? numVal : val;
 
-    const allThinkingFlags = argsWithoutProxy.filter(
-      (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
+    process.exit(1);
+  }
+
+  const thinkingOverride = thinkingParse.value;
+  if (thinkingParse.duplicateDisplays.length > 0) {
+    console.warn(
+      `[!] Multiple reasoning flags detected. Using first occurrence: ${thinkingParse.sourceDisplay}`
     );
-    if (allThinkingFlags.length > 1) {
-      console.warn(
-        `[!] Multiple --thinking flags detected. Using first occurrence: ${thinkingEqArg}`
-      );
-    }
-  } else {
-    const thinkingIdx = argsWithoutProxy.indexOf('--thinking');
-    if (thinkingIdx !== -1) {
-      const nextArg = argsWithoutProxy[thinkingIdx + 1];
-      if (!nextArg || nextArg.startsWith('-')) {
-        console.error(fail('--thinking requires a value'));
-        console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
-        console.error('    Levels: minimal, low, medium, high, xhigh, auto');
-        process.exit(1);
-      }
-      const numVal = parseInt(nextArg, 10);
-      thinkingOverride = !isNaN(numVal) ? numVal : nextArg;
+  }
 
-      const allThinkingFlags = argsWithoutProxy.filter(
-        (arg) => arg === '--thinking' || arg.startsWith('--thinking=')
-      );
-      if (allThinkingFlags.length > 1) {
-        console.warn(
-          `[!] Multiple --thinking flags detected. Using first occurrence: --thinking ${nextArg}`
-        );
-      }
-    }
+  if (thinkingParse.sourceFlag === '--effort' && provider !== 'codex') {
+    console.warn(
+      warn(
+        '`--effort` is primarily for codex. Continuing as alias of `--thinking` for compatibility.'
+      )
+    );
   }
 
   // Parse --1m / --no-1m flags for extended context (1M token window)
@@ -868,6 +855,7 @@ export async function execClaudeWithCLIProxy(
     '--use',
     '--nickname',
     '--thinking',
+    '--effort',
     '--1m',
     '--no-1m',
     '--incognito',
@@ -879,11 +867,13 @@ export async function execClaudeWithCLIProxy(
   const claudeArgs = argsWithoutProxy.filter((arg, idx) => {
     if (ccsFlags.includes(arg)) return false;
     if (arg.startsWith('--thinking=')) return false;
+    if (arg.startsWith('--effort=')) return false;
     if (arg.startsWith('--1m=') || arg.startsWith('--no-1m=')) return false;
     if (
       argsWithoutProxy[idx - 1] === '--use' ||
       argsWithoutProxy[idx - 1] === '--nickname' ||
-      argsWithoutProxy[idx - 1] === '--thinking'
+      argsWithoutProxy[idx - 1] === '--thinking' ||
+      argsWithoutProxy[idx - 1] === '--effort'
     )
       return false;
     return true;

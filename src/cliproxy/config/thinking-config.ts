@@ -14,6 +14,30 @@ import { warn } from '../../utils/ui';
 export type ModelTier = 'opus' | 'sonnet' | 'haiku';
 
 /**
+ * Normalize model ID for provider capability lookup.
+ * Codex may carry effort suffixes in either legacy "(high)" or current "-high" forms.
+ */
+function normalizeModelForThinkingLookup(model: string, provider: CLIProxyProvider): string {
+  const withoutExtendedContext = model.replace(/\[1m\]$/i, '').trim();
+
+  if (provider !== 'codex') return withoutExtendedContext;
+
+  // New codex suffix form: gpt-5.3-codex-high -> gpt-5.3-codex
+  const codexSuffixMatch = withoutExtendedContext.match(/^(.*)-(xhigh|high|medium)$/i);
+  if (codexSuffixMatch?.[1]) {
+    return codexSuffixMatch[1].trim();
+  }
+
+  // Legacy codex suffix form: gpt-5.3-codex(high) -> gpt-5.3-codex
+  const codexLegacyMatch = withoutExtendedContext.match(/^(.*)\((xhigh|high|medium)\)$/i);
+  if (codexLegacyMatch?.[1]) {
+    return codexLegacyMatch[1].trim();
+  }
+
+  return withoutExtendedContext;
+}
+
+/**
  * Check if warnings should be shown based on thinking config.
  * Defaults to true if show_warnings is not explicitly false.
  */
@@ -41,11 +65,46 @@ export function detectTierFromModel(modelName: string): ModelTier {
  * @returns Model name with thinking suffix, e.g., "gemini-3-pro-preview(high)"
  */
 export function applyThinkingSuffix(model: string, thinkingValue: string | number): string {
-  // Don't apply if model already ends with a parenthesized suffix (e.g., "model(high)" or "model(8192)")
-  // Matches: ends with "(...)" where content is non-empty
-  if (/\([^)]+\)$/.test(model)) {
+  return applyThinkingSuffixForProvider(model, thinkingValue);
+}
+
+/**
+ * Apply provider-aware thinking suffix to model name.
+ * - Most providers: model(level|budget) e.g. "gemini-2.5-pro(high)"
+ * - Codex: model-effort e.g. "gpt-5.3-codex-xhigh"
+ */
+function applyThinkingSuffixForProvider(
+  model: string,
+  thinkingValue: string | number,
+  provider?: CLIProxyProvider
+): string {
+  const codexEffortRegex = /^(medium|high|xhigh)$/i;
+  const codexModelSuffixRegex = /-(medium|high|xhigh)$/i;
+  const parenthesizedSuffixMatch = model.match(/\(([^)]+)\)$/);
+
+  // Existing parenthesized suffix:
+  // - keep as-is for non-codex providers
+  // - for codex effort levels, normalize to codex model suffix style
+  if (parenthesizedSuffixMatch) {
+    if (provider === 'codex') {
+      const normalizedParensValue = parenthesizedSuffixMatch[1]?.trim().toLowerCase() || '';
+      if (codexEffortRegex.test(normalizedParensValue)) {
+        return model.replace(/\([^)]+\)$/, `-${normalizedParensValue}`);
+      }
+    }
     return model;
   }
+
+  if (provider === 'codex') {
+    if (codexModelSuffixRegex.test(model)) {
+      return model;
+    }
+    const normalized = String(thinkingValue).trim().toLowerCase();
+    if (codexEffortRegex.test(normalized)) {
+      return `${model}-${normalized}`;
+    }
+  }
+
   return `${model}(${thinkingValue})`;
 }
 
@@ -120,7 +179,8 @@ export function applyThinkingConfig(
 
   // Get base model to check thinking support
   const baseModel = result.ANTHROPIC_MODEL || '';
-  if (!supportsThinking(provider, baseModel)) {
+  const normalizedBaseModel = normalizeModelForThinkingLookup(baseModel, provider);
+  if (!supportsThinking(provider, normalizedBaseModel)) {
     // U2: Warn user if they explicitly provided --thinking but model doesn't support it
     if (thinkingOverride !== undefined && shouldShowWarnings(thinkingConfig)) {
       console.warn(
@@ -143,7 +203,7 @@ export function applyThinkingConfig(
     thinkingValue = thinkingConfig.override;
   } else if (thinkingConfig.mode === 'auto') {
     // Auto mode: detect tier and apply default
-    const tier = detectTierFromModel(baseModel);
+    const tier = detectTierFromModel(normalizedBaseModel);
     // Check per-tier config first if composite
     const perTierValue = compositeTierThinking?.[tier];
     if (perTierValue !== undefined) {
@@ -156,7 +216,7 @@ export function applyThinkingConfig(
   }
 
   // Validate thinking value against model capabilities
-  const validation = validateThinking(provider, baseModel, thinkingValue);
+  const validation = validateThinking(provider, normalizedBaseModel, thinkingValue);
   if (validation.warning && shouldShowWarnings(thinkingConfig)) {
     console.warn(warn(validation.warning));
   }
@@ -174,7 +234,11 @@ export function applyThinkingConfig(
     // Otherwise, continue to process tiers with their own config (skip main model)
   } else if (result.ANTHROPIC_MODEL) {
     // Apply thinking suffix to main model (only if not off)
-    result.ANTHROPIC_MODEL = applyThinkingSuffix(result.ANTHROPIC_MODEL, thinkingValue);
+    result.ANTHROPIC_MODEL = applyThinkingSuffixForProvider(
+      result.ANTHROPIC_MODEL,
+      thinkingValue,
+      provider
+    );
   }
 
   // Apply to tier models if they support thinking
@@ -197,9 +261,10 @@ export function applyThinkingConfig(
       // P2 FIX: Use tier-specific provider from compositeTiers for mixed-provider composites
       // Falls back to the default provider if not a composite or tier not specified
       const tierProvider = compositeTiers?.[tier]?.provider ?? provider;
+      const normalizedTierModel = normalizeModelForThinkingLookup(model, tierProvider);
 
       // Check if this tier's model supports thinking (using tier-specific provider)
-      if (!supportsThinking(tierProvider, model)) {
+      if (!supportsThinking(tierProvider, normalizedTierModel)) {
         continue;
       }
 
@@ -224,7 +289,7 @@ export function applyThinkingConfig(
         continue;
       }
 
-      result[tierVar] = applyThinkingSuffix(model, tierThinkingValue);
+      result[tierVar] = applyThinkingSuffixForProvider(model, tierThinkingValue, tierProvider);
     }
   }
 
