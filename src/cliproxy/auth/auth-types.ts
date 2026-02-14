@@ -8,6 +8,74 @@ import { CLIProxyProvider } from '../types';
 import { AccountInfo } from '../account-manager';
 
 /**
+ * Kiro authentication methods supported by CLIProxyAPIPlus.
+ * - aws: AWS Builder ID via Device Code flow
+ * - aws-authcode: AWS Builder ID via Authorization Code flow (CLI flag only)
+ * - google: Social OAuth via Google
+ * - github: Social OAuth via GitHub (management API only)
+ */
+export const KIRO_AUTH_METHODS = ['aws', 'aws-authcode', 'google', 'github'] as const;
+export type KiroAuthMethod = (typeof KIRO_AUTH_METHODS)[number];
+
+/** CLI binary supports these Kiro methods directly via flags. */
+export const KIRO_CLI_AUTH_METHODS = ['aws', 'aws-authcode', 'google'] as const;
+export type KiroCLIAuthMethod = (typeof KIRO_CLI_AUTH_METHODS)[number];
+
+/** Default Kiro method for CCS UX and AWS Organization support. */
+export const DEFAULT_KIRO_AUTH_METHOD: KiroAuthMethod = 'aws';
+
+export function isKiroAuthMethod(value: string): value is KiroAuthMethod {
+  return KIRO_AUTH_METHODS.includes(value as KiroAuthMethod);
+}
+
+export function isKiroCLIAuthMethod(value: string): value is KiroCLIAuthMethod {
+  return KIRO_CLI_AUTH_METHODS.includes(value as KiroCLIAuthMethod);
+}
+
+export function normalizeKiroAuthMethod(value?: string): KiroAuthMethod {
+  if (!value) return DEFAULT_KIRO_AUTH_METHOD;
+  const normalized = value.trim().toLowerCase();
+  return isKiroAuthMethod(normalized) ? normalized : DEFAULT_KIRO_AUTH_METHOD;
+}
+
+export function isKiroDeviceCodeMethod(method: KiroAuthMethod): boolean {
+  return method === 'aws';
+}
+
+export function getKiroCallbackPort(method: KiroAuthMethod): number | null {
+  return isKiroDeviceCodeMethod(method) ? null : 9876;
+}
+
+export function getKiroCLIAuthFlag(method: KiroCLIAuthMethod): string {
+  switch (method) {
+    case 'aws':
+      return '--kiro-aws-login';
+    case 'aws-authcode':
+      return '--kiro-aws-authcode';
+    case 'google':
+      return '--kiro-google-login';
+  }
+}
+
+/**
+ * Kiro method for CLIProxyAPI management endpoint:
+ * GET /v0/management/kiro-auth-url?method=<value>
+ */
+export function toKiroManagementMethod(method: KiroAuthMethod): 'aws' | 'google' | 'github' {
+  switch (method) {
+    case 'google':
+      return 'google';
+    case 'github':
+      return 'github';
+    case 'aws-authcode':
+      return 'aws';
+    case 'aws':
+    default:
+      return 'aws';
+  }
+}
+
+/**
  * OAuth callback ports used by CLIProxyAPI (hardcoded in binary)
  * See: https://github.com/router-for-me/CLIProxyAPI/tree/main/internal/auth
  *
@@ -113,7 +181,9 @@ export const OAUTH_CONFIGS: Record<CLIProxyProvider, ProviderOAuthConfig> = {
     displayName: 'Kiro (AWS)',
     authUrl: 'https://oidc.us-east-1.amazonaws.com',
     scopes: ['codewhisperer:completions', 'codewhisperer:conversations'],
-    authFlag: '--kiro-login',
+    // Default to AWS Builder ID device code flow for better compatibility.
+    // Other Kiro methods are selected at runtime via OAuthOptions.kiroMethod.
+    authFlag: '--kiro-aws-login',
   },
   ghcp: {
     provider: 'ghcp',
@@ -213,6 +283,8 @@ export interface OAuthOptions {
   account?: string;
   add?: boolean;
   nickname?: string;
+  /** Kiro auth method override (CLI + Dashboard parity). */
+  kiroMethod?: KiroAuthMethod;
   /** If true, triggered from Web UI (enables project selection prompt) */
   fromUI?: boolean;
   /** If true, use --no-incognito flag (Kiro only - use normal browser instead of incognito) */

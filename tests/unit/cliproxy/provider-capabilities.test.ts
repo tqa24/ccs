@@ -12,7 +12,14 @@ import {
   OAUTH_CALLBACK_PORTS as DIAGNOSTIC_CALLBACK_PORTS,
   OAUTH_FLOW_TYPES,
 } from '../../../src/management/oauth-port-diagnostics';
-import { OAUTH_CALLBACK_PORTS as AUTH_CALLBACK_PORTS } from '../../../src/cliproxy/auth/auth-types';
+import {
+  DEFAULT_KIRO_AUTH_METHOD,
+  getKiroCallbackPort,
+  getKiroCLIAuthFlag,
+  normalizeKiroAuthMethod,
+  OAUTH_CALLBACK_PORTS as AUTH_CALLBACK_PORTS,
+  toKiroManagementMethod,
+} from '../../../src/cliproxy/auth/auth-types';
 
 describe('provider-capabilities', () => {
   it('keeps canonical provider IDs backward-compatible', () => {
@@ -74,5 +81,26 @@ describe('provider-capabilities', () => {
     for (const provider of getProvidersByOAuthFlow('device_code')) {
       expect(AUTH_CALLBACK_PORTS[provider]).toBeUndefined();
     }
+  });
+
+  it('maps Kiro auth methods to upstream CLI/management contracts', () => {
+    expect(DEFAULT_KIRO_AUTH_METHOD).toBe('aws');
+    expect(normalizeKiroAuthMethod()).toBe('aws');
+    expect(normalizeKiroAuthMethod('GOOGLE')).toBe('google');
+    expect(normalizeKiroAuthMethod('not-valid')).toBe('aws');
+
+    expect(getKiroCLIAuthFlag('aws')).toBe('--kiro-aws-login');
+    expect(getKiroCLIAuthFlag('aws-authcode')).toBe('--kiro-aws-authcode');
+    expect(getKiroCLIAuthFlag('google')).toBe('--kiro-google-login');
+
+    expect(getKiroCallbackPort('aws')).toBeNull();
+    expect(getKiroCallbackPort('google')).toBe(9876);
+    expect(getKiroCallbackPort('github')).toBe(9876);
+    expect(getKiroCallbackPort('aws-authcode')).toBe(9876);
+
+    expect(toKiroManagementMethod('aws')).toBe('aws');
+    expect(toKiroManagementMethod('aws-authcode')).toBe('aws');
+    expect(toKiroManagementMethod('google')).toBe('google');
+    expect(toKiroManagementMethod('github')).toBe('github');
   });
 });
