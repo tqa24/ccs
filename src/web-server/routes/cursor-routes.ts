@@ -7,7 +7,6 @@ import { Router } from 'express';
 import {
   getDaemonStatus,
   getAvailableModels,
-  getDefaultModel,
   startDaemon,
   stopDaemon,
   checkAuthStatus,
@@ -150,7 +149,7 @@ router.get('/models', async (_req: Request, res: Response): Promise<void> => {
   try {
     const cursorConfig = getCursorConfig();
     const models = await getAvailableModels(cursorConfig.port);
-    res.json({ models, current: getDefaultModel() });
+    res.json({ models, current: cursorConfig.model });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

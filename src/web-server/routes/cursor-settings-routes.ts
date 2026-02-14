@@ -5,6 +5,7 @@
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import * as fs from 'fs';
+import { promises as fsp } from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../../utils/config-manager';
 import { DEFAULT_CURSOR_CONFIG } from '../../config/unified-config-types';
@@ -13,6 +14,7 @@ import {
   saveUnifiedConfig,
   getCursorConfig,
 } from '../../config/unified-config-loader';
+import type { CursorConfig } from '../../config/unified-config-types';
 
 const router = Router();
 
@@ -34,8 +36,76 @@ function parseLocalCursorPort(settings: unknown): number | null {
   }
 }
 
+function parseRequiredModel(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function parseOptionalModel(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function getDefaultCursorSettings(cursorConfig: CursorConfig): { env: Record<string, string> } {
+  const model = cursorConfig.model || DEFAULT_CURSOR_CONFIG.model;
+  return {
+    env: {
+      ANTHROPIC_BASE_URL: `http://127.0.0.1:${cursorConfig.port}`,
+      ANTHROPIC_AUTH_TOKEN: 'cursor-managed',
+      ANTHROPIC_MODEL: model,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: cursorConfig.opus_model || model,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: cursorConfig.sonnet_model || model,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: cursorConfig.haiku_model || model,
+    },
+  };
+}
+
+async function syncRawSettingsFromCursorConfig(cursorConfig: CursorConfig): Promise<void> {
+  const settingsPath = path.join(getCcsDir(), 'cursor.settings.json');
+
+  let settings: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(await fsp.readFile(settingsPath, 'utf-8'));
+    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
+      settings = parsed as Record<string, unknown>;
+    }
+  } catch {
+    settings = {};
+  }
+
+  const envSource = settings.env;
+  const env =
+    typeof envSource === 'object' && envSource !== null && !Array.isArray(envSource)
+      ? { ...(envSource as Record<string, string>) }
+      : {};
+
+  const model = cursorConfig.model || DEFAULT_CURSOR_CONFIG.model;
+  const localPort = parseLocalCursorPort({ env });
+  if (!env.ANTHROPIC_BASE_URL || localPort !== null) {
+    env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${cursorConfig.port}`;
+  }
+  if (!env.ANTHROPIC_AUTH_TOKEN) {
+    env.ANTHROPIC_AUTH_TOKEN = 'cursor-managed';
+  }
+  env.ANTHROPIC_MODEL = model;
+  env.ANTHROPIC_DEFAULT_OPUS_MODEL = cursorConfig.opus_model || model;
+  env.ANTHROPIC_DEFAULT_SONNET_MODEL = cursorConfig.sonnet_model || model;
+  env.ANTHROPIC_DEFAULT_HAIKU_MODEL = cursorConfig.haiku_model || model;
+
+  const nextSettings = {
+    ...settings,
+    env,
+  };
+
+  const tempPath = settingsPath + '.tmp';
+  await fsp.writeFile(tempPath, JSON.stringify(nextSettings, null, 2) + '\n');
+  await fsp.rename(tempPath, settingsPath);
+}
+
 /**
- * GET /api/cursor/settings - Get cursor config (port, auto_start, ghost_mode)
+ * GET /api/cursor/settings - Get cursor config
  */
 router.get('/', (_req: Request, res: Response): void => {
   try {
@@ -49,7 +119,7 @@ router.get('/', (_req: Request, res: Response): void => {
 /**
  * PUT /api/cursor/settings - Update cursor config
  */
-router.put('/', (req: Request, res: Response): void => {
+router.put('/', async (req: Request, res: Response): Promise<void> => {
   try {
     const updates = req.body;
 
@@ -82,8 +152,40 @@ router.put('/', (req: Request, res: Response): void => {
       res.status(400).json({ error: 'ghost_mode must be a boolean' });
       return;
     }
+    if ('model' in updates && !parseRequiredModel(updates.model)) {
+      res.status(400).json({ error: 'model must be a non-empty string' });
+      return;
+    }
+    if (
+      'opus_model' in updates &&
+      updates.opus_model !== undefined &&
+      updates.opus_model !== null &&
+      typeof updates.opus_model !== 'string'
+    ) {
+      res.status(400).json({ error: 'opus_model must be a string' });
+      return;
+    }
+    if (
+      'sonnet_model' in updates &&
+      updates.sonnet_model !== undefined &&
+      updates.sonnet_model !== null &&
+      typeof updates.sonnet_model !== 'string'
+    ) {
+      res.status(400).json({ error: 'sonnet_model must be a string' });
+      return;
+    }
+    if (
+      'haiku_model' in updates &&
+      updates.haiku_model !== undefined &&
+      updates.haiku_model !== null &&
+      typeof updates.haiku_model !== 'string'
+    ) {
+      res.status(400).json({ error: 'haiku_model must be a string' });
+      return;
+    }
 
     const config = loadOrCreateUnifiedConfig();
+    const normalizedModel = parseRequiredModel(updates.model);
 
     // Merge updates with existing config
     // Only known fields are merged — unknown properties are ignored
@@ -94,9 +196,23 @@ router.put('/', (req: Request, res: Response): void => {
         updates.auto_start ?? config.cursor?.auto_start ?? DEFAULT_CURSOR_CONFIG.auto_start,
       ghost_mode:
         updates.ghost_mode ?? config.cursor?.ghost_mode ?? DEFAULT_CURSOR_CONFIG.ghost_mode,
+      model: normalizedModel ?? config.cursor?.model ?? DEFAULT_CURSOR_CONFIG.model,
+      opus_model:
+        'opus_model' in updates
+          ? parseOptionalModel(updates.opus_model)
+          : config.cursor?.opus_model,
+      sonnet_model:
+        'sonnet_model' in updates
+          ? parseOptionalModel(updates.sonnet_model)
+          : config.cursor?.sonnet_model,
+      haiku_model:
+        'haiku_model' in updates
+          ? parseOptionalModel(updates.haiku_model)
+          : config.cursor?.haiku_model,
     };
 
     saveUnifiedConfig(config);
+    await syncRawSettingsFromCursorConfig(config.cursor);
     res.json({ success: true, cursor: config.cursor });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -114,14 +230,7 @@ router.get('/raw', (_req: Request, res: Response): void => {
 
     // If file doesn't exist, return default structure
     if (!fs.existsSync(settingsPath)) {
-      // Create settings structure matching Cursor pattern
-      // Use 127.0.0.1 instead of localhost for more reliable local connections
-      const defaultSettings = {
-        env: {
-          ANTHROPIC_BASE_URL: `http://127.0.0.1:${cursorConfig.port}`,
-          ANTHROPIC_AUTH_TOKEN: 'cursor-managed',
-        },
-      };
+      const defaultSettings = getDefaultCursorSettings(cursorConfig);
 
       res.json({
         settings: defaultSettings,
@@ -186,14 +295,19 @@ router.put('/raw', (req: Request, res: Response): void => {
 
     // Keep unified config aligned with raw settings edits (parity with Copilot raw editor).
     const parsedPort = parseLocalCursorPort(settings);
-    if (parsedPort) {
-      const config = loadOrCreateUnifiedConfig();
-      config.cursor = {
-        ...(config.cursor ?? DEFAULT_CURSOR_CONFIG),
-        port: parsedPort,
-      };
-      saveUnifiedConfig(config);
-    }
+    const config = loadOrCreateUnifiedConfig();
+    const env = (settings as { env?: Record<string, unknown> }).env ?? {};
+    const model = parseRequiredModel(env.ANTHROPIC_MODEL) ?? config.cursor?.model;
+
+    config.cursor = {
+      ...(config.cursor ?? DEFAULT_CURSOR_CONFIG),
+      ...(parsedPort !== null ? { port: parsedPort } : {}),
+      ...(model ? { model } : {}),
+      opus_model: parseOptionalModel(env.ANTHROPIC_DEFAULT_OPUS_MODEL),
+      sonnet_model: parseOptionalModel(env.ANTHROPIC_DEFAULT_SONNET_MODEL),
+      haiku_model: parseOptionalModel(env.ANTHROPIC_DEFAULT_HAIKU_MODEL),
+    };
+    saveUnifiedConfig(config);
 
     const stat = fs.statSync(settingsPath);
     res.json({ success: true, mtime: stat.mtimeMs });

@@ -35,8 +35,8 @@ describe('DEFAULT_CURSOR_PORT', () => {
 });
 
 describe('DEFAULT_CURSOR_MODEL', () => {
-  it('is gpt-4.1', () => {
-    expect(DEFAULT_CURSOR_MODEL).toBe('gpt-4.1');
+  it('is gpt-5.3-codex', () => {
+    expect(DEFAULT_CURSOR_MODEL).toBe('gpt-5.3-codex');
   });
 });
 
@@ -48,12 +48,12 @@ describe('getDefaultModel', () => {
 
 describe('detectProvider', () => {
   it('detects anthropic models', () => {
-    expect(detectProvider('claude-sonnet-4')).toBe('anthropic');
-    expect(detectProvider('claude-opus-4')).toBe('anthropic');
+    expect(detectProvider('claude-4.5-sonnet')).toBe('anthropic');
+    expect(detectProvider('claude-4.6-opus')).toBe('anthropic');
   });
 
   it('detects openai models', () => {
-    expect(detectProvider('gpt-4.1')).toBe('openai');
+    expect(detectProvider('gpt-5.3-codex')).toBe('openai');
     expect(detectProvider('gpt-5-mini')).toBe('openai');
     expect(detectProvider('o3-mini')).toBe('openai');
   });
@@ -65,11 +65,16 @@ describe('detectProvider', () => {
   });
 
   it('detects google models', () => {
-    expect(detectProvider('gemini-2.5-pro')).toBe('google');
+    expect(detectProvider('gemini-3-pro')).toBe('google');
   });
 
   it('detects cursor models', () => {
-    expect(detectProvider('cursor-small')).toBe('cursor');
+    expect(detectProvider('composer-1.5')).toBe('cursor');
+    expect(detectProvider('cursor-model')).toBe('cursor');
+  });
+
+  it('detects xai models', () => {
+    expect(detectProvider('grok-code')).toBe('xai');
   });
 
   it('defaults to unknown for unrecognized models', () => {
@@ -79,8 +84,8 @@ describe('detectProvider', () => {
 
 describe('formatModelName', () => {
   it('returns catalog name for known models', () => {
-    expect(formatModelName('claude-sonnet-4')).toBe('Claude Sonnet 4');
-    expect(formatModelName('gpt-4.1')).toBe('GPT-4.1');
+    expect(formatModelName('claude-4.6-opus')).toBe('Claude 4.6 Opus');
+    expect(formatModelName('gpt-5.3-codex')).toBe('GPT-5.3 Codex');
   });
 
   it('converts kebab-case to title case for unknown models', () => {

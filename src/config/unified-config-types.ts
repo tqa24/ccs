@@ -304,6 +304,14 @@ export interface CursorConfig {
   auto_start: boolean;
   /** Enable ghost mode to disable telemetry (default: true) */
   ghost_mode: boolean;
+  /** Default model ID used by Cursor integration */
+  model: string;
+  /** Optional tier mapping for Claude-compatible model routing */
+  opus_model?: string;
+  /** Optional tier mapping for Claude-compatible model routing */
+  sonnet_model?: string;
+  /** Optional tier mapping for Claude-compatible model routing */
+  haiku_model?: string;
 }
 
 /**
@@ -723,6 +731,7 @@ export const DEFAULT_CURSOR_CONFIG: CursorConfig = {
   port: 20129,
   auto_start: false,
   ghost_mode: true,
+  model: 'gpt-5.3-codex',
 };
 
 /**

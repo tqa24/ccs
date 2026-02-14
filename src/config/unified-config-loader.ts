@@ -306,6 +306,10 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
       port: partial.cursor?.port ?? DEFAULT_CURSOR_CONFIG.port,
       auto_start: partial.cursor?.auto_start ?? DEFAULT_CURSOR_CONFIG.auto_start,
       ghost_mode: partial.cursor?.ghost_mode ?? DEFAULT_CURSOR_CONFIG.ghost_mode,
+      model: partial.cursor?.model ?? DEFAULT_CURSOR_CONFIG.model,
+      opus_model: partial.cursor?.opus_model,
+      sonnet_model: partial.cursor?.sonnet_model,
+      haiku_model: partial.cursor?.haiku_model,
     },
     // Global env - injected into all non-Claude subscription profiles
     global_env: {
@@ -603,6 +607,8 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('# port: Port for cursor proxy daemon (default: 20129)');
     lines.push('# auto_start: Auto-start daemon when CCS starts (default: false)');
     lines.push('# ghost_mode: Disable telemetry for privacy (default: true)');
+    lines.push('# model: Default model ID (used for ANTHROPIC_MODEL)');
+    lines.push('# opus_model/sonnet_model/haiku_model: Optional tier model mapping');
     lines.push('# ----------------------------------------------------------------------------');
     lines.push(
       yaml.dump({ cursor: config.cursor }, { indent: 2, lineWidth: -1, quotingType: '"' }).trim()

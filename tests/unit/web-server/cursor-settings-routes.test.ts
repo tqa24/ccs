@@ -128,6 +128,13 @@ describe('Cursor Settings Routes Logic', () => {
         port: updates.port ?? config.cursor?.port ?? 3000,
         auto_start: updates.auto_start ?? config.cursor?.auto_start ?? false,
         ghost_mode: updates.ghost_mode ?? config.cursor?.ghost_mode ?? false,
+        model: updates.model ?? config.cursor?.model ?? 'gpt-5.3-codex',
+        opus_model:
+          updates.opus_model !== undefined ? updates.opus_model : config.cursor?.opus_model,
+        sonnet_model:
+          updates.sonnet_model !== undefined ? updates.sonnet_model : config.cursor?.sonnet_model,
+        haiku_model:
+          updates.haiku_model !== undefined ? updates.haiku_model : config.cursor?.haiku_model,
       };
 
       expect(cursorConfig.port).toBe(5000);
@@ -137,7 +144,13 @@ describe('Cursor Settings Routes Logic', () => {
 
     it('updates port only', () => {
       const config = loadOrCreateUnifiedConfig();
-      config.cursor = { enabled: false, port: 3000, auto_start: false, ghost_mode: false };
+      config.cursor = {
+        enabled: false,
+        port: 3000,
+        auto_start: false,
+        ghost_mode: false,
+        model: 'gpt-5.3-codex',
+      };
       saveUnifiedConfig(config);
 
       const updates = { port: 4000 };
@@ -146,6 +159,13 @@ describe('Cursor Settings Routes Logic', () => {
         port: updates.port ?? config.cursor?.port ?? 3000,
         auto_start: updates.auto_start ?? config.cursor?.auto_start ?? false,
         ghost_mode: updates.ghost_mode ?? config.cursor?.ghost_mode ?? false,
+        model: updates.model ?? config.cursor?.model ?? 'gpt-5.3-codex',
+        opus_model:
+          updates.opus_model !== undefined ? updates.opus_model : config.cursor?.opus_model,
+        sonnet_model:
+          updates.sonnet_model !== undefined ? updates.sonnet_model : config.cursor?.sonnet_model,
+        haiku_model:
+          updates.haiku_model !== undefined ? updates.haiku_model : config.cursor?.haiku_model,
       };
 
       expect(cursorConfig.port).toBe(4000);
@@ -155,7 +175,13 @@ describe('Cursor Settings Routes Logic', () => {
 
     it('updates auto_start only', () => {
       const config = loadOrCreateUnifiedConfig();
-      config.cursor = { enabled: false, port: 3000, auto_start: false, ghost_mode: false };
+      config.cursor = {
+        enabled: false,
+        port: 3000,
+        auto_start: false,
+        ghost_mode: false,
+        model: 'gpt-5.3-codex',
+      };
       saveUnifiedConfig(config);
 
       const updates = { auto_start: true };
@@ -164,6 +190,13 @@ describe('Cursor Settings Routes Logic', () => {
         port: updates.port ?? config.cursor?.port ?? 3000,
         auto_start: updates.auto_start ?? config.cursor?.auto_start ?? false,
         ghost_mode: updates.ghost_mode ?? config.cursor?.ghost_mode ?? false,
+        model: updates.model ?? config.cursor?.model ?? 'gpt-5.3-codex',
+        opus_model:
+          updates.opus_model !== undefined ? updates.opus_model : config.cursor?.opus_model,
+        sonnet_model:
+          updates.sonnet_model !== undefined ? updates.sonnet_model : config.cursor?.sonnet_model,
+        haiku_model:
+          updates.haiku_model !== undefined ? updates.haiku_model : config.cursor?.haiku_model,
       };
 
       expect(cursorConfig.port).toBe(3000);
@@ -173,7 +206,13 @@ describe('Cursor Settings Routes Logic', () => {
 
     it('updates ghost_mode only', () => {
       const config = loadOrCreateUnifiedConfig();
-      config.cursor = { enabled: false, port: 3000, auto_start: false, ghost_mode: false };
+      config.cursor = {
+        enabled: false,
+        port: 3000,
+        auto_start: false,
+        ghost_mode: false,
+        model: 'gpt-5.3-codex',
+      };
       saveUnifiedConfig(config);
 
       const updates = { ghost_mode: true };
@@ -182,6 +221,13 @@ describe('Cursor Settings Routes Logic', () => {
         port: updates.port ?? config.cursor?.port ?? 3000,
         auto_start: updates.auto_start ?? config.cursor?.auto_start ?? false,
         ghost_mode: updates.ghost_mode ?? config.cursor?.ghost_mode ?? false,
+        model: updates.model ?? config.cursor?.model ?? 'gpt-5.3-codex',
+        opus_model:
+          updates.opus_model !== undefined ? updates.opus_model : config.cursor?.opus_model,
+        sonnet_model:
+          updates.sonnet_model !== undefined ? updates.sonnet_model : config.cursor?.sonnet_model,
+        haiku_model:
+          updates.haiku_model !== undefined ? updates.haiku_model : config.cursor?.haiku_model,
       };
 
       expect(cursorConfig.port).toBe(3000);
@@ -203,11 +249,16 @@ describe('Cursor Settings Routes Logic', () => {
         env: {
           ANTHROPIC_BASE_URL: `http://127.0.0.1:${cursorPort}`,
           ANTHROPIC_AUTH_TOKEN: 'cursor-managed',
+          ANTHROPIC_MODEL: 'gpt-5.3-codex',
+          ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.3-codex',
+          ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.3-codex',
+          ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5.3-codex',
         },
       };
 
       expect(defaultSettings.env.ANTHROPIC_BASE_URL).toContain('http://127.0.0.1:');
       expect(defaultSettings.env.ANTHROPIC_AUTH_TOKEN).toBe('cursor-managed');
+      expect(defaultSettings.env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex');
     });
 
     it('reads existing file', () => {
