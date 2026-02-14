@@ -174,17 +174,6 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         },
       },
       {
-        id: 'gpt-5.3-codex-spark',
-        name: 'GPT-5.3 Codex Spark',
-        description: 'Ultra-fast coding model',
-        thinking: {
-          type: 'levels',
-          levels: ['medium', 'high', 'xhigh'],
-          maxLevel: 'xhigh',
-          dynamicAllowed: false,
-        },
-      },
-      {
         id: 'gpt-5.2-codex',
         name: 'GPT-5.2 Codex',
         description: 'Previous stable Codex model',

@@ -143,18 +143,7 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
           default: 'gpt-5.3-codex',
           opus: 'gpt-5.3-codex',
           sonnet: 'gpt-5.3-codex-high',
-          haiku: 'gpt-5.3-codex-spark',
-        },
-      },
-      {
-        id: 'gpt-5.3-codex-spark',
-        name: 'GPT-5.3 Codex Spark',
-        description: 'Ultra-fast coding model',
-        presetMapping: {
-          default: 'gpt-5.3-codex-spark',
-          opus: 'gpt-5.3-codex',
-          sonnet: 'gpt-5.3-codex-high',
-          haiku: 'gpt-5.3-codex-spark',
+          haiku: 'gpt-5-mini',
         },
       },
       {
