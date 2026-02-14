@@ -52,6 +52,7 @@ import {
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { installImageAnalyzerHook } from '../../utils/hooks';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
+import { isKiroAuthMethod, KiroAuthMethod, normalizeKiroAuthMethod } from '../auth/auth-types';
 
 // Import modular components
 import { waitForProxyReadyWithSpinner, spawnProxy } from './lifecycle-manager';
@@ -307,6 +308,33 @@ export async function execClaudeWithCLIProxy(
     setNickname = argsWithoutProxy[nicknameIdx + 1];
   }
 
+  // Parse --kiro-auth-method flag
+  let kiroAuthMethod: KiroAuthMethod | undefined;
+  const kiroMethodIdx = argsWithoutProxy.indexOf('--kiro-auth-method');
+  if (kiroMethodIdx !== -1) {
+    const rawMethod = argsWithoutProxy[kiroMethodIdx + 1];
+    if (!rawMethod || rawMethod.startsWith('-')) {
+      console.error(fail('--kiro-auth-method requires a value'));
+      console.error('    Supported values: aws, aws-authcode, google, github');
+      process.exitCode = 1;
+      return;
+    }
+    const normalized = rawMethod.trim().toLowerCase();
+    if (!isKiroAuthMethod(normalized)) {
+      console.error(fail(`Invalid --kiro-auth-method value: ${rawMethod}`));
+      console.error('    Supported values: aws, aws-authcode, google, github');
+      process.exitCode = 1;
+      return;
+    }
+    kiroAuthMethod = normalizeKiroAuthMethod(normalized);
+  }
+
+  if (kiroAuthMethod && provider !== 'kiro' && !compositeProviders.includes('kiro')) {
+    console.error(fail('--kiro-auth-method is only valid for ccs kiro'));
+    process.exitCode = 1;
+    return;
+  }
+
   // Parse --thinking / --effort flags (aliases; first occurrence wins)
   const thinkingParse = parseThinkingOverride(argsWithoutProxy);
   if (thinkingParse.error) {
@@ -465,6 +493,7 @@ export async function execClaudeWithCLIProxy(
     const authSuccess = await triggerOAuth(provider, {
       verbose,
       import: true,
+      ...(kiroAuthMethod ? { kiroMethod: kiroAuthMethod } : {}),
       ...(setNickname ? { nickname: setNickname } : {}),
     });
     if (!authSuccess) {
@@ -495,6 +524,7 @@ export async function execClaudeWithCLIProxy(
           const authSuccess = await triggerOAuth(p, {
             verbose,
             add: addAccount,
+            ...(kiroAuthMethod && p === 'kiro' ? { kiroMethod: kiroAuthMethod } : {}),
             ...(forceHeadless ? { headless: true } : {}),
             ...(setNickname ? { nickname: setNickname } : {}),
             ...(noIncognito ? { noIncognito: true } : {}),
@@ -535,6 +565,7 @@ export async function execClaudeWithCLIProxy(
       const authSuccess = await triggerOAuth(provider, {
         verbose,
         add: addAccount,
+        ...(kiroAuthMethod ? { kiroMethod: kiroAuthMethod } : {}),
         ...(forceHeadless ? { headless: true } : {}),
         ...(setNickname ? { nickname: setNickname } : {}),
         ...(noIncognito ? { noIncognito: true } : {}),
@@ -854,6 +885,7 @@ export async function execClaudeWithCLIProxy(
     '--accounts',
     '--use',
     '--nickname',
+    '--kiro-auth-method',
     '--thinking',
     '--effort',
     '--1m',
@@ -872,6 +904,7 @@ export async function execClaudeWithCLIProxy(
     if (
       argsWithoutProxy[idx - 1] === '--use' ||
       argsWithoutProxy[idx - 1] === '--nickname' ||
+      argsWithoutProxy[idx - 1] === '--kiro-auth-method' ||
       argsWithoutProxy[idx - 1] === '--thinking' ||
       argsWithoutProxy[idx - 1] === '--effort'
     )
