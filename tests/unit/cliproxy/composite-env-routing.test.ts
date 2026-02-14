@@ -67,6 +67,8 @@ describe('buildClaudeEnvironment - composite remote routing', () => {
       thinkingOverride: 'high',
     });
 
-    expect(env.ANTHROPIC_MODEL).toContain('(high)');
+    expect(env.ANTHROPIC_MODEL).toContain('gemini');
+    // Gemini thinking overrides may be normalized to numeric budgets, and [1m] may be auto-appended.
+    expect(env.ANTHROPIC_MODEL).toMatch(/\([^)]+\)(\[1m\])?$/);
   });
 });
