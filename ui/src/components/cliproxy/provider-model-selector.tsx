@@ -18,6 +18,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getCodexEffortDisplay } from '@/lib/codex-effort';
 
 /** Model entry from catalog */
 export interface ModelEntry {
@@ -263,6 +264,8 @@ export function FlexibleModelSelector({
 }: FlexibleModelSelectorProps) {
   // Combine catalog models (recommended) with all available models
   const catalogModelIds = new Set(catalog?.models.map((m) => m.id) || []);
+  const isCodexProvider = catalog?.provider === 'codex';
+  const selectedCodexEffort = isCodexProvider ? getCodexEffortDisplay(value) : null;
 
   return (
     <div className="space-y-1.5">
@@ -273,7 +276,19 @@ export function FlexibleModelSelector({
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-9">
           <SelectValue placeholder="Select model">
-            {value && <span className="truncate font-mono text-xs">{value}</span>}
+            {value && (
+              <div className="flex items-center gap-2">
+                <span className="truncate font-mono text-xs">{value}</span>
+                {selectedCodexEffort && (
+                  <Badge
+                    variant={selectedCodexEffort.explicit ? 'secondary' : 'outline'}
+                    className="text-[9px] h-4 px-1 uppercase"
+                  >
+                    {selectedCodexEffort.label}
+                  </Badge>
+                )}
+              </div>
+            )}
           </SelectValue>
         </SelectTrigger>
         <SelectContent className="max-h-[300px]">
@@ -281,19 +296,30 @@ export function FlexibleModelSelector({
           {catalog && catalog.models.length > 0 && (
             <SelectGroup>
               <SelectLabel className="text-xs text-primary">Recommended</SelectLabel>
-              {catalog.models.map((model) => (
-                <SelectItem key={model.id} value={model.id}>
-                  <div className="flex items-center gap-2">
-                    <span className="truncate font-mono text-xs">{model.id}</span>
-                    {model.tier === 'paid' && (
-                      <Badge variant="outline" className="text-[9px] h-4 px-1">
-                        PAID
-                      </Badge>
-                    )}
-                    {value === model.id && <Check className="w-3 h-3 text-primary ml-auto" />}
-                  </div>
-                </SelectItem>
-              ))}
+              {catalog.models.map((model) => {
+                const codexEffort = isCodexProvider ? getCodexEffortDisplay(model.id) : null;
+                return (
+                  <SelectItem key={model.id} value={model.id}>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-mono text-xs">{model.id}</span>
+                      {model.tier === 'paid' && (
+                        <Badge variant="outline" className="text-[9px] h-4 px-1">
+                          PAID
+                        </Badge>
+                      )}
+                      {codexEffort && (
+                        <Badge
+                          variant={codexEffort.explicit ? 'secondary' : 'outline'}
+                          className="text-[9px] h-4 px-1 uppercase"
+                        >
+                          {codexEffort.label}
+                        </Badge>
+                      )}
+                      {value === model.id && <Check className="w-3 h-3 text-primary ml-auto" />}
+                    </div>
+                  </SelectItem>
+                );
+              })}
             </SelectGroup>
           )}
 
@@ -305,14 +331,25 @@ export function FlexibleModelSelector({
               </SelectLabel>
               {allModels
                 .filter((m) => !catalogModelIds.has(m.id))
-                .map((model) => (
-                  <SelectItem key={model.id} value={model.id}>
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-mono text-xs">{model.id}</span>
-                      {value === model.id && <Check className="w-3 h-3 text-primary ml-auto" />}
-                    </div>
-                  </SelectItem>
-                ))}
+                .map((model) => {
+                  const codexEffort = isCodexProvider ? getCodexEffortDisplay(model.id) : null;
+                  return (
+                    <SelectItem key={model.id} value={model.id}>
+                      <div className="flex items-center gap-2">
+                        <span className="truncate font-mono text-xs">{model.id}</span>
+                        {codexEffort && (
+                          <Badge
+                            variant={codexEffort.explicit ? 'secondary' : 'outline'}
+                            className="text-[9px] h-4 px-1 uppercase"
+                          >
+                            {codexEffort.label}
+                          </Badge>
+                        )}
+                        {value === model.id && <Check className="w-3 h-3 text-primary ml-auto" />}
+                      </div>
+                    </SelectItem>
+                  );
+                })}
             </SelectGroup>
           )}
 

@@ -138,12 +138,12 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
       {
         id: 'gpt-5.3-codex',
         name: 'GPT-5.3 Codex',
-        description: 'Full reasoning support (xhigh)',
+        description: 'Supports up to xhigh effort',
         presetMapping: {
-          default: 'gpt-5.3-codex',
-          opus: 'gpt-5.3-codex',
+          default: 'gpt-5.3-codex-xhigh',
+          opus: 'gpt-5.3-codex-xhigh',
           sonnet: 'gpt-5.3-codex-high',
-          haiku: 'gpt-5-mini',
+          haiku: 'gpt-5-mini-medium',
         },
       },
       {
@@ -151,21 +151,21 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         name: 'GPT-5.2 Codex',
         description: 'Previous stable Codex model',
         presetMapping: {
-          default: 'gpt-5.2-codex',
-          opus: 'gpt-5.2-codex',
+          default: 'gpt-5.2-codex-xhigh',
+          opus: 'gpt-5.2-codex-xhigh',
           sonnet: 'gpt-5.2-codex-high',
-          haiku: 'gpt-5-mini',
+          haiku: 'gpt-5-mini-medium',
         },
       },
       {
         id: 'gpt-5-mini',
         name: 'GPT-5 Mini',
-        description: 'Fast, capped at high reasoning (no xhigh)',
+        description: 'Fast, capped at high effort (no xhigh)',
         presetMapping: {
-          default: 'gpt-5-mini',
-          opus: 'gpt-5.3-codex',
-          sonnet: 'gpt-5-mini',
-          haiku: 'gpt-5-mini',
+          default: 'gpt-5-mini-medium',
+          opus: 'gpt-5.3-codex-xhigh',
+          sonnet: 'gpt-5-mini-high',
+          haiku: 'gpt-5-mini-medium',
         },
       },
       {

@@ -35,6 +35,21 @@ interface SettingsFile {
   [key: string]: unknown;
 }
 
+const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+
+function hasCodexEffortSuffix(model: string): boolean {
+  return CODEX_EFFORT_SUFFIX_REGEX.test(model);
+}
+
+function normalizeCodexTierModel(
+  provider: CLIProxyProfileName | undefined,
+  model: string,
+  fallbackEffort: 'medium' | 'high' | 'xhigh'
+): string {
+  if (provider !== 'codex') return model;
+  return hasCodexEffortSuffix(model) ? model : `${model}-${fallbackEffort}`;
+}
+
 /**
  * Build settings env object for a variant
  */
@@ -44,24 +59,23 @@ function buildSettingsEnv(
   port: number = CLIPROXY_DEFAULT_PORT
 ): SettingsEnv {
   const baseEnv = getClaudeEnvVars(provider as CLIProxyProvider, port);
-  const codexSonnetModel = normalizeCodexSonnetModel(provider, model);
+  const defaultModel = normalizeCodexTierModel(provider, model, 'xhigh');
+  const opusModel = normalizeCodexTierModel(provider, model, 'xhigh');
+  const sonnetModel = normalizeCodexTierModel(provider, model, 'high');
+  const haikuModel = normalizeCodexTierModel(
+    provider,
+    baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
+    'medium'
+  );
 
   return {
     ANTHROPIC_BASE_URL: baseEnv.ANTHROPIC_BASE_URL || '',
     ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN || '',
-    ANTHROPIC_MODEL: model,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: model,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: codexSonnetModel,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
+    ANTHROPIC_MODEL: defaultModel,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel,
   };
-}
-
-function normalizeCodexSonnetModel(
-  provider: CLIProxyProfileName | undefined,
-  model: string
-): string {
-  if (provider !== 'codex') return model;
-  return /-(xhigh|high|medium)$/.test(model) ? model : `${model}-high`;
 }
 
 /**
@@ -299,10 +313,20 @@ export function updateSettingsModel(
 
     if (model) {
       settings.env = settings.env || ({} as SettingsEnv);
-      const codexSonnetModel = normalizeCodexSonnetModel(provider, model);
-      settings.env.ANTHROPIC_MODEL = model;
-      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = model;
-      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = codexSonnetModel;
+      settings.env.ANTHROPIC_MODEL = normalizeCodexTierModel(provider, model, 'xhigh');
+      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = normalizeCodexTierModel(provider, model, 'xhigh');
+      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = normalizeCodexTierModel(
+        provider,
+        model,
+        'high'
+      );
+      if (provider === 'codex' && settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL) {
+        settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = normalizeCodexTierModel(
+          provider,
+          settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+          'medium'
+        );
+      }
     } else {
       // Clear model settings to use defaults
       delete (settings.env as unknown as Record<string, string>).ANTHROPIC_MODEL;

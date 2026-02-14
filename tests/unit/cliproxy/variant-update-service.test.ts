@@ -100,7 +100,10 @@ cliproxy:
     };
 
     expect(settings.env.ANTHROPIC_BASE_URL).toContain('/api/provider/codex');
-    expect(settings.env.ANTHROPIC_MODEL).toBe('gpt-5.1-codex-mini');
+    expect(settings.env.ANTHROPIC_MODEL).toBe('gpt-5.1-codex-mini-xhigh');
+    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.1-codex-mini-xhigh');
+    expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.1-codex-mini-high');
+    expect(settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5-mini-medium');
     expect(settings.env.CUSTOM_FLAG).toBe('keep-me');
     expect(settings.hooks.PreToolUse.length).toBe(1);
 
@@ -119,7 +122,10 @@ cliproxy:
     let settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
       env: Record<string, string>;
     };
+    expect(settings.env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex-xhigh');
+    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
+    expect(settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5-mini-medium');
 
     const modelOnly = updateVariant('demo', { model: 'gpt-5.3-codex' });
     expect(modelOnly.success).toBe(true);
@@ -127,8 +133,9 @@ cliproxy:
     settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
       env: Record<string, string>;
     };
-    expect(settings.env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex');
-    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex');
+    expect(settings.env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex-xhigh');
+    expect(settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex-xhigh');
     expect(settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex-high');
+    expect(settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5-mini-medium');
   });
 });

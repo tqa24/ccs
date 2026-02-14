@@ -14,6 +14,22 @@ import { CLIProxyProvider } from './types';
 import { initUI, color, bold, dim, ok, info, header } from '../utils/ui';
 import { getCcsDir } from '../utils/config-manager';
 
+const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+
+function stripCodexEffortSuffix(model: string, provider: CLIProxyProvider): string {
+  if (provider !== 'codex') return model;
+  return model.replace(CODEX_EFFORT_SUFFIX_REGEX, '');
+}
+
+function normalizeCodexTierModel(
+  provider: CLIProxyProvider,
+  model: string,
+  fallbackEffort: 'medium' | 'high' | 'xhigh'
+): string {
+  if (provider !== 'codex') return model;
+  return CODEX_EFFORT_SUFFIX_REGEX.test(model) ? model : `${model}-${fallbackEffort}`;
+}
+
 /**
  * Check if provider has user settings configured
  */
@@ -120,7 +136,9 @@ export async function configureProviderModel(
 
   // Find default index - use current model if configured, otherwise catalog default
   const currentModel = getCurrentModel(provider, customSettingsPath);
-  const targetModel = currentModel || catalog.defaultModel;
+  const targetModel = currentModel
+    ? stripCodexEffortSuffix(currentModel, provider)
+    : catalog.defaultModel;
   const defaultIdx = catalog.models.findIndex((m) => m.id === targetModel);
   const safeDefaultIdx = defaultIdx >= 0 ? defaultIdx : 0;
 
@@ -142,10 +160,14 @@ export async function configureProviderModel(
 
   // Get base env vars for defaults
   const baseEnv = getClaudeEnvVars(provider);
-  const codexSonnetModel =
-    provider === 'codex' && !selectedModel.match(/-(xhigh|high|medium)$/)
-      ? `${selectedModel}-high`
-      : selectedModel;
+  const selectedDefaultModel = normalizeCodexTierModel(provider, selectedModel, 'xhigh');
+  const selectedOpusModel = normalizeCodexTierModel(provider, selectedModel, 'xhigh');
+  const selectedSonnetModel = normalizeCodexTierModel(provider, selectedModel, 'high');
+  const selectedHaikuModel = normalizeCodexTierModel(
+    provider,
+    baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || selectedModel,
+    'medium'
+  );
 
   // Read existing settings to preserve user customizations
   let existingSettings: Record<string, unknown> = {};
@@ -167,10 +189,10 @@ export async function configureProviderModel(
   const ccsControlledEnv: Record<string, string> = {
     ANTHROPIC_BASE_URL: baseEnv.ANTHROPIC_BASE_URL || '',
     ANTHROPIC_AUTH_TOKEN: baseEnv.ANTHROPIC_AUTH_TOKEN || '',
-    ANTHROPIC_MODEL: selectedModel,
-    ANTHROPIC_DEFAULT_OPUS_MODEL: selectedModel,
-    ANTHROPIC_DEFAULT_SONNET_MODEL: codexSonnetModel,
-    ANTHROPIC_DEFAULT_HAIKU_MODEL: baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || '',
+    ANTHROPIC_MODEL: selectedDefaultModel,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: selectedOpusModel,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: selectedSonnetModel,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: selectedHaikuModel,
   };
 
   // Merge: user env vars (preserved) + CCS controlled (override)
@@ -232,13 +254,16 @@ export async function showCurrentConfig(provider: CLIProxyProvider): Promise<voi
 
   const currentModel = getCurrentModel(provider);
   const settingsPath = getProviderSettingsPath(provider);
+  const normalizedCurrentModel = currentModel
+    ? stripCodexEffortSuffix(currentModel, provider)
+    : undefined;
 
   console.error('');
   console.error(header(`${catalog.displayName} Model Configuration`));
   console.error('');
 
   if (currentModel) {
-    const entry = catalog.models.find((m) => m.id === currentModel);
+    const entry = catalog.models.find((m) => m.id === normalizedCurrentModel);
     const displayName = entry?.name || 'Unknown';
     console.error(
       `  ${bold('Current:')} ${color(displayName, 'success')} ${dim(`(${currentModel})`)}`
@@ -255,7 +280,7 @@ export async function showCurrentConfig(provider: CLIProxyProvider): Promise<voi
   console.error(dim('  [DEPRECATED] = Not recommended for use'));
   console.error('');
   catalog.models.forEach((m) => {
-    const isCurrent = m.id === currentModel;
+    const isCurrent = m.id === normalizedCurrentModel;
     console.error(formatModelDetailed(m, isCurrent));
   });
 

@@ -132,6 +132,12 @@ export function ModelConfigSection({
         <p className="text-xs text-muted-foreground mb-4">
           Configure which models to use for each tier
         </p>
+        {provider === 'codex' && (
+          <p className="text-[11px] text-muted-foreground mb-3 rounded-md border bg-muted/30 px-2.5 py-2">
+            Codex tip: suffixes <code>-medium</code>, <code>-high</code>, and <code>-xhigh</code>{' '}
+            pin reasoning effort. Unsuffixed models use Thinking settings.
+          </p>
+        )}
         <div className="space-y-4">
           <FlexibleModelSelector
             label="Default Model"

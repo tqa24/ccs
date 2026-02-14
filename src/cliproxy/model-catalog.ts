@@ -165,7 +165,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'gpt-5.3-codex',
         name: 'GPT-5.3 Codex',
-        description: 'Full reasoning support (xhigh)',
+        description: 'Supports up to xhigh effort',
         thinking: {
           type: 'levels',
           levels: ['medium', 'high', 'xhigh'],
@@ -187,7 +187,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'gpt-5-mini',
         name: 'GPT-5 Mini',
-        description: 'Capped at high reasoning (no xhigh)',
+        description: 'Capped at high effort (no xhigh)',
         thinking: {
           type: 'levels',
           levels: ['medium', 'high'],

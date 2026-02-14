@@ -115,7 +115,12 @@ export default function ThinkingSection() {
                   Thinking budget: <strong>agy</strong>, <strong>gemini</strong> (token-based)
                 </li>
                 <li>
-                  Reasoning effort: <strong>codex</strong> (level-based: medium/high/xhigh)
+                  Reasoning effort: <strong>codex</strong> (suffix or <code>--effort</code>:
+                  medium/high/xhigh)
+                </li>
+                <li>
+                  Codex suffixes pin effort (for example <code>-high</code>); unsuffixed models use
+                  Thinking mode.
                 </li>
               </ul>
             </div>

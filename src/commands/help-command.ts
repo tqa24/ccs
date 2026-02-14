@@ -168,7 +168,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ],
     [
       ['ccs gemini', 'Google Gemini (gemini-2.5-pro or 3-pro)'],
-      ['ccs codex', 'OpenAI Codex (gpt-5.3-codex)'],
+      ['ccs codex', 'OpenAI Codex (supports -medium/-high/-xhigh model suffixes)'],
       ['ccs agy', 'Antigravity (Claude/Gemini models)'],
       ['ccs qwen', 'Qwen Code (qwen3-coder)'],
       ['ccs kiro', 'Kiro (AWS CodeWhisperer Claude models)'],
@@ -346,11 +346,12 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['--thinking <number>', 'Custom token budget (512-100000)'],
     ['', ''],
     ['--effort <level>', 'Codex alias for reasoning effort (medium/high/xhigh)'],
-    ['--effort xhigh', 'Codex 5.3 full-depth reasoning'],
+    ['--effort xhigh', 'Pin Codex effort to xhigh for this run'],
     ['', ''],
     ['Note:', 'Extended thinking allocates compute for step-by-step reasoning'],
     ['', 'before responding.'],
     ['', 'Providers: agy/gemini use --thinking, codex uses --effort (or --thinking alias).'],
+    ['', 'Codex model suffixes also pin effort: -medium / -high / -xhigh.'],
   ]);
 
   // Extended Context (1M)
