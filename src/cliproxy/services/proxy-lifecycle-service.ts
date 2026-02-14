@@ -63,6 +63,16 @@ export async function startProxy(
 }
 
 /**
+ * Start CLIProxy service (or reuse existing running instance)
+ */
+export async function startProxy(
+  port: number = CLIPROXY_DEFAULT_PORT,
+  verbose: boolean = false
+): Promise<StartProxyResult> {
+  return ensureCliproxyService(port, verbose);
+}
+
+/**
  * Check if proxy is currently running
  */
 export function isProxyRunning(): boolean {
