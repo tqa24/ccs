@@ -8,7 +8,7 @@ import * as http from 'http';
 import { Readable } from 'stream';
 import { CursorExecutor } from './cursor-executor';
 import { checkAuthStatus } from './cursor-auth';
-import { DEFAULT_CURSOR_MODEL, DEFAULT_CURSOR_MODELS } from './cursor-models';
+import { DEFAULT_CURSOR_MODEL, getModelsForDaemon } from './cursor-models';
 import type { CursorTool } from './cursor-protobuf-schema';
 
 interface DaemonRuntimeOptions {
@@ -184,7 +184,19 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
       }
 
       if (method === 'GET' && requestUrl === '/v1/models') {
-        const data = DEFAULT_CURSOR_MODELS.map((model) => ({
+        const authStatus = checkAuthStatus();
+        const models = await getModelsForDaemon({
+          credentials:
+            authStatus.authenticated && !authStatus.expired && authStatus.credentials
+              ? {
+                  accessToken: authStatus.credentials.accessToken,
+                  machineId: authStatus.credentials.machineId,
+                  ghostMode: options.ghostMode,
+                }
+              : null,
+        });
+
+        const data = models.map((model) => ({
           id: model.id,
           object: 'model',
           created: 0,

@@ -2,7 +2,8 @@
  * Unit tests for Cursor models module
  */
 
-import { describe, it, expect } from 'bun:test';
+import { describe, it, expect, beforeEach } from 'bun:test';
+import * as http from 'http';
 import {
   DEFAULT_CURSOR_MODELS,
   DEFAULT_CURSOR_PORT,
@@ -11,6 +12,9 @@ import {
   detectProvider,
   formatModelName,
   fetchModelsFromDaemon,
+  fetchModelsFromCursorApi,
+  getModelsForDaemon,
+  clearCursorModelsCache,
 } from '../../../src/cursor/cursor-models';
 
 describe('DEFAULT_CURSOR_MODELS', () => {
@@ -100,5 +104,129 @@ describe('fetchModelsFromDaemon', () => {
     const models = await fetchModelsFromDaemon(unreachablePort);
 
     expect(models).toEqual(DEFAULT_CURSOR_MODELS);
+  });
+});
+
+describe('fetchModelsFromCursorApi', () => {
+  it('parses model list from API response', async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: [
+            { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', provider: 'openai' },
+            { id: 'claude-4.6-opus', name: 'Claude 4.6 Opus', provider: 'anthropic' },
+          ],
+        })
+      );
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const models = await fetchModelsFromCursorApi(
+        {
+          accessToken: 'test-token-123',
+          machineId: '1234567890abcdef1234567890abcdef',
+        },
+        {
+          endpoint: `http://127.0.0.1:${address.port}/v1/models`,
+          timeoutMs: 2000,
+        }
+      );
+
+      expect(models).not.toBeNull();
+      expect(models?.[0].id).toBe('gpt-5.3-codex');
+      expect(models?.[1].id).toBe('claude-4.6-opus');
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('returns null for non-200 responses', async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'forbidden' }));
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const models = await fetchModelsFromCursorApi(
+        {
+          accessToken: 'test-token-123',
+          machineId: '1234567890abcdef1234567890abcdef',
+        },
+        {
+          endpoint: `http://127.0.0.1:${address.port}/v1/models`,
+          timeoutMs: 2000,
+        }
+      );
+
+      expect(models).toBeNull();
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
+
+describe('getModelsForDaemon', () => {
+  beforeEach(() => {
+    clearCursorModelsCache();
+  });
+
+  it('falls back to defaults without credentials', async () => {
+    const models = await getModelsForDaemon();
+    expect(models).toEqual(DEFAULT_CURSOR_MODELS);
+  });
+
+  it('uses cached live models when endpoint becomes unavailable', async () => {
+    const liveModelId = 'test-live-model';
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: [{ id: liveModelId, name: 'Live Model', provider: 'openai' }],
+        })
+      );
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    const endpoint = `http://127.0.0.1:${address.port}/v1/models`;
+
+    try {
+      const first = await getModelsForDaemon({
+        credentials: {
+          accessToken: 'test-token-123',
+          machineId: '1234567890abcdef1234567890abcdef',
+        },
+        endpoint,
+        timeoutMs: 2000,
+      });
+
+      expect(first[0]?.id).toBe(liveModelId);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+
+    const second = await getModelsForDaemon({
+      endpoint: 'http://127.0.0.1:9/v1/models',
+      timeoutMs: 250,
+    });
+
+    expect(second[0]?.id).toBe(liveModelId);
   });
 });

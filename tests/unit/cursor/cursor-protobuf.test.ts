@@ -531,6 +531,28 @@ describe('CursorExecutor', () => {
       const body = JSON.parse(bodyText);
       expect(body.error.type).toBe('rate_limit_error');
     });
+
+    it('should surface reasoning_content when thinking payload is present', async () => {
+      const textContent = 'Final answer';
+      const thinkingContent = 'Internal reasoning trail';
+      const thinkingField = encodeField(FIELD.Thinking.TEXT, WIRE_TYPE.LEN, thinkingContent);
+      const chatResponse = concatArrays(
+        encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, textContent),
+        encodeField(FIELD.ChatResponse.THINKING, WIRE_TYPE.LEN, thinkingField)
+      );
+      const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, chatResponse);
+      const frame = wrapConnectRPCFrame(responseMsg, false);
+
+      const result = executor.transformProtobufToJSON(Buffer.from(frame), 'gpt-4', {
+        messages: [],
+      });
+
+      expect(result.status).toBe(200);
+      const bodyText = await result.text();
+      const body = JSON.parse(bodyText);
+      expect(body.choices[0].message.content).toBe(textContent);
+      expect(body.choices[0].message.reasoning_content).toBe(thinkingContent);
+    });
   });
 
   describe('transformProtobufToSSE', () => {
@@ -571,6 +593,23 @@ describe('CursorExecutor', () => {
       const bodyText = await result.text();
       const body = JSON.parse(bodyText);
       expect(body.error.type).toBe('rate_limit_error');
+    });
+
+    it('should emit reasoning_content deltas for thinking payloads', async () => {
+      const thinkingContent = 'Deliberate reasoning';
+      const thinkingField = encodeField(FIELD.Thinking.TEXT, WIRE_TYPE.LEN, thinkingContent);
+      const chatResponse = encodeField(FIELD.ChatResponse.THINKING, WIRE_TYPE.LEN, thinkingField);
+      const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, chatResponse);
+      const frame = wrapConnectRPCFrame(responseMsg, false);
+
+      const result = executor.transformProtobufToSSE(Buffer.from(frame), 'gpt-4', {
+        messages: [],
+      });
+
+      expect(result.status).toBe(200);
+      const bodyText = await result.text();
+      expect(bodyText).toContain('reasoning_content');
+      expect(bodyText).toContain(thinkingContent);
     });
   });
 
@@ -672,6 +711,16 @@ function buildFrame(payload: Uint8Array, flags = 0): Buffer {
  */
 function buildTextFrame(text: string): Buffer {
   const responseField = encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, text);
+  const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, responseField);
+  return buildFrame(responseMsg);
+}
+
+/**
+ * Helper: build a protobuf thinking response frame
+ */
+function buildThinkingFrame(thinking: string): Buffer {
+  const thinkingField = encodeField(FIELD.Thinking.TEXT, WIRE_TYPE.LEN, thinking);
+  const responseField = encodeField(FIELD.ChatResponse.THINKING, WIRE_TYPE.LEN, thinkingField);
   const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, responseField);
   return buildFrame(responseMsg);
 }
@@ -781,6 +830,18 @@ describe('StreamingFrameParser', () => {
     if (results2[0].type === 'error') {
       expect(results2[0].status).toBe(429);
       expect(results2[0].errorType).toBe('rate_limit_error');
+    }
+  });
+
+  it('should parse thinking frames', () => {
+    const parser = new StreamingFrameParser();
+    const frame = buildThinkingFrame('Think step by step');
+    const results = parser.push(frame);
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('thinking');
+    if (results[0].type === 'thinking') {
+      expect(results[0].text).toBe('Think step by step');
     }
   });
 

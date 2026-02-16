@@ -59,6 +59,7 @@ ccs cursor stop
 - Default port: `20129`
 - `ghost_mode`: enabled
 - `auto_start`: disabled
+- Model list resolution: authenticated live fetch when available, with cached/default fallback.
 
 These values are managed in unified config and can be updated from CLI or dashboard.
 

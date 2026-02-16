@@ -3,11 +3,11 @@
  * Handles HTTP/2 requests to Cursor API with protobuf encoding/decoding
  */
 
-import * as crypto from 'crypto';
 import type { IncomingHttpHeaders } from 'http';
 import { generateCursorBody, extractTextFromResponse } from './cursor-protobuf.js';
 import { buildCursorRequest } from './cursor-translator.js';
 import type { CursorTool, CursorCredentials } from './cursor-protobuf-schema.js';
+import { buildCursorConnectHeaders, generateCursorChecksum } from './cursor-client-policy.js';
 
 import { StreamingFrameParser, decompressPayload } from './cursor-stream-parser.js';
 
@@ -92,8 +92,6 @@ function createErrorResponse(jsonError: {
 export class CursorExecutor {
   private readonly baseUrl = 'https://api2.cursor.sh';
   private readonly chatPath = '/aiserver.v1.AiService/StreamChat';
-  private readonly CURSOR_CLIENT_VERSION = '2.3.41';
-  private readonly CURSOR_USER_AGENT = 'connect-es/1.6.1';
 
   buildUrl(): string {
     return `${this.baseUrl}${this.chatPath}`;
@@ -103,87 +101,11 @@ export class CursorExecutor {
    * Generate checksum using Jyh cipher (time-based XOR with rolling key seed=165)
    */
   generateChecksum(machineId: string): string {
-    const timestamp = Math.floor(Date.now() / 1000000);
-    // JS bitwise shifts wrap modulo 32, so >>40 and >>32 give wrong results.
-    // Use Math.trunc division for upper bytes that exceed 32-bit range.
-    const byteArray = new Uint8Array([
-      Math.trunc(timestamp / 2 ** 40) & 0xff,
-      Math.trunc(timestamp / 2 ** 32) & 0xff,
-      (timestamp >>> 24) & 0xff,
-      (timestamp >>> 16) & 0xff,
-      (timestamp >>> 8) & 0xff,
-      timestamp & 0xff,
-    ]);
-
-    let t = 165;
-    for (let i = 0; i < byteArray.length; i++) {
-      byteArray[i] = ((byteArray[i] ^ t) + (i % 256)) & 0xff;
-      t = byteArray[i];
-    }
-
-    const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
-    let encoded = '';
-
-    for (let i = 0; i < byteArray.length; i += 3) {
-      const a = byteArray[i];
-      const b = i + 1 < byteArray.length ? byteArray[i + 1] : 0;
-      const c = i + 2 < byteArray.length ? byteArray[i + 2] : 0;
-
-      encoded += alphabet[a >> 2];
-      encoded += alphabet[((a & 3) << 4) | (b >> 4)];
-
-      if (i + 1 < byteArray.length) {
-        encoded += alphabet[((b & 15) << 2) | (c >> 6)];
-      }
-      if (i + 2 < byteArray.length) {
-        encoded += alphabet[c & 63];
-      }
-    }
-
-    return `${encoded}${machineId}`;
+    return generateCursorChecksum(machineId);
   }
 
   buildHeaders(credentials: CursorCredentials): Record<string, string> {
-    const accessToken = credentials.accessToken;
-    const machineId = credentials.machineId;
-    const ghostMode = credentials.ghostMode !== false;
-
-    if (!machineId) {
-      throw new Error('Machine ID is required for Cursor API');
-    }
-
-    const delimIdx = accessToken.indexOf('::');
-    const cleanToken = delimIdx !== -1 ? accessToken.slice(delimIdx + 2) : accessToken;
-
-    if (!cleanToken) {
-      throw new Error('Access token is empty after parsing');
-    }
-
-    return {
-      authorization: `Bearer ${cleanToken}`,
-      'connect-accept-encoding': 'gzip',
-      'connect-protocol-version': '1',
-      'content-type': 'application/connect+proto',
-      'user-agent': this.CURSOR_USER_AGENT,
-      'x-amzn-trace-id': `Root=${crypto.randomUUID()}`,
-      'x-client-key': crypto.createHash('sha256').update(cleanToken).digest('hex'),
-      'x-cursor-checksum': this.generateChecksum(machineId),
-      'x-cursor-client-version': this.CURSOR_CLIENT_VERSION,
-      'x-cursor-client-type': 'ide',
-      'x-cursor-client-os':
-        process.platform === 'win32'
-          ? 'windows'
-          : process.platform === 'darwin'
-            ? 'macos'
-            : 'linux',
-      'x-cursor-client-arch': process.arch === 'arm64' ? 'aarch64' : 'x64',
-      'x-cursor-client-device-type': 'desktop',
-      'x-cursor-config-version': crypto.randomUUID(),
-      'x-cursor-timezone': Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-      'x-ghost-mode': ghostMode ? 'true' : 'false',
-      'x-request-id': crypto.randomUUID(),
-      'x-session-id': crypto.createHash('sha256').update(cleanToken).digest('hex').substring(0, 36),
-    };
+    return buildCursorConnectHeaders(credentials);
   }
 
   transformRequest(
@@ -589,6 +511,15 @@ export class CursorExecutor {
                   emitSSE(buildChunk(delta, null));
                   chunkCount++;
                 }
+
+                if (frame.type === 'thinking') {
+                  const delta =
+                    chunkCount === 0 && toolCallCount === 0
+                      ? { role: 'assistant', reasoning_content: frame.text }
+                      : { reasoning_content: frame.text };
+                  emitSSE(buildChunk(delta, null));
+                  chunkCount++;
+                }
               }
             });
 
@@ -659,6 +590,7 @@ export class CursorExecutor {
   private *parseProtobufFrames(buffer: Buffer): Generator<
     | { type: 'error'; response: Response }
     | { type: 'text'; text: string }
+    | { type: 'thinking'; text: string }
     | {
         type: 'toolCall';
         toolCall: {
@@ -732,6 +664,10 @@ export class CursorExecutor {
       if (result.text) {
         yield { type: 'text', text: result.text };
       }
+
+      if (result.thinking) {
+        yield { type: 'thinking', text: result.thinking };
+      }
     }
   }
 
@@ -740,6 +676,7 @@ export class CursorExecutor {
     const created = Math.floor(Date.now() / 1000);
 
     let totalContent = '';
+    let totalReasoning = '';
     const toolCalls: Array<{
       id: string;
       type: string;
@@ -793,6 +730,10 @@ export class CursorExecutor {
       if (frame.type === 'text') {
         totalContent += frame.text;
       }
+
+      if (frame.type === 'thinking') {
+        totalReasoning += frame.text;
+      }
     }
 
     // Finalize remaining tool calls
@@ -814,6 +755,7 @@ export class CursorExecutor {
     const message: {
       role: string;
       content: string | null;
+      reasoning_content?: string | null;
       tool_calls?: Array<{
         id: string;
         type: string;
@@ -826,6 +768,10 @@ export class CursorExecutor {
 
     if (toolCalls.length > 0) {
       message.tool_calls = toolCalls;
+    }
+
+    if (totalReasoning) {
+      message.reasoning_content = totalReasoning;
     }
 
     const completion = {
@@ -986,6 +932,27 @@ export class CursorExecutor {
                   chunks.length === 0 && toolCalls.length === 0
                     ? { role: 'assistant', content: frame.text }
                     : { content: frame.text },
+                finish_reason: null,
+              },
+            ],
+          })}\n\n`
+        );
+      }
+
+      if (frame.type === 'thinking') {
+        chunks.push(
+          `data: ${JSON.stringify({
+            id: responseId,
+            object: 'chat.completion.chunk',
+            created,
+            model,
+            choices: [
+              {
+                index: 0,
+                delta:
+                  chunks.length === 0 && toolCalls.length === 0
+                    ? { role: 'assistant', reasoning_content: frame.text }
+                    : { reasoning_content: frame.text },
                 finish_reason: null,
               },
             ],

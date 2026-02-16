@@ -153,6 +153,13 @@ describe('startDaemon', () => {
       const running = await isDaemonRunning(port);
       expect(running).toBe(true);
 
+      // Verify models endpoint exists and is OpenAI-compatible list shape
+      const modelsResponse = await fetch(`http://127.0.0.1:${port}/v1/models`);
+      expect(modelsResponse.status).toBe(200);
+      const modelsJson = (await modelsResponse.json()) as { object?: string; data?: unknown[] };
+      expect(modelsJson.object).toBe('list');
+      expect(Array.isArray(modelsJson.data)).toBe(true);
+
       // Verify chat endpoint exists (requires auth, should not be 404)
       const chatResponse = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
         method: 'POST',
