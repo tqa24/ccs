@@ -312,6 +312,13 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['ccsd <profile> [args]', 'Shorthand for: ccs <profile> --target droid'],
   ]);
 
+  // Multi-target examples
+  printSubSection('Multi-Target', [
+    ['ccs glm --target droid', 'Run GLM profile on Droid CLI'],
+    ['ccsd glm', 'Same as above (alias)'],
+    ['ccs glm', 'Run GLM profile on Claude Code (default)'],
+  ]);
+
   // Configuration
   printConfigSection('Configuration', [
     ['Config File:', isUnifiedMode() ? `${dirDisplay}/config.yaml` : `${dirDisplay}/config.json`],

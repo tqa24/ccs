@@ -11,6 +11,7 @@ import { TargetAdapter, TargetBinaryInfo, TargetCredentials, TargetType } from '
 import { getDroidBinaryInfo, detectDroidCli, checkDroidVersion } from './droid-detector';
 import { upsertCcsModel } from './droid-config-manager';
 import { escapeShellArg } from '../utils/shell-executor';
+import { forwardSignals } from '../utils/signal-forwarder';
 
 export class DroidAdapter implements TargetAdapter {
   readonly type: TargetType = 'droid';
@@ -118,24 +119,7 @@ export class DroidAdapter implements TargetAdapter {
       });
     }
 
-    const forwardSigInt = () => {
-      if (!child.killed) child.kill('SIGINT');
-    };
-    const forwardSigTerm = () => {
-      if (!child.killed) child.kill('SIGTERM');
-    };
-    const forwardSighup = () => {
-      if (!child.killed) child.kill('SIGHUP');
-    };
-    process.on('SIGINT', forwardSigInt);
-    process.on('SIGTERM', forwardSigTerm);
-    process.on('SIGHUP', forwardSighup);
-
-    const cleanupSignalHandlers = () => {
-      process.removeListener('SIGINT', forwardSigInt);
-      process.removeListener('SIGTERM', forwardSigTerm);
-      process.removeListener('SIGHUP', forwardSighup);
-    };
+    const cleanupSignalHandlers = forwardSignals(child);
 
     child.on('exit', (code, signal) => {
       cleanupSignalHandlers();

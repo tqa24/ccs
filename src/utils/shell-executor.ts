@@ -7,6 +7,7 @@
 import { spawn, spawnSync, ChildProcess } from 'child_process';
 import { ErrorManager } from './error-manager';
 import { getWebSearchHookEnv } from './websearch-manager';
+import { forwardSignals } from './signal-forwarder';
 
 /**
  * Strip ANTHROPIC_* env vars from an environment object.
@@ -127,24 +128,7 @@ export function execClaude(
     });
   }
 
-  const forwardSigInt = () => {
-    if (!child.killed) child.kill('SIGINT');
-  };
-  const forwardSigTerm = () => {
-    if (!child.killed) child.kill('SIGTERM');
-  };
-  const forwardSighup = () => {
-    if (!child.killed) child.kill('SIGHUP');
-  };
-  process.on('SIGINT', forwardSigInt);
-  process.on('SIGTERM', forwardSigTerm);
-  process.on('SIGHUP', forwardSighup);
-
-  const cleanupSignalHandlers = () => {
-    process.removeListener('SIGINT', forwardSigInt);
-    process.removeListener('SIGTERM', forwardSigTerm);
-    process.removeListener('SIGHUP', forwardSighup);
-  };
+  const cleanupSignalHandlers = forwardSignals(child);
 
   child.on('exit', (code, signal) => {
     cleanupSignalHandlers();

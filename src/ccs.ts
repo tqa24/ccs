@@ -725,7 +725,7 @@ async function main(): Promise<void> {
 
     // For non-claude targets, verify target binary exists once and pass it through.
     const targetBinaryInfo = targetAdapter?.detectBinary() ?? null;
-    if (resolvedTarget !== 'claude' && (!targetAdapter || !targetBinaryInfo)) {
+    if (resolvedTarget !== 'claude' && !targetBinaryInfo) {
       const displayName = targetAdapter?.displayName || resolvedTarget;
       console.error(fail(`${displayName} CLI not found.`));
       if (resolvedTarget === 'droid') {
@@ -759,17 +759,6 @@ async function main(): Promise<void> {
     }
 
     if (profileInfo.type === 'cliproxy') {
-      // Guard: non-claude targets don't support CLIProxy flow yet
-      if (resolvedTarget !== 'claude') {
-        if (!targetAdapter?.supportsProfileType('cliproxy')) {
-          console.error(
-            fail(`${targetAdapter?.displayName || 'Target'} does not support CLIProxy profiles`)
-          );
-          console.error(info('Use a settings-based profile with --target instead'));
-          process.exit(1);
-        }
-      }
-
       // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy, qwen) or user-defined variants
       // Inject WebSearch hook into profile settings before launch
       ensureProfileHooks(profileInfo.name);
@@ -788,16 +777,6 @@ async function main(): Promise<void> {
         profileName: profileInfo.name,
       });
     } else if (profileInfo.type === 'copilot') {
-      // Guard: non-claude targets don't support Copilot flow
-      if (resolvedTarget !== 'claude') {
-        if (!targetAdapter?.supportsProfileType('copilot')) {
-          console.error(
-            fail(`${targetAdapter?.displayName || 'Target'} does not support Copilot profiles`)
-          );
-          process.exit(1);
-        }
-      }
-
       // COPILOT FLOW: GitHub Copilot subscription via copilot-api proxy
       // Inject WebSearch hook into profile settings before launch
       ensureProfileHooks(profileInfo.name);
@@ -943,19 +922,6 @@ async function main(): Promise<void> {
         execClaude(claudeCli, ['--settings', expandedSettingsPath, ...remainingArgs], envVars);
       }
     } else if (profileInfo.type === 'account') {
-      // Guard: non-claude targets don't support account profiles
-      if (resolvedTarget !== 'claude') {
-        if (!targetAdapter?.supportsProfileType('account')) {
-          console.error(
-            fail(
-              `${targetAdapter?.displayName || 'Target'} does not support account-based profiles`
-            )
-          );
-          console.error(info('Use a settings-based profile with --target instead'));
-          process.exit(1);
-        }
-      }
-
       // NEW FLOW: Account-based profile (work, personal)
       // All platforms: Use instance isolation with CLAUDE_CONFIG_DIR
       const registry = new ProfileRegistry();

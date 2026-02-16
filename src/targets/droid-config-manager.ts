@@ -12,6 +12,11 @@ import * as lockfile from 'proper-lockfile';
 
 const CCS_MODEL_PREFIX = 'ccs-';
 
+/** Lock configuration for concurrent write safety */
+const LOCK_STALE_MS = 10000;
+const LOCK_RETRY_MIN_MS = 200;
+const LOCK_RETRY_MAX_MS = 1000;
+
 /**
  * Validate profile name to prevent filesystem/security issues.
  * Only alphanumeric, underscore, hyphen allowed.
@@ -104,8 +109,11 @@ function getSettingsPath(): string {
  */
 function ensureFactoryDir(): void {
   const dir = getFactoryDir();
-  if (!fs.existsSync(dir)) {
+  try {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException;
+    if (error.code !== 'EEXIST') throw error;
   }
 }
 
@@ -181,8 +189,8 @@ async function acquireFactoryLock(retries: number): Promise<() => Promise<void>>
   const factoryDir = getFactoryDir();
   try {
     return await lockfile.lock(factoryDir, {
-      stale: 10000,
-      retries: { retries, minTimeout: 200, maxTimeout: 1000 },
+      stale: LOCK_STALE_MS,
+      retries: { retries, minTimeout: LOCK_RETRY_MIN_MS, maxTimeout: LOCK_RETRY_MAX_MS },
     });
   } catch (error) {
     throw new Error(
