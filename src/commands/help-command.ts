@@ -301,9 +301,15 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   // Flags
   printSubSection('Flags', [
     ['--config-dir <path>', 'Use custom CCS config directory'],
+    ['--target <cli>', 'Target CLI: claude (default), droid'],
     ['-h, --help', 'Show this help message'],
     ['-v, --version', 'Show version and installation info'],
     ['-sc, --shell-completion', 'Install shell auto-completion'],
+  ]);
+
+  // Aliases
+  printSubSection('Aliases', [
+    ['ccsd <profile> [args]', 'Shorthand for: ccs <profile> --target droid'],
   ]);
 
   // Configuration

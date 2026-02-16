@@ -31,6 +31,8 @@ interface SessionLock {
   version?: string;
   /** Backend type running (original vs plus) */
   backend?: 'original' | 'plus';
+  /** Target CLI used for this session (default: 'claude') */
+  target?: string;
 }
 
 /** Generate unique session ID */

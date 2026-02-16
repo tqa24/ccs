@@ -56,6 +56,16 @@ src/
 │   ├── update-command.ts     # Self-update logic
 │   └── version-command.ts    # Version display
 │
+├── targets/                  # Multi-target adapter system (NEW)
+│   ├── index.ts              # Barrel export
+│   ├── target-adapter.ts     # TargetAdapter interface contract
+│   ├── target-registry.ts    # Registry for runtime adapter lookup
+│   ├── target-resolver.ts    # Resolution logic (flag > config > argv[0])
+│   ├── claude-adapter.ts     # Claude Code CLI implementation
+│   ├── droid-adapter.ts      # Factory Droid CLI implementation
+│   ├── droid-detector.ts     # Droid binary detection & version checks
+│   └── droid-config-manager.ts  # ~/.factory/settings.json management
+│
 ├── auth/                     # Authentication module
 │   ├── index.ts              # Barrel export
 │   ├── commands/             # Auth-specific CLI commands
@@ -181,6 +191,7 @@ src/
 | Category | Directories | Purpose |
 |----------|-------------|---------|
 | Core | `commands/`, `errors/` | CLI commands, error handling |
+| Targets | `targets/` | Multi-CLI adapter pattern (Claude Code, Factory Droid, extensible) |
 | Auth | `auth/`, `cliproxy/auth/` | Authentication across providers |
 | Config | `config/`, `types/` | Configuration & type definitions |
 | Providers | `cliproxy/`, `copilot/`, `glmt/` | Provider integrations (7 CLIProxy providers: gemini, codex, agy, qwen, iflow, kiro, ghcp) |
@@ -189,6 +200,47 @@ src/
 | Image Analysis | `utils/image-analysis/`, `utils/hooks/` | Vision model proxying (v7.34) |
 | Services | `web-server/`, `api/` | HTTP server, API services |
 | Utilities | `utils/`, `management/` | Helpers, diagnostics |
+
+### Target Adapter Module
+
+The targets module provides an extensible interface for dispatching profiles to different CLI implementations.
+
+**Key components:**
+
+1. **TargetAdapter Interface** - Contract that each CLI implementation must fulfill:
+   - `detectBinary()` - Find CLI binary on system (platform-specific)
+   - `prepareCredentials()` - Deliver credentials (env vars vs config file writes)
+   - `buildArgs()` - Construct target-specific argument list
+   - `buildEnv()` - Construct environment for target CLI
+   - `exec()` - Spawn target process (cross-platform)
+   - `supportsProfileType()` - Verify profile compatibility
+
+2. **Target Resolution** - Priority order:
+   - `--target <cli>` flag (CLI argument)
+   - Per-profile `target` field (from config.yaml)
+   - `argv[0]` detection (busybox pattern: `ccsd` → droid)
+   - Default: `claude`
+
+3. **Implementations:**
+   - **ClaudeAdapter** - Wraps existing behavior; delivers credentials via environment variables
+   - **DroidAdapter** - New; writes to ~/.factory/settings.json and spawns with `-m custom:ccs-<profile>` flag
+
+4. **Registry** - Map-based lookup (O(1)) for registered adapters at runtime
+
+**Usage flow:**
+```
+Profile resolution (existing)
+  ↓
+Target resolution (via resolver.ts)
+  ↓
+Get adapter from registry
+  ↓
+Prepare credentials (adapter.prepareCredentials)
+  ↓
+Build args & env (adapter.buildArgs, buildEnv)
+  ↓
+Spawn target CLI (adapter.exec)
+```
 
 ---
 

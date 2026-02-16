@@ -38,6 +38,16 @@ import { handleUpdateCommand } from './commands/update-command';
 // Import extracted utility functions
 import { execClaude, escapeShellArg } from './utils/shell-executor';
 
+// Import target adapter system
+import {
+  registerTarget,
+  getTarget,
+  ClaudeAdapter,
+  DroidAdapter,
+  type TargetCredentials,
+} from './targets';
+import { resolveTargetType, stripTargetFlag } from './targets/target-resolver';
+
 // Version and Update check utilities
 import { getVersion } from './utils/version';
 import {
@@ -264,6 +274,10 @@ async function showCachedUpdateNotification(): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  // Register target adapters
+  registerTarget(new ClaudeAdapter());
+  registerTarget(new DroidAdapter());
+
   const args = process.argv.slice(2);
 
   // Initialize UI colors early to ensure consistent colored output
@@ -599,14 +613,34 @@ async function main(): Promise<void> {
     console.log('');
   }
 
-  // Detect profile
-  const { profile, remainingArgs } = detectProfile(args);
+  // Detect profile (strip --target from args before profile detection)
+  const cleanArgs = stripTargetFlag(args);
+  const { profile, remainingArgs } = detectProfile(cleanArgs);
 
-  // Detect Claude CLI first (needed for all paths)
-  const claudeCli = detectClaudeCli();
-  if (!claudeCli) {
+  // Resolve target CLI (--target flag > per-profile config > argv[0] > 'claude')
+  const resolvedTarget = resolveTargetType(args);
+
+  // Detect Claude CLI (needed for claude target and CLIProxy flows)
+  const claudeCliRaw = detectClaudeCli();
+  if (resolvedTarget === 'claude' && !claudeCliRaw) {
     await ErrorManager.showClaudeNotFound();
     process.exit(1);
+  }
+  // For claude target, claudeCli is guaranteed non-null after the check above.
+  // For non-claude targets, CLIProxy flows still need Claude CLI — warn if missing.
+  const claudeCli = claudeCliRaw || '';
+
+  // For non-claude targets, verify target binary exists
+  if (resolvedTarget !== 'claude') {
+    const adapter = getTarget(resolvedTarget);
+    const binaryInfo = adapter.detectBinary();
+    if (!binaryInfo) {
+      console.error(fail(`${adapter.displayName} CLI not found.`));
+      if (resolvedTarget === 'droid') {
+        console.error(info('Install: npm i -g @factory/cli'));
+      }
+      process.exit(1);
+    }
   }
 
   // Use ProfileDetector to determine profile type
@@ -623,6 +657,14 @@ async function main(): Promise<void> {
     const profileInfo = detector.detectProfileType(profile);
 
     if (profileInfo.type === 'cliproxy') {
+      // Guard: non-claude targets don't support CLIProxy flow yet
+      if (resolvedTarget !== 'claude') {
+        const adapter = getTarget(resolvedTarget);
+        console.error(fail(`${adapter.displayName} does not support CLIProxy profiles yet`));
+        console.error(info('Use a settings-based profile with --target instead'));
+        process.exit(1);
+      }
+
       // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy, qwen) or user-defined variants
       // Inject WebSearch hook into profile settings before launch
       ensureProfileHooks(profileInfo.name);
@@ -641,6 +683,13 @@ async function main(): Promise<void> {
         profileName: profileInfo.name,
       });
     } else if (profileInfo.type === 'copilot') {
+      // Guard: non-claude targets don't support Copilot flow
+      if (resolvedTarget !== 'claude') {
+        const adapter = getTarget(resolvedTarget);
+        console.error(fail(`${adapter.displayName} does not support Copilot profiles`));
+        process.exit(1);
+      }
+
       // COPILOT FLOW: GitHub Copilot subscription via copilot-api proxy
       // Inject WebSearch hook into profile settings before launch
       ensureProfileHooks(profileInfo.name);
@@ -721,6 +770,12 @@ async function main(): Promise<void> {
 
       // Check if this is GLMT profile (requires proxy)
       if (profileInfo.name === 'glmt') {
+        // Guard: non-claude targets don't support GLMT proxy flow
+        if (resolvedTarget !== 'claude') {
+          const adapter = getTarget(resolvedTarget);
+          console.error(fail(`${adapter.displayName} does not support GLMT proxy profiles`));
+          process.exit(1);
+        }
         // GLMT FLOW: Settings-based with embedded proxy for thinking support
         await execClaudeWithProxy(claudeCli, profileInfo.name, remainingArgs);
       } else {
@@ -753,9 +808,34 @@ async function main(): Promise<void> {
           ...imageAnalysisEnv,
           CCS_PROFILE_TYPE: 'settings', // Signal to WebSearch hook this is a third-party provider
         };
+
+        // Dispatch through target adapter for non-claude targets
+        if (resolvedTarget !== 'claude') {
+          const adapter = getTarget(resolvedTarget);
+          const creds: TargetCredentials = {
+            profile: profileInfo.name,
+            baseUrl: settingsEnv['ANTHROPIC_BASE_URL'] || '',
+            apiKey: settingsEnv['ANTHROPIC_AUTH_TOKEN'] || '',
+            model: settingsEnv['ANTHROPIC_MODEL'],
+          };
+          await adapter.prepareCredentials(creds);
+          const targetArgs = adapter.buildArgs(profileInfo.name, remainingArgs);
+          const targetEnv = adapter.buildEnv(creds, profileInfo.type);
+          adapter.exec(targetArgs, targetEnv);
+          return;
+        }
+
         execClaude(claudeCli, ['--settings', expandedSettingsPath, ...remainingArgs], envVars);
       }
     } else if (profileInfo.type === 'account') {
+      // Guard: non-claude targets don't support account profiles
+      if (resolvedTarget !== 'claude') {
+        const adapter = getTarget(resolvedTarget);
+        console.error(fail(`${adapter.displayName} does not support account-based profiles`));
+        console.error(info('Use a settings-based profile with --target instead'));
+        process.exit(1);
+      }
+
       // NEW FLOW: Account-based profile (work, personal)
       // All platforms: Use instance isolation with CLAUDE_CONFIG_DIR
       const registry = new ProfileRegistry();
@@ -790,6 +870,19 @@ async function main(): Promise<void> {
         CCS_WEBSEARCH_SKIP: '1',
         CCS_IMAGE_ANALYSIS_SKIP: '1',
       };
+
+      // Dispatch through target adapter for non-claude targets
+      if (resolvedTarget !== 'claude') {
+        const adapter = getTarget(resolvedTarget);
+        const targetArgs = adapter.buildArgs('default', remainingArgs);
+        const targetEnv = adapter.buildEnv(
+          { profile: 'default', baseUrl: '', apiKey: '' },
+          'default'
+        );
+        adapter.exec(targetArgs, targetEnv);
+        return;
+      }
+
       execClaude(claudeCli, remainingArgs, envVars);
     }
   } catch (error) {
