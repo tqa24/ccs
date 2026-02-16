@@ -237,6 +237,42 @@ describe('aggregateSessionUsage', () => {
     expect(result[1].sessionId).toBe('old-session');
   });
 
+  test('propagates target metadata into session usage', () => {
+    const entries: RawUsageEntry[] = [
+      createEntry({ sessionId: 'session-A', target: 'droid' }),
+      createEntry({ sessionId: 'session-B' }),
+    ];
+
+    const result = aggregateSessionUsage(entries);
+    const sessionA = result.find((s) => s.sessionId === 'session-A');
+    const sessionB = result.find((s) => s.sessionId === 'session-B');
+
+    expect(sessionA?.target).toBe('droid');
+    expect(sessionB?.target).toBeUndefined();
+  });
+
+  test('uses latest timestamp target when a session has mixed targets', () => {
+    const entries: RawUsageEntry[] = [
+      createEntry({
+        sessionId: 'session-A',
+        timestamp: '2025-12-09T10:00:00.000Z',
+        target: 'claude',
+      }),
+      createEntry({
+        sessionId: 'session-A',
+        timestamp: '2025-12-09T12:00:00.000Z',
+        target: 'droid',
+      }),
+      createEntry({
+        sessionId: 'session-A',
+        timestamp: '2025-12-09T11:00:00.000Z',
+      }),
+    ];
+
+    const result = aggregateSessionUsage(entries);
+    expect(result[0].target).toBe('droid');
+  });
+
   test('returns empty array for no entries', () => {
     const result = aggregateSessionUsage([]);
     expect(result.length).toBe(0);

@@ -301,9 +301,22 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   // Flags
   printSubSection('Flags', [
     ['--config-dir <path>', 'Use custom CCS config directory'],
+    ['--target <cli>', 'Target CLI: claude (default), droid'],
     ['-h, --help', 'Show this help message'],
     ['-v, --version', 'Show version and installation info'],
     ['-sc, --shell-completion', 'Install shell auto-completion'],
+  ]);
+
+  // Aliases
+  printSubSection('Aliases', [
+    ['ccsd <profile> [args]', 'Shorthand for: ccs <profile> --target droid'],
+  ]);
+
+  // Multi-target examples
+  printSubSection('Multi-Target', [
+    ['ccs glm --target droid', 'Run GLM profile on Droid CLI'],
+    ['ccsd glm', 'Same as above (alias)'],
+    ['ccs glm', 'Run GLM profile on Claude Code (default)'],
   ]);
 
   // Configuration

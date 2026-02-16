@@ -1,0 +1,131 @@
+/**
+ * Claude Adapter
+ *
+ * TargetAdapter implementation for Claude Code CLI.
+ * Wraps existing detection, spawning, and execution logic.
+ */
+
+import { spawn, ChildProcess } from 'child_process';
+import { TargetAdapter, TargetBinaryInfo, TargetCredentials, TargetType } from './target-adapter';
+import { detectClaudeCli, getClaudeCliInfo } from '../utils/claude-detector';
+import type { ProfileType } from '../types/profile';
+import { escapeShellArg, stripAnthropicEnv } from '../utils/shell-executor';
+import { ErrorManager } from '../utils/error-manager';
+import { getWebSearchHookEnv } from '../utils/websearch-manager';
+import { wireChildProcessSignals } from '../utils/signal-forwarder';
+
+export class ClaudeAdapter implements TargetAdapter {
+  readonly type: TargetType = 'claude';
+  readonly displayName = 'Claude Code';
+
+  detectBinary(): TargetBinaryInfo | null {
+    const info = getClaudeCliInfo();
+    if (!info) return null;
+    return { path: info.path, needsShell: info.needsShell };
+  }
+
+  /**
+   * Claude uses env vars for credential delivery — no config file writes needed.
+   */
+  async prepareCredentials(_creds: TargetCredentials): Promise<void> {
+    // No-op: Claude receives credentials via environment variables
+  }
+
+  buildArgs(_profile: string, userArgs: string[]): string[] {
+    return userArgs;
+  }
+
+  buildEnv(creds: TargetCredentials, profileType: ProfileType): NodeJS.ProcessEnv {
+    const webSearchEnv = getWebSearchHookEnv();
+
+    // For account/default profiles, strip ANTHROPIC_* from parent env to prevent
+    // stale proxy config from interfering with native Claude API routing.
+    const baseEnv =
+      profileType === 'account' || profileType === 'default'
+        ? stripAnthropicEnv(process.env)
+        : process.env;
+
+    const env: NodeJS.ProcessEnv = { ...baseEnv, ...webSearchEnv };
+
+    if (creds.envVars) {
+      Object.assign(env, creds.envVars);
+    }
+
+    if (creds.baseUrl) env['ANTHROPIC_BASE_URL'] = creds.baseUrl;
+    if (creds.apiKey) env['ANTHROPIC_AUTH_TOKEN'] = creds.apiKey;
+    if (creds.model) env['ANTHROPIC_MODEL'] = creds.model;
+
+    return env;
+  }
+
+  exec(
+    args: string[],
+    env: NodeJS.ProcessEnv,
+    _options?: { cwd?: string; binaryInfo?: TargetBinaryInfo }
+  ): void {
+    const claudeCli = detectClaudeCli();
+    if (!claudeCli) {
+      void ErrorManager.showClaudeNotFound();
+      process.exit(1);
+      return;
+    }
+
+    const isWindows = process.platform === 'win32';
+    const isPowerShellScript = isWindows && /\.ps1$/i.test(claudeCli);
+    const needsShell = isWindows && /\.(cmd|bat)$/i.test(claudeCli);
+
+    let child: ChildProcess;
+    if (isPowerShellScript) {
+      child = spawn(
+        'powershell.exe',
+        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', claudeCli, ...args],
+        {
+          stdio: 'inherit',
+          windowsHide: true,
+          env,
+        }
+      );
+    } else if (needsShell) {
+      const cmdString = [claudeCli, ...args].map(escapeShellArg).join(' ');
+      child = spawn(cmdString, {
+        stdio: 'inherit',
+        windowsHide: true,
+        shell: true,
+        env,
+      });
+    } else {
+      child = spawn(claudeCli, args, {
+        stdio: 'inherit',
+        windowsHide: true,
+        env,
+      });
+    }
+
+    wireChildProcessSignals(child, async (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EACCES') {
+        console.error(`[X] Claude CLI is not executable: ${claudeCli}`);
+        console.error('    Check file permissions and executable bit.');
+      } else if (err.code === 'ENOENT') {
+        if (isPowerShellScript) {
+          console.error('[X] PowerShell executable not found (required for .ps1 wrapper launch).');
+          console.error('    Ensure powershell.exe is available in PATH.');
+        } else if (needsShell) {
+          console.error('[X] Windows command shell not found for Claude wrapper launch.');
+          console.error('    Ensure cmd.exe is available and accessible.');
+        } else {
+          await ErrorManager.showClaudeNotFound();
+        }
+      } else {
+        console.error(`[X] Failed to start Claude CLI (${claudeCli}): ${err.message}`);
+      }
+      process.exit(1);
+    });
+  }
+
+  /**
+   * Claude supports all CCS profile types.
+   */
+  supportsProfileType(_profileType: ProfileType): boolean {
+    return true;
+  }
+}

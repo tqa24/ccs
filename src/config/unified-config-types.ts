@@ -9,6 +9,8 @@
  * Into a single config.yaml structure.
  */
 
+import type { TargetType } from '../targets/target-adapter';
+
 /**
  * Unified config version.
  * Version 2 = YAML unified format
@@ -59,6 +61,8 @@ export interface ProfileConfig {
   type: 'api';
   /** Path to settings file (e.g., "~/.ccs/glm.settings.json") */
   settings: string;
+  /** Target CLI to use for this profile (default: 'claude') */
+  target?: TargetType;
 }
 
 /**
@@ -85,6 +89,8 @@ export interface CLIProxyVariantConfig {
   port?: number;
   /** Per-variant auth override (optional) */
   auth?: CLIProxyAuthConfig;
+  /** Target CLI to use for this variant (default: 'claude') */
+  target?: TargetType;
 }
 
 /**
@@ -130,6 +136,8 @@ export interface CompositeVariantConfig {
   port?: number;
   /** Per-variant auth override (optional) */
   auth?: CLIProxyAuthConfig;
+  /** Target CLI to use for this composite variant (default: 'claude') */
+  target?: TargetType;
 }
 
 /**

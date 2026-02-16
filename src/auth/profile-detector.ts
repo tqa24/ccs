@@ -24,8 +24,9 @@ import { loadUnifiedConfig, isUnifiedMode } from '../config/unified-config-loade
 import { getCcsDir } from '../utils/config-manager';
 import type { CLIProxyProvider } from '../cliproxy/types';
 import { CLIPROXY_PROVIDER_IDS, isCLIProxyProvider } from '../cliproxy/provider-capabilities';
-
-export type ProfileType = 'settings' | 'account' | 'cliproxy' | 'copilot' | 'default';
+import type { TargetType } from '../targets/target-adapter';
+import type { ProfileType } from '../types/profile';
+export type { ProfileType } from '../types/profile';
 
 /** CLIProxy profile names (OAuth-based, zero config) */
 export const CLIPROXY_PROFILES: readonly CLIProxyProvider[] = CLIPROXY_PROVIDER_IDS;
@@ -34,6 +35,7 @@ export type CLIProxyProfileName = CLIProxyProvider;
 export interface ProfileDetectionResult {
   type: ProfileType;
   name: string;
+  target?: TargetType;
   settingsPath?: string;
   profile?: Settings | ProfileMetadata;
   message?: string;
@@ -143,6 +145,7 @@ class ProfileDetector {
         return {
           type: 'cliproxy',
           name: profileName,
+          target: composite.target,
           provider: defaultTierConfig.provider as CLIProxyProfileName,
           settingsPath: composite.settings,
           port: composite.port,
@@ -156,6 +159,7 @@ class ProfileDetector {
       return {
         type: 'cliproxy',
         name: profileName,
+        target: singleVariant.target,
         provider: singleVariant.provider as CLIProxyProfileName,
         settingsPath: singleVariant.settings,
         port: singleVariant.port,
@@ -170,6 +174,7 @@ class ProfileDetector {
       return {
         type: 'settings',
         name: profileName,
+        target: profile.target,
         env: settingsEnv,
       };
     }

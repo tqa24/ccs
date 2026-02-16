@@ -38,6 +38,17 @@ import { handleUpdateCommand } from './commands/update-command';
 // Import extracted utility functions
 import { execClaude, escapeShellArg } from './utils/shell-executor';
 
+// Import target adapter system
+import {
+  registerTarget,
+  getTarget,
+  ClaudeAdapter,
+  DroidAdapter,
+  pruneOrphanedModels,
+  type TargetCredentials,
+} from './targets';
+import { resolveTargetType, stripTargetFlag } from './targets/target-resolver';
+
 // Version and Update check utilities
 import { getVersion } from './utils/version';
 import {
@@ -170,7 +181,8 @@ async function execClaudeWithProxy(
   };
 
   const isWindows = process.platform === 'win32';
-  const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(claudeCli);
+  const isPowerShellScript = isWindows && /\.ps1$/i.test(claudeCli);
+  const needsShell = isWindows && /\.(cmd|bat)$/i.test(claudeCli);
   const webSearchEnv = getWebSearchHookEnv();
   const imageAnalysisEnv = getImageAnalysisHookEnv(profileName);
   const env = {
@@ -182,7 +194,17 @@ async function execClaudeWithProxy(
   };
 
   let claude: ChildProcess;
-  if (needsShell) {
+  if (isPowerShellScript) {
+    claude = spawn(
+      'powershell.exe',
+      ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', claudeCli, ...args],
+      {
+        stdio: 'inherit',
+        windowsHide: true,
+        env,
+      }
+    );
+  } else if (needsShell) {
     const cmdString = [claudeCli, ...args].map(escapeShellArg).join(' ');
     claude = spawn(cmdString, {
       stdio: 'inherit',
@@ -199,27 +221,56 @@ async function execClaudeWithProxy(
   }
 
   // 5. Cleanup: kill proxy when Claude exits
+  const forwardSigTerm = () => {
+    proxy.kill('SIGTERM');
+    claude.kill('SIGTERM');
+  };
+  const forwardSigInt = () => {
+    proxy.kill('SIGTERM');
+    claude.kill('SIGINT');
+  };
+  const forwardSighup = () => {
+    proxy.kill('SIGTERM');
+    claude.kill('SIGHUP');
+  };
+  process.on('SIGTERM', forwardSigTerm);
+  process.on('SIGINT', forwardSigInt);
+  process.on('SIGHUP', forwardSighup);
+
+  const cleanupSignalHandlers = () => {
+    process.removeListener('SIGTERM', forwardSigTerm);
+    process.removeListener('SIGINT', forwardSigInt);
+    process.removeListener('SIGHUP', forwardSighup);
+  };
+
   claude.on('exit', (code, signal) => {
+    cleanupSignalHandlers();
     proxy.kill('SIGTERM');
     if (signal) process.kill(process.pid, signal as NodeJS.Signals);
     else process.exit(code || 0);
   });
 
   claude.on('error', (error) => {
-    console.error(fail(`Claude CLI error: ${error}`));
+    cleanupSignalHandlers();
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'EACCES') {
+      console.error(fail(`Claude CLI is not executable: ${claudeCli}`));
+      console.error('    Check file permissions and executable bit.');
+    } else if (err.code === 'ENOENT') {
+      if (isPowerShellScript) {
+        console.error(fail('PowerShell executable not found (required for .ps1 wrapper launch).'));
+        console.error('    Ensure powershell.exe is available in PATH.');
+      } else if (needsShell) {
+        console.error(fail('Windows command shell not found for Claude wrapper launch.'));
+        console.error('    Ensure cmd.exe is available and accessible.');
+      } else {
+        console.error(fail(`Claude CLI not found: ${claudeCli}`));
+      }
+    } else {
+      console.error(fail(`Claude CLI error: ${err.message}`));
+    }
     proxy.kill('SIGTERM');
     process.exit(1);
-  });
-
-  // Also handle parent process termination
-  process.once('SIGTERM', () => {
-    proxy.kill('SIGTERM');
-    claude.kill('SIGTERM');
-  });
-
-  process.once('SIGINT', () => {
-    proxy.kill('SIGTERM');
-    claude.kill('SIGTERM');
   });
 }
 
@@ -264,6 +315,10 @@ async function showCachedUpdateNotification(): Promise<boolean> {
 }
 
 async function main(): Promise<void> {
+  // Register target adapters
+  registerTarget(new ClaudeAdapter());
+  registerTarget(new DroidAdapter());
+
   const args = process.argv.slice(2);
 
   // Initialize UI colors early to ensure consistent colored output
@@ -385,7 +440,8 @@ async function main(): Promise<void> {
 
   // Special case: version command (check BEFORE profile detection)
   if (firstArg === 'version' || firstArg === '--version' || firstArg === '-v') {
-    handleVersionCommand();
+    await handleVersionCommand();
+    return;
   }
 
   // Special case: help command
@@ -561,33 +617,6 @@ async function main(): Promise<void> {
     process.exit(exitCode);
   }
 
-  // Special case: headless delegation (-p flag)
-  if (args.includes('-p') || args.includes('--prompt')) {
-    // CLIProxy profiles (codex/gemini/agy/etc, including user variants) must stay on
-    // the normal CLIProxy path so provider-specific flags (e.g. --effort/--thinking)
-    // and proxy chains are applied consistently.
-    let shouldUseDelegation = true;
-    const { profile } = detectProfile(args);
-    try {
-      const ProfileDetectorModule = await import('./auth/profile-detector');
-      const ProfileDetector = ProfileDetectorModule.default;
-      const detector = new ProfileDetector();
-      const profileInfo = detector.detectProfileType(profile);
-      if (profileInfo.type === 'cliproxy') {
-        shouldUseDelegation = false;
-      }
-    } catch {
-      // Best effort detection only; keep delegation fallback behavior.
-    }
-
-    if (shouldUseDelegation) {
-      const { DelegationHandler } = await import('./delegation/delegation-handler');
-      const handler = new DelegationHandler();
-      await handler.route(args);
-      return;
-    }
-  }
-
   // First-time install: offer setup wizard for interactive users
   // Check independently of recovery status (user may have empty config.yaml)
   // Skip if headless, CI, or non-TTY environment
@@ -597,16 +626,6 @@ async function main(): Promise<void> {
     console.log(info('First-time install detected. Run `ccs setup` for guided configuration.'));
     console.log('    Or use `ccs config` for the web dashboard.');
     console.log('');
-  }
-
-  // Detect profile
-  const { profile, remainingArgs } = detectProfile(args);
-
-  // Detect Claude CLI first (needed for all paths)
-  const claudeCli = detectClaudeCli();
-  if (!claudeCli) {
-    await ErrorManager.showClaudeNotFound();
-    process.exit(1);
   }
 
   // Use ProfileDetector to determine profile type
@@ -620,7 +639,124 @@ async function main(): Promise<void> {
   const detector = new ProfileDetector();
 
   try {
+    // Detect profile (strip --target flags before profile detection)
+    const cleanArgs = stripTargetFlag(args);
+    const { profile, remainingArgs } = detectProfile(cleanArgs);
     const profileInfo = detector.detectProfileType(profile);
+    let resolvedTarget: ReturnType<typeof resolveTargetType>;
+    try {
+      resolvedTarget = resolveTargetType(
+        args,
+        profileInfo.target ? { target: profileInfo.target } : undefined
+      );
+    } catch (error) {
+      console.error(fail((error as Error).message));
+      process.exit(1);
+      return;
+    }
+
+    // Detect Claude CLI (needed for claude target and all CLIProxy-derived flows)
+    const claudeCliRaw = detectClaudeCli();
+    if (resolvedTarget === 'claude' && !claudeCliRaw) {
+      await ErrorManager.showClaudeNotFound();
+      process.exit(1);
+    }
+    const claudeCli = claudeCliRaw || '';
+
+    // Resolve non-claude target adapter once.
+    const targetAdapter = resolvedTarget !== 'claude' ? getTarget(resolvedTarget) : null;
+
+    // Preflight unsupported profile/target combinations BEFORE binary detection,
+    // so users get the most actionable error even when the target CLI is not installed.
+    if (resolvedTarget !== 'claude') {
+      if (!targetAdapter) {
+        console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
+        process.exit(1);
+      }
+
+      if (profileInfo.type === 'cliproxy' && !targetAdapter.supportsProfileType('cliproxy')) {
+        console.error(fail(`${targetAdapter.displayName} does not support CLIProxy profiles`));
+        console.error(info('Use a settings-based profile with --target instead'));
+        process.exit(1);
+      }
+
+      if (profileInfo.type === 'copilot' && !targetAdapter.supportsProfileType('copilot')) {
+        console.error(fail(`${targetAdapter.displayName} does not support Copilot profiles`));
+        process.exit(1);
+      }
+
+      if (profileInfo.type === 'account' && !targetAdapter.supportsProfileType('account')) {
+        console.error(fail(`${targetAdapter.displayName} does not support account-based profiles`));
+        console.error(info('Use a settings-based profile with --target instead'));
+        process.exit(1);
+      }
+
+      // GLMT always requires Claude target because it depends on embedded proxy flow.
+      if (profileInfo.type === 'settings' && profileInfo.name === 'glmt') {
+        console.error(fail(`${targetAdapter.displayName} does not support GLMT proxy profiles`));
+        console.error(
+          info('Use --target claude for glmt, or switch to a direct API profile (glm/kimi)')
+        );
+        process.exit(1);
+      }
+
+      if (profileInfo.type === 'default') {
+        if (!targetAdapter.supportsProfileType('default')) {
+          console.error(fail(`${targetAdapter.displayName} does not support default profile mode`));
+          process.exit(1);
+        }
+
+        // For default mode, Droid requires explicit credentials from environment.
+        if (resolvedTarget === 'droid') {
+          const baseUrl = process.env['ANTHROPIC_BASE_URL'] || '';
+          const apiKey = process.env['ANTHROPIC_AUTH_TOKEN'] || '';
+          if (!baseUrl.trim() || !apiKey.trim()) {
+            console.error(
+              fail(
+                `${targetAdapter.displayName} default mode requires ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN`
+              )
+            );
+            console.error(info('Use a settings-based profile instead: ccs glm --target droid'));
+            process.exit(1);
+          }
+        }
+      }
+    }
+
+    // For non-claude targets, verify target binary exists once and pass it through.
+    const targetBinaryInfo = targetAdapter?.detectBinary() ?? null;
+    if (resolvedTarget !== 'claude' && !targetBinaryInfo) {
+      const displayName = targetAdapter?.displayName || resolvedTarget;
+      console.error(fail(`${displayName} CLI not found.`));
+      if (resolvedTarget === 'droid') {
+        console.error(info('Install: npm i -g @factory/cli'));
+      }
+      process.exit(1);
+    }
+
+    // Best-effort: prune stale Droid model entries at runtime so settings.json stays clean.
+    if (resolvedTarget === 'droid') {
+      try {
+        const allProfiles = detector.getAllProfiles();
+        const activeProfiles = allProfiles.settings.filter((name) => /^[a-zA-Z0-9_-]+$/.test(name));
+        await pruneOrphanedModels(activeProfiles);
+      } catch (error) {
+        console.error(warn(`[!] Droid prune skipped: ${(error as Error).message}`));
+      }
+    }
+
+    // Special case: headless delegation (-p/--prompt)
+    // Keep existing behavior for Claude targets only; non-claude targets must continue
+    // through normal adapter dispatch logic.
+    if (args.includes('-p') || args.includes('--prompt')) {
+      const shouldUseDelegation = resolvedTarget === 'claude' && profileInfo.type !== 'cliproxy';
+      if (shouldUseDelegation) {
+        const { DelegationHandler } = await import('./delegation/delegation-handler');
+        const handler = new DelegationHandler();
+        await handler.route(cleanArgs);
+        return;
+      }
+    }
 
     if (profileInfo.type === 'cliproxy') {
       // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy, qwen) or user-defined variants
@@ -721,6 +857,15 @@ async function main(): Promise<void> {
 
       // Check if this is GLMT profile (requires proxy)
       if (profileInfo.name === 'glmt') {
+        if (resolvedTarget !== 'claude') {
+          console.error(
+            fail(`${targetAdapter?.displayName || 'Target'} does not support GLMT proxy profiles`)
+          );
+          console.error(
+            info('Use --target claude for glmt, or switch to a direct API profile (glm/kimi)')
+          );
+          process.exit(1);
+        }
         // GLMT FLOW: Settings-based with embedded proxy for thinking support
         await execClaudeWithProxy(claudeCli, profileInfo.name, remainingArgs);
       } else {
@@ -753,6 +898,27 @@ async function main(): Promise<void> {
           ...imageAnalysisEnv,
           CCS_PROFILE_TYPE: 'settings', // Signal to WebSearch hook this is a third-party provider
         };
+
+        // Dispatch through target adapter for non-claude targets
+        if (resolvedTarget !== 'claude') {
+          const adapter = targetAdapter;
+          if (!adapter) {
+            console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
+            process.exit(1);
+          }
+          const creds: TargetCredentials = {
+            profile: profileInfo.name,
+            baseUrl: settingsEnv['ANTHROPIC_BASE_URL'] || '',
+            apiKey: settingsEnv['ANTHROPIC_AUTH_TOKEN'] || '',
+            model: settingsEnv['ANTHROPIC_MODEL'],
+          };
+          await adapter.prepareCredentials(creds);
+          const targetArgs = adapter.buildArgs(profileInfo.name, remainingArgs);
+          const targetEnv = adapter.buildEnv(creds, profileInfo.type);
+          adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
+          return;
+        }
+
         execClaude(claudeCli, ['--settings', expandedSettingsPath, ...remainingArgs], envVars);
       }
     } else if (profileInfo.type === 'account') {
@@ -790,6 +956,40 @@ async function main(): Promise<void> {
         CCS_WEBSEARCH_SKIP: '1',
         CCS_IMAGE_ANALYSIS_SKIP: '1',
       };
+
+      // Dispatch through target adapter for non-claude targets
+      if (resolvedTarget !== 'claude') {
+        const adapter = targetAdapter;
+        if (!adapter) {
+          console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
+          process.exit(1);
+        }
+        if (!adapter.supportsProfileType('default')) {
+          console.error(fail(`${adapter.displayName} does not support default profile mode`));
+          process.exit(1);
+        }
+        const creds: TargetCredentials = {
+          profile: 'default',
+          baseUrl: process.env['ANTHROPIC_BASE_URL'] || '',
+          apiKey: process.env['ANTHROPIC_AUTH_TOKEN'] || '',
+          model: process.env['ANTHROPIC_MODEL'],
+        };
+        if (!creds.baseUrl || !creds.apiKey) {
+          console.error(
+            fail(
+              `${adapter.displayName} default mode requires ANTHROPIC_BASE_URL and ANTHROPIC_AUTH_TOKEN`
+            )
+          );
+          console.error(info('Use a settings-based profile instead: ccs glm --target droid'));
+          process.exit(1);
+        }
+        await adapter.prepareCredentials(creds);
+        const targetArgs = adapter.buildArgs('default', remainingArgs);
+        const targetEnv = adapter.buildEnv(creds, 'default');
+        adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
+        return;
+      }
+
       execClaude(claudeCli, remainingArgs, envVars);
     }
   } catch (error) {
@@ -820,12 +1020,19 @@ process.on('unhandledRejection', (reason: unknown) => {
 // Handle process termination signals for cleanup
 process.on('SIGTERM', () => {
   runCleanup();
-  process.exit(0);
+  // If a target exec path registered additional signal listeners, let those
+  // listeners forward/coordinate child shutdown and final exit codes.
+  if (process.listenerCount('SIGTERM') <= 1) {
+    process.exit(143); // 128 + SIGTERM(15)
+  }
 });
 
 process.on('SIGINT', () => {
   runCleanup();
-  process.exit(130); // 128 + SIGINT(2)
+  // Same coordination rule as SIGTERM.
+  if (process.listenerCount('SIGINT') <= 1) {
+    process.exit(130); // 128 + SIGINT(2)
+  }
 });
 
 // Run main

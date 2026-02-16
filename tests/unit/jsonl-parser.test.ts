@@ -147,6 +147,26 @@ describe('parseUsageEntry', () => {
     const result = parseUsageEntry(VALID_ASSISTANT_ENTRY, '/custom/project/path');
     expect(result!.projectPath).toBe('/custom/project/path');
   });
+
+  test('parses string target when present', () => {
+    const withTarget = JSON.stringify({
+      ...JSON.parse(VALID_ASSISTANT_ENTRY),
+      target: 'droid',
+    });
+    const result = parseUsageEntry(withTarget, '/test');
+    expect(result).not.toBeNull();
+    expect(result!.target).toBe('droid');
+  });
+
+  test('ignores non-string target values', () => {
+    const withNumericTarget = JSON.stringify({
+      ...JSON.parse(VALID_ASSISTANT_ENTRY),
+      target: 123,
+    });
+    const result = parseUsageEntry(withNumericTarget, '/test');
+    expect(result).not.toBeNull();
+    expect(result!.target).toBeUndefined();
+  });
 });
 
 // ============================================================================

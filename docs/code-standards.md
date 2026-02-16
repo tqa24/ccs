@@ -40,6 +40,9 @@ Code standards, modularization patterns, and conventions for the CCS codebase.
 |------------|---------|-------------|
 | kebab-case | `cliproxy-executor.ts` | All TypeScript/TSX files |
 | kebab-case | `profile-detector.ts` | Multi-word file names |
+| *-adapter.ts | `claude-adapter.ts`, `droid-adapter.ts` | TargetAdapter implementations |
+| *-detector.ts | `droid-detector.ts` | Binary detection logic |
+| *-manager.ts | `droid-config-manager.ts` | Config/state management |
 | PascalCase | `BinaryManager` | Class exports only |
 | camelCase | `detectProfile` | Function exports |
 
@@ -154,6 +157,84 @@ Allowed when:
 - Importing private utilities not exposed in barrel
 - Circular dependency avoidance
 - Performance-critical tree-shaking
+
+---
+
+## Target Adapter Pattern
+
+The target adapter pattern enables pluggable support for multiple CLI implementations (Claude Code, Factory Droid, etc.) while preserving a unified profile system.
+
+### Pattern Overview
+
+**Each CLI target implements a `TargetAdapter` interface:**
+
+```typescript
+interface TargetAdapter {
+  readonly type: TargetType;                                    // 'claude' | 'droid'
+  readonly displayName: string;                                 // Human-readable name
+
+  detectBinary(): TargetBinaryInfo | null;                      // Find CLI on system
+  prepareCredentials(creds: TargetCredentials): Promise<void>;  // Deliver credentials
+  buildArgs(profile: string, userArgs: string[]): string[];    // Build CLI args
+  buildEnv(creds: TargetCredentials, type: string): Env;       // Build env vars
+  exec(args: string[], env: Env): void;                        // Spawn CLI process
+  supportsProfileType(type: string): boolean;                  // Validate profile
+}
+```
+
+### Key Differences Per Target
+
+| Aspect | Claude | Droid |
+|--------|--------|-------|
+| **Credential delivery** | Environment variables | Config file (~/.factory/settings.json) |
+| **Spawn args** | `claude <args>` | `droid -m custom:ccs-<profile> <args>` |
+| **Config write** | None (uses env) | `upsertCcsModel()` writes to settings |
+| **Binary detection** | `detectClaudeCli()` | `detectDroidCli()` with version check |
+
+### Target Resolution Priority
+
+Resolves which adapter to use via `resolveTargetType()`:
+
+```
+1. --target <name> flag (highest priority)
+   ↓
+2. Profile config: profileConfig.target field
+   ↓
+3. argv[0] detection (busybox pattern):
+   - ccsd → droid
+   - ccs → default
+   ↓
+4. Fallback: 'claude' (lowest priority)
+```
+
+### Registration Pattern
+
+At startup, adapters self-register into the runtime registry:
+
+```typescript
+// In ccs.ts or initialization
+registerTarget(new ClaudeAdapter());
+registerTarget(new DroidAdapter());
+
+// Later, when executing
+const targetType = resolveTargetType(args, profileConfig);
+const adapter = getTarget(targetType);
+
+await adapter.prepareCredentials(credentials);
+const spawnArgs = adapter.buildArgs(profile, userArgs);
+adapter.exec(spawnArgs, adapter.buildEnv(credentials, profileType));
+```
+
+### Adding a New Target
+
+To add support for a new CLI (e.g., `newcli`):
+
+1. Create `src/targets/newcli-adapter.ts` implementing `TargetAdapter`
+2. Implement each required method (detection, credential delivery, spawning)
+3. Create `src/targets/newcli-detector.ts` for binary detection logic
+4. Export from `src/targets/index.ts`
+5. Register in `ccs.ts`: `registerTarget(new NewCliAdapter())`
+6. Update `TargetType` union to include `'newcli'`
 
 ---
 
@@ -327,6 +408,26 @@ Use ASCII box drawing for error displays:
 |  Details: Unable to parse config    |
 +=====================================+
 ```
+
+### Cross-Platform Adapter Spawning
+
+When implementing target adapters, handle platform differences for binary spawning:
+
+```typescript
+// Window shell detection (.cmd, .bat, .ps1 require shell)
+const needsShell = isWindows && /\.(cmd|bat|ps1)$/i.test(binaryPath);
+
+if (needsShell) {
+  // Escape arguments and use shell: true
+  const cmdString = [binaryPath, ...args].map(escapeShellArg).join(' ');
+  spawn(cmdString, { shell: true, stdio: 'inherit' });
+} else {
+  // Direct spawn (Unix-like, unshelled Windows executables)
+  spawn(binaryPath, args, { stdio: 'inherit' });
+}
+```
+
+This pattern is used in both `ClaudeAdapter` and `DroidAdapter` to ensure cross-platform consistency.
 
 ---
 

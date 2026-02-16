@@ -371,6 +371,10 @@ export function aggregateSessionUsage(
   const sessionUsage: SessionUsage[] = [];
 
   for (const [sessionId, sessionEntries] of bySession) {
+    const orderedEntries = [...sessionEntries].sort((a, b) =>
+      a.timestamp.localeCompare(b.timestamp)
+    );
+
     // Aggregate by model
     const modelMap = new Map<string, ModelAccumulator>();
     const versions = new Set<string>();
@@ -380,8 +384,9 @@ export function aggregateSessionUsage(
     let totalCacheRead = 0;
     let lastActivity = '';
     let projectPath = '';
+    let target: string | undefined;
 
-    for (const entry of sessionEntries) {
+    for (const entry of orderedEntries) {
       const model = entry.model;
       const acc = modelMap.get(model) || {
         inputTokens: 0,
@@ -414,6 +419,10 @@ export function aggregateSessionUsage(
       // Use project path from entry
       if (entry.projectPath) {
         projectPath = entry.projectPath;
+      }
+
+      if (entry.target) {
+        target = entry.target;
       }
     }
 
@@ -450,6 +459,7 @@ export function aggregateSessionUsage(
       modelsUsed: Array.from(modelMap.keys()),
       modelBreakdowns,
       source,
+      target,
     });
   }
 
