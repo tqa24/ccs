@@ -9,9 +9,10 @@ import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
 import { TargetAdapter, TargetBinaryInfo, TargetCredentials, TargetType } from './target-adapter';
 import { getDroidBinaryInfo, detectDroidCli, checkDroidVersion } from './droid-detector';
+import type { ProfileType } from '../types/profile';
 import { upsertCcsModel } from './droid-config-manager';
 import { escapeShellArg } from '../utils/shell-executor';
-import { forwardSignals } from '../utils/signal-forwarder';
+import { wireChildProcessSignals } from '../utils/signal-forwarder';
 
 export class DroidAdapter implements TargetAdapter {
   readonly type: TargetType = 'droid';
@@ -57,7 +58,7 @@ export class DroidAdapter implements TargetAdapter {
   /**
    * Droid uses config file for credentials — minimal env needed.
    */
-  buildEnv(_creds: TargetCredentials, _profileType: string): NodeJS.ProcessEnv {
+  buildEnv(_creds: TargetCredentials, _profileType: ProfileType): NodeJS.ProcessEnv {
     return { ...process.env };
   }
 
@@ -119,16 +120,7 @@ export class DroidAdapter implements TargetAdapter {
       });
     }
 
-    const cleanupSignalHandlers = forwardSignals(child);
-
-    child.on('exit', (code, signal) => {
-      cleanupSignalHandlers();
-      if (signal) process.kill(process.pid, signal as NodeJS.Signals);
-      else process.exit(code || 0);
-    });
-
-    child.on('error', (err: NodeJS.ErrnoException) => {
-      cleanupSignalHandlers();
+    wireChildProcessSignals(child, (err: NodeJS.ErrnoException) => {
       if (err.code === 'EACCES') {
         console.error(`[X] Droid CLI is not executable: ${droidPath}`);
         console.error('    Check file permissions and executable bit.');
@@ -153,7 +145,7 @@ export class DroidAdapter implements TargetAdapter {
   /**
    * Droid currently supports direct settings-based and default flows only.
    */
-  supportsProfileType(profileType: string): boolean {
+  supportsProfileType(profileType: ProfileType): boolean {
     return profileType === 'settings' || profileType === 'default';
   }
 }

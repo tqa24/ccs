@@ -25,8 +25,8 @@ import { getCcsDir } from '../utils/config-manager';
 import type { CLIProxyProvider } from '../cliproxy/types';
 import { CLIPROXY_PROVIDER_IDS, isCLIProxyProvider } from '../cliproxy/provider-capabilities';
 import type { TargetType } from '../targets/target-adapter';
-
-export type ProfileType = 'settings' | 'account' | 'cliproxy' | 'copilot' | 'default';
+import type { ProfileType } from '../types/profile';
+export type { ProfileType } from '../types/profile';
 
 /** CLIProxy profile names (OAuth-based, zero config) */
 export const CLIPROXY_PROFILES: readonly CLIProxyProvider[] = CLIPROXY_PROVIDER_IDS;

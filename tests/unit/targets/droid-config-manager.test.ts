@@ -175,6 +175,60 @@ describe('droid-config-manager', () => {
         })
       ).rejects.toThrow(/settings\.json\.tmp is a symlink/);
     });
+
+    it('should update legacy ccs- alias entry on upsert', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({
+          customModels: [
+            {
+              model: 'claude-opus-4-6',
+              displayName: 'ccs-gemini',
+              baseUrl: 'http://localhost:8317',
+              apiKey: 'old-key',
+              provider: 'anthropic',
+            },
+          ],
+        })
+      );
+
+      await upsertCcsModel('gemini', {
+        model: 'claude-opus-4-6',
+        displayName: 'CCS gemini',
+        baseUrl: 'http://localhost:8318',
+        apiKey: 'new-key',
+        provider: 'anthropic',
+      });
+
+      const settings = JSON.parse(
+        fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8')
+      );
+      expect(settings.customModels).toHaveLength(1);
+      expect(settings.customModels[0].displayName).toBe('CCS gemini');
+      expect(settings.customModels[0].apiKey).toBe('new-key');
+      expect(settings.customModels[0].baseUrl).toBe('http://localhost:8318');
+    });
+
+    it('should reject symlinked settings file on write', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+
+      const realSettings = path.join(factoryDir, 'real-settings.json');
+      fs.writeFileSync(realSettings, JSON.stringify({ customModels: [] }));
+      fs.symlinkSync(realSettings, path.join(factoryDir, 'settings.json'));
+
+      await expect(
+        upsertCcsModel('gemini', {
+          model: 'claude-opus-4-6',
+          displayName: 'CCS gemini',
+          baseUrl: 'http://localhost:8317',
+          apiKey: 'dummy-key',
+          provider: 'anthropic',
+        })
+      ).rejects.toThrow(/settings\.json is a symlink/);
+    });
   });
 
   describe('removeCcsModel', () => {
@@ -203,6 +257,26 @@ describe('droid-config-manager', () => {
           customModels: [
             { model: 'gpt-4o', displayName: 'My GPT', baseUrl: 'x', apiKey: 'y', provider: 'openai' },
             { model: 'opus', displayName: 'CCS gemini', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+          ],
+        })
+      );
+
+      await removeCcsModel('gemini');
+
+      const settings = JSON.parse(fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8'));
+      expect(settings.customModels).toHaveLength(1);
+      expect(settings.customModels[0].displayName).toBe('My GPT');
+    });
+
+    it('should remove legacy ccs- alias entries', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({
+          customModels: [
+            { model: 'opus', displayName: 'ccs-gemini', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            { model: 'gpt-4o', displayName: 'My GPT', baseUrl: 'x', apiKey: 'y', provider: 'openai' },
           ],
         })
       );
@@ -295,6 +369,60 @@ describe('droid-config-manager', () => {
 
       await expect(listCcsModels()).rejects.toThrow(/settings\.json is a symlink/);
     });
+
+    it('should include legacy ccs- alias entries', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({
+          customModels: [
+            {
+              model: 'opus',
+              displayName: 'ccs-gemini',
+              baseUrl: 'http://localhost:8317',
+              apiKey: 'dummy',
+              provider: 'anthropic',
+            },
+          ],
+        })
+      );
+
+      const models = await listCcsModels();
+      expect(models.size).toBe(1);
+      expect(models.has('gemini')).toBe(true);
+    });
+
+    it('should ignore malformed managed display names', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({
+          customModels: [
+            { model: 'x', displayName: 'CCS ', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            { model: 'x', displayName: 'ccs-', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            { model: 'x', displayName: 'CCS ok', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+          ],
+        })
+      );
+
+      const models = await listCcsModels();
+      expect(models.size).toBe(1);
+      expect(models.has('ok')).toBe(true);
+    });
+
+    it('should recover from corrupted JSON by backing up and returning empty models', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      const settingsPath = path.join(factoryDir, 'settings.json');
+
+      fs.writeFileSync(settingsPath, '{"customModels":[', 'utf8');
+
+      const models = await listCcsModels();
+      expect(models.size).toBe(0);
+      expect(fs.existsSync(`${settingsPath}.bak`)).toBe(true);
+    });
   });
 
   describe('pruneOrphanedModels', () => {
@@ -343,18 +471,59 @@ describe('droid-config-manager', () => {
       expect(settings.customModels).toHaveLength(1);
       expect(settings.customModels[0].displayName).toBe('My GPT');
     });
+
+    it('should prune orphaned legacy ccs- alias entries', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({
+          customModels: [
+            { model: 'opus', displayName: 'ccs-gemini', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            { model: 'sonnet', displayName: 'ccs-codex', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+          ],
+        })
+      );
+
+      const removed = await pruneOrphanedModels(['gemini']);
+      expect(removed).toBe(1);
+
+      const models = await listCcsModels();
+      expect(models.size).toBe(1);
+      expect(models.has('gemini')).toBe(true);
+    });
+
+    it('should prune malformed managed entries while preserving user models', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({
+          customModels: [
+            { model: 'x', displayName: 'CCS ', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            { model: 'x', displayName: 'ccs-', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            { model: 'gpt-4o', displayName: 'My GPT', baseUrl: 'x', apiKey: 'y', provider: 'openai' },
+          ],
+        })
+      );
+
+      const removed = await pruneOrphanedModels([]);
+      expect(removed).toBe(2);
+
+      const settings = JSON.parse(fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8'));
+      expect(settings.customModels).toHaveLength(1);
+      expect(settings.customModels[0].displayName).toBe('My GPT');
+    });
   });
 
   describe('concurrent writes', () => {
-    it('should handle concurrent upserts without data loss', async () => {
-      // Write in batches of 3 to simulate realistic concurrency
-      // (10 simultaneous locks exceeds retry budget)
-      const profiles = Array.from({ length: 9 }, (_, i) => `profile-${i}`);
+    it(
+      'should handle concurrent upserts without data loss',
+      async () => {
+        const profiles = Array.from({ length: 10 }, (_, i) => `profile-${i}`);
 
-      for (let i = 0; i < profiles.length; i += 3) {
-        const batch = profiles.slice(i, i + 3);
         await Promise.all(
-          batch.map((p) =>
+          profiles.map((p) =>
             upsertCcsModel(p, {
               model: 'test-model',
               displayName: `CCS ${p}`,
@@ -364,14 +533,15 @@ describe('droid-config-manager', () => {
             })
           )
         );
-      }
 
-      const models = await listCcsModels();
-      expect(models.size).toBe(9);
+        const models = await listCcsModels();
+        expect(models.size).toBe(10);
 
-      for (const p of profiles) {
-        expect(models.has(p)).toBe(true);
-      }
-    });
+        for (const p of profiles) {
+          expect(models.has(p)).toBe(true);
+        }
+      },
+      15000
+    );
   });
 });

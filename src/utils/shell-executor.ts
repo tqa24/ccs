@@ -7,7 +7,7 @@
 import { spawn, spawnSync, ChildProcess } from 'child_process';
 import { ErrorManager } from './error-manager';
 import { getWebSearchHookEnv } from './websearch-manager';
-import { forwardSignals } from './signal-forwarder';
+import { wireChildProcessSignals } from './signal-forwarder';
 
 /**
  * Strip ANTHROPIC_* env vars from an environment object.
@@ -128,16 +128,7 @@ export function execClaude(
     });
   }
 
-  const cleanupSignalHandlers = forwardSignals(child);
-
-  child.on('exit', (code, signal) => {
-    cleanupSignalHandlers();
-    if (signal) process.kill(process.pid, signal as NodeJS.Signals);
-    else process.exit(code || 0);
-  });
-
-  child.on('error', async (err: NodeJS.ErrnoException) => {
-    cleanupSignalHandlers();
+  wireChildProcessSignals(child, async (err: NodeJS.ErrnoException) => {
     if (err.code === 'EACCES') {
       console.error(`[X] Claude CLI is not executable: ${claudeCli}`);
       console.error('    Check file permissions and executable bit.');

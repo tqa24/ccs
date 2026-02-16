@@ -8,10 +8,11 @@
 import { spawn, ChildProcess } from 'child_process';
 import { TargetAdapter, TargetBinaryInfo, TargetCredentials, TargetType } from './target-adapter';
 import { detectClaudeCli, getClaudeCliInfo } from '../utils/claude-detector';
+import type { ProfileType } from '../types/profile';
 import { escapeShellArg, stripAnthropicEnv } from '../utils/shell-executor';
 import { ErrorManager } from '../utils/error-manager';
 import { getWebSearchHookEnv } from '../utils/websearch-manager';
-import { forwardSignals } from '../utils/signal-forwarder';
+import { wireChildProcessSignals } from '../utils/signal-forwarder';
 
 export class ClaudeAdapter implements TargetAdapter {
   readonly type: TargetType = 'claude';
@@ -34,7 +35,7 @@ export class ClaudeAdapter implements TargetAdapter {
     return userArgs;
   }
 
-  buildEnv(creds: TargetCredentials, profileType: string): NodeJS.ProcessEnv {
+  buildEnv(creds: TargetCredentials, profileType: ProfileType): NodeJS.ProcessEnv {
     const webSearchEnv = getWebSearchHookEnv();
 
     // For account/default profiles, strip ANTHROPIC_* from parent env to prevent
@@ -100,16 +101,7 @@ export class ClaudeAdapter implements TargetAdapter {
       });
     }
 
-    const cleanupSignalHandlers = forwardSignals(child);
-
-    child.on('exit', (code, signal) => {
-      cleanupSignalHandlers();
-      if (signal) process.kill(process.pid, signal as NodeJS.Signals);
-      else process.exit(code || 0);
-    });
-
-    child.on('error', async (err: NodeJS.ErrnoException) => {
-      cleanupSignalHandlers();
+    wireChildProcessSignals(child, async (err: NodeJS.ErrnoException) => {
       if (err.code === 'EACCES') {
         console.error(`[X] Claude CLI is not executable: ${claudeCli}`);
         console.error('    Check file permissions and executable bit.');
@@ -133,7 +125,7 @@ export class ClaudeAdapter implements TargetAdapter {
   /**
    * Claude supports all CCS profile types.
    */
-  supportsProfileType(_profileType: string): boolean {
+  supportsProfileType(_profileType: ProfileType): boolean {
     return true;
   }
 }

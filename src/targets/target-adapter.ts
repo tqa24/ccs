@@ -9,6 +9,8 @@
  * Supported CLI target types.
  * 'claude' is the default; additional targets register via target-registry.
  */
+import type { ProfileType } from '../types/profile';
+
 export type TargetType = 'claude' | 'droid';
 
 /**
@@ -46,25 +48,46 @@ export interface TargetAdapter {
   readonly type: TargetType;
   readonly displayName: string;
 
-  /** Detect if the target CLI binary exists on system */
+  /**
+   * Resolve the target CLI executable on the current machine.
+   * Return `null` when the binary is unavailable.
+   */
   detectBinary(): TargetBinaryInfo | null;
 
-  /** Prepare credentials for delivery to target CLI */
+  /**
+   * Prepare credential delivery for the target.
+   * Targets may write config files, mutate process state, or no-op.
+   *
+   * @throws Error when required credentials are missing or invalid.
+   */
   prepareCredentials(creds: TargetCredentials): Promise<void>;
 
-  /** Build spawn arguments for the target CLI */
+  /**
+   * Build target-specific argument vector.
+   * `userArgs` are the arguments after CCS profile/flag parsing.
+   */
   buildArgs(profile: string, userArgs: string[]): string[];
 
-  /** Build environment variables for the target CLI */
-  buildEnv(creds: TargetCredentials, profileType: string): NodeJS.ProcessEnv;
+  /**
+   * Build environment variables for process spawn.
+   * `profileType` allows targets to vary env behavior by CCS profile mode.
+   */
+  buildEnv(creds: TargetCredentials, profileType: ProfileType): NodeJS.ProcessEnv;
 
-  /** Spawn the target CLI process (replaces current process flow) */
+  /**
+   * Spawn and hand over execution to the target CLI process.
+   * Implementations are responsible for signal forwarding and exit propagation.
+   *
+   * @throws Error for unrecoverable launch failures (if not exiting directly).
+   */
   exec(
     args: string[],
     env: NodeJS.ProcessEnv,
     options?: { cwd?: string; binaryInfo?: TargetBinaryInfo }
   ): void;
 
-  /** Check if a profile type is supported by this target */
-  supportsProfileType(profileType: string): boolean;
+  /**
+   * Report whether this target can run a given CCS profile type.
+   */
+  supportsProfileType(profileType: ProfileType): boolean;
 }

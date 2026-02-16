@@ -11,6 +11,7 @@ import * as os from 'os';
 import * as lockfile from 'proper-lockfile';
 
 const CCS_MODEL_PREFIX = 'ccs-';
+const CCS_DISPLAY_PREFIX = 'CCS ';
 
 /** Lock configuration for concurrent write safety */
 const LOCK_STALE_MS = 10000;
@@ -21,8 +22,12 @@ const LOCK_RETRY_MAX_MS = 1000;
  * Validate profile name to prevent filesystem/security issues.
  * Only alphanumeric, underscore, hyphen allowed.
  */
+function isValidProfileName(profile: string): boolean {
+  return !!profile && /^[a-zA-Z0-9_-]+$/.test(profile);
+}
+
 function validateProfileName(profile: string): void {
-  if (!profile || !/^[a-zA-Z0-9_-]+$/.test(profile)) {
+  if (!isValidProfileName(profile)) {
     throw new Error(
       `Invalid profile name "${profile}": must contain only alphanumeric characters, underscores, or hyphens`
     );
@@ -57,21 +62,39 @@ function isSupportedProvider(value: string): value is DroidCustomModel['provider
   return value === 'anthropic' || value === 'openai' || value === 'generic-chat-completion-api';
 }
 
-function asModelEntry(value: unknown): DroidCustomModelEntry | null {
-  if (!value || typeof value !== 'object') return null;
+function isDroidCustomModelEntry(value: unknown): value is DroidCustomModelEntry {
+  if (!value || typeof value !== 'object') return false;
   const record = value as Record<string, unknown>;
-  if (
-    typeof record.displayName !== 'string' ||
-    record.displayName.trim() === '' ||
-    typeof record.model !== 'string' ||
-    typeof record.baseUrl !== 'string' ||
-    typeof record.apiKey !== 'string' ||
-    typeof record.provider !== 'string' ||
-    record.provider.trim() === ''
-  ) {
-    return null;
+  return (
+    typeof record.displayName === 'string' &&
+    record.displayName.trim() !== '' &&
+    typeof record.model === 'string' &&
+    typeof record.baseUrl === 'string' &&
+    typeof record.apiKey === 'string' &&
+    typeof record.provider === 'string' &&
+    record.provider.trim() !== ''
+  );
+}
+
+function isManagedDisplayName(displayName: string): boolean {
+  return displayName.startsWith(CCS_DISPLAY_PREFIX) || displayName.startsWith(CCS_MODEL_PREFIX);
+}
+
+function parseManagedProfile(displayName: string): string | null {
+  let profile: string | null = null;
+
+  if (displayName.startsWith(CCS_DISPLAY_PREFIX)) {
+    profile = displayName.slice(CCS_DISPLAY_PREFIX.length).trim();
+  } else if (displayName.startsWith(CCS_MODEL_PREFIX)) {
+    profile = displayName.slice(CCS_MODEL_PREFIX.length).trim();
   }
-  return value as DroidCustomModelEntry;
+
+  if (!profile || !isValidProfileName(profile)) return null;
+  return profile;
+}
+
+function asModelEntry(value: unknown): DroidCustomModelEntry | null {
+  return isDroidCustomModelEntry(value) ? value : null;
 }
 
 function normalizeCustomModels(value: unknown): DroidCustomModelEntry[] {
@@ -276,14 +299,6 @@ function writeDroidSettings(settings: DroidSettings): void {
 }
 
 /**
- * Build the custom model alias from a CCS profile name.
- * e.g., "gemini" → "ccs-gemini"
- */
-function ccsAlias(profile: string): string {
-  return `${CCS_MODEL_PREFIX}${profile}`;
-}
-
-/**
  * Upsert a CCS-managed custom model entry.
  * Acquires file lock to prevent concurrent write races.
  */
@@ -293,20 +308,19 @@ export async function upsertCcsModel(profile: string, model: DroidCustomModel): 
 
   let release: (() => Promise<void>) | undefined;
   try {
-    release = await acquireFactoryLock(5);
+    release = await acquireFactoryLock(10);
 
     const settings = readDroidSettings();
     settings.customModels = normalizeCustomModels(settings.customModels);
 
-    const alias = ccsAlias(profile);
     const entry: DroidCustomModelEntry = {
       ...model,
       displayName: `CCS ${profile}`,
     };
 
-    // Find existing entry by checking displayName for CCS prefix match
+    // Find existing current or legacy entry for this profile.
     const idx = settings.customModels.findIndex(
-      (m) => m.displayName === `CCS ${profile}` || m.displayName === alias
+      (m) => parseManagedProfile(m.displayName) === profile
     );
 
     if (idx >= 0) {
@@ -338,7 +352,7 @@ export async function removeCcsModel(profile: string): Promise<void> {
     settings.customModels = normalizeCustomModels(settings.customModels);
 
     settings.customModels = settings.customModels.filter(
-      (m) => m.displayName !== `CCS ${profile}` && m.displayName !== ccsAlias(profile)
+      (m) => parseManagedProfile(m.displayName) !== profile
     );
 
     writeDroidSettings(settings);
@@ -354,16 +368,14 @@ export async function listCcsModels(): Promise<Map<string, DroidCustomModel>> {
   const result = new Map<string, DroidCustomModel>();
   const settings = readDroidSettings();
   for (const entry of normalizeCustomModels(settings.customModels)) {
-    if (entry.displayName?.startsWith('CCS ')) {
-      if (!isSupportedProvider(entry.provider)) {
-        continue;
-      }
-      const profile = entry.displayName.slice(4); // Remove "CCS " prefix
-      result.set(profile, {
-        ...entry,
-        provider: entry.provider,
-      });
-    }
+    const profile = parseManagedProfile(entry.displayName);
+    if (!profile) continue;
+    if (!isSupportedProvider(entry.provider)) continue;
+
+    result.set(profile, {
+      ...entry,
+      provider: entry.provider,
+    });
   }
 
   return result;
@@ -392,9 +404,13 @@ export async function pruneOrphanedModels(activeProfiles: string[]): Promise<num
 
     const before = settings.customModels.length;
     settings.customModels = settings.customModels.filter((m) => {
-      if (!m.displayName?.startsWith('CCS ')) return true; // Keep non-CCS entries
-      const profile = m.displayName.slice(4);
-      return activeProfiles.includes(profile);
+      const profile = parseManagedProfile(m.displayName);
+      if (profile) {
+        return activeProfiles.includes(profile);
+      }
+
+      // Drop malformed managed entries; keep user-managed entries.
+      return !isManagedDisplayName(m.displayName);
     });
 
     removed = before - settings.customModels.length;
