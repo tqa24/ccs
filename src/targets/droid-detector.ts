@@ -22,10 +22,15 @@ export function detectDroidCli(): string | null {
   if (process.env.CCS_DROID_PATH) {
     const customPath = expandPath(process.env.CCS_DROID_PATH);
     if (fs.existsSync(customPath)) {
-      return customPath;
+      if (fs.statSync(customPath).isFile()) {
+        return customPath;
+      }
+      console.warn('[!] CCS_DROID_PATH points to a directory, not a file:', customPath);
+      console.warn('    Falling back to system PATH lookup...');
+    } else {
+      console.warn('[!] Warning: CCS_DROID_PATH is set but file not found:', customPath);
+      console.warn('    Falling back to system PATH lookup...');
     }
-    console.warn('[!] Warning: CCS_DROID_PATH is set but file not found:', customPath);
-    console.warn('    Falling back to system PATH lookup...');
   }
 
   // Priority 2: Resolve 'droid' from PATH

@@ -660,9 +660,11 @@ async function main(): Promise<void> {
       // Guard: non-claude targets don't support CLIProxy flow yet
       if (resolvedTarget !== 'claude') {
         const adapter = getTarget(resolvedTarget);
-        console.error(fail(`${adapter.displayName} does not support CLIProxy profiles yet`));
-        console.error(info('Use a settings-based profile with --target instead'));
-        process.exit(1);
+        if (!adapter.supportsProfileType('cliproxy')) {
+          console.error(fail(`${adapter.displayName} does not support CLIProxy profiles yet`));
+          console.error(info('Use a settings-based profile with --target instead'));
+          process.exit(1);
+        }
       }
 
       // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy, qwen) or user-defined variants
@@ -686,8 +688,10 @@ async function main(): Promise<void> {
       // Guard: non-claude targets don't support Copilot flow
       if (resolvedTarget !== 'claude') {
         const adapter = getTarget(resolvedTarget);
-        console.error(fail(`${adapter.displayName} does not support Copilot profiles`));
-        process.exit(1);
+        if (!adapter.supportsProfileType('copilot')) {
+          console.error(fail(`${adapter.displayName} does not support Copilot profiles`));
+          process.exit(1);
+        }
       }
 
       // COPILOT FLOW: GitHub Copilot subscription via copilot-api proxy
@@ -773,8 +777,10 @@ async function main(): Promise<void> {
         // Guard: non-claude targets don't support GLMT proxy flow
         if (resolvedTarget !== 'claude') {
           const adapter = getTarget(resolvedTarget);
-          console.error(fail(`${adapter.displayName} does not support GLMT proxy profiles`));
-          process.exit(1);
+          if (!adapter.supportsProfileType('settings')) {
+            console.error(fail(`${adapter.displayName} does not support GLMT proxy profiles`));
+            process.exit(1);
+          }
         }
         // GLMT FLOW: Settings-based with embedded proxy for thinking support
         await execClaudeWithProxy(claudeCli, profileInfo.name, remainingArgs);
@@ -831,9 +837,11 @@ async function main(): Promise<void> {
       // Guard: non-claude targets don't support account profiles
       if (resolvedTarget !== 'claude') {
         const adapter = getTarget(resolvedTarget);
-        console.error(fail(`${adapter.displayName} does not support account-based profiles`));
-        console.error(info('Use a settings-based profile with --target instead'));
-        process.exit(1);
+        if (!adapter.supportsProfileType('account')) {
+          console.error(fail(`${adapter.displayName} does not support account-based profiles`));
+          console.error(info('Use a settings-based profile with --target instead'));
+          process.exit(1);
+        }
       }
 
       // NEW FLOW: Account-based profile (work, personal)
@@ -874,11 +882,14 @@ async function main(): Promise<void> {
       // Dispatch through target adapter for non-claude targets
       if (resolvedTarget !== 'claude') {
         const adapter = getTarget(resolvedTarget);
+        if (!adapter.supportsProfileType('default')) {
+          console.error(fail(`${adapter.displayName} does not support default profile mode`));
+          process.exit(1);
+        }
+        const creds: TargetCredentials = { profile: 'default', baseUrl: '', apiKey: '' };
+        await adapter.prepareCredentials(creds);
         const targetArgs = adapter.buildArgs('default', remainingArgs);
-        const targetEnv = adapter.buildEnv(
-          { profile: 'default', baseUrl: '', apiKey: '' },
-          'default'
-        );
+        const targetEnv = adapter.buildEnv(creds, 'default');
         adapter.exec(targetArgs, targetEnv);
         return;
       }

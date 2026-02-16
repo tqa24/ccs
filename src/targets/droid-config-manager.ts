@@ -12,6 +12,18 @@ import * as lockfile from 'proper-lockfile';
 
 const CCS_MODEL_PREFIX = 'ccs-';
 
+/**
+ * Validate profile name to prevent filesystem/security issues.
+ * Only alphanumeric, underscore, hyphen allowed.
+ */
+function validateProfileName(profile: string): void {
+  if (!profile || !/^[a-zA-Z0-9_-]+$/.test(profile)) {
+    throw new Error(
+      `Invalid profile name "${profile}": must contain only alphanumeric characters, underscores, or hyphens`
+    );
+  }
+}
+
 export interface DroidCustomModel {
   model: string;
   displayName: string;
@@ -69,6 +81,7 @@ function readDroidSettings(): DroidSettings {
     // Corrupted file — preserve as backup, start fresh
     const backup = settingsPath + '.bak';
     fs.copyFileSync(settingsPath, backup);
+    fs.chmodSync(backup, 0o600); // Secure backup permissions
     console.warn(`[!] Corrupted ${settingsPath}, backed up to ${backup}`);
     return { customModels: [] };
   }
@@ -81,6 +94,15 @@ function readDroidSettings(): DroidSettings {
 function writeDroidSettings(settings: DroidSettings): void {
   ensureFactoryDir();
   const settingsPath = getSettingsPath();
+
+  // Refuse to write if target is a symlink (prevents symlink attacks)
+  if (fs.existsSync(settingsPath)) {
+    const stat = fs.lstatSync(settingsPath);
+    if (stat.isSymbolicLink()) {
+      throw new Error('Refusing to write: settings.json is a symlink');
+    }
+  }
+
   const tmpPath = settingsPath + '.tmp';
 
   fs.writeFileSync(tmpPath, JSON.stringify(settings, null, 2) + '\n', {
@@ -115,6 +137,7 @@ function ccsAlias(profile: string): string {
  * Acquires file lock to prevent concurrent write races.
  */
 export async function upsertCcsModel(profile: string, model: DroidCustomModel): Promise<void> {
+  validateProfileName(profile);
   ensureFactoryDir();
   const settingsPath = getSettingsPath();
 
@@ -162,6 +185,7 @@ export async function upsertCcsModel(profile: string, model: DroidCustomModel): 
  * Remove a CCS-managed custom model entry.
  */
 export async function removeCcsModel(profile: string): Promise<void> {
+  validateProfileName(profile);
   const settingsPath = getSettingsPath();
   if (!fs.existsSync(settingsPath)) return;
 
@@ -208,6 +232,9 @@ export async function listCcsModels(): Promise<Map<string, DroidCustomModel>> {
  * Removes ccs-* entries whose profile no longer exists in active profiles.
  */
 export async function pruneOrphanedModels(activeProfiles: string[]): Promise<number> {
+  // Validate all profile names before pruning
+  activeProfiles.forEach((profile) => validateProfileName(profile));
+
   const settingsPath = getSettingsPath();
   if (!fs.existsSync(settingsPath)) return 0;
 

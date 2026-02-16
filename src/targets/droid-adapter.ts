@@ -82,8 +82,14 @@ export class DroidAdapter implements TargetAdapter {
       else process.exit(code || 0);
     });
 
-    child.on('error', () => {
-      console.error('[X] Failed to start Droid CLI. Is @factory/cli installed?');
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EACCES') {
+        console.error('[X] Droid CLI not executable. Check file permissions.');
+      } else if (err.code === 'ENOENT') {
+        console.error('[X] Droid CLI not found. Install: npm i -g @factory/cli');
+      } else {
+        console.error('[X] Failed to start Droid CLI:', err.message);
+      }
       process.exit(1);
     });
   }
