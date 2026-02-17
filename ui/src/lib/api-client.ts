@@ -5,10 +5,14 @@
 
 import type { CLIProxyProvider } from './provider-config';
 
-const BASE_URL = '/api';
+export const API_BASE_URL = '/api';
+
+export function withApiBase(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${BASE_URL}${url}`, {
+  const res = await fetch(withApiBase(url), {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });
