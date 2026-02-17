@@ -6,7 +6,7 @@
 
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { withApiBase } from '@/lib/api-client';
+import { ApiConflictError, withApiBase } from '@/lib/api-client';
 
 // Types
 export interface CopilotStatus {
@@ -121,7 +121,7 @@ async function saveCopilotRawSettings(data: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (res.status === 409) throw new Error('CONFLICT');
+  if (res.status === 409) throw new ApiConflictError('Copilot raw settings changed externally');
   if (!res.ok) throw new Error('Failed to save copilot raw settings');
   return res.json();
 }

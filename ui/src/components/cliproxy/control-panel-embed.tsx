@@ -9,7 +9,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { RefreshCw, AlertCircle, Key, X, Gauge, Globe, Settings } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api-client';
+import { api, withApiBase } from '@/lib/api-client';
 import type { CliproxyServerConfig } from '@/lib/api-client';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 
@@ -24,7 +24,8 @@ interface ControlPanelEmbedProps {
 
 export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanelEmbedProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
+  const [iframeRevision, setIframeRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [showLoginHint, setShowLoginHint] = useState(true);
@@ -40,7 +41,7 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
   const { data: authTokens } = useQuery<AuthTokensResponse>({
     queryKey: ['auth-tokens-raw'],
     queryFn: async () => {
-      const response = await fetch('/api/settings/auth/tokens/raw');
+      const response = await fetch(withApiBase('/settings/auth/tokens/raw'));
       if (!response.ok) throw new Error('Failed to fetch auth tokens');
       return response.json();
     },
@@ -60,8 +61,8 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
 
     if (remote?.enabled && remote?.host) {
       const protocol = remote.protocol || 'http';
-      // Use port from config, or default based on protocol (443 for https, 80 for http)
-      const remotePort = remote.port || (protocol === 'https' ? 443 : 80);
+      // Use port from config, or default based on protocol (443 for https, 8317 for http)
+      const remotePort = remote.port || (protocol === 'https' ? 443 : CLIPROXY_DEFAULT_PORT);
       // Only include port in URL if it's non-standard
       const portSuffix =
         (protocol === 'https' && remotePort === 443) || (protocol === 'http' && remotePort === 80)
@@ -88,6 +89,9 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
       displayHost: `localhost:${port}`,
     };
   }, [cliproxyConfig, authTokens, port]);
+
+  const iframeLoaded = loadedUrl === managementUrl;
+  const isLoading = !iframeLoaded;
 
   // Check if CLIProxy is running
   useEffect(() => {
@@ -130,48 +134,53 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
     return () => controller.abort();
   }, [checkUrl, isRemote, displayHost]);
 
-  // Handle iframe load - attempt to auto-login via postMessage
-  const handleIframeLoad = useCallback(() => {
-    setIsLoading(false);
-
-    // Try to inject credentials via postMessage
-    // The management.html needs to listen for this message
-    // If it doesn't support it, user will see the login page
-    if (iframeRef.current?.contentWindow && authToken) {
-      try {
-        // Derive apiBase from checkUrl (remove trailing slash)
-        const apiBase = checkUrl.replace(/\/$/, '');
-
-        // Security: Validate iframe src matches target origin before sending credentials
-        const iframeSrc = iframeRef.current.src;
-        if (!iframeSrc.startsWith(apiBase)) {
-          console.warn('[ControlPanelEmbed] Iframe origin mismatch, skipping postMessage');
-          return;
-        }
-
-        // Send credentials to iframe
-        iframeRef.current.contentWindow.postMessage(
-          {
-            type: 'ccs-auto-login',
-            apiBase,
-            managementKey: authToken,
-          },
-          apiBase
-        );
-      } catch (e) {
-        // Cross-origin restriction - expected if not same origin
-        console.debug('[ControlPanelEmbed] postMessage failed - cross-origin:', e);
-      }
+  const postAutoLoginCredentials = useCallback(() => {
+    // Auto-login can only run when iframe has loaded and authToken is available.
+    if (!iframeLoaded || !iframeRef.current?.contentWindow || !authToken) {
+      return;
     }
-  }, [checkUrl, authToken]);
+
+    try {
+      // Derive apiBase from checkUrl (remove trailing slash)
+      const apiBase = checkUrl.replace(/\/$/, '');
+
+      // Security: Validate iframe src matches target origin before sending credentials
+      const iframeSrc = iframeRef.current.src;
+      if (!iframeSrc.startsWith(apiBase)) {
+        console.warn('[ControlPanelEmbed] Iframe origin mismatch, skipping postMessage');
+        return;
+      }
+
+      // Send credentials to iframe
+      iframeRef.current.contentWindow.postMessage(
+        {
+          type: 'ccs-auto-login',
+          apiBase,
+          managementKey: authToken,
+        },
+        apiBase
+      );
+    } catch (e) {
+      // Cross-origin restriction - expected if not same origin
+      console.debug('[ControlPanelEmbed] postMessage failed - cross-origin:', e);
+    }
+  }, [authToken, checkUrl, iframeLoaded]);
+
+  // Retry auto-login when token/checkUrl arrive after iframe onLoad.
+  useEffect(() => {
+    postAutoLoginCredentials();
+  }, [postAutoLoginCredentials]);
+
+  // Handle iframe load - mark ready then let effect post credentials.
+  const handleIframeLoad = useCallback(() => {
+    setLoadedUrl(managementUrl);
+  }, [managementUrl]);
 
   const handleRefresh = () => {
-    setIsLoading(true);
+    setLoadedUrl(null);
+    setIframeRevision((value) => value + 1);
     setError(null);
     setIsConnected(false);
-    if (iframeRef.current) {
-      iframeRef.current.src = managementUrl;
-    }
   };
 
   // Show error state if CLIProxy is not running
@@ -264,6 +273,7 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
 
       {/* Iframe */}
       <iframe
+        key={`${managementUrl}:${iframeRevision}`}
         ref={iframeRef}
         src={managementUrl}
         className="flex-1 w-full border-0"

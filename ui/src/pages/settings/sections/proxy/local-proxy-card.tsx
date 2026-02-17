@@ -35,9 +35,10 @@ export function LocalProxyCard({
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">Port</label>
           <Input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={displayLocalPort}
-            onChange={(e) => setEditedLocalPort(e.target.value)}
+            onChange={(e) => setEditedLocalPort(e.target.value.replace(/\D/g, ''))}
             onBlur={onSaveLocalPort}
             placeholder={`${CLIPROXY_DEFAULT_PORT}`}
             className="font-mono max-w-32"

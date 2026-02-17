@@ -25,6 +25,7 @@ import { RemoteProxyCard } from './remote-proxy-card';
 import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
 import { api } from '@/lib/api-client';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
+import { toast } from 'sonner';
 
 /** LocalStorage key for debug mode preference */
 const DEBUG_MODE_KEY = 'ccs_debug_mode';
@@ -184,12 +185,24 @@ export default function ProxySection() {
   };
 
   const savePort = () => {
-    const portStr = editedPort ?? displayPort;
-    const port = portStr === '' ? undefined : parseInt(portStr, 10);
-    const effectivePort = port && !isNaN(port) && port > 0 ? port : undefined;
+    const portStr = (editedPort ?? displayPort).trim();
+    if (portStr === '') {
+      if (config.remote.port !== undefined) {
+        saveConfig({ remote: { ...remoteConfig, port: undefined } });
+      }
+      setEditedPort(null);
+      return;
+    }
 
-    if (effectivePort !== config.remote.port) {
-      saveConfig({ remote: { ...remoteConfig, port: effectivePort } });
+    const parsedPort = Number(portStr);
+    if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      toast.error('Port must be an integer between 1 and 65535, or empty for default');
+      setEditedPort(null);
+      return;
+    }
+
+    if (parsedPort !== config.remote.port) {
+      saveConfig({ remote: { ...remoteConfig, port: parsedPort } });
     }
     setEditedPort(null);
   };
@@ -211,9 +224,17 @@ export default function ProxySection() {
   };
 
   const saveLocalPort = () => {
-    const port = parseInt(editedLocalPort ?? displayLocalPort, 10);
-    if (!isNaN(port) && port !== config.local.port) {
-      saveConfig({ local: { ...config.local, port } });
+    const localPortStr = (editedLocalPort ?? displayLocalPort).trim();
+    const parsedPort = localPortStr === '' ? CLIPROXY_DEFAULT_PORT : Number(localPortStr);
+
+    if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+      toast.error('Local port must be an integer between 1 and 65535');
+      setEditedLocalPort(null);
+      return;
+    }
+
+    if (parsedPort !== config.local.port) {
+      saveConfig({ local: { ...config.local, port: parsedPort } });
     }
     setEditedLocalPort(null);
   };

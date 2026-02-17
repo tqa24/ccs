@@ -5,6 +5,7 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { useCopilot } from '@/hooks/use-copilot';
+import { isApiConflictError } from '@/lib/api-client';
 import { toast } from 'sonner';
 import type { ModelPreset } from './types';
 
@@ -171,7 +172,7 @@ export function useCopilotConfigForm() {
       setLocalOverrides({});
       setRawJsonEdits(null);
     } catch (error) {
-      if ((error as Error).message === 'CONFLICT') {
+      if (isApiConflictError(error)) {
         setConflictDialog(true);
       } else {
         toast.error('Failed to save settings');

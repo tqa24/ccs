@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useCursor } from '@/hooks/use-cursor';
 import { DEFAULT_CURSOR_PORT } from '@/lib/default-ports';
+import { isApiConflictError } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -391,6 +392,16 @@ export function CursorPage() {
   };
 
   const applyPreset = (preset: 'codex53' | 'claude46' | 'gemini3') => {
+    if (modelsLoading) {
+      toast.error('Models are still loading. Please wait before applying a preset.');
+      return;
+    }
+
+    if (models.length === 0) {
+      toast.error('No models available yet. Start the daemon and refresh first.');
+      return;
+    }
+
     const fallbackModel = effectiveModel || currentModel || models[0]?.id || 'gpt-5.3-codex';
     const codex53 = pickModelByAliases(
       models,
@@ -560,11 +571,10 @@ export function CursorPage() {
       }
       return true;
     } catch (error) {
-      const message = (error as Error).message || 'Failed to save raw settings';
-      if (message === 'CONFLICT') {
+      if (isApiConflictError(error)) {
         toast.error('Raw settings changed externally. Refresh and retry.');
       } else {
-        toast.error(message);
+        toast.error((error as Error).message || 'Failed to save raw settings');
       }
       return false;
     }
@@ -868,6 +878,7 @@ export function CursorPage() {
                                 size="sm"
                                 className="text-xs h-7 gap-1"
                                 onClick={() => applyPreset('codex53')}
+                                disabled={modelsLoading || models.length === 0}
                                 title="OpenAI-only mapping: GPT-5.3 Codex / Codex Max / GPT-5 Mini"
                               >
                                 <Zap className="w-3 h-3" />
@@ -878,6 +889,7 @@ export function CursorPage() {
                                 size="sm"
                                 className="text-xs h-7 gap-1"
                                 onClick={() => applyPreset('claude46')}
+                                disabled={modelsLoading || models.length === 0}
                                 title="Claude-first mapping: Opus 4.6 / Sonnet 4.5 / Haiku 4.5"
                               >
                                 <Zap className="w-3 h-3" />
@@ -888,6 +900,7 @@ export function CursorPage() {
                                 size="sm"
                                 className="text-xs h-7 gap-1"
                                 onClick={() => applyPreset('gemini3')}
+                                disabled={modelsLoading || models.length === 0}
                                 title="Gemini-first mapping: Gemini 3 Pro + Gemini 3 Flash"
                               >
                                 <Zap className="w-3 h-3" />
