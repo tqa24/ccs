@@ -16,12 +16,10 @@ import type {
   RemoteModelInfo,
   GetModelDefinitionsResponse,
 } from './management-api-types';
+import { CLIPROXY_DEFAULT_PORT } from './config/port-manager';
 
 /** Default timeout for management operations (longer than health check) */
 const DEFAULT_TIMEOUT_MS = 5000;
-
-/** Default port for HTTP protocol */
-const DEFAULT_HTTP_PORT = 8317;
 
 /** Default port for HTTPS protocol */
 const DEFAULT_HTTPS_PORT = 443;
@@ -33,7 +31,7 @@ function getEffectivePort(port: number | undefined, protocol: 'http' | 'https'):
   if (port !== undefined && Number.isInteger(port) && port > 0 && port <= 65535) {
     return port;
   }
-  return protocol === 'https' ? DEFAULT_HTTPS_PORT : DEFAULT_HTTP_PORT;
+  return protocol === 'https' ? DEFAULT_HTTPS_PORT : CLIPROXY_DEFAULT_PORT;
 }
 
 /**
