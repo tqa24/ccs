@@ -570,6 +570,48 @@ describe('droid-config-manager', () => {
       expect(settings.customModels).toHaveLength(1);
       expect(settings.customModels[0].displayName).toBe('My GPT');
     });
+
+    it('should reject invalid active profile names', async () => {
+      await expect(pruneOrphanedModels(['bad profile'])).rejects.toThrow(/Invalid profile name/);
+    });
+
+    it('should use active profile snapshot taken at call time', async () => {
+      const factoryDir = path.join(tmpDir, '.factory');
+      fs.mkdirSync(factoryDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({
+          customModels: [
+            {
+              model: 'opus',
+              displayName: 'CCS gemini',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'anthropic',
+            },
+            {
+              model: 'sonnet',
+              displayName: 'CCS codex',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'anthropic',
+            },
+          ],
+        })
+      );
+
+      const activeProfiles = ['gemini'];
+      const prunePromise = pruneOrphanedModels(activeProfiles);
+      activeProfiles.push('codex'); // Mutation after call should not affect in-flight prune decision.
+
+      const removed = await prunePromise;
+      expect(removed).toBe(1);
+
+      const models = await listCcsModels();
+      expect(models.size).toBe(1);
+      expect(models.has('gemini')).toBe(true);
+      expect(models.has('codex')).toBe(false);
+    });
   });
 
   describe('concurrent writes', () => {

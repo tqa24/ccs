@@ -386,8 +386,8 @@ export async function listCcsModels(): Promise<Map<string, DroidCustomModel>> {
  * Removes ccs-* entries whose profile no longer exists in active profiles.
  */
 export async function pruneOrphanedModels(activeProfiles: string[]): Promise<number> {
-  // Validate all profile names before pruning
-  activeProfiles.forEach((profile) => validateProfileName(profile));
+  // Snapshot at call time so caller-side mutation cannot affect filtering while lock is pending.
+  const activeProfilesSnapshot = [...activeProfiles];
 
   ensureFactoryDir();
   const settingsPath = getSettingsPath();
@@ -397,6 +397,12 @@ export async function pruneOrphanedModels(activeProfiles: string[]): Promise<num
 
   try {
     release = await acquireFactoryLock(3);
+    const activeProfileSet = new Set<string>();
+    for (const profile of activeProfilesSnapshot) {
+      validateProfileName(profile);
+      activeProfileSet.add(profile);
+    }
+
     if (!fs.existsSync(settingsPath)) return 0;
 
     const settings = readDroidSettings();
@@ -406,7 +412,7 @@ export async function pruneOrphanedModels(activeProfiles: string[]): Promise<num
     settings.customModels = settings.customModels.filter((m) => {
       const profile = parseManagedProfile(m.displayName);
       if (profile) {
-        return activeProfiles.includes(profile);
+        return activeProfileSet.has(profile);
       }
 
       // Drop malformed managed entries; keep user-managed entries.
