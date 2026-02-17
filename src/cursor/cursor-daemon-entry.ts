@@ -8,7 +8,7 @@ import * as http from 'http';
 import { Readable } from 'stream';
 import { CursorExecutor } from './cursor-executor';
 import { checkAuthStatus } from './cursor-auth';
-import { DEFAULT_CURSOR_MODEL, getModelsForDaemon } from './cursor-models';
+import { getModelsForDaemon, resolveCursorRequestModel } from './cursor-models';
 import type { CursorTool } from './cursor-protobuf-schema';
 
 interface DaemonRuntimeOptions {
@@ -229,10 +229,10 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
 
       const parsedBody = (await readJsonBody(req)) as OpenAIChatRequest;
       const messages = normalizeMessages(parsedBody.messages);
-      const model =
-        typeof parsedBody.model === 'string' && parsedBody.model
-          ? parsedBody.model
-          : DEFAULT_CURSOR_MODEL;
+      const requestedModel =
+        typeof parsedBody.model === 'string' && parsedBody.model.trim().length > 0
+          ? parsedBody.model.trim()
+          : undefined;
       const stream = parsedBody.stream === true;
 
       const authStatus = checkAuthStatus();
@@ -256,6 +256,25 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
         return;
       }
 
+      const daemonCredentials = {
+        accessToken: authStatus.credentials.accessToken,
+        machineId: authStatus.credentials.machineId,
+        ghostMode: options.ghostMode,
+      };
+      const availableModels = await getModelsForDaemon({
+        credentials: daemonCredentials,
+      });
+      const model = resolveCursorRequestModel(requestedModel, availableModels);
+      if (
+        requestedModel &&
+        requestedModel !== model &&
+        (process.env.CCS_DEBUG === '1' || process.env.CCS_DEBUG === 'true')
+      ) {
+        console.error(
+          `[cursor] Requested model "${requestedModel}" is unavailable; falling back to "${model}".`
+        );
+      }
+
       const abortController = new AbortController();
       const abortOnDisconnect = () => {
         if (!abortController.signal.aborted && !res.writableEnded) {
@@ -271,11 +290,7 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
         model,
         stream,
         signal: abortController.signal,
-        credentials: {
-          accessToken: authStatus.credentials.accessToken,
-          machineId: authStatus.credentials.machineId,
-          ghostMode: options.ghostMode,
-        },
+        credentials: daemonCredentials,
         body: {
           messages,
           tools: Array.isArray(parsedBody.tools) ? parsedBody.tools : undefined,

@@ -15,6 +15,7 @@ import {
   fetchModelsFromCursorApi,
   getModelsForDaemon,
   clearCursorModelsCache,
+  resolveCursorRequestModel,
 } from '../../../src/cursor/cursor-models';
 
 describe('DEFAULT_CURSOR_MODELS', () => {
@@ -47,6 +48,26 @@ describe('DEFAULT_CURSOR_MODEL', () => {
 describe('getDefaultModel', () => {
   it('returns the default model constant', () => {
     expect(getDefaultModel()).toBe(DEFAULT_CURSOR_MODEL);
+  });
+});
+
+describe('resolveCursorRequestModel', () => {
+  it('keeps requested model when present in available models', () => {
+    const resolved = resolveCursorRequestModel('claude-4.6-opus', DEFAULT_CURSOR_MODELS);
+    expect(resolved).toBe('claude-4.6-opus');
+  });
+
+  it('falls back to default when requested model is unavailable', () => {
+    const resolved = resolveCursorRequestModel('non-existent-model', DEFAULT_CURSOR_MODELS);
+    expect(resolved).toBe(DEFAULT_CURSOR_MODEL);
+  });
+
+  it('falls back to first available model when default id is absent from available set', () => {
+    const resolved = resolveCursorRequestModel('non-existent-model', [
+      { id: 'fallback-1', name: 'Fallback 1', provider: 'openai' },
+      { id: 'fallback-2', name: 'Fallback 2', provider: 'anthropic' },
+    ]);
+    expect(resolved).toBe('fallback-1');
   });
 });
 

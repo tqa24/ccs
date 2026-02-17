@@ -264,10 +264,44 @@ export async function getAvailableModels(port: number): Promise<CursorModel[]> {
   return fetchModelsFromDaemon(port);
 }
 
+function getCatalogDefaultModelId(availableModels: CursorModel[]): string {
+  if (availableModels.some((model) => model.id === DEFAULT_CURSOR_MODEL)) {
+    return DEFAULT_CURSOR_MODEL;
+  }
+
+  const explicitDefault = availableModels.find((model) => model.isDefault)?.id;
+  if (explicitDefault) {
+    return explicitDefault;
+  }
+
+  const firstAvailable = availableModels.find(
+    (model) => typeof model.id === 'string' && model.id.trim().length > 0
+  )?.id;
+
+  return firstAvailable || DEFAULT_CURSOR_MODEL;
+}
+
+export function resolveCursorRequestModel(
+  requestedModel: string | null | undefined,
+  availableModels: CursorModel[]
+): string {
+  const fallbackModel = getCatalogDefaultModelId(availableModels);
+  const normalizedRequested = typeof requestedModel === 'string' ? requestedModel.trim() : '';
+  if (!normalizedRequested) {
+    return fallbackModel;
+  }
+
+  if (availableModels.some((model) => model.id === normalizedRequested)) {
+    return normalizedRequested;
+  }
+
+  return fallbackModel;
+}
+
 /**
  * Get the default model.
  * Uses GPT-5.3 Codex as default.
  */
 export function getDefaultModel(): string {
-  return DEFAULT_CURSOR_MODEL;
+  return getCatalogDefaultModelId(DEFAULT_CURSOR_MODELS);
 }
