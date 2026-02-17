@@ -19,7 +19,7 @@ import {
 } from '../../../src/cursor/cursor-daemon';
 import { getCcsDir } from '../../../src/utils/config-manager';
 import { handleCursorCommand } from '../../../src/commands/cursor-command';
-import { loadCredentials } from '../../../src/cursor/cursor-auth';
+import { loadCredentials, saveCredentials } from '../../../src/cursor/cursor-auth';
 
 // Test isolation
 let originalCcsHome: string | undefined;
@@ -181,6 +181,93 @@ describe('startDaemon', () => {
     },
     35000
   );
+
+  it('returns 404 for unknown routes', async () => {
+    const port = 10000 + Math.floor(Math.random() * 50000);
+    const result = await startDaemon({ port, ghost_mode: true });
+    expect(result.success).toBe(true);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/unknown`);
+      expect(response.status).toBe(404);
+    } finally {
+      await stopDaemon();
+    }
+  });
+
+  it('returns 401 when credentials are expired', async () => {
+    const port = 10000 + Math.floor(Math.random() * 50000);
+    const expiredAt = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
+
+    saveCredentials({
+      accessToken: 'a'.repeat(60),
+      machineId: '1234567890abcdef1234567890abcdef',
+      authMethod: 'manual',
+      importedAt: expiredAt,
+    });
+
+    const result = await startDaemon({ port, ghost_mode: true });
+    expect(result.success).toBe(true);
+
+    try {
+      const response = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4.1',
+          messages: [{ role: 'user', content: 'hello' }],
+        }),
+      });
+
+      expect(response.status).toBe(401);
+      const body = (await response.json()) as { error?: { message?: string } };
+      expect(body.error?.message).toContain('expired');
+    } finally {
+      await stopDaemon();
+    }
+  });
+
+  it('validates invalid JSON, invalid message schema, and oversized body', async () => {
+    const port = 10000 + Math.floor(Math.random() * 50000);
+    const result = await startDaemon({ port, ghost_mode: true });
+    expect(result.success).toBe(true);
+
+    try {
+      const invalidJson = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{invalid-json',
+      });
+      expect(invalidJson.status).toBe(400);
+
+      const invalidSchema = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4.1',
+          messages: { role: 'user', content: 'hello' },
+        }),
+      });
+      expect(invalidSchema.status).toBe(400);
+
+      const oversized = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4.1',
+          messages: [
+            {
+              role: 'user',
+              content: 'x'.repeat(10 * 1024 * 1024 + 1024),
+            },
+          ],
+        }),
+      });
+      expect(oversized.status).toBe(413);
+    } finally {
+      await stopDaemon();
+    }
+  });
 });
 
 describe('isDaemonRunning', () => {

@@ -6,7 +6,7 @@
 import type { IncomingHttpHeaders } from 'http';
 import { generateCursorBody, extractTextFromResponse } from './cursor-protobuf.js';
 import { buildCursorRequest } from './cursor-translator.js';
-import type { CursorTool, CursorCredentials } from './cursor-protobuf-schema.js';
+import type { CursorTool, CursorApiCredentials } from './cursor-protobuf-schema.js';
 import { buildCursorConnectHeaders, generateCursorChecksum } from './cursor-client-policy.js';
 
 import { StreamingFrameParser, decompressPayload } from './cursor-stream-parser.js';
@@ -30,7 +30,7 @@ interface ExecutorParams {
     reasoning_effort?: string;
   };
   stream: boolean;
-  credentials: CursorCredentials;
+  credentials: CursorApiCredentials;
   signal?: AbortSignal;
 }
 
@@ -104,7 +104,7 @@ export class CursorExecutor {
     return generateCursorChecksum(machineId);
   }
 
-  buildHeaders(credentials: CursorCredentials): Record<string, string> {
+  buildHeaders(credentials: CursorApiCredentials): Record<string, string> {
     return buildCursorConnectHeaders(credentials);
   }
 
@@ -112,7 +112,7 @@ export class CursorExecutor {
     model: string,
     body: ExecutorParams['body'],
     stream: boolean,
-    credentials: CursorCredentials
+    credentials: CursorApiCredentials
   ): Uint8Array {
     const translatedBody = buildCursorRequest(model, body, stream, credentials);
     const messages = translatedBody.messages || [];
@@ -320,12 +320,24 @@ export class CursorExecutor {
     const created = Math.floor(Date.now() / 1000);
 
     return new Promise((resolve, reject) => {
+      let settled = false;
+      const resolveOnce = (response: Response) => {
+        if (settled) return;
+        settled = true;
+        resolve(response);
+      };
+      const rejectOnce = (error: Error) => {
+        if (settled) return;
+        settled = true;
+        reject(error);
+      };
+
       const urlObj = new URL(url);
       const client = http2.connect(`https://${urlObj.host}`);
 
       client.on('error', (err) => {
         client.close();
-        reject(err);
+        rejectOnce(err instanceof Error ? err : new Error(String(err)));
       });
 
       const req = client.request({
@@ -342,7 +354,8 @@ export class CursorExecutor {
       if (signal) {
         const onAbort = () => {
           streamClosed = true;
-          // Close the ReadableStream controller so consumers don't hang on reader.read()
+
+          // If stream already started, close readable to unblock consumers.
           if (streamController) {
             try {
               streamController.close();
@@ -350,9 +363,12 @@ export class CursorExecutor {
               /* already closed */
             }
           }
+
           req.close();
           client.close();
+          rejectOnce(new Error('Request aborted'));
         };
+
         signal.addEventListener('abort', onAbort, { once: true });
         const cleanup = () => signal.removeEventListener('abort', onAbort);
         req.on('end', cleanup);
@@ -368,12 +384,12 @@ export class CursorExecutor {
           req.on('end', () => {
             client.close();
             const errorText = Buffer.concat(errorChunks).toString();
-            resolve(
+            resolveOnce(
               new Response(
                 JSON.stringify({
                   error: {
                     message: `[${status}]: ${errorText}`,
-                    type: 'invalid_request_error',
+                    type: status === 429 ? 'rate_limit_error' : 'invalid_request_error',
                     code: '',
                   },
                 }),
@@ -561,7 +577,7 @@ export class CursorExecutor {
           },
         });
 
-        resolve(
+        resolveOnce(
           new Response(readable, {
             status: 200,
             headers: {
@@ -575,7 +591,7 @@ export class CursorExecutor {
 
       req.on('error', (err) => {
         client.close();
-        reject(err);
+        rejectOnce(err instanceof Error ? err : new Error(String(err)));
       });
 
       req.write(body);

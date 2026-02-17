@@ -326,11 +326,15 @@ export function extractTextFromResponse(payload: Uint8Array): {
       }
     }
 
+    if (payload.length > 0) {
+      return { text: null, error: 'Malformed protobuf response', toolCall: null, thinking: null };
+    }
+
     return { text: null, error: null, toolCall: null, thinking: null };
   } catch (err) {
     if (process.env.CCS_DEBUG) {
       console.error('[cursor] extractTextFromResponse parsing failed:', err);
     }
-    return { text: null, error: null, toolCall: null, thinking: null };
+    return { text: null, error: 'Malformed protobuf response', toolCall: null, thinking: null };
   }
 }

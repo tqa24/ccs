@@ -371,18 +371,12 @@ describe('Request Encoding', () => {
     it('should handle multi-frame buffer', () => {
       const executor = new CursorExecutor();
 
-      // Create two simple frames
-      const frame1 = wrapConnectRPCFrame(
-        encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, 'Frame 1'),
-        false
-      );
-      const frame2 = wrapConnectRPCFrame(
-        encodeField(FIELD.ChatResponse.TEXT, WIRE_TYPE.LEN, ' Frame 2'),
-        false
-      );
+      // Build two valid response frames (top-level Response.RESPONSE wrapper).
+      const frame1 = buildTextFrame('Frame 1');
+      const frame2 = buildTextFrame(' Frame 2');
 
       // Concatenate them
-      const multiFrame = Buffer.concat([Buffer.from(frame1), Buffer.from(frame2)]);
+      const multiFrame = Buffer.concat([frame1, frame2]);
 
       const result = executor.transformProtobufToJSON(multiFrame, 'gpt-4', {
         messages: [],
@@ -455,6 +449,29 @@ describe('CursorExecutor', () => {
       const headers = executor.buildHeaders(credentials);
 
       expect(headers.authorization).toBe('Bearer actual-token');
+    });
+
+    it('should throw when token becomes empty after delimiter parsing', () => {
+      const credentials = {
+        accessToken: 'prefix::',
+        machineId: 'test-machine-id',
+      };
+
+      expect(() => executor.buildHeaders(credentials)).toThrow('Access token is empty');
+    });
+
+    it('should include normalized platform and timezone headers', () => {
+      const credentials = {
+        accessToken: 'test-token',
+        machineId: 'test-machine-id',
+      };
+
+      const headers = executor.buildHeaders(credentials);
+
+      expect(['windows', 'macos', 'linux']).toContain(headers['x-cursor-client-os']);
+      expect(['aarch64', 'x64']).toContain(headers['x-cursor-client-arch']);
+      expect(typeof headers['x-cursor-timezone']).toBe('string');
+      expect(headers['x-cursor-timezone'].length).toBeGreaterThan(0);
     });
 
     it('should respect ghostMode flag', () => {
@@ -553,6 +570,33 @@ describe('CursorExecutor', () => {
       expect(body.choices[0].message.content).toBe(textContent);
       expect(body.choices[0].message.reasoning_content).toBe(thinkingContent);
     });
+
+    it('should merge fragmented tool call arguments and set tool_calls finish reason', async () => {
+      const frame1 = buildToolCallFrame({
+        id: 'call_123',
+        name: 'search_docs',
+        args: '{"q":"hel',
+        isLast: false,
+      });
+      const frame2 = buildToolCallFrame({
+        id: 'call_123',
+        name: 'search_docs',
+        args: 'lo"}',
+        isLast: true,
+      });
+      const combined = Buffer.concat([frame1, frame2]);
+
+      const result = executor.transformProtobufToJSON(combined, 'gpt-4', {
+        messages: [],
+      });
+
+      expect(result.status).toBe(200);
+      const body = JSON.parse(await result.text());
+      expect(body.choices[0].finish_reason).toBe('tool_calls');
+      expect(body.choices[0].message.tool_calls[0].id).toBe('call_123');
+      expect(body.choices[0].message.tool_calls[0].function.name).toBe('search_docs');
+      expect(body.choices[0].message.tool_calls[0].function.arguments).toBe('{"q":"hello"}');
+    });
   });
 
   describe('transformProtobufToSSE', () => {
@@ -610,6 +654,32 @@ describe('CursorExecutor', () => {
       const bodyText = await result.text();
       expect(bodyText).toContain('reasoning_content');
       expect(bodyText).toContain(thinkingContent);
+    });
+
+    it('should emit tool call deltas and end with finish_reason tool_calls', async () => {
+      const frame1 = buildToolCallFrame({
+        id: 'call_abc',
+        name: 'search_docs',
+        args: '{"q":"foo',
+        isLast: false,
+      });
+      const frame2 = buildToolCallFrame({
+        id: 'call_abc',
+        name: 'search_docs',
+        args: '"}',
+        isLast: true,
+      });
+      const combined = Buffer.concat([frame1, frame2]);
+
+      const result = executor.transformProtobufToSSE(combined, 'gpt-4', {
+        messages: [],
+      });
+
+      expect(result.status).toBe(200);
+      const bodyText = await result.text();
+      expect(bodyText).toContain('tool_calls');
+      expect(bodyText).toContain('search_docs');
+      expect(bodyText).toContain('"finish_reason":"tool_calls"');
     });
   });
 
@@ -722,6 +792,25 @@ function buildThinkingFrame(thinking: string): Buffer {
   const thinkingField = encodeField(FIELD.Thinking.TEXT, WIRE_TYPE.LEN, thinking);
   const responseField = encodeField(FIELD.ChatResponse.THINKING, WIRE_TYPE.LEN, thinkingField);
   const responseMsg = encodeField(FIELD.Response.RESPONSE, WIRE_TYPE.LEN, responseField);
+  return buildFrame(responseMsg);
+}
+
+/**
+ * Helper: build a protobuf tool call response frame
+ */
+function buildToolCallFrame(options: {
+  id: string;
+  name: string;
+  args: string;
+  isLast: boolean;
+}): Buffer {
+  const toolCallPayload = concatArrays(
+    encodeField(FIELD.ToolCall.ID, WIRE_TYPE.LEN, options.id),
+    encodeField(FIELD.ToolCall.NAME, WIRE_TYPE.LEN, options.name),
+    encodeField(FIELD.ToolCall.RAW_ARGS, WIRE_TYPE.LEN, options.args),
+    encodeField(FIELD.ToolCall.IS_LAST, WIRE_TYPE.VARINT, options.isLast ? 1 : 0)
+  );
+  const responseMsg = encodeField(FIELD.Response.TOOL_CALL, WIRE_TYPE.LEN, toolCallPayload);
   return buildFrame(responseMsg);
 }
 
@@ -842,6 +931,39 @@ describe('StreamingFrameParser', () => {
     expect(results[0].type).toBe('thinking');
     if (results[0].type === 'thinking') {
       expect(results[0].text).toBe('Think step by step');
+    }
+  });
+
+  it('should parse tool call frames', () => {
+    const parser = new StreamingFrameParser();
+    const frame = buildToolCallFrame({
+      id: 'call_parser',
+      name: 'search_docs',
+      args: '{"q":"docs"}',
+      isLast: true,
+    });
+    const results = parser.push(frame);
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('toolCall');
+    if (results[0].type === 'toolCall') {
+      expect(results[0].toolCall.id).toBe('call_parser');
+      expect(results[0].toolCall.function.name).toBe('search_docs');
+      expect(results[0].toolCall.function.arguments).toBe('{"q":"docs"}');
+      expect(results[0].toolCall.isLast).toBe(true);
+    }
+  });
+
+  it('should classify malformed protobuf payload as server error', () => {
+    const parser = new StreamingFrameParser();
+    const malformedFrame = buildFrame(new Uint8Array([0xff, 0xff, 0xff]));
+    const results = parser.push(malformedFrame);
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('error');
+    if (results[0].type === 'error') {
+      expect(results[0].errorType).toBe('server_error');
+      expect(results[0].message).toContain('Malformed protobuf response');
     }
   });
 

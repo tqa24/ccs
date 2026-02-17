@@ -99,11 +99,51 @@ describe('formatModelName', () => {
 
 describe('fetchModelsFromDaemon', () => {
   it('falls back to DEFAULT_CURSOR_MODELS when daemon is unreachable', async () => {
-    // Use a port that nothing is listening on
     const unreachablePort = 9999;
     const models = await fetchModelsFromDaemon(unreachablePort);
 
     expect(models).toEqual(DEFAULT_CURSOR_MODELS);
+  });
+
+  it('falls back to defaults when daemon returns invalid JSON', async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end('{not-valid-json');
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const models = await fetchModelsFromDaemon(address.port);
+      expect(models).toEqual(DEFAULT_CURSOR_MODELS);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('falls back to defaults when daemon response exceeds max body size', async () => {
+    const oversizedPayload = 'x'.repeat(1024 * 1024 + 1024);
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(oversizedPayload);
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const models = await fetchModelsFromDaemon(address.port);
+      expect(models).toEqual(DEFAULT_CURSOR_MODELS);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 
@@ -176,6 +216,90 @@ describe('fetchModelsFromCursorApi', () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
     }
   });
+
+  it('parses response.models and filters invalid records', async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          models: [
+            { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex' },
+            { id: '', name: 'invalid-empty-id' },
+            { id: 123, name: 'invalid-type-id' },
+          ],
+        })
+      );
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const models = await fetchModelsFromCursorApi(
+        {
+          accessToken: 'test-token-123',
+          machineId: '1234567890abcdef1234567890abcdef',
+        },
+        {
+          endpoint: `http://127.0.0.1:${address.port}/v1/models`,
+          timeoutMs: 2000,
+        }
+      );
+
+      expect(models).not.toBeNull();
+      expect(models).toHaveLength(1);
+      expect(models?.[0].id).toBe('gpt-5.3-codex');
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
+  it('returns null when required credentials are missing', async () => {
+    const models = await fetchModelsFromCursorApi(
+      {
+        accessToken: '',
+        machineId: '1234567890abcdef1234567890abcdef',
+      },
+      {
+        endpoint: 'http://127.0.0.1:9/v1/models',
+        timeoutMs: 50,
+      }
+    );
+
+    expect(models).toBeNull();
+  });
+
+  it('returns null on timeout/abort', async () => {
+    const server = http.createServer((_req, _res) => {
+      // Intentionally no response within timeout.
+    });
+
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const models = await fetchModelsFromCursorApi(
+        {
+          accessToken: 'test-token-123',
+          machineId: '1234567890abcdef1234567890abcdef',
+        },
+        {
+          endpoint: `http://127.0.0.1:${address.port}/v1/models`,
+          timeoutMs: 25,
+        }
+      );
+
+      expect(models).toBeNull();
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
 });
 
 describe('getModelsForDaemon', () => {
@@ -228,5 +352,69 @@ describe('getModelsForDaemon', () => {
     });
 
     expect(second[0]?.id).toBe(liveModelId);
+  });
+
+  it('clears cache after auth failures and falls back to defaults', async () => {
+    const liveModelId = 'test-live-model-auth-cache';
+    const okServer = http.createServer((_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          data: [{ id: liveModelId, name: 'Live Model', provider: 'openai' }],
+        })
+      );
+    });
+
+    await new Promise<void>((resolve) => okServer.listen(0, '127.0.0.1', resolve));
+    const okAddress = okServer.address();
+    if (!okAddress || typeof okAddress === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const first = await getModelsForDaemon({
+        credentials: {
+          accessToken: 'test-token-123',
+          machineId: '1234567890abcdef1234567890abcdef',
+        },
+        endpoint: `http://127.0.0.1:${okAddress.port}/v1/models`,
+        timeoutMs: 2000,
+      });
+
+      expect(first[0]?.id).toBe(liveModelId);
+    } finally {
+      await new Promise<void>((resolve) => okServer.close(() => resolve()));
+    }
+
+    const forbiddenServer = http.createServer((_req, res) => {
+      res.writeHead(403, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'forbidden' }));
+    });
+
+    await new Promise<void>((resolve) => forbiddenServer.listen(0, '127.0.0.1', resolve));
+    const forbiddenAddress = forbiddenServer.address();
+    if (!forbiddenAddress || typeof forbiddenAddress === 'string') {
+      throw new Error('Unable to resolve test server port');
+    }
+
+    try {
+      const forbidden = await fetchModelsFromCursorApi(
+        {
+          accessToken: 'test-token-123',
+          machineId: '1234567890abcdef1234567890abcdef',
+        },
+        {
+          endpoint: `http://127.0.0.1:${forbiddenAddress.port}/v1/models`,
+          timeoutMs: 2000,
+        }
+      );
+
+      expect(forbidden).toBeNull();
+    } finally {
+      await new Promise<void>((resolve) => forbiddenServer.close(() => resolve()));
+    }
+
+    const afterAuthFailure = await getModelsForDaemon();
+    expect(afterAuthFailure).toEqual(DEFAULT_CURSOR_MODELS);
   });
 });

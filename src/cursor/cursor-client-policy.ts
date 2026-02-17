@@ -5,7 +5,7 @@
  */
 
 import * as crypto from 'crypto';
-import type { CursorCredentials } from './cursor-protobuf-schema';
+import type { CursorApiCredentials } from './cursor-protobuf-schema';
 
 export const CURSOR_CLIENT_VERSION = '2.3.41';
 export const CURSOR_USER_AGENT = 'connect-es/1.6.1';
@@ -33,6 +33,7 @@ export function generateCursorChecksum(machineId: string, nowMs: number = Date.n
     throw new Error('Machine ID is required for Cursor API');
   }
 
+  // Convert milliseconds to coarse ~1000-second units required by Cursor's checksum routine.
   const timestamp = Math.floor(nowMs / 1000000);
   // JS bitwise shifts wrap modulo 32, so >>40 and >>32 give wrong results.
   // Use Math.trunc division for upper bytes that exceed 32-bit range.
@@ -73,7 +74,7 @@ export function generateCursorChecksum(machineId: string, nowMs: number = Date.n
   return `${encoded}${machineId}`;
 }
 
-function buildCursorBaseHeaders(credentials: CursorCredentials): Record<string, string> {
+function buildCursorBaseHeaders(credentials: CursorApiCredentials): Record<string, string> {
   const cleanToken = normalizeCursorAccessToken(credentials.accessToken);
 
   if (!cleanToken) {
@@ -105,7 +106,9 @@ function buildCursorBaseHeaders(credentials: CursorCredentials): Record<string, 
   };
 }
 
-export function buildCursorConnectHeaders(credentials: CursorCredentials): Record<string, string> {
+export function buildCursorConnectHeaders(
+  credentials: CursorApiCredentials
+): Record<string, string> {
   return {
     ...buildCursorBaseHeaders(credentials),
     'connect-accept-encoding': 'gzip',
@@ -115,7 +118,9 @@ export function buildCursorConnectHeaders(credentials: CursorCredentials): Recor
   };
 }
 
-export function buildCursorModelsHeaders(credentials: CursorCredentials): Record<string, string> {
+export function buildCursorModelsHeaders(
+  credentials: CursorApiCredentials
+): Record<string, string> {
   return {
     ...buildCursorBaseHeaders(credentials),
     accept: 'application/json',

@@ -59,12 +59,26 @@ function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let total = 0;
+    let settled = false;
+
+    const resolveOnce = (payload: unknown) => {
+      if (settled) return;
+      settled = true;
+      resolve(payload);
+    };
+
+    const rejectOnce = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
 
     req.on('data', (chunk: Buffer) => {
       total += chunk.length;
       if (total > MAX_BODY_SIZE) {
-        req.destroy();
-        reject(new Error('Request body too large (max 10MB)'));
+        // Stop processing body, but avoid force-closing socket so caller can return 413 cleanly.
+        req.pause();
+        rejectOnce(new Error('Request body too large (max 10MB)'));
         return;
       }
       chunks.push(chunk);
@@ -73,17 +87,19 @@ function readJsonBody(req: http.IncomingMessage): Promise<unknown> {
     req.on('end', () => {
       const raw = Buffer.concat(chunks).toString('utf8').trim();
       if (!raw) {
-        resolve({});
+        resolveOnce({});
         return;
       }
       try {
-        resolve(JSON.parse(raw));
+        resolveOnce(JSON.parse(raw));
       } catch {
-        reject(new Error('Invalid JSON in request body'));
+        rejectOnce(new Error('Invalid JSON in request body'));
       }
     });
 
-    req.on('error', reject);
+    req.on('error', (error) => {
+      rejectOnce(error instanceof Error ? error : new Error(String(error)));
+    });
   });
 }
 
@@ -241,11 +257,15 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
       }
 
       const abortController = new AbortController();
-      req.on('close', () => {
-        if (!res.writableEnded) {
+      const abortOnDisconnect = () => {
+        if (!abortController.signal.aborted && !res.writableEnded) {
           abortController.abort();
         }
-      });
+      };
+
+      req.on('aborted', abortOnDisconnect);
+      req.on('close', abortOnDisconnect);
+      res.on('close', abortOnDisconnect);
 
       const result = await executor.execute({
         model,
@@ -269,7 +289,8 @@ export function startCursorDaemonServer(options: DaemonRuntimeOptions): http.Ser
       await pipeWebResponseToNode(result.response, res);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      writeJson(res, 400, {
+      const isPayloadTooLarge = message.includes('Request body too large');
+      writeJson(res, isPayloadTooLarge ? 413 : 400, {
         error: {
           type: 'invalid_request_error',
           message,

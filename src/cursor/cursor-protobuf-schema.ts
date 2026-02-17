@@ -135,7 +135,7 @@ export type UnifiedModeType = (typeof UNIFIED_MODE)[keyof typeof UNIFIED_MODE];
 export type ThinkingLevelType = (typeof THINKING_LEVEL)[keyof typeof THINKING_LEVEL];
 
 /** Cursor credentials structure */
-export interface CursorCredentials {
+export interface CursorApiCredentials {
   accessToken: string;
   machineId: string;
   ghostMode?: boolean;

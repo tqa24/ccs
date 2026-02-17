@@ -6,7 +6,7 @@
 
 import * as http from 'http';
 import type { CursorModel } from './types';
-import type { CursorCredentials } from './cursor-protobuf-schema';
+import type { CursorApiCredentials } from './cursor-protobuf-schema';
 import { isDaemonRunning } from './cursor-daemon';
 import { buildCursorModelsHeaders } from './cursor-client-policy';
 import {
@@ -32,6 +32,15 @@ let liveModelsCache: {
 interface CursorModelsApiResponse {
   data?: Array<{ id?: unknown; name?: unknown; provider?: unknown }>;
   models?: Array<{ id?: unknown; name?: unknown; provider?: unknown }>;
+}
+
+function debugLog(message: string, error?: unknown): void {
+  if (!process.env.CCS_DEBUG) return;
+  if (error) {
+    console.error(`[cursor] ${message}`, error);
+    return;
+  }
+  console.error(`[cursor] ${message}`);
 }
 
 function normalizeModelRecords(
@@ -93,7 +102,7 @@ export function clearCursorModelsCache(): void {
 }
 
 export async function fetchModelsFromCursorApi(
-  credentials: CursorCredentials,
+  credentials: CursorApiCredentials,
   options: {
     endpoint?: string;
     timeoutMs?: number;
@@ -116,12 +125,21 @@ export async function fetchModelsFromCursorApi(
     });
 
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        clearCursorModelsCache();
+      }
+      debugLog(`Cursor models API returned ${response.status} (${endpoint})`);
       return null;
     }
 
     const payload = (await response.json()) as unknown;
-    return parseApiModelsResponse(payload);
-  } catch {
+    const parsed = parseApiModelsResponse(payload);
+    if (!parsed) {
+      debugLog(`Cursor models API payload shape invalid (${endpoint})`);
+    }
+    return parsed;
+  } catch (error) {
+    debugLog(`Cursor models API fetch failed (${endpoint})`, error);
     return null;
   } finally {
     clearTimeout(timeout);
@@ -130,7 +148,7 @@ export async function fetchModelsFromCursorApi(
 
 export async function getModelsForDaemon(
   options: {
-    credentials?: CursorCredentials | null;
+    credentials?: CursorApiCredentials | null;
     endpoint?: string;
     timeoutMs?: number;
   } = {}
@@ -186,6 +204,7 @@ export async function fetchModelsFromDaemon(port: number): Promise<CursorModel[]
         res.on('data', (chunk) => {
           data += chunk;
           if (data.length > MAX_BODY_SIZE) {
+            debugLog('Cursor daemon /v1/models body exceeded 1MB; falling back to defaults');
             req.destroy();
             safeResolve(DEFAULT_CURSOR_MODELS);
           }
@@ -193,30 +212,39 @@ export async function fetchModelsFromDaemon(port: number): Promise<CursorModel[]
 
         res.on('end', () => {
           try {
-            const response = JSON.parse(data) as { data?: Array<{ id: string }> };
-            if (response.data && Array.isArray(response.data)) {
-              const models: CursorModel[] = response.data.map((m) => ({
-                id: m.id,
-                name: formatModelName(m.id),
-                provider: detectProvider(m.id),
-                isDefault: m.id === DEFAULT_CURSOR_MODEL,
-              }));
+            const response = JSON.parse(data) as { data?: Array<{ id?: unknown }> };
+            if (Array.isArray(response.data)) {
+              const models: CursorModel[] = response.data
+                .filter((m) => m && typeof m.id === 'string' && m.id.length > 0)
+                .map((m) => ({
+                  id: m.id as string,
+                  name: formatModelName(m.id as string),
+                  provider: detectProvider(m.id as string),
+                  isDefault: m.id === DEFAULT_CURSOR_MODEL,
+                }));
               safeResolve(models.length > 0 ? models : DEFAULT_CURSOR_MODELS);
             } else {
+              debugLog('Cursor daemon /v1/models payload missing data[]; falling back to defaults');
               safeResolve(DEFAULT_CURSOR_MODELS);
             }
-          } catch {
+          } catch (error) {
+            debugLog(
+              'Cursor daemon /v1/models returned invalid JSON; falling back to defaults',
+              error
+            );
             safeResolve(DEFAULT_CURSOR_MODELS);
           }
         });
       }
     );
 
-    req.on('error', () => {
+    req.on('error', (error) => {
+      debugLog('Cursor daemon /v1/models request failed; falling back to defaults', error);
       safeResolve(DEFAULT_CURSOR_MODELS);
     });
 
     req.on('timeout', () => {
+      debugLog('Cursor daemon /v1/models request timed out; falling back to defaults');
       req.destroy();
       safeResolve(DEFAULT_CURSOR_MODELS);
     });
