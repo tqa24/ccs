@@ -90,11 +90,11 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     category: 'alternative',
   },
   {
-    id: 'kimi',
+    id: 'km',
     name: 'Kimi',
     description: 'Moonshot AI - Fast reasoning model',
     baseUrl: 'https://api.kimi.com/coding/',
-    defaultProfileName: 'kimi',
+    defaultProfileName: 'km',
     badge: 'Reasoning',
     icon: '/icons/kimi.svg',
     defaultModel: 'kimi-k2-thinking-turbo',
@@ -102,6 +102,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     apiKeyPlaceholder: 'sk-...',
     apiKeyHint: 'Get your API key from Moonshot AI',
     category: 'alternative',
+    alwaysThinkingEnabled: true,
   },
   {
     id: 'foundry',

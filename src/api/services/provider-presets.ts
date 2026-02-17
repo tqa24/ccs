@@ -93,11 +93,11 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     alwaysThinkingEnabled: true,
   },
   {
-    id: 'kimi',
+    id: 'km',
     name: 'Kimi',
     description: 'Moonshot AI - Fast reasoning model',
     baseUrl: 'https://api.kimi.com/coding/',
-    defaultProfileName: 'kimi',
+    defaultProfileName: 'km',
     defaultModel: 'kimi-k2-thinking-turbo',
     apiKeyPlaceholder: 'sk-...',
     apiKeyHint: 'Get your API key from Moonshot AI',

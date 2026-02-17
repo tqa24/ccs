@@ -19,6 +19,7 @@ export const CLIPROXY_PROVIDERS = [
   'kiro',
   'ghcp',
   'claude',
+  'kimi',
 ] as const;
 
 /** Union type for CLIProxy provider IDs */
@@ -39,6 +40,7 @@ export const PROVIDER_ASSETS: Record<string, string> = {
   kiro: '/assets/providers/kiro.png',
   ghcp: '/assets/providers/copilot.svg',
   claude: '/assets/providers/claude.svg',
+  kimi: '/assets/providers/kimi.svg',
 };
 
 // Provider brand colors
@@ -52,6 +54,7 @@ export const PROVIDER_COLORS: Record<string, string> = {
   kiro: '#4d908e', // Dark Cyan (AWS-inspired)
   ghcp: '#43aa8b', // Seaweed (GitHub-inspired)
   claude: '#D97757', // Anthropic brand color (matches SVG)
+  kimi: '#FF6B35', // Moonshot AI brand orange
 };
 
 // Provider display names
@@ -65,6 +68,7 @@ const PROVIDER_NAMES: Record<string, string> = {
   kiro: 'Kiro (AWS)',
   ghcp: 'GitHub Copilot (OAuth)',
   claude: 'Claude (Anthropic)',
+  kimi: 'Kimi (Moonshot)',
 };
 
 // Map provider to display name
@@ -76,7 +80,7 @@ export function getProviderDisplayName(provider: string): string {
  * Providers that use Device Code OAuth flow instead of Authorization Code flow.
  * Device Code flow requires displaying a user code for manual entry at provider's website.
  */
-export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = ['ghcp', 'kiro', 'qwen'];
+export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = ['ghcp', 'kiro', 'qwen', 'kimi'];
 
 /** Check if provider uses Device Code flow */
 export function isDeviceCodeProvider(provider: string): boolean {
