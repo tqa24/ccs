@@ -24,6 +24,7 @@ import { LocalProxyCard } from './local-proxy-card';
 import { RemoteProxyCard } from './remote-proxy-card';
 import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
 import { api } from '@/lib/api-client';
+import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 
 /** LocalStorage key for debug mode preference */
 const DEBUG_MODE_KEY = 'ccs_debug_mode';
@@ -165,7 +166,7 @@ export default function ProxySection() {
   const portInput = config.remote.port !== undefined ? config.remote.port.toString() : '';
   const authTokenInput = config.remote.auth_token ?? '';
   const managementKeyInput = config.remote.management_key ?? '';
-  const localPortInput = (config.local.port ?? 8317).toString();
+  const localPortInput = (config.local.port ?? CLIPROXY_DEFAULT_PORT).toString();
 
   const displayHost = editedHost ?? hostInput;
   const displayPort = editedPort ?? portInput;

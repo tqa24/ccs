@@ -5,6 +5,7 @@
 
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import type { CliproxyServerConfig } from '../../types';
 
 interface LocalProxyCardProps {
@@ -38,7 +39,7 @@ export function LocalProxyCard({
             value={displayLocalPort}
             onChange={(e) => setEditedLocalPort(e.target.value)}
             onBlur={onSaveLocalPort}
-            placeholder="8317"
+            placeholder={`${CLIPROXY_DEFAULT_PORT}`}
             className="font-mono max-w-32"
             disabled={saving}
           />
