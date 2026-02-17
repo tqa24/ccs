@@ -13,6 +13,7 @@ import type { ProfileType } from '../types/profile';
 import { upsertCcsModel } from './droid-config-manager';
 import { escapeShellArg } from '../utils/shell-executor';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
+import { runCleanup } from '../errors';
 
 export class DroidAdapter implements TargetAdapter {
   readonly type: TargetType = 'droid';
@@ -52,6 +53,11 @@ export class DroidAdapter implements TargetAdapter {
   }
 
   buildArgs(profile: string, userArgs: string[]): string[] {
+    if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+      throw new Error(
+        `Invalid profile name "${profile}" for Droid target: only alphanumeric, underscore, hyphen allowed`
+      );
+    }
     return ['-m', `custom:ccs-${profile}`, ...userArgs];
   }
 
@@ -67,26 +73,32 @@ export class DroidAdapter implements TargetAdapter {
     env: NodeJS.ProcessEnv,
     options?: { cwd?: string; binaryInfo?: TargetBinaryInfo }
   ): void {
+    const exitWithCleanup = (code: number): never => {
+      try {
+        runCleanup();
+      } catch {
+        // Cleanup should be best-effort on launch errors.
+      }
+      process.exit(code);
+    };
+
     const droidPath = options?.binaryInfo?.path || detectDroidCli();
     if (!droidPath) {
       console.error('[X] Droid CLI not found. Install: npm i -g @factory/cli');
-      process.exit(1);
-      return;
+      return exitWithCleanup(1);
     }
     try {
       const stat = fs.statSync(droidPath);
       if (!stat.isFile()) {
         console.error(`[X] Droid CLI path is not a file: ${droidPath}`);
-        process.exit(1);
-        return;
+        return exitWithCleanup(1);
       }
     } catch (err) {
       const error = err as NodeJS.ErrnoException;
       console.error(
         `[X] Droid CLI path is not accessible (${error.code || 'unknown'}): ${droidPath}`
       );
-      process.exit(1);
-      return;
+      return exitWithCleanup(1);
     }
 
     const isWindows = process.platform === 'win32';
@@ -138,7 +150,7 @@ export class DroidAdapter implements TargetAdapter {
       } else {
         console.error(`[X] Failed to start Droid CLI (${droidPath}):`, err.message);
       }
-      process.exit(1);
+      return exitWithCleanup(1);
     });
   }
 

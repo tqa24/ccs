@@ -13,6 +13,7 @@ import { escapeShellArg, stripAnthropicEnv } from '../utils/shell-executor';
 import { ErrorManager } from '../utils/error-manager';
 import { getWebSearchHookEnv } from '../utils/websearch-manager';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
+import { runCleanup } from '../errors';
 
 export class ClaudeAdapter implements TargetAdapter {
   readonly type: TargetType = 'claude';
@@ -63,11 +64,19 @@ export class ClaudeAdapter implements TargetAdapter {
     env: NodeJS.ProcessEnv,
     _options?: { cwd?: string; binaryInfo?: TargetBinaryInfo }
   ): void {
+    const exitWithCleanup = (code: number): never => {
+      try {
+        runCleanup();
+      } catch {
+        // Cleanup should be best-effort on launch errors.
+      }
+      process.exit(code);
+    };
+
     const claudeCli = detectClaudeCli();
     if (!claudeCli) {
       void ErrorManager.showClaudeNotFound();
-      process.exit(1);
-      return;
+      return exitWithCleanup(1);
     }
 
     const isWindows = process.platform === 'win32';
@@ -118,7 +127,7 @@ export class ClaudeAdapter implements TargetAdapter {
       } else {
         console.error(`[X] Failed to start Claude CLI (${claudeCli}): ${err.message}`);
       }
-      process.exit(1);
+      return exitWithCleanup(1);
     });
   }
 
