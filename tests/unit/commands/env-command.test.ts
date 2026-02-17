@@ -77,15 +77,11 @@ describe('env-command', () => {
     });
 
     it('formats powershell export', () => {
-      expect(formatExportLine('powershell', 'API_KEY', 'sk-123')).toBe(
-        "$env:API_KEY = 'sk-123'"
-      );
+      expect(formatExportLine('powershell', 'API_KEY', 'sk-123')).toBe("$env:API_KEY = 'sk-123'");
     });
 
     it('escapes single quotes in values', () => {
-      expect(formatExportLine('bash', 'VAL', "it's here")).toBe(
-        "export VAL='it'\\''s here'"
-      );
+      expect(formatExportLine('bash', 'VAL', "it's here")).toBe("export VAL='it'\\''s here'");
     });
 
     it('handles empty values', () => {
@@ -104,9 +100,7 @@ describe('env-command', () => {
     });
 
     it('prevents backtick injection in values', () => {
-      expect(formatExportLine('bash', 'TOKEN', 'safe`whoami`')).toBe(
-        "export TOKEN='safe`whoami`'"
-      );
+      expect(formatExportLine('bash', 'TOKEN', 'safe`whoami`')).toBe("export TOKEN='safe`whoami`'");
     });
 
     it('escapes single quotes in fish values', () => {
@@ -114,9 +108,7 @@ describe('env-command', () => {
     });
 
     it('escapes single quotes in powershell values', () => {
-      expect(formatExportLine('powershell', 'VAL', "it's here")).toBe(
-        "$env:VAL = 'it''s here'"
-      );
+      expect(formatExportLine('powershell', 'VAL', "it's here")).toBe("$env:VAL = 'it''s here'");
     });
   });
 
@@ -205,11 +197,15 @@ describe('env-command', () => {
     });
 
     it('returns undefined when no positional args', () => {
-      expect(findProfile(['--format', 'openai', '--shell', 'fish'], ['format', 'shell'])).toBeUndefined();
+      expect(
+        findProfile(['--format', 'openai', '--shell', 'fish'], ['format', 'shell'])
+      ).toBeUndefined();
     });
 
     it('skips multiple flag-value pairs', () => {
-      expect(findProfile(['--format', 'openai', '--shell', 'fish', 'codex'], ['format', 'shell'])).toBe('codex');
+      expect(
+        findProfile(['--format', 'openai', '--shell', 'fish', 'codex'], ['format', 'shell'])
+      ).toBe('codex');
     });
   });
 });

@@ -32,7 +32,8 @@ const MOCK_PORT = 59876; // Use a unique port for mock server
 const CLIPROXY_API_KEY = 'test-api-key-12345';
 
 // Default provider models for testing (matches DEFAULT_IMAGE_ANALYSIS_CONFIG)
-const DEFAULT_PROVIDER_MODELS = 'agy:gemini-2.5-flash,gemini:gemini-2.5-flash,codex:gpt-5.1-codex-mini,kiro:kiro-claude-haiku-4-5,ghcp:claude-haiku-4.5,claude:claude-haiku-4-5-20251001';
+const DEFAULT_PROVIDER_MODELS =
+  'agy:gemini-2.5-flash,gemini:gemini-2.5-flash,codex:gpt-5.1-codex-mini,kiro:kiro-claude-haiku-4-5,ghcp:claude-haiku-4.5,claude:claude-haiku-4-5-20251001';
 const DEFAULT_PROVIDER = 'agy'; // Default test provider
 
 // ============================================================================
@@ -168,13 +169,75 @@ function invokeHook(
 function createTestPng(filepath: string): void {
   // 1x1 PNG with a red pixel (RGB: 255, 0, 0)
   const png = Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, // PNG signature
-    0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53,
-    0xde, 0x00, 0x00, 0x00, 0x0c, 0x49, 0x44, 0x41, // IDAT chunk (red pixel)
-    0x54, 0x08, 0xd7, 0x63, 0xf8, 0xcf, 0xc0, 0x00, 0x00, 0x01, 0x01, 0x01, 0x00, 0x18, 0xdd, 0x8d,
-    0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, // IEND chunk
-    0x44, 0xae, 0x42, 0x60, 0x82,
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a, // PNG signature
+    0x00,
+    0x00,
+    0x00,
+    0x0d,
+    0x49,
+    0x48,
+    0x44,
+    0x52, // IHDR chunk
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x08,
+    0x02,
+    0x00,
+    0x00,
+    0x00,
+    0x90,
+    0x77,
+    0x53,
+    0xde,
+    0x00,
+    0x00,
+    0x00,
+    0x0c,
+    0x49,
+    0x44,
+    0x41, // IDAT chunk (red pixel)
+    0x54,
+    0x08,
+    0xd7,
+    0x63,
+    0xf8,
+    0xcf,
+    0xc0,
+    0x00,
+    0x00,
+    0x01,
+    0x01,
+    0x01,
+    0x00,
+    0x18,
+    0xdd,
+    0x8d,
+    0xb4,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x49,
+    0x45,
+    0x4e, // IEND chunk
+    0x44,
+    0xae,
+    0x42,
+    0x60,
+    0x82,
   ]);
   fs.writeFileSync(filepath, png);
 }
@@ -487,15 +550,14 @@ describe('Image Analyzer Hook', () => {
       expect(result.code).toBe(2);
       const output = JSON.parse(result.stdout);
       expect(output.decision).toBe('block');
-      expect(output.hookSpecificOutput.permissionDecisionReason).toContain(
-        'CLIProxy unavailable'
-      );
+      expect(output.hookSpecificOutput.permissionDecisionReason).toContain('CLIProxy unavailable');
     });
 
     it('should analyze PNG via mock CLIProxy and return analysis', () => {
       resetMockState();
       mockResponse = {
-        content: 'This image shows a small red square, likely a single pixel or very minimal graphic.',
+        content:
+          'This image shows a small red square, likely a single pixel or very minimal graphic.',
         statusCode: 200,
       };
 

@@ -97,7 +97,9 @@ describe('signal-forwarder', () => {
     const child = createMockChildProcess();
     const before = getSignalListenerCounts();
     const onError = jest.fn(async () => {});
-    const err = Object.assign(new Error('spawn failed'), { code: 'ENOENT' }) as NodeJS.ErrnoException;
+    const err = Object.assign(new Error('spawn failed'), {
+      code: 'ENOENT',
+    }) as NodeJS.ErrnoException;
 
     wireChildProcessSignals(child, onError);
     child.emit('error', err);
@@ -113,7 +115,9 @@ describe('signal-forwarder', () => {
     const child = createMockChildProcess();
     const onError = jest.fn(async () => {});
     const onExit = jest.fn();
-    const err = Object.assign(new Error('spawn failed'), { code: 'ENOENT' }) as NodeJS.ErrnoException;
+    const err = Object.assign(new Error('spawn failed'), {
+      code: 'ENOENT',
+    }) as NodeJS.ErrnoException;
 
     wireChildProcessSignals(child, onError, onExit);
     child.emit('error', err);
@@ -134,7 +138,9 @@ describe('signal-forwarder', () => {
       .mockImplementation((() => undefined as never) as typeof process.exit);
 
     try {
-      const err = Object.assign(new Error('spawn failed'), { code: 'ENOENT' }) as NodeJS.ErrnoException;
+      const err = Object.assign(new Error('spawn failed'), {
+        code: 'ENOENT',
+      }) as NodeJS.ErrnoException;
       wireChildProcessSignals(child, onError);
       child.emit('error', err);
       await Promise.resolve();

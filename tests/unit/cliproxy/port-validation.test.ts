@@ -12,10 +12,7 @@
  */
 
 import { describe, it, expect } from 'bun:test';
-import {
-  validatePort,
-  CLIPROXY_DEFAULT_PORT,
-} from '../../../src/cliproxy/config-generator';
+import { validatePort, CLIPROXY_DEFAULT_PORT } from '../../../src/cliproxy/config-generator';
 import { resolveProxyConfig } from '../../../src/cliproxy/proxy-config-resolver';
 
 describe('Port Validation', () => {

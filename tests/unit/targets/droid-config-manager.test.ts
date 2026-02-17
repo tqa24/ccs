@@ -101,9 +101,7 @@ describe('droid-config-manager', () => {
         provider: 'anthropic',
       });
 
-      const settings = JSON.parse(
-        fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8')
-      );
+      const settings = JSON.parse(fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8'));
       expect(settings.customModels).toHaveLength(2);
       expect(settings.customModels[0].displayName).toBe('My GPT');
       expect(settings.customModels[1].displayName).toBe('CCS gemini');
@@ -135,9 +133,7 @@ describe('droid-config-manager', () => {
         provider: 'anthropic',
       });
 
-      const settings = JSON.parse(
-        fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8')
-      );
+      const settings = JSON.parse(fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8'));
       expect(settings.customModels).toHaveLength(2);
       expect(settings.customModels[0].provider).toBe('custom-provider');
       expect(settings.customModels[1].displayName).toBe('CCS gemini');
@@ -162,7 +158,10 @@ describe('droid-config-manager', () => {
     it('should reject symlinked temp file path', async () => {
       const factoryDir = path.join(tmpDir, '.factory');
       fs.mkdirSync(factoryDir, { recursive: true });
-      fs.writeFileSync(path.join(factoryDir, 'settings.json'), JSON.stringify({ customModels: [] }));
+      fs.writeFileSync(
+        path.join(factoryDir, 'settings.json'),
+        JSON.stringify({ customModels: [] })
+      );
       fs.symlinkSync('/tmp', path.join(factoryDir, 'settings.json.tmp'));
 
       await expect(
@@ -202,9 +201,7 @@ describe('droid-config-manager', () => {
         provider: 'anthropic',
       });
 
-      const settings = JSON.parse(
-        fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8')
-      );
+      const settings = JSON.parse(fs.readFileSync(path.join(factoryDir, 'settings.json'), 'utf8'));
       expect(settings.customModels).toHaveLength(1);
       expect(settings.customModels[0].displayName).toBe('CCS gemini');
       expect(settings.customModels[0].apiKey).toBe('new-key');
@@ -255,8 +252,20 @@ describe('droid-config-manager', () => {
         path.join(factoryDir, 'settings.json'),
         JSON.stringify({
           customModels: [
-            { model: 'gpt-4o', displayName: 'My GPT', baseUrl: 'x', apiKey: 'y', provider: 'openai' },
-            { model: 'opus', displayName: 'CCS gemini', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            {
+              model: 'gpt-4o',
+              displayName: 'My GPT',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'openai',
+            },
+            {
+              model: 'opus',
+              displayName: 'CCS gemini',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'anthropic',
+            },
           ],
         })
       );
@@ -275,8 +284,20 @@ describe('droid-config-manager', () => {
         path.join(factoryDir, 'settings.json'),
         JSON.stringify({
           customModels: [
-            { model: 'opus', displayName: 'ccs-gemini', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
-            { model: 'gpt-4o', displayName: 'My GPT', baseUrl: 'x', apiKey: 'y', provider: 'openai' },
+            {
+              model: 'opus',
+              displayName: 'ccs-gemini',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'anthropic',
+            },
+            {
+              model: 'gpt-4o',
+              displayName: 'My GPT',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'openai',
+            },
           ],
         })
       );
@@ -351,7 +372,12 @@ describe('droid-config-manager', () => {
       fs.writeFileSync(
         path.join(factoryDir, 'settings.json'),
         JSON.stringify({
-          customModels: [null, 123, 'bad', { displayName: 'CCS ok', model: 'x', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' }],
+          customModels: [
+            null,
+            123,
+            'bad',
+            { displayName: 'CCS ok', model: 'x', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+          ],
         })
       );
 
@@ -458,8 +484,20 @@ describe('droid-config-manager', () => {
         path.join(factoryDir, 'settings.json'),
         JSON.stringify({
           customModels: [
-            { model: 'gpt-4o', displayName: 'My GPT', baseUrl: 'x', apiKey: 'y', provider: 'openai' },
-            { model: 'opus', displayName: 'CCS old-profile', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            {
+              model: 'gpt-4o',
+              displayName: 'My GPT',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'openai',
+            },
+            {
+              model: 'opus',
+              displayName: 'CCS old-profile',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'anthropic',
+            },
           ],
         })
       );
@@ -479,8 +517,20 @@ describe('droid-config-manager', () => {
         path.join(factoryDir, 'settings.json'),
         JSON.stringify({
           customModels: [
-            { model: 'opus', displayName: 'ccs-gemini', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
-            { model: 'sonnet', displayName: 'ccs-codex', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
+            {
+              model: 'opus',
+              displayName: 'ccs-gemini',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'anthropic',
+            },
+            {
+              model: 'sonnet',
+              displayName: 'ccs-codex',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'anthropic',
+            },
           ],
         })
       );
@@ -502,7 +552,13 @@ describe('droid-config-manager', () => {
           customModels: [
             { model: 'x', displayName: 'CCS ', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
             { model: 'x', displayName: 'ccs-', baseUrl: 'x', apiKey: 'y', provider: 'anthropic' },
-            { model: 'gpt-4o', displayName: 'My GPT', baseUrl: 'x', apiKey: 'y', provider: 'openai' },
+            {
+              model: 'gpt-4o',
+              displayName: 'My GPT',
+              baseUrl: 'x',
+              apiKey: 'y',
+              provider: 'openai',
+            },
           ],
         })
       );
@@ -517,31 +573,27 @@ describe('droid-config-manager', () => {
   });
 
   describe('concurrent writes', () => {
-    it(
-      'should handle concurrent upserts without data loss',
-      async () => {
-        const profiles = Array.from({ length: 10 }, (_, i) => `profile-${i}`);
+    it('should handle concurrent upserts without data loss', async () => {
+      const profiles = Array.from({ length: 10 }, (_, i) => `profile-${i}`);
 
-        await Promise.all(
-          profiles.map((p) =>
-            upsertCcsModel(p, {
-              model: 'test-model',
-              displayName: `CCS ${p}`,
-              baseUrl: 'http://localhost:8317',
-              apiKey: 'key',
-              provider: 'anthropic',
-            })
-          )
-        );
+      await Promise.all(
+        profiles.map((p) =>
+          upsertCcsModel(p, {
+            model: 'test-model',
+            displayName: `CCS ${p}`,
+            baseUrl: 'http://localhost:8317',
+            apiKey: 'key',
+            provider: 'anthropic',
+          })
+        )
+      );
 
-        const models = await listCcsModels();
-        expect(models.size).toBe(10);
+      const models = await listCcsModels();
+      expect(models.size).toBe(10);
 
-        for (const p of profiles) {
-          expect(models.has(p)).toBe(true);
-        }
-      },
-      15000
-    );
+      for (const p of profiles) {
+        expect(models.has(p)).toBe(true);
+      }
+    }, 15000);
   });
 });

@@ -141,39 +141,35 @@ describe('startDaemon', () => {
     expect(result.error).toContain('Invalid port');
   });
 
-  it(
-    'starts and stops daemon successfully',
-    async () => {
-      const port = 10000 + Math.floor(Math.random() * 50000);
-      const result = await startDaemon({ port, ghost_mode: true });
-      expect(result.success).toBe(true);
-      expect(result.pid).toBeDefined();
+  it('starts and stops daemon successfully', async () => {
+    const port = 10000 + Math.floor(Math.random() * 50000);
+    const result = await startDaemon({ port, ghost_mode: true });
+    expect(result.success).toBe(true);
+    expect(result.pid).toBeDefined();
 
-      // Verify health
-      const running = await isDaemonRunning(port);
-      expect(running).toBe(true);
+    // Verify health
+    const running = await isDaemonRunning(port);
+    expect(running).toBe(true);
 
-      // Verify chat endpoint exists (requires auth, should not be 404)
-      const chatResponse = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'gpt-4.1',
-          messages: [{ role: 'user', content: 'hello' }],
-        }),
-      });
-      expect(chatResponse.status).toBe(401);
+    // Verify chat endpoint exists (requires auth, should not be 404)
+    const chatResponse = await fetch(`http://127.0.0.1:${port}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'gpt-4.1',
+        messages: [{ role: 'user', content: 'hello' }],
+      }),
+    });
+    expect(chatResponse.status).toBe(401);
 
-      // Stop
-      const stopResult = await stopDaemon();
-      expect(stopResult.success).toBe(true);
+    // Stop
+    const stopResult = await stopDaemon();
+    expect(stopResult.success).toBe(true);
 
-      // Verify stopped
-      const stillRunning = await isDaemonRunning(port);
-      expect(stillRunning).toBe(false);
-    },
-    35000
-  );
+    // Verify stopped
+    const stillRunning = await isDaemonRunning(port);
+    expect(stillRunning).toBe(false);
+  }, 35000);
 });
 
 describe('isDaemonRunning', () => {

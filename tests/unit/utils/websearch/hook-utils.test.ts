@@ -1,5 +1,8 @@
 import { expect, test, describe } from 'bun:test';
-import { isCcsWebSearchHook, deduplicateCcsHooks } from '../../../../src/utils/websearch/hook-utils';
+import {
+  isCcsWebSearchHook,
+  deduplicateCcsHooks,
+} from '../../../../src/utils/websearch/hook-utils';
 
 describe('isCcsWebSearchHook', () => {
   test('Returns true for CCS hook with forward slashes (Unix path)', () => {

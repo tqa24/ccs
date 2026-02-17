@@ -3,7 +3,9 @@ import { getStartUrlUnsupportedReason } from '../../../src/web-server/routes/cli
 
 describe('cliproxy-auth-routes start-url guard', () => {
   it('rejects device code providers', () => {
-    expect(getStartUrlUnsupportedReason('kiro')).toContain("Kiro method 'aws' uses Device Code flow");
+    expect(getStartUrlUnsupportedReason('kiro')).toContain(
+      "Kiro method 'aws' uses Device Code flow"
+    );
     expect(getStartUrlUnsupportedReason('ghcp')).toContain("Provider 'ghcp' uses Device Code flow");
     expect(getStartUrlUnsupportedReason('qwen')).toContain("Provider 'qwen' uses Device Code flow");
   });

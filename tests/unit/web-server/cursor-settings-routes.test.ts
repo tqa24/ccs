@@ -14,7 +14,10 @@ process.env.CCS_HOME = TEST_CCS_DIR;
 
 // Import after setting env var
 import type { CursorConfig } from '../../../src/config/unified-config-types';
-import { loadOrCreateUnifiedConfig, saveUnifiedConfig } from '../../../src/config/unified-config-loader';
+import {
+  loadOrCreateUnifiedConfig,
+  saveUnifiedConfig,
+} from '../../../src/config/unified-config-loader';
 import { getCcsDir } from '../../../src/utils/config-manager';
 
 describe('Cursor Settings Routes Logic', () => {

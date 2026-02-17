@@ -135,6 +135,8 @@ describe('shell-completion command', () => {
     await expect(handleShellCompletionCommand([])).rejects.toThrow('process.exit(1)');
     const plainErrorLines = errorLines.map(stripAnsi);
     expect(plainErrorLines.some((line) => line.includes('Error: boom'))).toBe(true);
-    expect(plainErrorLines.some((line) => line.includes('ccs --shell-completion --zsh'))).toBe(true);
+    expect(plainErrorLines.some((line) => line.includes('ccs --shell-completion --zsh'))).toBe(
+      true
+    );
   });
 });

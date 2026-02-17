@@ -129,9 +129,9 @@ describe('stripTargetFlag', () => {
   });
 
   it('should remove repeated --target flags', () => {
-    expect(stripTargetFlag(['--target', 'droid', 'gemini', '--target=claude', '--verbose'])).toEqual(
-      ['gemini', '--verbose']
-    );
+    expect(
+      stripTargetFlag(['--target', 'droid', 'gemini', '--target=claude', '--verbose'])
+    ).toEqual(['gemini', '--verbose']);
   });
 
   it('should throw when --target has no value', () => {

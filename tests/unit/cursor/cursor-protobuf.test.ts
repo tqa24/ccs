@@ -300,7 +300,9 @@ describe('Message Translation', () => {
 
       expect(result.messages).toHaveLength(1);
       expect(result.messages[0].role).toBe('user');
-      expect(result.messages[0].content).toBe('[System Instructions]\nSystem instruction part 1 part 2');
+      expect(result.messages[0].content).toBe(
+        '[System Instructions]\nSystem instruction part 1 part 2'
+      );
     });
   });
 });
@@ -332,7 +334,12 @@ describe('Request Encoding', () => {
         },
       ];
 
-      const result = generateCursorBody([{ role: 'user', content: 'What is the weather?' }], 'gpt-4', tools, null);
+      const result = generateCursorBody(
+        [{ role: 'user', content: 'What is the weather?' }],
+        'gpt-4',
+        tools,
+        null
+      );
 
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result.length).toBeGreaterThan(0);
@@ -358,7 +365,9 @@ describe('Request Encoding', () => {
       const executor = new CursorExecutor();
 
       // Frame header says payload is 100 bytes but only 5 bytes follow
-      const truncatedFrame = Buffer.from([0x00, 0x00, 0x00, 0x00, 0x64, 0x01, 0x02, 0x03, 0x04, 0x05]);
+      const truncatedFrame = Buffer.from([
+        0x00, 0x00, 0x00, 0x00, 0x64, 0x01, 0x02, 0x03, 0x04, 0x05,
+      ]);
 
       const result = executor.transformProtobufToJSON(truncatedFrame, 'gpt-4', {
         messages: [],
@@ -644,7 +653,10 @@ describe('CursorExecutor', () => {
         ];
 
         // buildCursorRequest expects (model, body, stream, credentials)
-        buildCursorRequest('test-model', { messages }, false, { machineId: '12345', accessToken: 'test' });
+        buildCursorRequest('test-model', { messages }, false, {
+          machineId: '12345',
+          accessToken: 'test',
+        });
 
         // Should have logged warning
         const hasWarning = consoleSpy.some((log) => log.includes('Unknown message role'));
