@@ -37,6 +37,7 @@ import { handleUpdateCommand } from './commands/update-command';
 
 // Import extracted utility functions
 import { execClaude, escapeShellArg } from './utils/shell-executor';
+import { wireChildProcessSignals } from './utils/signal-forwarder';
 
 // Import target adapter system
 import {
@@ -117,6 +118,15 @@ async function execClaudeWithProxy(
       ANTHROPIC_BASE_URL: envData['ANTHROPIC_BASE_URL'],
     },
   });
+  const stopProxy = (): void => {
+    try {
+      if (!proxy.killed) {
+        proxy.kill('SIGTERM');
+      }
+    } catch {
+      // Best-effort cleanup on process teardown.
+    }
+  };
 
   // 3. Wait for proxy ready signal (with timeout)
   const { ProgressIndicator } = await import('./utils/progress-indicator');
@@ -167,7 +177,8 @@ async function execClaudeWithProxy(
     console.error('  - Enable verbose logging: ccs glmt --verbose "prompt"');
     console.error(`  - Check proxy logs in ${getCcsDir()}/logs/ (if debug enabled)`);
     console.error('');
-    proxy.kill();
+    stopProxy();
+    runCleanup();
     process.exit(1);
   }
 
@@ -220,58 +231,41 @@ async function execClaudeWithProxy(
     });
   }
 
-  // 5. Cleanup: kill proxy when Claude exits
-  const forwardSigTerm = () => {
-    proxy.kill('SIGTERM');
-    claude.kill('SIGTERM');
-  };
-  const forwardSigInt = () => {
-    proxy.kill('SIGTERM');
-    claude.kill('SIGINT');
-  };
-  const forwardSighup = () => {
-    proxy.kill('SIGTERM');
-    claude.kill('SIGHUP');
-  };
-  process.on('SIGTERM', forwardSigTerm);
-  process.on('SIGINT', forwardSigInt);
-  process.on('SIGHUP', forwardSighup);
-
-  const cleanupSignalHandlers = () => {
-    process.removeListener('SIGTERM', forwardSigTerm);
-    process.removeListener('SIGINT', forwardSigInt);
-    process.removeListener('SIGHUP', forwardSighup);
-  };
-
-  claude.on('exit', (code, signal) => {
-    cleanupSignalHandlers();
-    proxy.kill('SIGTERM');
-    if (signal) process.kill(process.pid, signal as NodeJS.Signals);
-    else process.exit(code || 0);
-  });
-
-  claude.on('error', (error) => {
-    cleanupSignalHandlers();
-    const err = error as NodeJS.ErrnoException;
-    if (err.code === 'EACCES') {
-      console.error(fail(`Claude CLI is not executable: ${claudeCli}`));
-      console.error('    Check file permissions and executable bit.');
-    } else if (err.code === 'ENOENT') {
-      if (isPowerShellScript) {
-        console.error(fail('PowerShell executable not found (required for .ps1 wrapper launch).'));
-        console.error('    Ensure powershell.exe is available in PATH.');
-      } else if (needsShell) {
-        console.error(fail('Windows command shell not found for Claude wrapper launch.'));
-        console.error('    Ensure cmd.exe is available and accessible.');
+  // 5. Shared signal forwarding + proxy cleanup lifecycle
+  wireChildProcessSignals(
+    claude,
+    (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EACCES') {
+        console.error(fail(`Claude CLI is not executable: ${claudeCli}`));
+        console.error('    Check file permissions and executable bit.');
+      } else if (err.code === 'ENOENT') {
+        if (isPowerShellScript) {
+          console.error(
+            fail('PowerShell executable not found (required for .ps1 wrapper launch).')
+          );
+          console.error('    Ensure powershell.exe is available in PATH.');
+        } else if (needsShell) {
+          console.error(fail('Windows command shell not found for Claude wrapper launch.'));
+          console.error('    Ensure cmd.exe is available and accessible.');
+        } else {
+          console.error(fail(`Claude CLI not found: ${claudeCli}`));
+        }
       } else {
-        console.error(fail(`Claude CLI not found: ${claudeCli}`));
+        console.error(fail(`Claude CLI error: ${err.message}`));
       }
-    } else {
-      console.error(fail(`Claude CLI error: ${err.message}`));
+      stopProxy();
+      runCleanup();
+      process.exit(1);
+    },
+    (code: number | null, signal: NodeJS.Signals | null) => {
+      stopProxy();
+      if (signal) {
+        process.kill(process.pid, signal);
+      } else {
+        process.exit(code || 0);
+      }
     }
-    proxy.kill('SIGTERM');
-    process.exit(1);
-  });
+  );
 }
 
 // ========== Main Execution ==========
@@ -1019,7 +1013,11 @@ process.on('unhandledRejection', (reason: unknown) => {
 
 // Handle process termination signals for cleanup
 process.on('SIGTERM', () => {
-  runCleanup();
+  try {
+    runCleanup();
+  } catch {
+    // Cleanup failure should not block termination.
+  }
   // If a target exec path registered additional signal listeners, let those
   // listeners forward/coordinate child shutdown and final exit codes.
   if (process.listenerCount('SIGTERM') <= 1) {
@@ -1028,7 +1026,11 @@ process.on('SIGTERM', () => {
 });
 
 process.on('SIGINT', () => {
-  runCleanup();
+  try {
+    runCleanup();
+  } catch {
+    // Cleanup failure should not block termination.
+  }
   // Same coordination rule as SIGTERM.
   if (process.listenerCount('SIGINT') <= 1) {
     process.exit(130); // 128 + SIGINT(2)
