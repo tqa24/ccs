@@ -1,3 +1,48 @@
+## [7.46.0](https://github.com/kaitranntt/ccs/compare/v7.45.0...v7.46.0) (2026-02-17)
+
+### Features
+
+* **cliproxy:** add Kimi as OAuth CLIProxy provider ([08b2a67](https://github.com/kaitranntt/ccs/commit/08b2a6791398912ff5ea6b3cce18b37552c1ef10)), closes [#574](https://github.com/kaitranntt/ccs/issues/574)
+* **cliproxy:** expose codex weekly reset schedule in quota views ([4fc19c4](https://github.com/kaitranntt/ccs/commit/4fc19c43902330da31b49b6296082fb13e22bebf))
+* **cliproxy:** rename kimi API preset to km, add kimi to UI ([f451f4e](https://github.com/kaitranntt/ccs/commit/f451f4e4214396f59c0e8482be0be2f7376d5388))
+* **cursor:** harden daemon integration and model discovery ([c639cef](https://github.com/kaitranntt/ccs/commit/c639cefa7bd33807e96d96fd566c64a89166f22f))
+* **targets:** add multi-target CLI adapter system (Droid support) ([7d7054e](https://github.com/kaitranntt/ccs/commit/7d7054e2c096768c42fa4be1db5d111bb8e56b8a))
+* **targets:** support CCS_DROID_ALIASES argv0 mapping ([025218a](https://github.com/kaitranntt/ccs/commit/025218a706d30ca75163153293ce0920d9c3917d))
+* **ui:** add Kimi provider logo with dark background ([6961fb0](https://github.com/kaitranntt/ccs/commit/6961fb0ec35b326bb77ffea9f8828708d2a40cb7))
+
+### Bug Fixes
+
+* **cliproxy:** add kimi to wizard constants and image analysis config ([ddd5b15](https://github.com/kaitranntt/ccs/commit/ddd5b159d21efe436aa2bf82a190d3b284abe4a8))
+* **cliproxy:** log unknown codex quota window labels ([9031e5a](https://github.com/kaitranntt/ccs/commit/9031e5a085e8c1b4b58e4e871e4d98dbd48bcfc3))
+* **core:** prevent GLMT proxy leaks in child lifecycle ([53e18d4](https://github.com/kaitranntt/ccs/commit/53e18d4c8d60ed0d13a1cb034f53c5c2ef91bdad))
+* **cursor:** fallback when requested model is unavailable ([fae8716](https://github.com/kaitranntt/ccs/commit/fae87169008b704c319f78fcac958dda435985d0))
+* **cursor:** resolve review feedback and harden edge cases ([4798741](https://github.com/kaitranntt/ccs/commit/4798741a99eb60190c6ba09215f50d3bc67db6e4))
+* **targets:** close all remaining multi-target droid edge cases ([0431adf](https://github.com/kaitranntt/ccs/commit/0431adf3061388b5b984cbcbbf336a09bab85be3))
+* **targets:** DRY signal handling, remove redundant guards, harden config manager ([02af8d5](https://github.com/kaitranntt/ccs/commit/02af8d5737d9c3db4172b094b1bfae13ccdccbb1))
+* **targets:** harden adapter lifecycle and droid model edge cases ([3da3407](https://github.com/kaitranntt/ccs/commit/3da3407f9a3470f34aaf03c19d3410e5b33caa36))
+* **targets:** harden edge cases from parallel code review ([3191a4a](https://github.com/kaitranntt/ccs/commit/3191a4ab3887b79c598c31de278a45361c587a48))
+* **targets:** run cleanup before adapter launch exits ([812bb5c](https://github.com/kaitranntt/ccs/commit/812bb5c0a5b60041d1928189019cc75183ae525d))
+* **targets:** snapshot active profiles during droid prune ([15d6c06](https://github.com/kaitranntt/ccs/commit/15d6c06dbc8de72379330c43031a5660b4bc0338))
+* **test:** add kimi to provider tests, remove merge conflict marker ([0fe195c](https://github.com/kaitranntt/ccs/commit/0fe195cdc38c26b93f0f269bd384c7ef3a6c289c))
+
+### Documentation
+
+* **provider:** clarify kimi base profile endpoint ([e33164f](https://github.com/kaitranntt/ccs/commit/e33164f42e96ec6826728c47b615286bb13bfdd6))
+* **targets:** document built-in and env droid aliases ([91edc95](https://github.com/kaitranntt/ccs/commit/91edc9565bbd6bf4fe6992b0c7e2457a90a87949))
+
+### Styles
+
+* format source and test files ([539afea](https://github.com/kaitranntt/ccs/commit/539afea7374f2c931ab5cbb1e04e0845c57729b5))
+
+### Code Refactoring
+
+* **cliproxy:** DRY provider lists into single source of truth ([94b03c7](https://github.com/kaitranntt/ccs/commit/94b03c7f75fd398282a0737c497f882aeb708724))
+
+### CI
+
+* **ai-review:** switch from CLIProxy to GLM API for code reviews ([55ecbce](https://github.com/kaitranntt/ccs/commit/55ecbce3f523c034a854bc741c4c3a5b5e7851d4))
+* **ai-review:** switch from CLIProxy to GLM API for code reviews ([f81c562](https://github.com/kaitranntt/ccs/commit/f81c56204cd981e265b1ed072b887ac80114f5c3))
+
 ## [7.45.0](https://github.com/kaitranntt/ccs/compare/v7.44.0...v7.45.0) (2026-02-14)
 
 ### Features
