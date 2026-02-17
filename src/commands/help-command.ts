@@ -3,6 +3,7 @@ import * as path from 'path';
 import { initUI, box, color, dim, sectionHeader, subheader } from '../utils/ui';
 import { isUnifiedMode } from '../config/unified-config-loader';
 import { getCcsDir, getCcsDirSource } from '../utils/config-manager';
+import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
 
 // Get version from package.json (same as version-command.ts)
 const VERSION = JSON.parse(
@@ -345,7 +346,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   // CLI Proxy configuration flags (new)
   printSubSection('CLI Proxy Configuration', [
     ['--proxy-host <host>', 'Remote proxy hostname/IP'],
-    ['--proxy-port <port>', 'Proxy port (default: 8317)'],
+    ['--proxy-port <port>', `Proxy port (default: ${CLIPROXY_DEFAULT_PORT})`],
     ['--proxy-protocol <proto>', 'Protocol: http or https (default: http)'],
     ['--proxy-auth-token <token>', 'Auth token for remote proxy'],
     ['--proxy-timeout <ms>', 'Connection timeout in ms (default: 2000)'],
@@ -421,7 +422,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   console.log(`  Binary:      ${color(`${dirDisplay}/cliproxy/bin/cli-proxy-api-plus`, 'path')}`);
   console.log(`  Config:      ${color(`${dirDisplay}/cliproxy/config.yaml`, 'path')}`);
   console.log(`  Auth:        ${color(`${dirDisplay}/cliproxy/auth/`, 'path')}`);
-  console.log(`  ${dim('Port: 8317 (default)')}`);
+  console.log(`  ${dim(`Port: ${CLIPROXY_DEFAULT_PORT} (default)`)}`);
   console.log('');
 
   // Shared Data
