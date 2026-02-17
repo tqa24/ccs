@@ -23,7 +23,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useCursor } from '@/hooks/use-cursor';
+import { DEFAULT_CURSOR_PORT, useCursor } from '@/hooks/use-cursor';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -77,7 +77,7 @@ function buildConfigDraft(config?: {
   haiku_model?: string;
 }): CursorConfigDraft {
   return {
-    port: String(config?.port ?? 20129),
+    port: String(config?.port ?? DEFAULT_CURSOR_PORT),
     auto_start: config?.auto_start ?? false,
     ghost_mode: config?.ghost_mode ?? true,
     model: config?.model?.trim() || 'gpt-5.3-codex',
@@ -767,7 +767,7 @@ export function CursorPage() {
           <div className="p-3 border-t bg-background text-xs text-muted-foreground">
             <div className="flex items-center justify-between">
               <span>Port</span>
-              <span>{status?.port ?? config?.port ?? 20129}</span>
+              <span>{status?.port ?? config?.port ?? DEFAULT_CURSOR_PORT}</span>
             </div>
           </div>
         </div>

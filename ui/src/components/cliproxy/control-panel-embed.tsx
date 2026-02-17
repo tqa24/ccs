@@ -11,9 +11,7 @@ import { RefreshCw, AlertCircle, Key, X, Gauge, Globe, Settings } from 'lucide-r
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 import type { CliproxyServerConfig } from '@/lib/api-client';
-
-/** CLIProxyAPI default port */
-const CLIPROXY_DEFAULT_PORT = 8317;
+import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 
 interface AuthTokensResponse {
   apiKey: { value: string; isCustom: boolean };
