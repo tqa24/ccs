@@ -115,9 +115,9 @@ export function getProviderDisplayName(provider: string): string {
 }
 
 /** Map provider to user-facing short description */
-export function getProviderDescription(provider: string): string | undefined {
+export function getProviderDescription(provider: string): string {
   const normalized = provider.toLowerCase();
-  if (!isValidProvider(normalized)) return undefined;
+  if (!isValidProvider(normalized)) return '';
   return PROVIDER_METADATA[normalized].description;
 }
 

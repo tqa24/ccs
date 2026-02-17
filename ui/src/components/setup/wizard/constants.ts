@@ -27,7 +27,7 @@ const WIZARD_PROVIDER_ORDER: CLIProxyProvider[] = [
 export const PROVIDERS: ProviderOption[] = WIZARD_PROVIDER_ORDER.map((id) => ({
   id,
   name: getProviderDisplayName(id),
-  description: getProviderDescription(id) || '',
+  description: getProviderDescription(id),
 }));
 
 export const ALL_STEPS = ['provider', 'auth', 'variant', 'success'];

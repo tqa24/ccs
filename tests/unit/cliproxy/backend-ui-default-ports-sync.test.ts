@@ -9,6 +9,8 @@ import { CLIPROXY_DEFAULT_PORT as BACKEND_CLIPROXY_DEFAULT_PORT } from '../../..
 import { DEFAULT_CURSOR_PORT as BACKEND_CURSOR_DEFAULT_PORT } from '../../../src/cursor/cursor-models';
 import {
   CLIPROXY_PROVIDER_IDS as BACKEND_CLIPROXY_PROVIDER_IDS,
+  getProviderDescription as getBackendProviderDescription,
+  getProviderDisplayName as getBackendProviderDisplayName,
   getProvidersByOAuthFlow,
 } from '../../../src/cliproxy/provider-capabilities';
 import {
@@ -18,6 +20,7 @@ import {
 import {
   CLIPROXY_PROVIDERS as UI_CLIPROXY_PROVIDERS,
   DEVICE_CODE_PROVIDERS as UI_DEVICE_CODE_PROVIDERS,
+  PROVIDER_METADATA as UI_PROVIDER_METADATA,
 } from '../../../ui/src/lib/provider-config';
 
 function sorted(values: readonly string[]): string[] {
@@ -39,5 +42,17 @@ describe('Default Port Sync', () => {
 
   test('Device code providers are synced between backend and UI', () => {
     expect(sorted(UI_DEVICE_CODE_PROVIDERS)).toEqual(sorted(getProvidersByOAuthFlow('device_code')));
+  });
+
+  test('Provider display names are synced between backend and UI', () => {
+    for (const provider of BACKEND_CLIPROXY_PROVIDER_IDS) {
+      expect(UI_PROVIDER_METADATA[provider].displayName).toBe(getBackendProviderDisplayName(provider));
+    }
+  });
+
+  test('Provider descriptions are synced between backend and UI', () => {
+    for (const provider of BACKEND_CLIPROXY_PROVIDER_IDS) {
+      expect(UI_PROVIDER_METADATA[provider].description).toBe(getBackendProviderDescription(provider));
+    }
   });
 });

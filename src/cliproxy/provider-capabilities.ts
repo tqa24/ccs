@@ -5,6 +5,7 @@ export type TokenRefreshOwnership = 'ccs' | 'cliproxy' | 'unsupported';
 
 export interface ProviderCapabilities {
   displayName: string;
+  description: string;
   oauthFlow: OAuthFlowType;
   callbackPort: number | null;
   /** Provider name expected by CLIProxyAPI callback endpoint payload. */
@@ -27,6 +28,7 @@ export interface ProviderCapabilities {
 export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilities> = {
   gemini: {
     displayName: 'Google Gemini',
+    description: 'Gemini Pro/Flash models',
     oauthFlow: 'authorization_code',
     callbackPort: 8085,
     callbackProviderName: 'gemini',
@@ -37,7 +39,8 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     aliases: ['gemini-cli'],
   },
   codex: {
-    displayName: 'Codex',
+    displayName: 'OpenAI Codex',
+    description: 'GPT-4 and codex models',
     oauthFlow: 'authorization_code',
     callbackPort: 1455,
     callbackProviderName: 'codex',
@@ -48,7 +51,8 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     aliases: [],
   },
   agy: {
-    displayName: 'AntiGravity',
+    displayName: 'Antigravity',
+    description: 'Antigravity AI models',
     oauthFlow: 'authorization_code',
     callbackPort: 51121,
     callbackProviderName: 'antigravity',
@@ -59,7 +63,8 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     aliases: ['antigravity'],
   },
   qwen: {
-    displayName: 'Qwen',
+    displayName: 'Alibaba Qwen',
+    description: 'Qwen Code models',
     oauthFlow: 'device_code',
     callbackPort: null,
     callbackProviderName: 'qwen',
@@ -71,6 +76,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
   },
   iflow: {
     displayName: 'iFlow',
+    description: 'iFlow AI models',
     oauthFlow: 'authorization_code',
     callbackPort: 11451,
     callbackProviderName: 'iflow',
@@ -82,6 +88,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
   },
   kiro: {
     displayName: 'Kiro (AWS)',
+    description: 'AWS CodeWhisperer models',
     oauthFlow: 'device_code',
     callbackPort: null,
     callbackProviderName: 'kiro',
@@ -93,6 +100,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
   },
   ghcp: {
     displayName: 'GitHub Copilot (OAuth)',
+    description: 'GitHub Copilot via OAuth',
     oauthFlow: 'device_code',
     callbackPort: null,
     callbackProviderName: 'copilot',
@@ -103,7 +111,8 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     aliases: ['github-copilot', 'copilot'],
   },
   claude: {
-    displayName: 'Claude',
+    displayName: 'Claude (Anthropic)',
+    description: 'Claude Opus/Sonnet models',
     oauthFlow: 'authorization_code',
     callbackPort: 54545,
     callbackProviderName: 'anthropic',
@@ -115,6 +124,7 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
   },
   kimi: {
     displayName: 'Kimi (Moonshot)',
+    description: 'Moonshot AI K2/K2.5 models',
     oauthFlow: 'device_code',
     callbackPort: null,
     callbackProviderName: 'kimi',
@@ -129,6 +139,18 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
 export const CLIPROXY_PROVIDER_IDS = Object.freeze(
   Object.keys(PROVIDER_CAPABILITIES) as CLIProxyProvider[]
 );
+
+export function buildProviderMap<T>(
+  valueFor: (provider: CLIProxyProvider) => T
+): Record<CLIProxyProvider, T> {
+  return CLIPROXY_PROVIDER_IDS.reduce(
+    (acc, provider) => {
+      acc[provider] = valueFor(provider);
+      return acc;
+    },
+    {} as Record<CLIProxyProvider, T>
+  );
+}
 
 const PROVIDER_ID_SET = new Set(CLIPROXY_PROVIDER_IDS);
 
@@ -153,6 +175,10 @@ export function getProviderCapabilities(provider: CLIProxyProvider): ProviderCap
 
 export function getProviderDisplayName(provider: CLIProxyProvider): string {
   return PROVIDER_CAPABILITIES[provider].displayName;
+}
+
+export function getProviderDescription(provider: CLIProxyProvider): string {
+  return PROVIDER_CAPABILITIES[provider].description;
 }
 
 export function getProvidersByOAuthFlow(flowType: OAuthFlowType): CLIProxyProvider[] {

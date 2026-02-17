@@ -7,6 +7,7 @@
 import { CLIProxyProvider } from '../types';
 import type { AccountInfo } from '../account-manager';
 import {
+  buildProviderMap,
   CLIPROXY_PROVIDER_IDS,
   getOAuthCallbackPort,
   getCLIProxyCallbackProviderName,
@@ -14,18 +15,6 @@ import {
   getProviderAuthFilePrefixes,
   getProviderTokenTypeValues,
 } from '../provider-capabilities';
-
-function buildProviderMap<T>(
-  valueFor: (provider: CLIProxyProvider) => T
-): Record<CLIProxyProvider, T> {
-  return CLIPROXY_PROVIDER_IDS.reduce(
-    (acc, provider) => {
-      acc[provider] = valueFor(provider);
-      return acc;
-    },
-    {} as Record<CLIProxyProvider, T>
-  );
-}
 
 /**
  * Kiro authentication methods supported by CLIProxyAPIPlus.

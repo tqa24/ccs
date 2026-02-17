@@ -7,9 +7,6 @@ import { MODEL_CATALOGS } from './model-catalogs';
 import { CLIPROXY_DEFAULT_PORT } from './default-ports';
 export { CLIPROXY_DEFAULT_PORT } from './default-ports';
 
-/** CLIProxy port - should match the backend configuration */
-export const CLIPROXY_PORT = CLIPROXY_DEFAULT_PORT;
-
 /** Default fallback API key if fetch fails */
 const DEFAULT_API_KEY = 'ccs-internal-managed';
 
@@ -33,7 +30,7 @@ async function fetchEffectiveApiKey(): Promise<string> {
  * Uses the first model's presetMapping or falls back to using defaultModel for all tiers
  *
  * @param provider - The provider ID (e.g., 'gemini', 'codex', 'agy')
- * @param port - Optional custom port (defaults to CLIPROXY_PORT)
+ * @param port - Optional custom port (defaults to CLIPROXY_DEFAULT_PORT)
  * @returns Object with success status and applied preset name
  */
 export async function applyDefaultPreset(
