@@ -21,6 +21,7 @@ const PROVIDER_IMAGES: Record<string, string> = {
   kiro: '/assets/providers/kiro.png',
   ghcp: '/assets/providers/copilot.svg',
   claude: '/assets/providers/claude.svg',
+  kimi: '/assets/providers/kimi.svg',
 };
 
 /** Provider color configuration (for fallback only - no background for image logos) */
@@ -33,7 +34,11 @@ const PROVIDER_CONFIG: Record<string, { text: string; letter: string }> = {
   iflow: { text: 'text-indigo-600', letter: 'i' },
   kiro: { text: 'text-teal-600', letter: 'K' },
   ghcp: { text: 'text-green-600', letter: 'C' },
+  kimi: { text: 'text-orange-500', letter: 'K' },
 };
+
+/** Providers whose logos require a dark background */
+const DARK_BG_PROVIDERS = new Set(['kimi']);
 
 /** Size configuration */
 const SIZE_CONFIG = {
@@ -55,7 +60,7 @@ export function ProviderLogo({ provider, className, size = 'md' }: ProviderLogoP
     <div
       className={cn(
         'flex items-center justify-center rounded-md',
-        imageSrc && 'bg-white p-1',
+        imageSrc && (DARK_BG_PROVIDERS.has(providerKey) ? 'bg-gray-900 p-1' : 'bg-white p-1'),
         sizeConfig.container,
         className
       )}

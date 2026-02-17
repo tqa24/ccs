@@ -18,6 +18,7 @@ import { getCcsDir } from '../utils/config-manager';
 import { expandPath } from '../utils/helpers';
 import type { ProfileConfig, AccountConfig, CLIProxyVariantConfig } from './unified-config-types';
 import { createEmptyUnifiedConfig } from './unified-config-types';
+import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
 import { saveUnifiedConfig, hasUnifiedConfig, loadUnifiedConfig } from './unified-config-loader';
 import { infoBox, warn } from '../utils/ui';
 
@@ -203,7 +204,7 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
     // 6b. Migrate built-in CLIProxy OAuth profile settings (gemini, codex, agy, qwen, iflow)
     // Keep settings in *.settings.json files - only record reference in config.yaml
     // This matches Claude's ~/.claude/settings.json pattern for user familiarity
-    const builtInProviders = ['gemini', 'codex', 'agy', 'qwen', 'iflow'];
+    const builtInProviders = [...CLIPROXY_PROVIDER_IDS];
     for (const provider of builtInProviders) {
       const settingsFile = `${provider}.settings.json`;
       const settingsPath = path.join(ccsDir, settingsFile);

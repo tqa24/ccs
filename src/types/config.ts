@@ -3,6 +3,8 @@
  * Source: ~/.ccs/config.json
  */
 
+import type { CLIProxyProvider } from '../cliproxy/types';
+
 /**
  * Profile configuration mapping
  * Maps profile names to settings.json paths
@@ -18,7 +20,7 @@ export interface ProfilesConfig {
  */
 export interface CLIProxyVariantConfig {
   /** CLIProxy provider to use */
-  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp' | 'claude';
+  provider: CLIProxyProvider;
   /** Path to settings.json with custom model configuration (optional) */
   settings?: string;
   /** Account identifier for multi-account support (optional, defaults to 'default') */

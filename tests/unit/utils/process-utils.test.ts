@@ -1,7 +1,7 @@
 /**
  * Unit tests for process-utils.ts
  */
-import { describe, it, expect, beforeEach, afterEach, jest } from 'bun:test';
+import { describe, it, expect, jest } from 'bun:test';
 import { EventEmitter } from 'events';
 import { killWithEscalation } from '../../../src/utils/process-utils';
 import type { ChildProcess } from 'child_process';
@@ -20,15 +20,11 @@ function createMockProcess(exitCode: number | null = null): ChildProcess {
   return proc as ChildProcess;
 }
 
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 describe('killWithEscalation', () => {
-  beforeEach(() => {
-    jest.useFakeTimers();
-  });
-
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
   it('should send SIGTERM immediately', () => {
     const proc = createMockProcess();
     killWithEscalation(proc);
@@ -37,36 +33,34 @@ describe('killWithEscalation', () => {
     expect(proc.kill).toHaveBeenCalledTimes(1);
   });
 
-  it('should send SIGKILL after grace period if process still running', () => {
+  it('should send SIGKILL after grace period if process still running', async () => {
     const proc = createMockProcess(null); // exitCode null = still running
-    killWithEscalation(proc, 3000);
+    killWithEscalation(proc, 10);
 
     // SIGTERM sent immediately
     expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
     expect(proc.kill).toHaveBeenCalledTimes(1);
 
-    // Advance time by grace period
-    jest.advanceTimersByTime(3000);
+    await wait(40);
 
     // SIGKILL sent after grace period
     expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
     expect(proc.kill).toHaveBeenCalledTimes(2);
   });
 
-  it('should NOT send SIGKILL if process exits before grace period', () => {
+  it('should NOT send SIGKILL if process exits before grace period', async () => {
     const proc = createMockProcess(null);
-    killWithEscalation(proc, 3000);
+    killWithEscalation(proc, 40);
 
     expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
     expect(proc.kill).toHaveBeenCalledTimes(1);
 
-    // Simulate process exit after 1 second
-    jest.advanceTimersByTime(1000);
-    proc.exitCode = 0; // Process exited
+    // Simulate process exit before grace timeout
+    await wait(10);
+    proc.exitCode = 0;
     proc.emit('exit', 0);
 
-    // Advance remaining time
-    jest.advanceTimersByTime(2000);
+    await wait(60);
 
     // SIGKILL should NOT have been sent
     expect(proc.kill).toHaveBeenCalledTimes(1);
@@ -75,56 +69,95 @@ describe('killWithEscalation', () => {
 
   it('should use default grace period of 3000ms', () => {
     const proc = createMockProcess(null);
-    killWithEscalation(proc); // No grace period argument
+    const originalSetTimeout = globalThis.setTimeout;
+    const fakeTimer = {
+      unref: () => fakeTimer,
+      ref: () => fakeTimer,
+      hasRef: () => false,
+      refresh: () => fakeTimer,
+    } as unknown as ReturnType<typeof setTimeout>;
 
-    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    let observedDelay: number | undefined;
 
-    // Advance by default 3000ms
-    jest.advanceTimersByTime(3000);
+    globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+      observedDelay = timeout;
+      void handler; // avoid executing callback in this assertion-only test
+      return fakeTimer;
+    }) as typeof globalThis.setTimeout;
 
-    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+    try {
+      killWithEscalation(proc);
+      expect(observedDelay).toBe(3000);
+      expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(proc.kill).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 
   it('should respect custom grace period', () => {
     const proc = createMockProcess(null);
-    killWithEscalation(proc, 5000); // Custom 5 second grace period
+    const originalSetTimeout = globalThis.setTimeout;
+    const fakeTimer = {
+      unref: () => fakeTimer,
+      ref: () => fakeTimer,
+      hasRef: () => false,
+      refresh: () => fakeTimer,
+    } as unknown as ReturnType<typeof setTimeout>;
 
-    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    let observedDelay: number | undefined;
 
-    // Advance by less than grace period
-    jest.advanceTimersByTime(4999);
-    expect(proc.kill).toHaveBeenCalledTimes(1); // Still only SIGTERM
+    globalThis.setTimeout = ((handler: TimerHandler, timeout?: number) => {
+      observedDelay = timeout;
+      void handler;
+      return fakeTimer;
+    }) as typeof globalThis.setTimeout;
 
-    // Advance to grace period
-    jest.advanceTimersByTime(1);
-    expect(proc.kill).toHaveBeenCalledWith('SIGKILL');
+    try {
+      killWithEscalation(proc, 5000);
+      expect(observedDelay).toBe(5000);
+      expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(proc.kill).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.setTimeout = originalSetTimeout;
+    }
   });
 
-  it('should clear timer when process exits', () => {
+  it('should clear timer when process exits', async () => {
     const proc = createMockProcess(null);
-    killWithEscalation(proc, 3000);
+    const originalClearTimeout = globalThis.clearTimeout;
+    let clearCalled = false;
 
-    // Simulate immediate exit
-    proc.exitCode = 0;
-    proc.emit('exit', 0);
+    globalThis.clearTimeout = ((id: ReturnType<typeof setTimeout>) => {
+      clearCalled = true;
+      return originalClearTimeout(id);
+    }) as typeof globalThis.clearTimeout;
 
-    // Advance way past grace period
-    jest.advanceTimersByTime(10000);
+    try {
+      killWithEscalation(proc, 50);
 
-    // Should only have SIGTERM, timer was cleared
-    expect(proc.kill).toHaveBeenCalledTimes(1);
-    expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+      // Simulate immediate exit
+      proc.exitCode = 0;
+      proc.emit('exit', 0);
+
+      await wait(70);
+
+      // Should only have SIGTERM, timer was cleared
+      expect(clearCalled).toBe(true);
+      expect(proc.kill).toHaveBeenCalledTimes(1);
+      expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
+    } finally {
+      globalThis.clearTimeout = originalClearTimeout;
+    }
   });
 
-  it('should handle process that already exited', () => {
+  it('should handle process that already exited', async () => {
     const proc = createMockProcess(0); // Already exited
-    killWithEscalation(proc, 3000);
+    killWithEscalation(proc, 10);
 
     expect(proc.kill).toHaveBeenCalledWith('SIGTERM');
 
-    // Even though exitCode is not null, timer still fires
-    // (because we check exitCode at timer callback time)
-    jest.advanceTimersByTime(3000);
+    await wait(30);
 
     // SIGKILL should NOT be sent because exitCode is not null
     expect(proc.kill).toHaveBeenCalledTimes(1);

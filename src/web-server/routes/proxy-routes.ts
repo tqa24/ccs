@@ -16,6 +16,7 @@ import {
   DEFAULT_CLIPROXY_SERVER_CONFIG,
   CliproxyServerConfig,
 } from '../../config/unified-config-types';
+import { CLIPROXY_PROVIDER_IDS } from '../../cliproxy/provider-capabilities';
 
 const router = Router();
 
@@ -113,7 +114,7 @@ router.put('/backend', async (req: Request, res: Response) => {
       config.cliproxy = {
         backend,
         oauth_accounts: {},
-        providers: ['gemini', 'codex', 'agy', 'qwen', 'iflow', 'kiro', 'ghcp'],
+        providers: [...CLIPROXY_PROVIDER_IDS],
         variants: {},
       };
     } else {

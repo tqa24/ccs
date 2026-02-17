@@ -6,6 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { CLIProxyProvider, ProviderConfig } from '../types';
+import { getProviderDisplayName } from '../provider-capabilities';
 import { getModelMappingFromConfig } from '../base-config-loader';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { getEffectiveApiKey, getEffectiveManagementSecret } from '../auth-token-manager';
@@ -46,34 +47,17 @@ const DEFAULT_ANTIGRAVITY_ALIASES: Array<{ name: string; alias: string; fork?: b
   { name: 'claude-opus-4-6-thinking', alias: 'gemini-claude-opus-4-6-thinking', fork: true },
 ];
 
-/** Provider display names (static metadata) */
-const PROVIDER_DISPLAY_NAMES: Record<CLIProxyProvider, string> = {
-  gemini: 'Gemini',
-  codex: 'Codex',
-  agy: 'Antigravity',
-  qwen: 'Qwen Code',
-  iflow: 'iFlow',
-  kiro: 'Kiro (AWS)',
-  ghcp: 'GitHub Copilot (OAuth)',
-  claude: 'Claude (Anthropic)',
-};
-
 /**
  * Get provider configuration
  * Model mappings are loaded from config/base-{provider}.settings.json
  */
 export function getProviderConfig(provider: CLIProxyProvider): ProviderConfig {
-  const displayName = PROVIDER_DISPLAY_NAMES[provider];
-  if (!displayName) {
-    throw new Error(`Unknown provider: ${provider}`);
-  }
-
   // Load models from base config file
   const models = getModelMappingFromConfig(provider);
 
   return {
     name: provider,
-    displayName,
+    displayName: getProviderDisplayName(provider),
     models,
     requiresOAuth: true, // All CLIProxy providers require OAuth
   };

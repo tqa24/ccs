@@ -57,9 +57,7 @@ describe('shouldApplyExtendedContext', () => {
     });
 
     it('returns false for Claude models without explicit flag', () => {
-      expect(shouldApplyExtendedContext('agy', 'claude-opus-4-5-thinking', undefined)).toBe(
-        false
-      );
+      expect(shouldApplyExtendedContext('agy', 'claude-opus-4-5-thinking', undefined)).toBe(false);
     });
 
     it('returns false for Claude models without explicit flag', () => {

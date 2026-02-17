@@ -1,9 +1,9 @@
 {
   "sourceDirectory": "src",
   "largeFileThresholdLoc": 350,
-  "typeScriptFileCount": 341,
-  "locInSrc": 67708,
-  "processExitReferenceCount": 164,
-  "synchronousFsApiReferenceCount": 850,
-  "largeFileCountOver350Loc": 55
+  "typeScriptFileCount": 355,
+  "locInSrc": 71353,
+  "processExitReferenceCount": 185,
+  "synchronousFsApiReferenceCount": 879,
+  "largeFileCountOver350Loc": 56
 }

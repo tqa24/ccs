@@ -68,6 +68,8 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
   if (isCodexQuotaResult(quota)) {
     const { fiveHourWindow, weeklyWindow, codeReviewWindows, unknownWindows } =
       getCodexQuotaBreakdown(quota.windows);
+    const fiveHourResetAt = quota.coreUsage?.fiveHour?.resetAt ?? fiveHourWindow?.resetAt ?? null;
+    const weeklyResetAt = quota.coreUsage?.weekly?.resetAt ?? weeklyWindow?.resetAt ?? null;
     const orderedWindows = [fiveHourWindow, weeklyWindow, ...codeReviewWindows, ...unknownWindows]
       .filter((w): w is NonNullable<typeof w> => !!w)
       .filter(
@@ -92,7 +94,11 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
             <span className="font-mono">{w.remainingPercent}%</span>
           </div>
         ))}
-        <ResetTimeIndicator resetTime={resetTime} />
+        <CodexResetIndicators
+          fiveHourResetTime={fiveHourResetAt}
+          weeklyResetTime={weeklyResetAt}
+          fallbackResetTime={resetTime}
+        />
       </div>
     );
   }
@@ -129,6 +135,43 @@ function ResetTimeIndicator({ resetTime }: { resetTime: string | null }) {
     <div className="flex items-center gap-1.5 pt-1 border-t border-border/50">
       <Clock className="w-3 h-3 text-blue-400" />
       <span className="text-blue-400 font-medium">Resets {formatResetTime(resetTime)}</span>
+    </div>
+  );
+}
+
+function CodexResetIndicators({
+  fiveHourResetTime,
+  weeklyResetTime,
+  fallbackResetTime,
+}: {
+  fiveHourResetTime: string | null;
+  weeklyResetTime: string | null;
+  fallbackResetTime: string | null;
+}) {
+  const hasSpecificReset = !!fiveHourResetTime || !!weeklyResetTime;
+  if (!hasSpecificReset && !fallbackResetTime) return null;
+
+  return (
+    <div className="pt-1 border-t border-border/50 space-y-1">
+      {fiveHourResetTime && (
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3 h-3 text-blue-400" />
+          <span className="text-blue-400 font-medium">
+            5h resets {formatResetTime(fiveHourResetTime)}
+          </span>
+        </div>
+      )}
+      {weeklyResetTime && (
+        <div className="flex items-center gap-1.5">
+          <Clock className="w-3 h-3 text-indigo-400" />
+          <span className="text-indigo-400 font-medium">
+            Weekly resets {formatResetTime(weeklyResetTime)}
+          </span>
+        </div>
+      )}
+      {!hasSpecificReset && fallbackResetTime && (
+        <ResetTimeIndicator resetTime={fallbackResetTime} />
+      )}
     </div>
   );
 }

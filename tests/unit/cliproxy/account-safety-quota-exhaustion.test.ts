@@ -13,7 +13,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { handleQuotaExhaustion, writeQuotaWarning, maskEmail } from '../../../src/cliproxy/account-safety';
+import {
+  handleQuotaExhaustion,
+  writeQuotaWarning,
+  maskEmail,
+} from '../../../src/cliproxy/account-safety';
 
 // Setup test isolation
 let tmpDir: string;

@@ -549,6 +549,7 @@ export async function handleSessions(
       cost: Math.round(s.totalCost * 100) / 100,
       lastActivity: s.lastActivity,
       modelsUsed: s.modelsUsed,
+      target: s.target || 'claude',
     }));
 
     res.json({

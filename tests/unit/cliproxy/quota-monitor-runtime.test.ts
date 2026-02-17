@@ -11,7 +11,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { startQuotaMonitor, stopQuotaMonitor, clearQuotaCache } from '../../../src/cliproxy/quota-manager';
+import {
+  startQuotaMonitor,
+  stopQuotaMonitor,
+  clearQuotaCache,
+} from '../../../src/cliproxy/quota-manager';
 
 // Setup test isolation
 let tmpDir: string;

@@ -141,6 +141,17 @@ ccs ollama    # Local Ollama (no API key needed)
 ccs glm       # GLM (API key)
 ```
 
+### Droid Alias (`argv[0]` pattern)
+
+By default, invoking CCS as `ccsd` auto-selects the Droid target:
+
+```bash
+ln -s "$(command -v ccs)" /usr/local/bin/ccsd
+ccsd glm
+```
+
+Need additional alias names? Set `CCS_DROID_ALIASES` as a comma-separated list (for example: `CCS_DROID_ALIASES=ccs-droid,mydroid`).
+
 ### Kiro Auth Methods
 
 `ccs kiro --auth` defaults to AWS Builder ID Device OAuth (best support for AWS org accounts).
@@ -238,6 +249,7 @@ Re-creates symlinks for shared commands, skills, and settings.
 
 ```bash
 ccs cliproxy doctor     # Check quota status for all agy accounts
+ccs cliproxy quota      # Show agy/codex/gemini quotas (Codex: 5h + weekly reset schedule)
 ```
 
 **Auto-Failover**: When an Antigravity account runs out of quota, CCS automatically switches to another account with remaining capacity. Shared GCP project accounts are excluded (pooled quota).

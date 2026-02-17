@@ -100,6 +100,8 @@ export interface Session {
   cost: number;
   lastActivity: string;
   modelsUsed: string[];
+  /** Target CLI used (default: 'claude') */
+  target?: string;
 }
 
 export interface PaginatedSessions {

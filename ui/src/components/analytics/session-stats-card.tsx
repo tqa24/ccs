@@ -133,9 +133,16 @@ export function SessionStatsCard({ data, isLoading, className }: SessionStatsCar
                 className="flex items-center justify-between text-xs p-1.5 rounded bg-muted/30 hover:bg-muted/50 transition-colors"
               >
                 <div className="flex flex-col min-w-0 flex-1">
-                  <span className="font-medium truncate" title={session.projectPath}>
-                    {getProjectDisplayName(session.projectPath)}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className="font-medium truncate" title={session.projectPath}>
+                      {getProjectDisplayName(session.projectPath)}
+                    </span>
+                    {(session.target ?? 'claude') !== 'claude' && (
+                      <span className="shrink-0 px-1 py-0 text-[9px] font-medium rounded bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 uppercase">
+                        {session.target}
+                      </span>
+                    )}
+                  </div>
                   <span className="text-[10px] text-muted-foreground">
                     {formatDistanceToNow(new Date(session.lastActivity), { addSuffix: true })}
                   </span>

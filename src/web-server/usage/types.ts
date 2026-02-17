@@ -79,6 +79,8 @@ export interface SessionUsage {
   modelsUsed: string[];
   modelBreakdowns: ModelBreakdown[];
   source: string;
+  /** Target CLI used for this session (default: 'claude') */
+  target?: string;
 }
 
 // ============================================================================

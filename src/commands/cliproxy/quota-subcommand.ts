@@ -67,7 +67,13 @@ function formatResetTime(seconds: number): string {
   if (seconds <= 0) return 'now';
   if (seconds < 60) return `in ${seconds}s`;
   if (seconds < 3600) return `in ${Math.round(seconds / 60)}m`;
-  return `in ${Math.round(seconds / 3600)}h`;
+  if (seconds < 86400) return `in ${Math.round(seconds / 3600)}h`;
+
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.round((seconds % 86400) / 3600);
+  if (hours <= 0) return `in ${days}d`;
+  if (hours >= 24) return `in ${days + 1}d`;
+  return `in ${days}d ${hours}h`;
 }
 
 function formatResetTimeISO(isoTime: string): string {
@@ -76,6 +82,40 @@ function formatResetTimeISO(isoTime: string): string {
   if (isNaN(resetDate.getTime())) return 'unknown';
   const seconds = Math.max(0, Math.round((resetDate.getTime() - Date.now()) / 1000));
   return formatResetTime(seconds);
+}
+
+function formatAbsoluteResetTime(isoTime: string): string | null {
+  if (!isoTime) return null;
+  const resetDate = new Date(isoTime);
+  if (isNaN(resetDate.getTime())) return null;
+  const date = resetDate.toLocaleDateString(undefined, {
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const time = resetDate.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `${date} ${time}`;
+}
+
+function formatCodexWindowReset(
+  window: Pick<CodexQuotaResult['windows'][number], 'resetAfterSeconds' | 'resetAt'>
+): string | null {
+  if (typeof window.resetAfterSeconds === 'number' && isFinite(window.resetAfterSeconds)) {
+    const relative = formatResetTime(Math.max(0, window.resetAfterSeconds));
+    if (window.resetAfterSeconds >= 86400 && window.resetAt) {
+      const absolute = formatAbsoluteResetTime(window.resetAt);
+      return absolute ? `${relative} (${absolute})` : relative;
+    }
+    return relative;
+  }
+
+  if (window.resetAt) {
+    return formatResetTimeISO(window.resetAt);
+  }
+
+  return null;
 }
 
 type CodexWindowKind =
@@ -286,15 +326,45 @@ function displayCodexQuotaSection(results: { account: string; quota: CodexQuotaR
 
     console.log(`  ${statusIcon}${account}${defaultMark}${planBadge}`);
 
+    const coreUsageSummary = quota.coreUsage ?? {
+      fiveHour: fiveHourWindow
+        ? {
+            label: fiveHourWindow.label,
+            remainingPercent: fiveHourWindow.remainingPercent,
+            resetAfterSeconds: fiveHourWindow.resetAfterSeconds,
+            resetAt: fiveHourWindow.resetAt,
+          }
+        : null,
+      weekly: weeklyWindow
+        ? {
+            label: weeklyWindow.label,
+            remainingPercent: weeklyWindow.remainingPercent,
+            resetAfterSeconds: weeklyWindow.resetAfterSeconds,
+            resetAt: weeklyWindow.resetAt,
+          }
+        : null,
+    };
+    const resetParts: string[] = [];
+    const fiveHourReset = coreUsageSummary.fiveHour
+      ? formatCodexWindowReset(coreUsageSummary.fiveHour)
+      : null;
+    const weeklyReset = coreUsageSummary.weekly
+      ? formatCodexWindowReset(coreUsageSummary.weekly)
+      : null;
+    if (fiveHourReset) resetParts.push(`5h ${fiveHourReset}`);
+    if (weeklyReset) resetParts.push(`weekly ${weeklyReset}`);
+    if (resetParts.length > 0) {
+      console.log(`    ${dim(`Reset schedule: ${resetParts.join(' | ')}`)}`);
+    }
+
     const orderedWindows = [fiveHourWindow, weeklyWindow, ...quota.windows].filter(
       (w, index, arr): w is NonNullable<typeof w> => !!w && arr.indexOf(w) === index
     );
 
     for (const window of orderedWindows) {
       const bar = formatQuotaBar(window.remainingPercent);
-      const resetLabel = window.resetAfterSeconds
-        ? dim(` Resets ${formatResetTime(window.resetAfterSeconds)}`)
-        : '';
+      const resetValue = formatCodexWindowReset(window);
+      const resetLabel = resetValue ? dim(` Resets ${resetValue}`) : '';
       console.log(
         `    ${getCodexWindowDisplayLabel(window, orderedWindows).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}%${resetLabel}`
       );

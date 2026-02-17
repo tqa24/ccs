@@ -14,9 +14,7 @@ import { type RawUsageEntry } from '../../src/web-server/jsonl-parser';
 // TEST FIXTURES
 // ============================================================================
 
-const createEntry = (
-  overrides: Partial<RawUsageEntry> = {}
-): RawUsageEntry => ({
+const createEntry = (overrides: Partial<RawUsageEntry> = {}): RawUsageEntry => ({
   inputTokens: 1000,
   outputTokens: 500,
   cacheCreationTokens: 100,
@@ -66,9 +64,7 @@ describe('aggregateDailyUsage', () => {
     expect(result[0].modelsUsed).toContain('claude-opus-4-5-20251101');
 
     // Find sonnet breakdown
-    const sonnet = result[0].modelBreakdowns.find(
-      (b) => b.modelName === 'claude-sonnet-4-5'
-    );
+    const sonnet = result[0].modelBreakdowns.find((b) => b.modelName === 'claude-sonnet-4-5');
     expect(sonnet!.inputTokens).toBe(1500); // 1000 + 500
   });
 
@@ -235,6 +231,42 @@ describe('aggregateSessionUsage', () => {
 
     expect(result[0].sessionId).toBe('new-session');
     expect(result[1].sessionId).toBe('old-session');
+  });
+
+  test('propagates target metadata into session usage', () => {
+    const entries: RawUsageEntry[] = [
+      createEntry({ sessionId: 'session-A', target: 'droid' }),
+      createEntry({ sessionId: 'session-B' }),
+    ];
+
+    const result = aggregateSessionUsage(entries);
+    const sessionA = result.find((s) => s.sessionId === 'session-A');
+    const sessionB = result.find((s) => s.sessionId === 'session-B');
+
+    expect(sessionA?.target).toBe('droid');
+    expect(sessionB?.target).toBeUndefined();
+  });
+
+  test('uses latest timestamp target when a session has mixed targets', () => {
+    const entries: RawUsageEntry[] = [
+      createEntry({
+        sessionId: 'session-A',
+        timestamp: '2025-12-09T10:00:00.000Z',
+        target: 'claude',
+      }),
+      createEntry({
+        sessionId: 'session-A',
+        timestamp: '2025-12-09T12:00:00.000Z',
+        target: 'droid',
+      }),
+      createEntry({
+        sessionId: 'session-A',
+        timestamp: '2025-12-09T11:00:00.000Z',
+      }),
+    ];
+
+    const result = aggregateSessionUsage(entries);
+    expect(result[0].target).toBe('droid');
   });
 
   test('returns empty array for no entries', () => {

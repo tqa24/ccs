@@ -10,7 +10,7 @@ import * as path from 'node:path';
 import { getAuthDir } from './config-generator';
 import { getProviderAccounts, getPausedDir } from './account-manager';
 import { sanitizeEmail, isTokenExpired } from './auth-utils';
-import type { CodexQuotaResult, CodexQuotaWindow } from './quota-types';
+import type { CodexQuotaResult, CodexQuotaWindow, CodexCoreUsageSummary } from './quota-types';
 
 /** ChatGPT backend API base URL */
 const CODEX_API_BASE = 'https://chatgpt.com/backend-api';
@@ -55,6 +55,113 @@ interface CodexWindowData {
   usedPercent?: number;
   reset_after_seconds?: number | null;
   resetAfterSeconds?: number | null;
+}
+
+type CodexWindowKind =
+  | 'usage-5h'
+  | 'usage-weekly'
+  | 'code-review-5h'
+  | 'code-review-weekly'
+  | 'code-review'
+  | 'unknown';
+
+function getCodexWindowKind(label: string): CodexWindowKind {
+  const lower = (label || '').toLowerCase();
+  const isCodeReview = lower.includes('code review') || lower.includes('code_review');
+  const isPrimary = lower.includes('primary');
+  const isSecondary = lower.includes('secondary');
+
+  if (isCodeReview) {
+    if (isPrimary) return 'code-review-5h';
+    if (isSecondary) return 'code-review-weekly';
+    return 'code-review';
+  }
+
+  if (isPrimary) return 'usage-5h';
+  if (isSecondary) return 'usage-weekly';
+  return 'unknown';
+}
+
+function getUnknownCodexWindowLabels(windows: CodexQuotaWindow[]): string[] {
+  const unknownLabels = windows
+    .filter((window) => getCodexWindowKind(window.label) === 'unknown')
+    .map((window) => window.label)
+    .filter((label): label is string => typeof label === 'string' && label.trim().length > 0);
+  return Array.from(new Set(unknownLabels));
+}
+
+function shouldLogCodexWindowWarnings(verbose: boolean): boolean {
+  if (verbose) return true;
+  const debugFlag = process.env['CCS_DEBUG'];
+  return debugFlag === '1' || debugFlag === 'true';
+}
+
+/**
+ * Build explicit 5h + weekly usage summary from raw Codex windows.
+ * Falls back to shortest/longest reset windows if API labels change.
+ */
+export function buildCodexCoreUsageSummary(windows: CodexQuotaWindow[]): CodexCoreUsageSummary {
+  if (!windows || windows.length === 0) {
+    return { fiveHour: null, weekly: null };
+  }
+
+  let fiveHourWindow: CodexQuotaWindow | null = null;
+  let weeklyWindow: CodexQuotaWindow | null = null;
+  const nonCodeReviewWindows: CodexQuotaWindow[] = [];
+
+  for (const window of windows) {
+    const kind = getCodexWindowKind(window.label);
+    if (kind === 'usage-5h') {
+      if (!fiveHourWindow) fiveHourWindow = window;
+      nonCodeReviewWindows.push(window);
+      continue;
+    }
+    if (kind === 'usage-weekly') {
+      if (!weeklyWindow) weeklyWindow = window;
+      nonCodeReviewWindows.push(window);
+      continue;
+    }
+    if (kind === 'unknown') {
+      nonCodeReviewWindows.push(window);
+    }
+  }
+
+  if ((!fiveHourWindow || !weeklyWindow) && nonCodeReviewWindows.length > 0) {
+    const withReset = nonCodeReviewWindows
+      .filter(
+        (w) =>
+          typeof w.resetAfterSeconds === 'number' &&
+          isFinite(w.resetAfterSeconds) &&
+          w.resetAfterSeconds >= 0
+      )
+      .sort((a, b) => (a.resetAfterSeconds || 0) - (b.resetAfterSeconds || 0));
+
+    if (!fiveHourWindow) {
+      fiveHourWindow = withReset[0] || nonCodeReviewWindows[0] || null;
+    }
+
+    if (!weeklyWindow) {
+      weeklyWindow =
+        withReset.length > 1
+          ? withReset[withReset.length - 1]
+          : nonCodeReviewWindows.find((w) => w !== fiveHourWindow) || null;
+    }
+  }
+
+  const mapWindow = (window: CodexQuotaWindow | null): CodexCoreUsageSummary['fiveHour'] => {
+    if (!window) return null;
+    return {
+      label: window.label,
+      remainingPercent: window.remainingPercent,
+      resetAfterSeconds: window.resetAfterSeconds,
+      resetAt: window.resetAt,
+    };
+  };
+
+  return {
+    fiveHour: mapWindow(fiveHourWindow),
+    weekly: mapWindow(weeklyWindow),
+  };
 }
 
 /**
@@ -295,6 +402,14 @@ export async function fetchCodexQuota(
 
       const data = (await response.json()) as CodexUsageResponse;
       const windows = buildCodexQuotaWindows(data);
+      const unknownWindowLabels = getUnknownCodexWindowLabels(windows);
+      if (unknownWindowLabels.length > 0 && shouldLogCodexWindowWarnings(verbose)) {
+        console.error(
+          `[!] Codex quota detected unknown window labels: ${unknownWindowLabels.join(', ')}`
+        );
+        console.error('    Window classification may need an update for upstream API changes.');
+      }
+      const coreUsage = buildCodexCoreUsageSummary(windows);
 
       // Extract plan type
       const planTypeRaw = data.plan_type || data.planType;
@@ -311,6 +426,7 @@ export async function fetchCodexQuota(
       return {
         success: true,
         windows,
+        coreUsage,
         planType,
         lastUpdated: Date.now(),
         accountId,
@@ -380,4 +496,4 @@ export async function fetchAllCodexQuotas(
 }
 
 // Export for testing
-export { readCodexAuthData, buildCodexQuotaWindows };
+export { readCodexAuthData, buildCodexQuotaWindows, getUnknownCodexWindowLabels };

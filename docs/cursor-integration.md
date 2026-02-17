@@ -59,6 +59,8 @@ ccs cursor stop
 - Default port: `20129`
 - `ghost_mode`: enabled
 - `auto_start`: disabled
+- Model list resolution: authenticated live fetch when available, with cached/default fallback.
+- Request model validation: if a requested model is not present in the available Cursor model catalog, daemon falls back to the resolved default model.
 
 These values are managed in unified config and can be updated from CLI or dashboard.
 

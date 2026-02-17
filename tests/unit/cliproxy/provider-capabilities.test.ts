@@ -32,6 +32,7 @@ describe('provider-capabilities', () => {
       'kiro',
       'ghcp',
       'claude',
+      'kimi',
     ]);
   });
 
@@ -43,7 +44,7 @@ describe('provider-capabilities', () => {
   });
 
   it('returns providers by OAuth flow capability', () => {
-    expect(getProvidersByOAuthFlow('device_code')).toEqual(['qwen', 'kiro', 'ghcp']);
+    expect(getProvidersByOAuthFlow('device_code')).toEqual(['qwen', 'kiro', 'ghcp', 'kimi']);
     expect(getProvidersByOAuthFlow('authorization_code')).toEqual([
       'gemini',
       'codex',

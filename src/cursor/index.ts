@@ -34,8 +34,11 @@ export {
   DEFAULT_CURSOR_PORT,
   DEFAULT_CURSOR_MODEL,
   fetchModelsFromDaemon,
+  fetchModelsFromCursorApi,
+  getModelsForDaemon,
   getAvailableModels,
   getDefaultModel,
+  clearCursorModelsCache,
   detectProvider,
   formatModelName,
 } from './cursor-models';

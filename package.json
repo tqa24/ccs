@@ -1,6 +1,6 @@
 {
   "name": "@kaitranntt/ccs",
-  "version": "7.45.0",
+  "version": "7.45.0-dev.6",
   "description": "Claude Code Switch - Instant profile switching between Claude Sonnet 4.5 and GLM 4.6",
   "keywords": [
     "cli",
@@ -26,7 +26,8 @@
   "main": "dist/ccs.js",
   "types": "dist/ccs.d.ts",
   "bin": {
-    "ccs": "dist/ccs.js"
+    "ccs": "dist/ccs.js",
+    "ccsd": "dist/ccs.js"
   },
   "files": [
     "dist/",
@@ -102,6 +103,7 @@
     "listr2": "^3.14.0",
     "open": "^8.4.2",
     "ora": "^5.4.1",
+    "proper-lockfile": "^4.1.2",
     "ws": "^8.16.0"
   },
   "devDependencies": {
@@ -121,6 +123,7 @@
     "@types/express-session": "^1.18.2",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.19.25",
+    "@types/proper-lockfile": "^4.1.4",
     "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^8.48.0",
     "@typescript-eslint/parser": "^8.48.0",

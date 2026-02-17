@@ -2,156 +2,176 @@
  * Cursor Model Catalog
  *
  * Manages available models from Cursor IDE.
- * Based on Cursor's supported models catalog.
  */
 
 import * as http from 'http';
 import type { CursorModel } from './types';
+import type { CursorApiCredentials } from './cursor-protobuf-schema';
 import { isDaemonRunning } from './cursor-daemon';
+import { buildCursorModelsHeaders } from './cursor-client-policy';
+import {
+  DEFAULT_CURSOR_MODEL,
+  DEFAULT_CURSOR_MODELS,
+  detectProvider,
+  formatModelName,
+} from './cursor-default-models';
 
 /** Default daemon port */
 export const DEFAULT_CURSOR_PORT = 20129;
 
-/** Default model ID */
-export const DEFAULT_CURSOR_MODEL = 'gpt-5.3-codex';
+export { DEFAULT_CURSOR_MODEL, DEFAULT_CURSOR_MODELS, detectProvider, formatModelName };
 
-/**
- * Default models available through Cursor IDE.
- * Used as fallback when daemon is not reachable.
- * Source: Cursor docs model catalog (Feb 2026)
- */
-export const DEFAULT_CURSOR_MODELS: CursorModel[] = [
-  // Anthropic Models
-  {
-    id: 'claude-4.6-opus',
-    name: 'Claude 4.6 Opus',
-    provider: 'anthropic',
-  },
-  {
-    id: 'claude-4.6-opus-fast-mode',
-    name: 'Claude 4.6 Opus (Fast mode)',
-    provider: 'anthropic',
-  },
-  {
-    id: 'claude-4.5-sonnet',
-    name: 'Claude 4.5 Sonnet',
-    provider: 'anthropic',
-  },
-  {
-    id: 'claude-4.5-opus',
-    name: 'Claude 4.5 Opus',
-    provider: 'anthropic',
-  },
-  {
-    id: 'claude-4.5-haiku',
-    name: 'Claude 4.5 Haiku',
-    provider: 'anthropic',
-  },
-  {
-    id: 'claude-4-sonnet',
-    name: 'Claude 4 Sonnet',
-    provider: 'anthropic',
-  },
-  {
-    id: 'claude-4-sonnet-1m',
-    name: 'Claude 4 Sonnet 1M',
-    provider: 'anthropic',
-  },
+const CURSOR_MODELS_API_ENDPOINT = 'https://api2.cursor.sh/v1/models';
+const CURSOR_MODELS_CACHE_TTL_MS = 5 * 60 * 1000;
 
-  // Cursor Models
-  {
-    id: 'composer-1.5',
-    name: 'Composer 1.5',
-    provider: 'cursor',
-  },
-  {
-    id: 'composer-1',
-    name: 'Composer 1',
-    provider: 'cursor',
-  },
+let liveModelsCache: {
+  models: CursorModel[];
+  expiresAtMs: number;
+} | null = null;
 
-  // OpenAI Models
-  {
-    id: 'gpt-5.3-codex',
-    name: 'GPT-5.3 Codex',
-    provider: 'openai',
-    isDefault: true,
-  },
-  {
-    id: 'gpt-5.2-codex',
-    name: 'GPT-5.2 Codex',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5.2',
-    name: 'GPT-5.2',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5.1-codex',
-    name: 'GPT-5.1 Codex',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5.1-codex-max',
-    name: 'GPT-5.1 Codex Max',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5.1-codex-mini',
-    name: 'GPT-5.1 Codex Mini',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5-codex',
-    name: 'GPT-5-Codex',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5',
-    name: 'GPT-5',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5-fast',
-    name: 'GPT-5 Fast',
-    provider: 'openai',
-  },
-  {
-    id: 'gpt-5-mini',
-    name: 'GPT-5 Mini',
-    provider: 'openai',
-  },
+interface CursorModelsApiResponse {
+  data?: Array<{ id?: unknown; name?: unknown; provider?: unknown }>;
+  models?: Array<{ id?: unknown; name?: unknown; provider?: unknown }>;
+}
 
-  // Google Models
-  {
-    id: 'gemini-3-pro',
-    name: 'Gemini 3 Pro',
-    provider: 'google',
-  },
-  {
-    id: 'gemini-3-pro-image-preview',
-    name: 'Gemini 3 Pro Image Preview',
-    provider: 'google',
-  },
-  {
-    id: 'gemini-3-flash',
-    name: 'Gemini 3 Flash',
-    provider: 'google',
-  },
-  {
-    id: 'gemini-2.5-flash',
-    name: 'Gemini 2.5 Flash',
-    provider: 'google',
-  },
+function debugLog(message: string, error?: unknown): void {
+  if (!process.env.CCS_DEBUG) return;
+  if (error) {
+    console.error(`[cursor] ${message}`, error);
+    return;
+  }
+  console.error(`[cursor] ${message}`);
+}
 
-  // xAI Models
-  {
-    id: 'grok-code',
-    name: 'Grok Code',
-    provider: 'xai',
-  },
-];
+function normalizeModelRecords(
+  records: Array<{ id?: unknown; name?: unknown; provider?: unknown }>
+): CursorModel[] {
+  const models: CursorModel[] = [];
+  for (const record of records) {
+    if (!record || typeof record !== 'object') continue;
+    if (typeof record.id !== 'string' || !record.id) continue;
+    const modelId = record.id;
+    const modelName = typeof record.name === 'string' && record.name ? record.name : modelId;
+    const provider =
+      typeof record.provider === 'string' && record.provider
+        ? record.provider
+        : detectProvider(modelId);
+    models.push({
+      id: modelId,
+      name: modelName,
+      provider,
+      isDefault: modelId === DEFAULT_CURSOR_MODEL,
+    });
+  }
+  return models;
+}
+
+function parseApiModelsResponse(payload: unknown): CursorModel[] | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const response = payload as CursorModelsApiResponse;
+  const records = Array.isArray(response.data)
+    ? response.data
+    : Array.isArray(response.models)
+      ? response.models
+      : null;
+
+  if (!records) return null;
+
+  const models = normalizeModelRecords(records);
+  return models.length > 0 ? models : null;
+}
+
+function getCachedLiveModels(nowMs: number = Date.now()): CursorModel[] | null {
+  if (!liveModelsCache) return null;
+  if (liveModelsCache.expiresAtMs <= nowMs) {
+    liveModelsCache = null;
+    return null;
+  }
+  return liveModelsCache.models;
+}
+
+function setCachedLiveModels(models: CursorModel[], nowMs: number = Date.now()): void {
+  liveModelsCache = {
+    models,
+    expiresAtMs: nowMs + CURSOR_MODELS_CACHE_TTL_MS,
+  };
+}
+
+export function clearCursorModelsCache(): void {
+  liveModelsCache = null;
+}
+
+export async function fetchModelsFromCursorApi(
+  credentials: CursorApiCredentials,
+  options: {
+    endpoint?: string;
+    timeoutMs?: number;
+  } = {}
+): Promise<CursorModel[] | null> {
+  if (!credentials.accessToken || !credentials.machineId) {
+    return null;
+  }
+
+  const endpoint = options.endpoint || CURSOR_MODELS_API_ENDPOINT;
+  const timeoutMs = options.timeoutMs ?? 5000;
+  const abortController = new AbortController();
+  const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      headers: buildCursorModelsHeaders(credentials),
+      signal: abortController.signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        clearCursorModelsCache();
+      }
+      debugLog(`Cursor models API returned ${response.status} (${endpoint})`);
+      return null;
+    }
+
+    const payload = (await response.json()) as unknown;
+    const parsed = parseApiModelsResponse(payload);
+    if (!parsed) {
+      debugLog(`Cursor models API payload shape invalid (${endpoint})`);
+    }
+    return parsed;
+  } catch (error) {
+    debugLog(`Cursor models API fetch failed (${endpoint})`, error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function getModelsForDaemon(
+  options: {
+    credentials?: CursorApiCredentials | null;
+    endpoint?: string;
+    timeoutMs?: number;
+  } = {}
+): Promise<CursorModel[]> {
+  const cached = getCachedLiveModels();
+  if (cached) {
+    return cached;
+  }
+
+  const credentials = options.credentials;
+  if (credentials?.accessToken && credentials.machineId) {
+    const liveModels = await fetchModelsFromCursorApi(credentials, {
+      endpoint: options.endpoint,
+      timeoutMs: options.timeoutMs,
+    });
+    if (liveModels && liveModels.length > 0) {
+      setCachedLiveModels(liveModels);
+      return liveModels;
+    }
+  }
+
+  return DEFAULT_CURSOR_MODELS;
+}
 
 /**
  * Fetch available models from running cursor daemon.
@@ -184,6 +204,7 @@ export async function fetchModelsFromDaemon(port: number): Promise<CursorModel[]
         res.on('data', (chunk) => {
           data += chunk;
           if (data.length > MAX_BODY_SIZE) {
+            debugLog('Cursor daemon /v1/models body exceeded 1MB; falling back to defaults');
             req.destroy();
             safeResolve(DEFAULT_CURSOR_MODELS);
           }
@@ -191,30 +212,39 @@ export async function fetchModelsFromDaemon(port: number): Promise<CursorModel[]
 
         res.on('end', () => {
           try {
-            const response = JSON.parse(data) as { data?: Array<{ id: string }> };
-            if (response.data && Array.isArray(response.data)) {
-              const models: CursorModel[] = response.data.map((m) => ({
-                id: m.id,
-                name: formatModelName(m.id),
-                provider: detectProvider(m.id),
-                isDefault: m.id === DEFAULT_CURSOR_MODEL,
-              }));
+            const response = JSON.parse(data) as { data?: Array<{ id?: unknown }> };
+            if (Array.isArray(response.data)) {
+              const models: CursorModel[] = response.data
+                .filter((m) => m && typeof m.id === 'string' && m.id.length > 0)
+                .map((m) => ({
+                  id: m.id as string,
+                  name: formatModelName(m.id as string),
+                  provider: detectProvider(m.id as string),
+                  isDefault: m.id === DEFAULT_CURSOR_MODEL,
+                }));
               safeResolve(models.length > 0 ? models : DEFAULT_CURSOR_MODELS);
             } else {
+              debugLog('Cursor daemon /v1/models payload missing data[]; falling back to defaults');
               safeResolve(DEFAULT_CURSOR_MODELS);
             }
-          } catch {
+          } catch (error) {
+            debugLog(
+              'Cursor daemon /v1/models returned invalid JSON; falling back to defaults',
+              error
+            );
             safeResolve(DEFAULT_CURSOR_MODELS);
           }
         });
       }
     );
 
-    req.on('error', () => {
+    req.on('error', (error) => {
+      debugLog('Cursor daemon /v1/models request failed; falling back to defaults', error);
       safeResolve(DEFAULT_CURSOR_MODELS);
     });
 
     req.on('timeout', () => {
+      debugLog('Cursor daemon /v1/models request timed out; falling back to defaults');
       req.destroy();
       safeResolve(DEFAULT_CURSOR_MODELS);
     });
@@ -234,39 +264,44 @@ export async function getAvailableModels(port: number): Promise<CursorModel[]> {
   return fetchModelsFromDaemon(port);
 }
 
+function getCatalogDefaultModelId(availableModels: CursorModel[]): string {
+  if (availableModels.some((model) => model.id === DEFAULT_CURSOR_MODEL)) {
+    return DEFAULT_CURSOR_MODEL;
+  }
+
+  const explicitDefault = availableModels.find((model) => model.isDefault)?.id;
+  if (explicitDefault) {
+    return explicitDefault;
+  }
+
+  const firstAvailable = availableModels.find(
+    (model) => typeof model.id === 'string' && model.id.trim().length > 0
+  )?.id;
+
+  return firstAvailable || DEFAULT_CURSOR_MODEL;
+}
+
+export function resolveCursorRequestModel(
+  requestedModel: string | null | undefined,
+  availableModels: CursorModel[]
+): string {
+  const fallbackModel = getCatalogDefaultModelId(availableModels);
+  const normalizedRequested = typeof requestedModel === 'string' ? requestedModel.trim() : '';
+  if (!normalizedRequested) {
+    return fallbackModel;
+  }
+
+  if (availableModels.some((model) => model.id === normalizedRequested)) {
+    return normalizedRequested;
+  }
+
+  return fallbackModel;
+}
+
 /**
  * Get the default model.
  * Uses GPT-5.3 Codex as default.
  */
 export function getDefaultModel(): string {
-  return DEFAULT_CURSOR_MODEL;
-}
-
-/**
- * Detect provider from model ID.
- */
-export function detectProvider(modelId: string): string {
-  if (modelId.includes('claude')) return 'anthropic';
-  if (modelId.includes('gpt') || /^o[1-9]\d*(-|$)/.test(modelId)) return 'openai';
-  if (modelId.includes('gemini')) return 'google';
-  if (modelId.includes('cursor') || modelId.includes('composer')) return 'cursor';
-  if (modelId.includes('grok')) return 'xai';
-  return 'unknown';
-}
-
-/**
- * Format model ID to human-readable name.
- */
-export function formatModelName(modelId: string): string {
-  // Find model in catalog for metadata
-  const model = DEFAULT_CURSOR_MODELS.find((m) => m.id === modelId);
-  if (model) {
-    return model.name;
-  }
-
-  // Fallback: convert kebab-case to title case
-  return modelId
-    .split('-')
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
+  return getCatalogDefaultModelId(DEFAULT_CURSOR_MODELS);
 }

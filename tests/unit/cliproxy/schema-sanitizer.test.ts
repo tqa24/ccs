@@ -535,10 +535,7 @@ describe('sanitizeToolSchemas', () => {
   });
 
   test('handles tools without input_schema', () => {
-    const tools = [
-      { name: 'simple_tool', description: 'No schema' },
-      { name: 'another_tool' },
-    ];
+    const tools = [{ name: 'simple_tool', description: 'No schema' }, { name: 'another_tool' }];
 
     const result = sanitizeToolSchemas(tools);
 

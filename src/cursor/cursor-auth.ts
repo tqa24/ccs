@@ -22,11 +22,23 @@ import type { CursorCredentials, CursorAuthStatus, AutoDetectResult } from './ty
 import { getCcsDir } from '../utils/config-manager';
 
 /**
+ * Resolve home directory from environment first for deterministic testability,
+ * then fall back to os.homedir() when env vars are unavailable.
+ */
+function resolveHomeDir(): string {
+  if (process.platform === 'win32') {
+    return process.env.USERPROFILE || process.env.HOME || os.homedir();
+  }
+
+  return process.env.HOME || os.homedir();
+}
+
+/**
  * Get platform-specific path to Cursor's state.vscdb
  */
 export function getTokenStoragePath(): string {
   const platform = process.platform;
-  const home = os.homedir();
+  const home = resolveHomeDir();
 
   if (platform === 'win32') {
     const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');

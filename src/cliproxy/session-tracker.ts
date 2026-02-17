@@ -17,6 +17,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
+import * as lockfile from 'proper-lockfile';
 import { getCliproxyDir } from './config-generator';
 import { getPortProcess, isCLIProxyProcess } from '../utils/port-utils';
 import { CLIPROXY_DEFAULT_PORT } from './config-generator';
@@ -31,6 +32,10 @@ interface SessionLock {
   version?: string;
   /** Backend type running (original vs plus) */
   backend?: 'original' | 'plus';
+  /** Target summary for active sessions ('mixed' when multiple targets share the proxy) */
+  target?: string;
+  /** Per-session target metadata */
+  sessionTargets?: Record<string, string>;
 }
 
 /** Generate unique session ID */
@@ -44,6 +49,34 @@ function getSessionLockPathForPort(port: number): string {
     return path.join(getCliproxyDir(), 'sessions.json');
   }
   return path.join(getCliproxyDir(), `sessions-${port}.json`);
+}
+
+function ensureCliproxyDir(): string {
+  const dir = getCliproxyDir();
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+  return dir;
+}
+
+function withSessionTrackerLock<T>(fn: () => T): T {
+  const dir = ensureCliproxyDir();
+  let release: (() => void) | undefined;
+
+  try {
+    release = lockfile.lockSync(dir, {
+      stale: 10000,
+    }) as () => void;
+    return fn();
+  } finally {
+    if (release) {
+      try {
+        release();
+      } catch {
+        // Best-effort release
+      }
+    }
+  }
 }
 
 /** Get path to session lock file (default port) - kept for future use */
@@ -85,13 +118,24 @@ function readSessionLock(): SessionLock | null {
   return readSessionLockForPort(CLIPROXY_DEFAULT_PORT);
 }
 
+function getTargetSummary(lock: SessionLock): string | undefined {
+  const targets = lock.sessionTargets ? Object.values(lock.sessionTargets).filter(Boolean) : [];
+  if (targets.length === 0) {
+    return lock.target;
+  }
+
+  const unique = new Set(targets);
+  if (unique.size === 1) {
+    return targets[0];
+  }
+  return 'mixed';
+}
+
 /** Write session lock file for specific port */
 function writeSessionLockForPort(lock: SessionLock): void {
   const lockPath = getSessionLockPathForPort(lock.port);
-  const dir = path.dirname(lockPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  }
+  ensureCliproxyDir();
+  lock.target = getTargetSummary(lock);
   fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2), { mode: 0o600 });
 }
 
@@ -184,16 +228,24 @@ export function registerSession(
   port: number,
   proxyPid: number,
   version?: string,
-  backend?: 'original' | 'plus'
+  backend?: 'original' | 'plus',
+  target?: string
 ): string {
   const sessionId = generateSessionId();
-  const existingLock = readSessionLockForPort(port);
+  withSessionTrackerLock(() => {
+    const existingLock = readSessionLockForPort(port);
 
-  if (existingLock && existingLock.port === port && existingLock.pid === proxyPid) {
-    // Add to existing sessions
-    existingLock.sessions.push(sessionId);
-    writeSessionLockForPort(existingLock);
-  } else {
+    if (existingLock && existingLock.port === port && existingLock.pid === proxyPid) {
+      // Add to existing sessions
+      existingLock.sessions.push(sessionId);
+      if (target) {
+        existingLock.sessionTargets = existingLock.sessionTargets || {};
+        existingLock.sessionTargets[sessionId] = target;
+      }
+      writeSessionLockForPort(existingLock);
+      return;
+    }
+
     // Create new lock (first session for this proxy)
     const newLock: SessionLock = {
       port,
@@ -202,9 +254,11 @@ export function registerSession(
       startedAt: new Date().toISOString(),
       version,
       backend,
+      target,
+      sessionTargets: target ? { [sessionId]: target } : undefined,
     };
     writeSessionLockForPort(newLock);
-  }
+  });
 
   return sessionId;
 }
@@ -218,48 +272,66 @@ export function registerSession(
 export function unregisterSession(sessionId: string, port?: number): boolean {
   // If port provided, use port-specific lookup
   if (port !== undefined) {
-    const lock = readSessionLockForPort(port);
+    return withSessionTrackerLock(() => {
+      const lock = readSessionLockForPort(port);
+      if (!lock) {
+        return true;
+      }
+
+      const index = lock.sessions.indexOf(sessionId);
+      if (index !== -1) {
+        lock.sessions.splice(index, 1);
+      }
+
+      if (lock.sessionTargets) {
+        delete lock.sessionTargets[sessionId];
+        if (Object.keys(lock.sessionTargets).length === 0) {
+          delete lock.sessionTargets;
+        }
+      }
+
+      if (lock.sessions.length === 0) {
+        deleteSessionLockForPort(port);
+        return true;
+      }
+
+      writeSessionLockForPort(lock);
+      return false;
+    });
+  }
+
+  // Fallback: search default port (backward compat)
+  return withSessionTrackerLock(() => {
+    const lock = readSessionLock();
     if (!lock) {
+      // No lock file - assume we're the only session
       return true;
     }
 
+    // Remove this session from the list
     const index = lock.sessions.indexOf(sessionId);
     if (index !== -1) {
       lock.sessions.splice(index, 1);
     }
 
+    if (lock.sessionTargets) {
+      delete lock.sessionTargets[sessionId];
+      if (Object.keys(lock.sessionTargets).length === 0) {
+        delete lock.sessionTargets;
+      }
+    }
+
+    // Check if any sessions remain
     if (lock.sessions.length === 0) {
-      deleteSessionLockForPort(port);
+      // Last session - clean up lock file
+      deleteSessionLock();
       return true;
     }
 
+    // Other sessions still active - keep proxy running
     writeSessionLockForPort(lock);
     return false;
-  }
-
-  // Fallback: search default port (backward compat)
-  const lock = readSessionLock();
-  if (!lock) {
-    // No lock file - assume we're the only session
-    return true;
-  }
-
-  // Remove this session from the list
-  const index = lock.sessions.indexOf(sessionId);
-  if (index !== -1) {
-    lock.sessions.splice(index, 1);
-  }
-
-  // Check if any sessions remain
-  if (lock.sessions.length === 0) {
-    // Last session - clean up lock file
-    deleteSessionLock();
-    return true;
-  }
-
-  // Other sessions still active - keep proxy running
-  writeSessionLockForPort(lock);
-  return false;
+  });
 }
 
 /**
@@ -420,6 +492,7 @@ export function getProxyStatus(port: number = CLIPROXY_DEFAULT_PORT): {
   sessionCount?: number;
   startedAt?: string;
   version?: string;
+  target?: string;
 } {
   const lock = readSessionLockForPort(port);
 
@@ -440,6 +513,7 @@ export function getProxyStatus(port: number = CLIPROXY_DEFAULT_PORT): {
     sessionCount: lock.sessions.length,
     startedAt: lock.startedAt,
     version: lock.version,
+    target: lock.target || 'claude',
   };
 }
 

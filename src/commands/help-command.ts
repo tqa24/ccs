@@ -131,7 +131,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       ['ccs', 'Use default Claude account'],
       ['ccs glm', 'GLM 5 (API key required)'],
       ['ccs glmt', 'GLM with thinking mode'],
-      ['ccs kimi', 'Kimi for Coding (API key)'],
+      ['ccs km', 'Kimi for Coding (API key)'],
       ['ccs ollama', 'Local Ollama (http://localhost:11434)'],
       ['ccs ollama-cloud', 'Ollama Cloud (API key required)'],
       ['', ''], // Spacer
@@ -171,6 +171,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       ['ccs codex', 'OpenAI Codex (supports -medium/-high/-xhigh model suffixes)'],
       ['ccs agy', 'Antigravity (Claude/Gemini models)'],
       ['ccs qwen', 'Qwen Code (qwen3-coder)'],
+      ['ccs kimi', 'Kimi (Moonshot AI K2/K2.5 models)'],
       ['ccs kiro', 'Kiro (AWS CodeWhisperer Claude models)'],
       ['ccs ghcp', 'GitHub Copilot (OAuth via CLIProxy Plus)'],
       ['', ''], // Spacer
@@ -255,7 +256,8 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   printSubSection('Delegation (inside Claude Code CLI)', [
     ['/ccs "task"', 'Delegate task (auto-selects profile)'],
     ['/ccs --glm "task"', 'Force GLM-5 for simple tasks'],
-    ['/ccs --kimi "task"', 'Force Kimi for long context'],
+    ['/ccs --kimi "task"', 'Force Kimi OAuth for long context'],
+    ['/ccs --km "task"', 'Force Kimi API key for long context'],
     ['/ccs:continue "follow-up"', 'Continue last delegation session'],
   ]);
 
@@ -301,9 +303,22 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   // Flags
   printSubSection('Flags', [
     ['--config-dir <path>', 'Use custom CCS config directory'],
+    ['--target <cli>', 'Target CLI: claude (default), droid'],
     ['-h, --help', 'Show this help message'],
     ['-v, --version', 'Show version and installation info'],
     ['-sc, --shell-completion', 'Install shell auto-completion'],
+  ]);
+
+  // Aliases
+  printSubSection('Aliases', [
+    ['ccsd <profile> [args]', 'Shorthand for: ccs <profile> --target droid'],
+  ]);
+
+  // Multi-target examples
+  printSubSection('Multi-Target', [
+    ['ccs glm --target droid', 'Run GLM profile on Droid CLI'],
+    ['ccsd glm', 'Same as above (alias)'],
+    ['ccs glm', 'Run GLM profile on Claude Code (default)'],
   ]);
 
   // Configuration

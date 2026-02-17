@@ -9,6 +9,10 @@
  * Into a single config.yaml structure.
  */
 
+import type { TargetType } from '../targets/target-adapter';
+import type { CLIProxyProvider } from '../cliproxy/types';
+import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
+
 /**
  * Unified config version.
  * Version 2 = YAML unified format
@@ -23,18 +27,9 @@ export const UNIFIED_CONFIG_VERSION = 8;
 
 /**
  * Supported CLIProxy providers.
- * Includes all OAuth-based providers supported by CLIProxyAPI.
+ * Derived from CLIPROXY_PROVIDER_IDS — single source of truth in provider-capabilities.ts.
  */
-export const CLIPROXY_SUPPORTED_PROVIDERS = [
-  'gemini',
-  'codex',
-  'agy',
-  'qwen',
-  'iflow',
-  'kiro',
-  'ghcp',
-  'claude',
-] as const;
+export const CLIPROXY_SUPPORTED_PROVIDERS = CLIPROXY_PROVIDER_IDS;
 
 /**
  * Account configuration (formerly in profiles.json).
@@ -59,6 +54,8 @@ export interface ProfileConfig {
   type: 'api';
   /** Path to settings file (e.g., "~/.ccs/glm.settings.json") */
   settings: string;
+  /** Target CLI to use for this profile (default: 'claude') */
+  target?: TargetType;
 }
 
 /**
@@ -76,7 +73,7 @@ export type OAuthAccounts = Record<string, string>;
  */
 export interface CLIProxyVariantConfig {
   /** Base provider to use */
-  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp' | 'claude';
+  provider: CLIProxyProvider;
   /** Account nickname (references oauth_accounts) */
   account?: string;
   /** Path to settings file (e.g., "~/.ccs/gemini-custom.settings.json") */
@@ -85,6 +82,8 @@ export interface CLIProxyVariantConfig {
   port?: number;
   /** Per-variant auth override (optional) */
   auth?: CLIProxyAuthConfig;
+  /** Target CLI to use for this variant (default: 'claude') */
+  target?: TargetType;
 }
 
 /**
@@ -92,14 +91,14 @@ export interface CLIProxyVariantConfig {
  */
 export interface CompositeTierConfig {
   /** Provider for this tier */
-  provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp' | 'claude';
+  provider: CLIProxyProvider;
   /** Model ID to use for this tier */
   model: string;
   /** Account nickname (optional, references oauth_accounts) */
   account?: string;
   /** Fallback provider+model if primary fails */
   fallback?: {
-    provider: 'gemini' | 'codex' | 'agy' | 'qwen' | 'iflow' | 'kiro' | 'ghcp' | 'claude';
+    provider: CLIProxyProvider;
     model: string;
     account?: string;
   };
@@ -130,6 +129,8 @@ export interface CompositeVariantConfig {
   port?: number;
   /** Per-variant auth override (optional) */
   auth?: CLIProxyAuthConfig;
+  /** Target CLI to use for this composite variant (default: 'claude') */
+  target?: TargetType;
 }
 
 /**
@@ -665,6 +666,7 @@ export const DEFAULT_IMAGE_ANALYSIS_CONFIG: ImageAnalysisConfig = {
     // 'vision-model' is a generic placeholder - users can override via config.yaml
     qwen: 'vision-model',
     iflow: 'qwen3-vl-plus',
+    kimi: 'vision-model',
   },
 };
 

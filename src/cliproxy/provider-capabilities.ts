@@ -62,6 +62,12 @@ export const PROVIDER_CAPABILITIES: Record<CLIProxyProvider, ProviderCapabilitie
     callbackPort: 54545,
     aliases: ['anthropic'],
   },
+  kimi: {
+    displayName: 'Kimi (Moonshot)',
+    oauthFlow: 'device_code',
+    callbackPort: null,
+    aliases: ['moonshot'],
+  },
 };
 
 export const CLIPROXY_PROVIDER_IDS = Object.freeze(

@@ -128,8 +128,7 @@ describe('detectFailedTier', () => {
   });
 
   it('should match first tier when multiple models mentioned', () => {
-    const stderr =
-      'Tried claude-opus-4-6-thinking, then gemini-3-pro-preview, both failed';
+    const stderr = 'Tried claude-opus-4-6-thinking, then gemini-3-pro-preview, both failed';
     const result = detectFailedTier(stderr, tiers);
     expect(result).toBe('opus'); // First match
   });

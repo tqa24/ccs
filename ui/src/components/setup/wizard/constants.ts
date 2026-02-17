@@ -17,6 +17,7 @@ const PROVIDER_INFO: Record<CLIProxyProvider, { name: string; description: strin
   iflow: { name: 'iFlow', description: 'iFlow AI models' },
   kiro: { name: 'Kiro (AWS)', description: 'AWS CodeWhisperer models' },
   ghcp: { name: 'GitHub Copilot (OAuth)', description: 'GitHub Copilot via OAuth' },
+  kimi: { name: 'Kimi (Moonshot)', description: 'Moonshot AI K2/K2.5 models' },
 };
 
 /** Wizard display order - most recommended first */
@@ -26,6 +27,7 @@ const WIZARD_PROVIDER_ORDER: CLIProxyProvider[] = [
   'gemini',
   'codex',
   'qwen',
+  'kimi',
   'iflow',
   'kiro',
   'ghcp',

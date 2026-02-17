@@ -30,11 +30,13 @@ afterEach(() => {
 });
 
 // Helper to create proxy instance with specific config
-async function createTestableProxy(config: {
-  maxRetries?: number;
-  baseDelay?: number;
-  enabled?: boolean;
-} = {}) {
+async function createTestableProxy(
+  config: {
+    maxRetries?: number;
+    baseDelay?: number;
+    enabled?: boolean;
+  } = {}
+) {
   // Set env vars before import
   if (config.maxRetries !== undefined) {
     process.env.GLMT_MAX_RETRIES = String(config.maxRetries);
@@ -56,7 +58,11 @@ describe('GLMT Retry Logic', () => {
     it('should use default values when env vars not set', async () => {
       const proxy = await createTestableProxy();
       // Access private via type assertion for testing
-      const config = (proxy as unknown as { retryConfig: { maxRetries: number; baseDelay: number; enabled: boolean } }).retryConfig;
+      const config = (
+        proxy as unknown as {
+          retryConfig: { maxRetries: number; baseDelay: number; enabled: boolean };
+        }
+      ).retryConfig;
       expect(config.maxRetries).toBe(3);
       expect(config.baseDelay).toBe(1000);
       expect(config.enabled).toBe(true);
@@ -84,7 +90,11 @@ describe('GLMT Retry Logic', () => {
   describe('calculateRetryDelay', () => {
     it('should calculate exponential delay with jitter', async () => {
       const proxy = await createTestableProxy({ baseDelay: 1000 });
-      const calcDelay = (proxy as unknown as { calculateRetryDelay: (attempt: number, retryAfter?: string) => number }).calculateRetryDelay.bind(proxy);
+      const calcDelay = (
+        proxy as unknown as {
+          calculateRetryDelay: (attempt: number, retryAfter?: string) => number;
+        }
+      ).calculateRetryDelay.bind(proxy);
 
       // Attempt 0: 2^0 * 1000 = 1000 + jitter (0-500)
       const delay0 = calcDelay(0);
@@ -104,7 +114,11 @@ describe('GLMT Retry Logic', () => {
 
     it('should honor Retry-After header in seconds', async () => {
       const proxy = await createTestableProxy();
-      const calcDelay = (proxy as unknown as { calculateRetryDelay: (attempt: number, retryAfter?: string) => number }).calculateRetryDelay.bind(proxy);
+      const calcDelay = (
+        proxy as unknown as {
+          calculateRetryDelay: (attempt: number, retryAfter?: string) => number;
+        }
+      ).calculateRetryDelay.bind(proxy);
 
       // Retry-After: 5 seconds → 5000ms
       const delay = calcDelay(0, '5');
@@ -113,7 +127,11 @@ describe('GLMT Retry Logic', () => {
 
     it('should ignore invalid Retry-After header and fallback to exponential', async () => {
       const proxy = await createTestableProxy({ baseDelay: 1000 });
-      const calcDelay = (proxy as unknown as { calculateRetryDelay: (attempt: number, retryAfter?: string) => number }).calculateRetryDelay.bind(proxy);
+      const calcDelay = (
+        proxy as unknown as {
+          calculateRetryDelay: (attempt: number, retryAfter?: string) => number;
+        }
+      ).calculateRetryDelay.bind(proxy);
 
       // Invalid header falls back to exponential
       const delay = calcDelay(0, 'invalid');
@@ -123,7 +141,11 @@ describe('GLMT Retry Logic', () => {
 
     it('should ignore zero or negative Retry-After', async () => {
       const proxy = await createTestableProxy({ baseDelay: 1000 });
-      const calcDelay = (proxy as unknown as { calculateRetryDelay: (attempt: number, retryAfter?: string) => number }).calculateRetryDelay.bind(proxy);
+      const calcDelay = (
+        proxy as unknown as {
+          calculateRetryDelay: (attempt: number, retryAfter?: string) => number;
+        }
+      ).calculateRetryDelay.bind(proxy);
 
       const delay = calcDelay(0, '0');
       expect(delay).toBeGreaterThanOrEqual(1000);
@@ -134,7 +156,11 @@ describe('GLMT Retry Logic', () => {
   describe('isRetryableError', () => {
     it('should return true for 429 status code', async () => {
       const proxy = await createTestableProxy();
-      const isRetryable = (proxy as unknown as { isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string } }).isRetryableError.bind(proxy);
+      const isRetryable = (
+        proxy as unknown as {
+          isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string };
+        }
+      ).isRetryableError.bind(proxy);
 
       const result = isRetryable(new Error('Upstream error: 429 Too Many Requests'));
       expect(result.retryable).toBe(true);
@@ -142,7 +168,11 @@ describe('GLMT Retry Logic', () => {
 
     it('should return true for rate limit message', async () => {
       const proxy = await createTestableProxy();
-      const isRetryable = (proxy as unknown as { isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string } }).isRetryableError.bind(proxy);
+      const isRetryable = (
+        proxy as unknown as {
+          isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string };
+        }
+      ).isRetryableError.bind(proxy);
 
       const result = isRetryable(new Error('Rate limit exceeded'));
       expect(result.retryable).toBe(true);
@@ -150,7 +180,11 @@ describe('GLMT Retry Logic', () => {
 
     it('should return false for non-retryable errors', async () => {
       const proxy = await createTestableProxy();
-      const isRetryable = (proxy as unknown as { isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string } }).isRetryableError.bind(proxy);
+      const isRetryable = (
+        proxy as unknown as {
+          isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string };
+        }
+      ).isRetryableError.bind(proxy);
 
       expect(isRetryable(new Error('Connection refused')).retryable).toBe(false);
       expect(isRetryable(new Error('Timeout')).retryable).toBe(false);
@@ -160,7 +194,11 @@ describe('GLMT Retry Logic', () => {
 
     it('should extract Retry-After from error message', async () => {
       const proxy = await createTestableProxy();
-      const isRetryable = (proxy as unknown as { isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string } }).isRetryableError.bind(proxy);
+      const isRetryable = (
+        proxy as unknown as {
+          isRetryableError: (error: Error) => { retryable: boolean; retryAfter?: string };
+        }
+      ).isRetryableError.bind(proxy);
 
       const result = isRetryable(new Error('429 Too Many Requests, Retry-After: 10'));
       expect(result.retryable).toBe(true);
@@ -174,47 +212,66 @@ describe('GLMT Retry Logic', () => {
       let attempts = 0;
 
       // Mock forwardToUpstream
-      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream = async () => {
-        attempts++;
-        return { choices: [{ message: { content: 'success' } }] };
-      };
+      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream =
+        async () => {
+          attempts++;
+          return { choices: [{ message: { content: 'success' } }] };
+        };
 
-      const forwardWithRetry = (proxy as unknown as { forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown> }).forwardWithRetry.bind(proxy);
+      const forwardWithRetry = (
+        proxy as unknown as {
+          forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown>;
+        }
+      ).forwardWithRetry.bind(proxy);
       const result = await forwardWithRetry({}, {});
 
       expect(attempts).toBe(1);
-      expect((result as { choices: Array<{ message: { content: string } }> }).choices[0].message.content).toBe('success');
+      expect(
+        (result as { choices: Array<{ message: { content: string } }> }).choices[0].message.content
+      ).toBe('success');
     });
 
     it('should retry on 429 and succeed eventually', async () => {
       const proxy = await createTestableProxy({ baseDelay: 10 }); // Fast for tests
       let attempts = 0;
 
-      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream = async () => {
-        attempts++;
-        if (attempts < 3) {
-          throw new Error('Upstream error: 429 Too Many Requests');
-        }
-        return { choices: [{ message: { content: 'success after retry' } }] };
-      };
+      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream =
+        async () => {
+          attempts++;
+          if (attempts < 3) {
+            throw new Error('Upstream error: 429 Too Many Requests');
+          }
+          return { choices: [{ message: { content: 'success after retry' } }] };
+        };
 
-      const forwardWithRetry = (proxy as unknown as { forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown> }).forwardWithRetry.bind(proxy);
+      const forwardWithRetry = (
+        proxy as unknown as {
+          forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown>;
+        }
+      ).forwardWithRetry.bind(proxy);
       const result = await forwardWithRetry({}, {});
 
       expect(attempts).toBe(3);
-      expect((result as { choices: Array<{ message: { content: string } }> }).choices[0].message.content).toBe('success after retry');
+      expect(
+        (result as { choices: Array<{ message: { content: string } }> }).choices[0].message.content
+      ).toBe('success after retry');
     });
 
     it('should fail after max retries exhausted', async () => {
       const proxy = await createTestableProxy({ maxRetries: 2, baseDelay: 10 });
       let attempts = 0;
 
-      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream = async () => {
-        attempts++;
-        throw new Error('Upstream error: 429 Too Many Requests');
-      };
+      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream =
+        async () => {
+          attempts++;
+          throw new Error('Upstream error: 429 Too Many Requests');
+        };
 
-      const forwardWithRetry = (proxy as unknown as { forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown> }).forwardWithRetry.bind(proxy);
+      const forwardWithRetry = (
+        proxy as unknown as {
+          forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown>;
+        }
+      ).forwardWithRetry.bind(proxy);
 
       await expect(forwardWithRetry({}, {})).rejects.toThrow('429');
       expect(attempts).toBe(3); // Initial + 2 retries
@@ -224,12 +281,17 @@ describe('GLMT Retry Logic', () => {
       const proxy = await createTestableProxy({ enabled: false });
       let attempts = 0;
 
-      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream = async () => {
-        attempts++;
-        throw new Error('Upstream error: 429 Too Many Requests');
-      };
+      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream =
+        async () => {
+          attempts++;
+          throw new Error('Upstream error: 429 Too Many Requests');
+        };
 
-      const forwardWithRetry = (proxy as unknown as { forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown> }).forwardWithRetry.bind(proxy);
+      const forwardWithRetry = (
+        proxy as unknown as {
+          forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown>;
+        }
+      ).forwardWithRetry.bind(proxy);
 
       await expect(forwardWithRetry({}, {})).rejects.toThrow('429');
       expect(attempts).toBe(1);
@@ -239,12 +301,17 @@ describe('GLMT Retry Logic', () => {
       const proxy = await createTestableProxy({ baseDelay: 10 });
       let attempts = 0;
 
-      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream = async () => {
-        attempts++;
-        throw new Error('Upstream error: 500 Internal Server Error');
-      };
+      (proxy as unknown as { forwardToUpstream: () => Promise<unknown> }).forwardToUpstream =
+        async () => {
+          attempts++;
+          throw new Error('Upstream error: 500 Internal Server Error');
+        };
 
-      const forwardWithRetry = (proxy as unknown as { forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown> }).forwardWithRetry.bind(proxy);
+      const forwardWithRetry = (
+        proxy as unknown as {
+          forwardWithRetry: (req: unknown, headers: unknown) => Promise<unknown>;
+        }
+      ).forwardWithRetry.bind(proxy);
 
       await expect(forwardWithRetry({}, {})).rejects.toThrow('500');
       expect(attempts).toBe(1);
@@ -254,7 +321,8 @@ describe('GLMT Retry Logic', () => {
   describe('connection pooling', () => {
     it('should create https.Agent with keepAlive enabled', async () => {
       const proxy = await createTestableProxy();
-      const agent = (proxy as unknown as { httpsAgent: { options?: { keepAlive?: boolean } } }).httpsAgent;
+      const agent = (proxy as unknown as { httpsAgent: { options?: { keepAlive?: boolean } } })
+        .httpsAgent;
 
       expect(agent).toBeDefined();
       // Agent should have keepAlive behavior (internal property)
@@ -263,7 +331,9 @@ describe('GLMT Retry Logic', () => {
 
     it('should destroy agent on stop', async () => {
       const proxy = await createTestableProxy();
-      const agent = (proxy as unknown as { httpsAgent: { destroy: () => void; destroyed?: boolean } }).httpsAgent;
+      const agent = (
+        proxy as unknown as { httpsAgent: { destroy: () => void; destroyed?: boolean } }
+      ).httpsAgent;
 
       let destroyed = false;
       const originalDestroy = agent.destroy.bind(agent);

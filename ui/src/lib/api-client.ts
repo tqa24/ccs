@@ -183,12 +183,34 @@ export interface CodexQuotaWindow {
   resetAt: string | null;
 }
 
+/** Core Codex usage window (5h/weekly) extracted from raw windows */
+export interface CodexCoreUsageWindow {
+  /** Source window label */
+  label: string;
+  /** Percentage remaining (0-100) */
+  remainingPercent: number;
+  /** Seconds until quota resets, null if unknown */
+  resetAfterSeconds: number | null;
+  /** ISO timestamp when quota resets, null if unknown */
+  resetAt: string | null;
+}
+
+/** Core Codex usage summary with explicit 5h and weekly windows */
+export interface CodexCoreUsageSummary {
+  /** Short-cycle usage limit window (typically 5h) */
+  fiveHour: CodexCoreUsageWindow | null;
+  /** Long-cycle usage limit window (typically weekly) */
+  weekly: CodexCoreUsageWindow | null;
+}
+
 /** Codex quota result */
 export interface CodexQuotaResult {
   /** Whether fetch succeeded */
   success: boolean;
   /** Quota windows (primary, secondary, code review) */
   windows: CodexQuotaWindow[];
+  /** Explicit core usage windows (5h + weekly) for easier reset display */
+  coreUsage?: CodexCoreUsageSummary;
   /** Plan type: free, plus, team, or null if unknown */
   planType: 'free' | 'plus' | 'team' | null;
   /** Timestamp of fetch */

@@ -88,6 +88,7 @@ export function toKiroManagementMethod(method: KiroAuthMethod): 'aws' | 'google'
  * - Kiro:   Device Code Flow (polling-based, NO callback port needed)
  * - Qwen:   Device Code Flow (polling-based, NO callback port needed)
  * - GHCP:   Device Code Flow (polling-based, NO callback port needed)
+ * - Kimi:   Device Code Flow (polling-based, NO callback port needed)
  */
 export const OAUTH_CALLBACK_PORTS: Partial<Record<CLIProxyProvider, number>> = {
   gemini: 8085,
@@ -98,6 +99,7 @@ export const OAUTH_CALLBACK_PORTS: Partial<Record<CLIProxyProvider, number>> = {
   // kiro: Device Code Flow - no callback port
   // qwen: Device Code Flow - no callback port
   // ghcp: Device Code Flow - no callback port
+  // kimi: Device Code Flow - no callback port
 };
 
 /**
@@ -199,6 +201,13 @@ export const OAUTH_CONFIGS: Record<CLIProxyProvider, ProviderOAuthConfig> = {
     scopes: ['user:inference', 'user:profile'],
     authFlag: '--claude-login',
   },
+  kimi: {
+    provider: 'kimi',
+    displayName: 'Kimi (Moonshot)',
+    authUrl: 'https://auth.kimi.com/api/oauth/device_authorization',
+    scopes: ['api'],
+    authFlag: '--kimi-login',
+  },
 };
 
 /**
@@ -215,6 +224,7 @@ export const PROVIDER_AUTH_PREFIXES: Record<CLIProxyProvider, string[]> = {
   kiro: ['kiro-', 'aws-', 'codewhisperer-'],
   ghcp: ['github-copilot-', 'copilot-', 'gh-'],
   claude: ['claude-', 'anthropic-'],
+  kimi: ['kimi-'],
 };
 
 /**
@@ -230,6 +240,7 @@ export const PROVIDER_TYPE_VALUES: Record<CLIProxyProvider, string[]> = {
   kiro: ['kiro', 'codewhisperer'],
   ghcp: ['github-copilot', 'copilot'],
   claude: ['claude', 'anthropic'],
+  kimi: ['kimi'],
 };
 
 /**
@@ -245,6 +256,7 @@ export const CLIPROXY_CALLBACK_PROVIDER_MAP: Record<CLIProxyProvider, string> = 
   claude: 'anthropic',
   qwen: 'qwen',
   iflow: 'iflow',
+  kimi: 'kimi',
 };
 
 /**
@@ -261,6 +273,7 @@ export const CLIPROXY_AUTH_URL_PROVIDER_MAP: Record<CLIProxyProvider, string> = 
   claude: 'anthropic',
   qwen: 'qwen',
   iflow: 'iflow',
+  kimi: 'kimi',
 };
 
 /**

@@ -31,6 +31,7 @@ export interface RawUsageEntry {
   timestamp: string;
   projectPath: string;
   version?: string;
+  target?: string;
 }
 
 /** Internal structure matching JSONL assistant entries */
@@ -40,6 +41,7 @@ interface JsonlAssistantEntry {
   timestamp: string;
   version?: string;
   cwd?: string;
+  target?: string;
   message: {
     model: string;
     usage: {
@@ -95,6 +97,10 @@ export function parseUsageEntry(line: string, projectPath: string): RawUsageEntr
       timestamp: assistant.timestamp || new Date().toISOString(),
       projectPath,
       version: assistant.version,
+      target:
+        typeof (entry as { target?: unknown }).target === 'string'
+          ? ((entry as { target?: string }).target as string)
+          : undefined,
     };
   } catch {
     // Malformed JSON - skip silently

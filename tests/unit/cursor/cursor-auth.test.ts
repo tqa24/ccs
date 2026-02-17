@@ -431,11 +431,23 @@ describe('autoDetectTokens', () => {
       return;
     }
 
-    const result = autoDetectTokens();
+    const originalHome = process.env.HOME;
+    const isolatedHome = path.join(tempDir, 'no-cursor-home');
+    process.env.HOME = isolatedHome;
 
-    // Should fail because Cursor database doesn't exist in test environment
-    expect(result.found).toBe(false);
-    expect(result.error).toBeDefined();
+    try {
+      const result = autoDetectTokens();
+
+      // Should fail because isolated test home has no Cursor database
+      expect(result.found).toBe(false);
+      expect(result.error).toBeDefined();
+    } finally {
+      if (originalHome !== undefined) {
+        process.env.HOME = originalHome;
+      } else {
+        delete process.env.HOME;
+      }
+    }
   });
 
   it('should have found property in return type', () => {
