@@ -308,7 +308,7 @@ class ProfileDetector {
       };
     }
 
-    // Priority 3: Check settings-based profiles (glm, kimi) - LEGACY FALLBACK
+    // Priority 3: Check settings-based profiles (glm) - LEGACY FALLBACK
     if (config.profiles && config.profiles[profileName]) {
       return {
         type: 'settings',

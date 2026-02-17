@@ -5,7 +5,7 @@
  *
  * Refresh responsibility:
  * - CCS-managed: gemini (CCS refreshes tokens directly via Google OAuth)
- * - CLIProxy-delegated: codex, agy, kiro, ghcp, qwen, iflow
+ * - CLIProxy-delegated: codex, agy, kiro, ghcp, qwen, iflow, kimi
  *   (CLIProxyAPIPlus handles refresh automatically in background)
  * - Not implemented: claude
  */
@@ -34,6 +34,7 @@ const CLIPROXY_DELEGATED_REFRESH: CLIProxyProvider[] = [
   'ghcp',
   'qwen',
   'iflow',
+  'kimi',
 ];
 
 /**
@@ -63,6 +64,7 @@ export async function refreshToken(
     case 'iflow':
     case 'kiro':
     case 'ghcp':
+    case 'kimi':
       // CLIProxyAPIPlus handles refresh for these providers automatically.
       // No action needed from CCS — report success with delegated flag.
       return { success: true, delegated: true };

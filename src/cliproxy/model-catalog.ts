@@ -197,6 +197,42 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       },
     ],
   },
+  kimi: {
+    provider: 'kimi',
+    displayName: 'Kimi (Moonshot)',
+    defaultModel: 'kimi-k2.5',
+    models: [
+      {
+        id: 'kimi-k2.5',
+        name: 'Kimi K2.5',
+        description: 'Latest Moonshot coding model',
+        thinking: {
+          type: 'budget',
+          min: 1024,
+          max: 32000,
+          zeroAllowed: true,
+          dynamicAllowed: true,
+        },
+      },
+      {
+        id: 'kimi-k2-thinking',
+        name: 'Kimi K2 Thinking',
+        description: 'Extended reasoning model',
+        thinking: {
+          type: 'budget',
+          min: 1024,
+          max: 32000,
+          zeroAllowed: true,
+          dynamicAllowed: true,
+        },
+      },
+      {
+        id: 'kimi-k2',
+        name: 'Kimi K2',
+        description: 'Flagship coding model',
+      },
+    ],
+  },
   claude: {
     provider: 'claude',
     displayName: 'Claude (Anthropic)',

@@ -792,7 +792,7 @@ async function main(): Promise<void> {
       const exitCode = await executeCopilotProfile(copilotConfig, remainingArgs);
       process.exit(exitCode);
     } else if (profileInfo.type === 'settings') {
-      // Settings-based profiles (glm, glmt, kimi) are third-party providers
+      // Settings-based profiles (glm, glmt) are third-party providers
       // WebSearch is server-side tool - third-party providers have no access
       // Inject WebSearch hook into profile settings before launch
       ensureProfileHooks(profileInfo.name);
@@ -869,7 +869,7 @@ async function main(): Promise<void> {
         // GLMT FLOW: Settings-based with embedded proxy for thinking support
         await execClaudeWithProxy(claudeCli, profileInfo.name, remainingArgs);
       } else {
-        // EXISTING FLOW: Settings-based profile (glm, kimi)
+        // EXISTING FLOW: Settings-based profile (glm)
         // Use --settings flag (backward compatible)
         const expandedSettingsPath = getSettingsPath(profileInfo.name);
         const webSearchEnv = getWebSearchHookEnv();
