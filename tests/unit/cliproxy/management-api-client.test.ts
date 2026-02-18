@@ -1,7 +1,7 @@
 /**
  * Unit tests for management-api-client module
  */
-import { describe, it, expect, beforeEach, mock } from 'bun:test';
+import { describe, it, expect, beforeEach, mock, spyOn } from 'bun:test';
 import { ManagementApiClient } from '../../../src/cliproxy/management-api-client';
 import type {
   ManagementClientConfig,
@@ -75,6 +75,18 @@ describe('management-api-client', () => {
         delete configNoPort.port;
         const client = new ManagementApiClient(configNoPort);
         expect(client.getBaseUrl()).toBe('https://localhost');
+      });
+
+      it('should warn and fall back when configured port is invalid', () => {
+        const warnSpy = spyOn(console, 'warn').mockImplementation(() => {});
+
+        const client = new ManagementApiClient({ ...config, port: 99999 });
+        expect(client.getBaseUrl()).toBe('http://localhost:8317');
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[management-api-client] Invalid port "99999", using default 8317'
+        );
+
+        warnSpy.mockRestore();
       });
     });
 

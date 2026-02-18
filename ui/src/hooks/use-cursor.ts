@@ -6,8 +6,7 @@
 
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-
-const API_BASE = '/api';
+import { ApiConflictError, withApiBase } from '@/lib/api-client';
 
 export interface CursorStatus {
   enabled: boolean;
@@ -59,25 +58,25 @@ interface CursorAuthResult {
 }
 
 async function fetchCursorStatus(): Promise<CursorStatus> {
-  const res = await fetch(`${API_BASE}/cursor/status`);
+  const res = await fetch(withApiBase('/cursor/status'));
   if (!res.ok) throw new Error('Failed to fetch cursor status');
   return res.json();
 }
 
 async function fetchCursorConfig(): Promise<CursorConfig> {
-  const res = await fetch(`${API_BASE}/cursor/settings`);
+  const res = await fetch(withApiBase('/cursor/settings'));
   if (!res.ok) throw new Error('Failed to fetch cursor config');
   return res.json();
 }
 
 async function fetchCursorModels(): Promise<CursorModelsResponse> {
-  const res = await fetch(`${API_BASE}/cursor/models`);
+  const res = await fetch(withApiBase('/cursor/models'));
   if (!res.ok) throw new Error('Failed to fetch cursor models');
   return res.json();
 }
 
 async function fetchCursorRawSettings(): Promise<CursorRawSettings> {
-  const res = await fetch(`${API_BASE}/cursor/settings/raw`);
+  const res = await fetch(withApiBase('/cursor/settings/raw'));
   if (!res.ok) throw new Error('Failed to fetch cursor raw settings');
   return res.json();
 }
@@ -85,7 +84,7 @@ async function fetchCursorRawSettings(): Promise<CursorRawSettings> {
 async function updateCursorConfig(
   updates: Partial<CursorConfig>
 ): Promise<{ success: boolean; cursor: CursorConfig }> {
-  const res = await fetch(`${API_BASE}/cursor/settings`, {
+  const res = await fetch(withApiBase('/cursor/settings'), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
@@ -98,18 +97,18 @@ async function saveCursorRawSettings(data: {
   settings: CursorRawSettings['settings'];
   expectedMtime?: number;
 }): Promise<{ success: boolean; mtime: number }> {
-  const res = await fetch(`${API_BASE}/cursor/settings/raw`, {
+  const res = await fetch(withApiBase('/cursor/settings/raw'), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (res.status === 409) throw new Error('CONFLICT');
+  if (res.status === 409) throw new ApiConflictError('Cursor raw settings changed externally');
   if (!res.ok) throw new Error('Failed to save cursor raw settings');
   return res.json();
 }
 
 async function autoDetectCursorAuth(): Promise<CursorAuthResult> {
-  const res = await fetch(`${API_BASE}/cursor/auth/auto-detect`, { method: 'POST' });
+  const res = await fetch(withApiBase('/cursor/auth/auto-detect'), { method: 'POST' });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: 'Auto-detect failed' }));
     throw new Error(error.error || 'Auto-detect failed');
@@ -121,7 +120,7 @@ async function importCursorAuthManual(data: {
   accessToken: string;
   machineId: string;
 }): Promise<CursorAuthResult> {
-  const res = await fetch(`${API_BASE}/cursor/auth/import`, {
+  const res = await fetch(withApiBase('/cursor/auth/import'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -134,13 +133,13 @@ async function importCursorAuthManual(data: {
 }
 
 async function startCursorDaemon(): Promise<{ success: boolean; pid?: number; error?: string }> {
-  const res = await fetch(`${API_BASE}/cursor/daemon/start`, { method: 'POST' });
+  const res = await fetch(withApiBase('/cursor/daemon/start'), { method: 'POST' });
   if (!res.ok) throw new Error('Failed to start cursor daemon');
   return res.json();
 }
 
 async function stopCursorDaemon(): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`${API_BASE}/cursor/daemon/stop`, { method: 'POST' });
+  const res = await fetch(withApiBase('/cursor/daemon/stop'), { method: 'POST' });
   if (!res.ok) throw new Error('Failed to stop cursor daemon');
   return res.json();
 }

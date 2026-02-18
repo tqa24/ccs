@@ -6,8 +6,7 @@
 
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-
-const API_BASE = '/api';
+import { ApiConflictError, withApiBase } from '@/lib/api-client';
 
 // Types
 export interface CopilotStatus {
@@ -80,31 +79,31 @@ export interface CopilotRawSettings {
 
 // API functions
 async function fetchCopilotStatus(): Promise<CopilotStatus> {
-  const res = await fetch(`${API_BASE}/copilot/status`);
+  const res = await fetch(withApiBase('/copilot/status'));
   if (!res.ok) throw new Error('Failed to fetch copilot status');
   return res.json();
 }
 
 async function fetchCopilotConfig(): Promise<CopilotConfig> {
-  const res = await fetch(`${API_BASE}/copilot/config`);
+  const res = await fetch(withApiBase('/copilot/config'));
   if (!res.ok) throw new Error('Failed to fetch copilot config');
   return res.json();
 }
 
 async function fetchCopilotModels(): Promise<{ models: CopilotModel[]; current: string }> {
-  const res = await fetch(`${API_BASE}/copilot/models`);
+  const res = await fetch(withApiBase('/copilot/models'));
   if (!res.ok) throw new Error('Failed to fetch copilot models');
   return res.json();
 }
 
 async function fetchCopilotRawSettings(): Promise<CopilotRawSettings> {
-  const res = await fetch(`${API_BASE}/copilot/settings/raw`);
+  const res = await fetch(withApiBase('/copilot/settings/raw'));
   if (!res.ok) throw new Error('Failed to fetch copilot raw settings');
   return res.json();
 }
 
 async function updateCopilotConfig(config: Partial<CopilotConfig>): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/copilot/config`, {
+  const res = await fetch(withApiBase('/copilot/config'), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(config),
@@ -117,12 +116,12 @@ async function saveCopilotRawSettings(data: {
   settings: CopilotRawSettings['settings'];
   expectedMtime?: number;
 }): Promise<{ success: boolean; mtime: number }> {
-  const res = await fetch(`${API_BASE}/copilot/settings/raw`, {
+  const res = await fetch(withApiBase('/copilot/settings/raw'), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  if (res.status === 409) throw new Error('CONFLICT');
+  if (res.status === 409) throw new ApiConflictError('Copilot raw settings changed externally');
   if (!res.ok) throw new Error('Failed to save copilot raw settings');
   return res.json();
 }
@@ -135,31 +134,31 @@ export interface CopilotAuthResult {
 }
 
 async function startCopilotAuth(): Promise<CopilotAuthResult> {
-  const res = await fetch(`${API_BASE}/copilot/auth/start`, { method: 'POST' });
+  const res = await fetch(withApiBase('/copilot/auth/start'), { method: 'POST' });
   if (!res.ok) throw new Error('Failed to start auth');
   return res.json();
 }
 
 async function startCopilotDaemon(): Promise<{ success: boolean; pid?: number; error?: string }> {
-  const res = await fetch(`${API_BASE}/copilot/daemon/start`, { method: 'POST' });
+  const res = await fetch(withApiBase('/copilot/daemon/start'), { method: 'POST' });
   if (!res.ok) throw new Error('Failed to start daemon');
   return res.json();
 }
 
 async function stopCopilotDaemon(): Promise<{ success: boolean; error?: string }> {
-  const res = await fetch(`${API_BASE}/copilot/daemon/stop`, { method: 'POST' });
+  const res = await fetch(withApiBase('/copilot/daemon/stop'), { method: 'POST' });
   if (!res.ok) throw new Error('Failed to stop daemon');
   return res.json();
 }
 
 async function fetchCopilotInfo(): Promise<CopilotInfo> {
-  const res = await fetch(`${API_BASE}/copilot/info`);
+  const res = await fetch(withApiBase('/copilot/info'));
   if (!res.ok) throw new Error('Failed to fetch copilot info');
   return res.json();
 }
 
 async function installCopilotApi(version?: string): Promise<CopilotInstallResult> {
-  const res = await fetch(`${API_BASE}/copilot/install`, {
+  const res = await fetch(withApiBase('/copilot/install'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(version ? { version } : {}),

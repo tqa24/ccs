@@ -4,9 +4,8 @@
  */
 
 import { MODEL_CATALOGS } from './model-catalogs';
-
-/** CLIProxy port - should match the backend configuration */
-export const CLIPROXY_PORT = 8317;
+import { CLIPROXY_DEFAULT_PORT } from './default-ports';
+export { CLIPROXY_DEFAULT_PORT } from './default-ports';
 
 /** Default fallback API key if fetch fails */
 const DEFAULT_API_KEY = 'ccs-internal-managed';
@@ -31,7 +30,7 @@ async function fetchEffectiveApiKey(): Promise<string> {
  * Uses the first model's presetMapping or falls back to using defaultModel for all tiers
  *
  * @param provider - The provider ID (e.g., 'gemini', 'codex', 'agy')
- * @param port - Optional custom port (defaults to CLIPROXY_PORT)
+ * @param port - Optional custom port (defaults to CLIPROXY_DEFAULT_PORT)
  * @returns Object with success status and applied preset name
  */
 export async function applyDefaultPreset(
@@ -53,7 +52,7 @@ export async function applyDefaultPreset(
   // Fetch effective API key (respects user customization)
   const effectiveApiKey = await fetchEffectiveApiKey();
 
-  const effectivePort = port ?? CLIPROXY_PORT;
+  const effectivePort = port ?? CLIPROXY_DEFAULT_PORT;
   const settings = {
     env: {
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${effectivePort}/api/provider/${provider}`,

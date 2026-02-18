@@ -30,6 +30,50 @@ export function isValidProvider(provider: string): provider is CLIProxyProvider 
   return CLIPROXY_PROVIDERS.includes(provider as CLIProxyProvider);
 }
 
+interface ProviderMetadata {
+  displayName: string;
+  description: string;
+}
+
+export const PROVIDER_METADATA: Record<CLIProxyProvider, ProviderMetadata> = {
+  agy: {
+    displayName: 'Antigravity',
+    description: 'Antigravity AI models',
+  },
+  claude: {
+    displayName: 'Claude (Anthropic)',
+    description: 'Claude Opus/Sonnet models',
+  },
+  gemini: {
+    displayName: 'Google Gemini',
+    description: 'Gemini Pro/Flash models',
+  },
+  codex: {
+    displayName: 'OpenAI Codex',
+    description: 'GPT-4 and codex models',
+  },
+  qwen: {
+    displayName: 'Alibaba Qwen',
+    description: 'Qwen Code models',
+  },
+  iflow: {
+    displayName: 'iFlow',
+    description: 'iFlow AI models',
+  },
+  kiro: {
+    displayName: 'Kiro (AWS)',
+    description: 'AWS CodeWhisperer models',
+  },
+  ghcp: {
+    displayName: 'GitHub Copilot (OAuth)',
+    description: 'GitHub Copilot via OAuth',
+  },
+  kimi: {
+    displayName: 'Kimi (Moonshot)',
+    description: 'Moonshot AI K2/K2.5 models',
+  },
+};
+
 // Map provider names to asset filenames (only providers with actual logos)
 export const PROVIDER_ASSETS: Record<string, string> = {
   gemini: '/assets/providers/gemini-color.svg',
@@ -59,21 +103,22 @@ export const PROVIDER_COLORS: Record<string, string> = {
 
 // Provider display names
 const PROVIDER_NAMES: Record<string, string> = {
-  gemini: 'Gemini',
-  agy: 'Antigravity',
-  codex: 'Codex',
+  ...Object.fromEntries(
+    CLIPROXY_PROVIDERS.map((provider) => [provider, PROVIDER_METADATA[provider].displayName])
+  ),
   vertex: 'Vertex AI',
-  iflow: 'iFlow',
-  qwen: 'Qwen',
-  kiro: 'Kiro (AWS)',
-  ghcp: 'GitHub Copilot (OAuth)',
-  claude: 'Claude (Anthropic)',
-  kimi: 'Kimi (Moonshot)',
 };
 
 // Map provider to display name
 export function getProviderDisplayName(provider: string): string {
   return PROVIDER_NAMES[provider.toLowerCase()] || provider;
+}
+
+/** Map provider to user-facing short description */
+export function getProviderDescription(provider: string): string {
+  const normalized = provider.toLowerCase();
+  if (!isValidProvider(normalized)) return '';
+  return PROVIDER_METADATA[normalized].description;
 }
 
 /**

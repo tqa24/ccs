@@ -43,6 +43,7 @@ import {
   DEFAULT_BACKEND,
 } from '../../cliproxy/platform-detector';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
+import { CLIPROXY_DEFAULT_PORT } from '../../cliproxy/config/port-manager';
 
 const router = Router();
 
@@ -208,7 +209,7 @@ router.get('/proxy-status', async (_req: Request, res: Response): Promise<void> 
       // Proxy running but no session lock - legacy/untracked instance
       res.json({
         running: true,
-        port: 8317, // Default port
+        port: CLIPROXY_DEFAULT_PORT,
         sessionCount: 0, // Unknown sessions
         // No pid/startedAt since we don't have session lock
       });

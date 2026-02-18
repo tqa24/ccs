@@ -328,7 +328,7 @@ export interface ProxyRemoteConfig {
    * Remote proxy port.
    * Optional - defaults based on protocol:
    * - HTTPS: 443
-   * - HTTP: 80
+   * - HTTP: 8317
    * When empty/undefined, uses protocol default.
    */
   port?: number;

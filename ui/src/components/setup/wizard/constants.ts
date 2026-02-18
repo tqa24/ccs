@@ -5,20 +5,11 @@
  */
 
 import type { ProviderOption } from './types';
-import type { CLIProxyProvider } from '@/lib/provider-config';
-
-/** Provider display info for wizard - ordered by recommendation */
-const PROVIDER_INFO: Record<CLIProxyProvider, { name: string; description: string }> = {
-  agy: { name: 'Antigravity', description: 'Antigravity AI models' },
-  claude: { name: 'Claude (Anthropic)', description: 'Claude Opus/Sonnet models' },
-  gemini: { name: 'Google Gemini', description: 'Gemini Pro/Flash models' },
-  codex: { name: 'OpenAI Codex', description: 'GPT-4 and codex models' },
-  qwen: { name: 'Alibaba Qwen', description: 'Qwen Code models' },
-  iflow: { name: 'iFlow', description: 'iFlow AI models' },
-  kiro: { name: 'Kiro (AWS)', description: 'AWS CodeWhisperer models' },
-  ghcp: { name: 'GitHub Copilot (OAuth)', description: 'GitHub Copilot via OAuth' },
-  kimi: { name: 'Kimi (Moonshot)', description: 'Moonshot AI K2/K2.5 models' },
-};
+import {
+  type CLIProxyProvider,
+  getProviderDescription,
+  getProviderDisplayName,
+} from '@/lib/provider-config';
 
 /** Wizard display order - most recommended first */
 const WIZARD_PROVIDER_ORDER: CLIProxyProvider[] = [
@@ -35,8 +26,8 @@ const WIZARD_PROVIDER_ORDER: CLIProxyProvider[] = [
 
 export const PROVIDERS: ProviderOption[] = WIZARD_PROVIDER_ORDER.map((id) => ({
   id,
-  name: PROVIDER_INFO[id].name,
-  description: PROVIDER_INFO[id].description,
+  name: getProviderDisplayName(id),
+  description: getProviderDescription(id),
 }));
 
 export const ALL_STEPS = ['provider', 'auth', 'variant', 'success'];

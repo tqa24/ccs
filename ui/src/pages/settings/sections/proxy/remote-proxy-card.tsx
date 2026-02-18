@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Cloud, RefreshCw, Wifi, WifiOff, CheckCircle2 } from 'lucide-react';
+import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import type { CliproxyServerConfig, RemoteProxyStatus } from '../../types';
 
 interface RemoteProxyCardProps {
@@ -59,7 +60,8 @@ export function RemoteProxyCard({
   const remoteConfig = config.remote;
 
   // HTTP defaults to 8317 (CLIProxyAPI default), HTTPS to 443 (standard SSL)
-  const getDefaultPort = (protocol: 'http' | 'https') => (protocol === 'https' ? 443 : 8317);
+  const getDefaultPort = (protocol: 'http' | 'https') =>
+    protocol === 'https' ? 443 : CLIPROXY_DEFAULT_PORT;
 
   return (
     <div className="space-y-4 p-4 rounded-lg border bg-muted/30">

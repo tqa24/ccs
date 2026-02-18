@@ -5,6 +5,7 @@
 
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
+import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import type { CliproxyServerConfig } from '../../types';
 
 interface LocalProxyCardProps {
@@ -34,11 +35,12 @@ export function LocalProxyCard({
         <div className="flex items-center gap-2">
           <label className="text-sm text-muted-foreground">Port</label>
           <Input
-            type="number"
+            type="text"
+            inputMode="numeric"
             value={displayLocalPort}
-            onChange={(e) => setEditedLocalPort(e.target.value)}
+            onChange={(e) => setEditedLocalPort(e.target.value.replace(/\D/g, ''))}
             onBlur={onSaveLocalPort}
-            placeholder="8317"
+            placeholder={`${CLIPROXY_DEFAULT_PORT}`}
             className="font-mono max-w-32"
             disabled={saving}
           />

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  buildProviderAliasMap,
   CLIPROXY_PROVIDER_IDS,
   getOAuthCallbackPort,
   getOAuthFlowType,
+  PROVIDER_CAPABILITIES,
   getProviderDisplayName,
   getProvidersByOAuthFlow,
   isCLIProxyProvider,
@@ -68,7 +70,25 @@ describe('provider-capabilities', () => {
     expect(getOAuthCallbackPort('qwen')).toBeNull();
     expect(getOAuthCallbackPort('kiro')).toBeNull();
     expect(getOAuthCallbackPort('gemini')).toBe(8085);
-    expect(getProviderDisplayName('agy')).toBe('AntiGravity');
+    expect(getProviderDisplayName('agy')).toBe('Antigravity');
+  });
+
+  it('throws when provider aliases collide across providers', () => {
+    const capabilitiesWithCollision = {
+      ...PROVIDER_CAPABILITIES,
+      gemini: {
+        ...PROVIDER_CAPABILITIES.gemini,
+        aliases: ['shared-alias'],
+      },
+      codex: {
+        ...PROVIDER_CAPABILITIES.codex,
+        aliases: ['shared-alias'],
+      },
+    };
+
+    expect(() =>
+      buildProviderAliasMap(capabilitiesWithCollision as typeof PROVIDER_CAPABILITIES)
+    ).toThrow(/shared-alias/i);
   });
 
   it('keeps diagnostics flow metadata in sync with provider capabilities', () => {

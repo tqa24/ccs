@@ -11,6 +11,11 @@
  */
 
 import { CLIProxyProvider } from '../../types';
+import { getProviderAccounts } from '../../account-manager';
+import {
+  getTokenRefreshOwnership,
+  isRefreshDelegatedToCLIProxy,
+} from '../../provider-capabilities';
 import { refreshGeminiToken } from '../gemini-token-refresh';
 
 /** Token refresh result */
@@ -22,64 +27,64 @@ export interface ProviderRefreshResult {
   delegated?: boolean;
 }
 
-/**
- * Providers where CLIProxyAPIPlus owns token refresh.
- * CLIProxyAPIPlus runs background refresh automatically (e.g. kiro: every 1 min).
- * CCS should not attempt to refresh these — just trust CLIProxy.
- */
-const CLIPROXY_DELEGATED_REFRESH: CLIProxyProvider[] = [
-  'codex',
-  'agy',
-  'kiro',
-  'ghcp',
-  'qwen',
-  'iflow',
-  'kimi',
-];
+function assertNever(value: never): never {
+  throw new Error(`Unhandled token refresh ownership: ${String(value)}`);
+}
 
 /**
  * Check if a provider's token refresh is delegated to CLIProxy
  */
 export function isRefreshDelegated(provider: CLIProxyProvider): boolean {
-  return CLIPROXY_DELEGATED_REFRESH.includes(provider);
+  return isRefreshDelegatedToCLIProxy(provider);
 }
 
 /**
  * Refresh token for a specific provider and account
  * @param provider Provider to refresh
- * @param _accountId Account ID (currently unused, multi-account not yet implemented)
+ * @param accountId Account ID used to refresh the correct provider token
  * @returns Refresh result with success status and optional error
  */
 export async function refreshToken(
   provider: CLIProxyProvider,
-  _accountId: string
+  accountId: string
 ): Promise<ProviderRefreshResult> {
-  switch (provider) {
-    case 'gemini':
-      return await refreshGeminiTokenWrapper();
+  const normalizedAccountId = accountId.trim();
+  if (!normalizedAccountId) {
+    return {
+      success: false,
+      error: 'Account ID is required for token refresh',
+    };
+  }
 
-    case 'codex':
-    case 'agy':
-    case 'qwen':
-    case 'iflow':
-    case 'kiro':
-    case 'ghcp':
-    case 'kimi':
+  const hasAccount = getProviderAccounts(provider).some(
+    (account) => account.id === normalizedAccountId
+  );
+  if (!hasAccount) {
+    return {
+      success: false,
+      error: `Account not found for ${provider}: ${normalizedAccountId}`,
+    };
+  }
+
+  if (provider === 'gemini') {
+    return await refreshGeminiTokenWrapper(normalizedAccountId);
+  }
+
+  const ownership = getTokenRefreshOwnership(provider);
+  switch (ownership) {
+    case 'cliproxy':
       // CLIProxyAPIPlus handles refresh for these providers automatically.
       // No action needed from CCS — report success with delegated flag.
       return { success: true, delegated: true };
-
-    case 'claude':
+    case 'unsupported':
+    case 'ccs':
+      // Non-gemini CCS-owned refresh paths are not implemented yet.
       return {
         success: false,
         error: `Token refresh not yet implemented for ${provider}`,
       };
-
     default:
-      return {
-        success: false,
-        error: `Unknown provider: ${provider}`,
-      };
+      return assertNever(ownership);
   }
 }
 
@@ -87,8 +92,8 @@ export async function refreshToken(
  * Wrapper for Gemini token refresh
  * Converts gemini-token-refresh.ts format to provider-refreshers format
  */
-async function refreshGeminiTokenWrapper(): Promise<ProviderRefreshResult> {
-  const result = await refreshGeminiToken();
+async function refreshGeminiTokenWrapper(accountId: string): Promise<ProviderRefreshResult> {
+  const result = await refreshGeminiToken(accountId);
 
   if (!result.success) {
     return {

@@ -5,7 +5,16 @@
  */
 
 import { CLIProxyProvider } from '../types';
-import { AccountInfo } from '../account-manager';
+import type { AccountInfo } from '../account-manager';
+import {
+  buildProviderMap,
+  CLIPROXY_PROVIDER_IDS,
+  getOAuthCallbackPort,
+  getCLIProxyCallbackProviderName,
+  getCLIProxyAuthUrlProviderName,
+  getProviderAuthFilePrefixes,
+  getProviderTokenTypeValues,
+} from '../provider-capabilities';
 
 /**
  * Kiro authentication methods supported by CLIProxyAPIPlus.
@@ -90,17 +99,17 @@ export function toKiroManagementMethod(method: KiroAuthMethod): 'aws' | 'google'
  * - GHCP:   Device Code Flow (polling-based, NO callback port needed)
  * - Kimi:   Device Code Flow (polling-based, NO callback port needed)
  */
-export const OAUTH_CALLBACK_PORTS: Partial<Record<CLIProxyProvider, number>> = {
-  gemini: 8085,
-  codex: 1455,
-  agy: 51121,
-  iflow: 11451,
-  claude: 54545,
-  // kiro: Device Code Flow - no callback port
-  // qwen: Device Code Flow - no callback port
-  // ghcp: Device Code Flow - no callback port
-  // kimi: Device Code Flow - no callback port
-};
+export const OAUTH_CALLBACK_PORTS: Partial<Record<CLIProxyProvider, number>> =
+  CLIPROXY_PROVIDER_IDS.reduce(
+    (acc, provider) => {
+      const callbackPort = getOAuthCallbackPort(provider);
+      if (callbackPort !== null) {
+        acc[provider] = callbackPort;
+      }
+      return acc;
+    },
+    {} as Partial<Record<CLIProxyProvider, number>>
+  );
 
 /**
  * Auth status for a provider
@@ -215,66 +224,34 @@ export const OAUTH_CONFIGS: Record<CLIProxyProvider, ProviderOAuthConfig> = {
  * CLIProxyAPI names auth files with provider prefix (e.g., "antigravity-user@email.json")
  * Note: Gemini tokens may NOT have prefix - CLIProxyAPI uses {email}-{projectID}.json format
  */
-export const PROVIDER_AUTH_PREFIXES: Record<CLIProxyProvider, string[]> = {
-  gemini: ['gemini-', 'google-'],
-  codex: ['codex-', 'openai-'],
-  agy: ['antigravity-', 'agy-'],
-  qwen: ['qwen-'],
-  iflow: ['iflow-'],
-  kiro: ['kiro-', 'aws-', 'codewhisperer-'],
-  ghcp: ['github-copilot-', 'copilot-', 'gh-'],
-  claude: ['claude-', 'anthropic-'],
-  kimi: ['kimi-'],
-};
+export const PROVIDER_AUTH_PREFIXES: Record<CLIProxyProvider, string[]> = buildProviderMap(
+  (provider) => [...getProviderAuthFilePrefixes(provider)]
+);
 
 /**
  * Provider type values inside token JSON files
  * CLIProxyAPI sets "type" field in token JSON (e.g., {"type": "gemini"})
  */
-export const PROVIDER_TYPE_VALUES: Record<CLIProxyProvider, string[]> = {
-  gemini: ['gemini'],
-  codex: ['codex'],
-  agy: ['antigravity'],
-  qwen: ['qwen'],
-  iflow: ['iflow'],
-  kiro: ['kiro', 'codewhisperer'],
-  ghcp: ['github-copilot', 'copilot'],
-  claude: ['claude', 'anthropic'],
-  kimi: ['kimi'],
-};
+export const PROVIDER_TYPE_VALUES: Record<CLIProxyProvider, string[]> = buildProviderMap(
+  (provider) => [...getProviderTokenTypeValues(provider)]
+);
 
 /**
  * Maps CCS provider names to CLIProxyAPI callback provider names
  * Used when submitting OAuth callbacks to CLIProxyAPI management endpoint
  */
-export const CLIPROXY_CALLBACK_PROVIDER_MAP: Record<CLIProxyProvider, string> = {
-  gemini: 'gemini',
-  codex: 'codex',
-  agy: 'antigravity',
-  kiro: 'kiro',
-  ghcp: 'copilot',
-  claude: 'anthropic',
-  qwen: 'qwen',
-  iflow: 'iflow',
-  kimi: 'kimi',
-};
+export const CLIPROXY_CALLBACK_PROVIDER_MAP: Record<CLIProxyProvider, string> = buildProviderMap(
+  (provider) => getCLIProxyCallbackProviderName(provider)
+);
 
 /**
  * Maps CCS provider names to CLIProxyAPI auth-url endpoint prefixes.
  * Used for GET /v0/management/${prefix}-auth-url endpoints.
  * These differ from callback names for some providers (e.g., gemini-cli vs gemini).
  */
-export const CLIPROXY_AUTH_URL_PROVIDER_MAP: Record<CLIProxyProvider, string> = {
-  gemini: 'gemini-cli',
-  codex: 'codex',
-  agy: 'antigravity',
-  kiro: 'kiro',
-  ghcp: 'github',
-  claude: 'anthropic',
-  qwen: 'qwen',
-  iflow: 'iflow',
-  kimi: 'kimi',
-};
+export const CLIPROXY_AUTH_URL_PROVIDER_MAP: Record<CLIProxyProvider, string> = buildProviderMap(
+  (provider) => getCLIProxyAuthUrlProviderName(provider)
+);
 
 /**
  * Get OAuth config for provider

@@ -16,24 +16,41 @@ import type {
   RemoteModelInfo,
   GetModelDefinitionsResponse,
 } from './management-api-types';
+import { CLIPROXY_DEFAULT_PORT } from './config/port-manager';
 
 /** Default timeout for management operations (longer than health check) */
 const DEFAULT_TIMEOUT_MS = 5000;
 
-/** Default port for HTTP protocol */
-const DEFAULT_HTTP_PORT = 8317;
-
 /** Default port for HTTPS protocol */
 const DEFAULT_HTTPS_PORT = 443;
+
+/** Avoid duplicate warnings for repeated invalid port inputs */
+const WARNED_INVALID_PORTS = new Set<string>();
+
+function isValidPort(port: number | undefined): port is number {
+  return port !== undefined && Number.isInteger(port) && port > 0 && port <= 65535;
+}
 
 /**
  * Get effective port based on config and protocol.
  */
 function getEffectivePort(port: number | undefined, protocol: 'http' | 'https'): number {
-  if (port !== undefined && Number.isInteger(port) && port > 0 && port <= 65535) {
+  if (isValidPort(port)) {
     return port;
   }
-  return protocol === 'https' ? DEFAULT_HTTPS_PORT : DEFAULT_HTTP_PORT;
+
+  const fallbackPort = protocol === 'https' ? DEFAULT_HTTPS_PORT : CLIPROXY_DEFAULT_PORT;
+  if (port !== undefined) {
+    const warningKey = `${protocol}:${String(port)}`;
+    if (!WARNED_INVALID_PORTS.has(warningKey)) {
+      WARNED_INVALID_PORTS.add(warningKey);
+      console.warn(
+        `[management-api-client] Invalid port "${String(port)}", using default ${fallbackPort}`
+      );
+    }
+  }
+
+  return fallbackPort;
 }
 
 /**
