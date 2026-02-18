@@ -27,6 +27,12 @@ export interface CodexReasoningProxyConfig {
   stripPathPrefix?: string;
 }
 
+const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
+
+function stripExtendedContextSuffix(model: string): string {
+  return model.replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '').trim();
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
@@ -38,10 +44,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function parseModelEffortSuffix(
   model: string
 ): { upstreamModel: string; effort: CodexReasoningEffort } | null {
-  const match = model.match(/^(.*)-(xhigh|high|medium)$/);
+  const normalizedModel = stripExtendedContextSuffix(model);
+  const match = normalizedModel.match(/^(.*)-(xhigh|high|medium)$/i);
   if (!match) return null;
   const upstreamModel = match[1]?.trim();
-  const effort = match[2] as CodexReasoningEffort;
+  const effort = match[2]?.toLowerCase() as CodexReasoningEffort;
   if (!upstreamModel) return null;
   return { upstreamModel, effort };
 }
@@ -86,8 +93,10 @@ export function buildCodexModelEffortMap(
 
   const upsertMin = (model: string | undefined, effort: CodexReasoningEffort) => {
     if (!isNonEmptyString(model)) return;
-    const existing = map.get(model);
-    map.set(model, existing ? minEffort(existing, effort) : effort);
+    const normalizedModel = stripExtendedContextSuffix(model);
+    if (!normalizedModel) return;
+    const existing = map.get(normalizedModel);
+    map.set(normalizedModel, existing ? minEffort(existing, effort) : effort);
   };
 
   upsertMin(models.defaultModel, 'xhigh');
@@ -108,9 +117,10 @@ export function getEffortForModel(
   defaultEffort: CodexReasoningEffort
 ): CodexReasoningEffort {
   if (!model) return defaultEffort;
-  const effort = modelEffort.get(model) ?? defaultEffort;
+  const normalizedModel = stripExtendedContextSuffix(model);
+  const effort = modelEffort.get(normalizedModel) ?? defaultEffort;
   // Apply model-specific cap from catalog
-  return capEffortAtModelMax(model, effort);
+  return capEffortAtModelMax(normalizedModel, effort);
 }
 
 export function injectReasoningEffortIntoBody(
@@ -316,17 +326,22 @@ export class CodexReasoningProxy {
 
       const originalModel =
         isRecord(parsed) && typeof parsed.model === 'string' ? parsed.model : null;
+      const normalizedRequestModel = originalModel
+        ? stripExtendedContextSuffix(originalModel)
+        : null;
 
       // Support "model aliases" like `gpt-5.2-codex-xhigh` by translating to:
       // - upstream model: `gpt-5.2-codex`
       // - reasoning.effort: `xhigh`
       //
       // This allows tier→effort mapping without inventing upstream model IDs.
-      const suffixParsed = originalModel ? parseModelEffortSuffix(originalModel) : null;
-      const upstreamModel = suffixParsed?.upstreamModel ?? originalModel;
+      const suffixParsed = normalizedRequestModel
+        ? parseModelEffortSuffix(normalizedRequestModel)
+        : null;
+      const upstreamModel = suffixParsed?.upstreamModel ?? normalizedRequestModel;
       const effort =
         suffixParsed?.effort ??
-        getEffortForModel(originalModel, this.modelEffort, this.config.defaultEffort);
+        getEffortForModel(normalizedRequestModel, this.modelEffort, this.config.defaultEffort);
 
       const withUpstreamModel =
         upstreamModel && isRecord(parsed) ? { ...parsed, model: upstreamModel } : parsed;

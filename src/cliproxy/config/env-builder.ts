@@ -164,7 +164,53 @@ function ensureRequiredEnvVars(
     result.ANTHROPIC_AUTH_TOKEN = defaults.ANTHROPIC_AUTH_TOKEN;
   }
 
+  // Normalize local CLIProxy root/wrong-provider URLs to provider-pinned endpoint.
+  // This prevents model-routed "unknown provider" failures for codex effort aliases.
+  if (result.ANTHROPIC_BASE_URL?.trim()) {
+    result.ANTHROPIC_BASE_URL = normalizeLocalProviderBaseUrl(
+      result.ANTHROPIC_BASE_URL,
+      provider,
+      validPort
+    );
+  }
+
   return result;
+}
+
+/** Localhost hostnames used for local CLIProxy endpoints */
+const LOCALHOST_NAMES = new Set(['127.0.0.1', 'localhost', '0.0.0.0']);
+
+/**
+ * Normalize local CLIProxy endpoint to the expected provider route.
+ * Only rewrites localhost URLs that target the active local port.
+ */
+function normalizeLocalProviderBaseUrl(
+  baseUrl: string,
+  provider: CLIProxyProvider,
+  port: number
+): string {
+  try {
+    const parsed = new URL(baseUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) return baseUrl;
+    if (!LOCALHOST_NAMES.has(parsed.hostname.toLowerCase())) return baseUrl;
+
+    const effectivePort = parsed.port
+      ? Number.parseInt(parsed.port, 10)
+      : parsed.protocol === 'https:'
+        ? 443
+        : 80;
+    if (!Number.isFinite(effectivePort) || effectivePort !== port) return baseUrl;
+
+    const expectedPath = `/api/provider/${provider}`;
+    if (parsed.pathname === expectedPath && !parsed.search && !parsed.hash) return baseUrl;
+
+    parsed.pathname = expectedPath;
+    parsed.search = '';
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return baseUrl;
+  }
 }
 
 /**
