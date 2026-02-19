@@ -489,6 +489,12 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 0.0,
     cacheReadPerMillion: 0.15,
   },
+  'kimi-k2': {
+    inputPerMillion: 0.6,
+    outputPerMillion: 2.5,
+    cacheCreationPerMillion: 0.0,
+    cacheReadPerMillion: 0.15,
+  },
   'kimi-k2-instruct': {
     inputPerMillion: 1.0,
     outputPerMillion: 3.0,

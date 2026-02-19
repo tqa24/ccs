@@ -36,6 +36,33 @@ describe('Model Catalog', () => {
     });
   });
 
+  describe('Kimi models', () => {
+    it('contains Kimi provider catalog', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      assert(MODEL_CATALOG.kimi, 'Should have kimi provider');
+      assert.strictEqual(MODEL_CATALOG.kimi.provider, 'kimi');
+      assert.strictEqual(MODEL_CATALOG.kimi.displayName, 'Kimi (Moonshot)');
+    });
+
+    it('has correct default model', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      assert.strictEqual(MODEL_CATALOG.kimi.defaultModel, 'kimi-k2.5');
+    });
+
+    it('includes K2.5, K2 Thinking, K2', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const ids = MODEL_CATALOG.kimi.models.map((m) => m.id);
+      assert(ids.includes('kimi-k2.5'), 'Should include kimi-k2.5');
+      assert(ids.includes('kimi-k2-thinking'), 'Should include kimi-k2-thinking');
+      assert(ids.includes('kimi-k2'), 'Should include kimi-k2');
+    });
+
+    it('has 3 models total', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      assert.strictEqual(MODEL_CATALOG.kimi.models.length, 3);
+    });
+  });
+
   describe('AGY models', () => {
     it('has correct default model', () => {
       const { MODEL_CATALOG } = modelCatalog;
