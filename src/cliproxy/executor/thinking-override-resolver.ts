@@ -18,7 +18,7 @@ export function parseEnvThinkingOverride(raw: string | undefined): string | numb
   const trimmed = raw.trim();
   if (!trimmed) return undefined;
 
-  if (/^-?\d+$/.test(trimmed)) {
+  if (/^\d+$/.test(trimmed)) {
     const parsed = Number.parseInt(trimmed, 10);
     if (parsed < THINKING_BUDGET_MIN || parsed > THINKING_BUDGET_MAX) {
       return undefined;

@@ -26,6 +26,20 @@ import { validateFilePath } from './route-helpers';
 
 const router = Router();
 
+export function resolveThinkingProviderOverridesForSave(
+  currentProviderOverrides: ThinkingConfig['provider_overrides'] | undefined,
+  updatesProviderOverrides: Record<string, Partial<ThinkingConfig['tier_defaults']>> | undefined,
+  shouldClearProviderOverrides: boolean
+): ThinkingConfig['provider_overrides'] | undefined {
+  if (shouldClearProviderOverrides) {
+    return undefined;
+  }
+  if (updatesProviderOverrides !== undefined) {
+    return updatesProviderOverrides;
+  }
+  return currentProviderOverrides;
+}
+
 // ==================== Generic File API ====================
 
 /**
@@ -437,11 +451,11 @@ router.put('/thinking', (req: Request, res: Response): void => {
         sonnet: updates.tier_defaults?.sonnet ?? config.thinking?.tier_defaults?.sonnet ?? 'medium',
         haiku: updates.tier_defaults?.haiku ?? config.thinking?.tier_defaults?.haiku ?? 'low',
       },
-      provider_overrides: shouldClearProviderOverrides
-        ? undefined
-        : updates.provider_overrides !== undefined
-          ? normalizedProviderOverrides
-          : config.thinking?.provider_overrides,
+      provider_overrides: resolveThinkingProviderOverridesForSave(
+        config.thinking?.provider_overrides,
+        updates.provider_overrides !== undefined ? normalizedProviderOverrides : undefined,
+        shouldClearProviderOverrides
+      ),
       show_warnings: updates.show_warnings ?? config.thinking?.show_warnings ?? true,
     };
 

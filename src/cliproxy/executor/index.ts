@@ -363,6 +363,7 @@ export async function execClaudeWithCLIProxy(
     thinkingParse.value,
     process.env.CCS_THINKING
   );
+  const thinkingCfg = getThinkingConfig();
 
   if (thinkingParse.duplicateDisplays.length > 0) {
     console.warn(
@@ -813,7 +814,6 @@ export async function execClaudeWithCLIProxy(
           process.env.CCS_CODEX_REASONING_TRACE === '1' ||
           process.env.CCS_CODEX_REASONING_TRACE === 'true';
         const stripPathPrefix = useRemoteProxy ? '/api/provider/codex' : undefined;
-        const thinkingCfg = getThinkingConfig();
         const codexThinkingOff = shouldDisableCodexReasoning(thinkingCfg, thinkingOverride);
         codexReasoningProxy = new CodexReasoningProxy({
           upstreamBaseUrl: postSanitizationBaseUrl,
@@ -889,9 +889,8 @@ export async function execClaudeWithCLIProxy(
 
   // 11b. Print thinking status feedback (TTY only, non-piped sessions)
   if (process.stderr.isTTY) {
-    const thinkingCfgStatus = getThinkingConfig();
     const { thinkingLabel, sourceLabel } = buildThinkingStartupStatus(
-      thinkingCfgStatus,
+      thinkingCfg,
       thinkingOverride,
       thinkingSource,
       thinkingParse.sourceDisplay

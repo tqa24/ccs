@@ -15,6 +15,10 @@ interface ThinkingCommandOptions {
   help?: boolean;
 }
 
+type ThinkingTier = 'opus' | 'sonnet' | 'haiku';
+export type ThinkingTierOverrideMap = Partial<Record<ThinkingTier, string>>;
+export type ThinkingProviderOverrides = Record<string, ThinkingTierOverrideMap>;
+
 export interface ParseResult {
   options: ThinkingCommandOptions;
   error?: string;
@@ -105,5 +109,50 @@ export function parseThinkingOverrideInput(rawOverride: string): {
   }
   return {
     error: `Invalid override: ${rawOverride}`,
+  };
+}
+
+export function clearProviderOverride(
+  currentOverrides: ThinkingProviderOverrides | undefined,
+  provider: string,
+  tier?: ThinkingTier
+): { nextOverrides: ThinkingProviderOverrides | undefined; changed: boolean } {
+  const current = currentOverrides ?? {};
+  const nextOverrides: ThinkingProviderOverrides = { ...current };
+
+  const providerEntry = nextOverrides[provider];
+  if (!providerEntry) {
+    return {
+      nextOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined,
+      changed: false,
+    };
+  }
+
+  if (!tier) {
+    delete nextOverrides[provider];
+    return {
+      nextOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined,
+      changed: true,
+    };
+  }
+
+  if (providerEntry[tier] === undefined) {
+    return {
+      nextOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined,
+      changed: false,
+    };
+  }
+
+  const nextProviderEntry = { ...providerEntry };
+  delete nextProviderEntry[tier];
+  if (Object.keys(nextProviderEntry).length === 0) {
+    delete nextOverrides[provider];
+  } else {
+    nextOverrides[provider] = nextProviderEntry;
+  }
+
+  return {
+    nextOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined,
+    changed: true,
   };
 }

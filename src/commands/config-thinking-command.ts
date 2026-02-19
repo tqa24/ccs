@@ -13,7 +13,11 @@ import {
 } from '../config/unified-config-loader';
 import { DEFAULT_THINKING_TIER_DEFAULTS } from '../config/unified-config-types';
 import { VALID_THINKING_LEVELS } from '../cliproxy/thinking-validator';
-import { parseThinkingCommandArgs, parseThinkingOverrideInput } from './config-thinking-parser';
+import {
+  clearProviderOverride,
+  parseThinkingCommandArgs,
+  parseThinkingOverrideInput,
+} from './config-thinking-parser';
 
 const VALID_THINKING_MODES = ['auto', 'off', 'manual'] as const;
 
@@ -271,27 +275,21 @@ export async function handleConfigThinkingCommand(args: string[]): Promise<void>
       process.exitCode = 1;
       return;
     }
-    const currentOverrides = thinkingConfig.provider_overrides ?? {};
-    const nextOverrides = { ...currentOverrides };
-    if (!nextOverrides[provider]) {
-      // no-op, but still considered change request to keep command deterministic
-      hasChanges = true;
-    } else if (!tier) {
-      delete nextOverrides[provider];
+    const normalizedTier = tier as ThinkingTier | undefined;
+    const clearResult = clearProviderOverride(
+      thinkingConfig.provider_overrides,
+      provider,
+      normalizedTier
+    );
+    thinkingConfig.provider_overrides = clearResult.nextOverrides;
+    if (clearResult.changed) {
       hasChanges = true;
     } else {
-      const normalizedTier = tier as ThinkingTier;
-      const providerEntry = { ...nextOverrides[provider] };
-      delete providerEntry[normalizedTier];
-      if (Object.keys(providerEntry).length === 0) {
-        delete nextOverrides[provider];
-      } else {
-        nextOverrides[provider] = providerEntry;
-      }
-      hasChanges = true;
+      console.log(
+        info(`No provider override found for '${provider}'${tier ? ` tier '${tier}'` : ''}`)
+      );
+      console.log('');
     }
-    thinkingConfig.provider_overrides =
-      Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined;
   }
 
   if (hasChanges) {

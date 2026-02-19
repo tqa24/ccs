@@ -3,6 +3,7 @@ import {
   parseThinkingCommandArgs,
   parseThinkingOverrideInput,
 } from '../../../src/commands/config-thinking-command';
+import { clearProviderOverride } from '../../../src/commands/config-thinking-parser';
 
 describe('config thinking command parser', () => {
   it('rejects missing required option values', () => {
@@ -39,5 +40,49 @@ describe('config thinking override normalization', () => {
   it('validates numeric bounds', () => {
     expect(parseThinkingOverrideInput('100001').error).toContain('between 0 and 100000');
     expect(parseThinkingOverrideInput('8192')).toEqual({ value: 8192 });
+  });
+});
+
+describe('config thinking provider override clearing', () => {
+  it('is a no-op when provider override does not exist', () => {
+    const result = clearProviderOverride(
+      {
+        codex: { opus: 'high' },
+      },
+      'gemini'
+    );
+
+    expect(result.changed).toBe(false);
+    expect(result.nextOverrides).toEqual({
+      codex: { opus: 'high' },
+    });
+  });
+
+  it('is a no-op when provider exists but tier override does not', () => {
+    const result = clearProviderOverride(
+      {
+        codex: { opus: 'high' },
+      },
+      'codex',
+      'haiku'
+    );
+
+    expect(result.changed).toBe(false);
+    expect(result.nextOverrides).toEqual({
+      codex: { opus: 'high' },
+    });
+  });
+
+  it('removes provider entry when last tier is cleared', () => {
+    const result = clearProviderOverride(
+      {
+        codex: { opus: 'high' },
+      },
+      'codex',
+      'opus'
+    );
+
+    expect(result.changed).toBe(true);
+    expect(result.nextOverrides).toBeUndefined();
   });
 });
