@@ -70,6 +70,7 @@ export function ProviderEditor({
       iflow: ['iflow'],
       kiro: ['kiro', 'aws'],
       ghcp: ['github', 'copilot'],
+      kimi: ['kimi', 'moonshot'],
     };
     const owners = ownerMap[modelFilterProvider.toLowerCase()] || [
       modelFilterProvider.toLowerCase(),

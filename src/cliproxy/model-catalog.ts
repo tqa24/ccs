@@ -205,7 +205,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'kimi-k2.5',
         name: 'Kimi K2.5',
-        description: 'Latest Moonshot coding model',
+        description: 'Latest multimodal model (262K context)',
         thinking: {
           type: 'budget',
           min: 1024,

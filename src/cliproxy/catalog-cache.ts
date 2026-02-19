@@ -23,6 +23,7 @@ const CHANNEL_TO_PROVIDER: Record<string, CLIProxyProvider> = {
   codex: 'codex',
   qwen: 'qwen',
   iflow: 'iflow',
+  kimi: 'kimi',
 };
 
 /** CCS provider → channel name mapping (reverse) */
@@ -31,7 +32,7 @@ export const PROVIDER_TO_CHANNEL: Record<string, string> = Object.fromEntries(
 );
 
 /** Providers to sync from CLIProxyAPI */
-export const SYNCABLE_PROVIDERS: CLIProxyProvider[] = ['agy', 'gemini', 'codex', 'claude'];
+export const SYNCABLE_PROVIDERS: CLIProxyProvider[] = ['agy', 'gemini', 'codex', 'claude', 'kimi'];
 
 function getCacheFilePath(): string {
   return path.join(getCcsDir(), CACHE_FILE_NAME);

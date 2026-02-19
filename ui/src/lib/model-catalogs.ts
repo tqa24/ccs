@@ -275,6 +275,40 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
       },
     ],
   },
+  kimi: {
+    provider: 'kimi',
+    displayName: 'Kimi (Moonshot)',
+    defaultModel: 'kimi-k2.5',
+    models: [
+      {
+        id: 'kimi-k2.5',
+        name: 'Kimi K2.5',
+        description: 'Latest multimodal model (262K context)',
+        presetMapping: {
+          default: 'kimi-k2.5',
+          opus: 'kimi-k2.5',
+          sonnet: 'kimi-k2-thinking',
+          haiku: 'kimi-k2',
+        },
+      },
+      {
+        id: 'kimi-k2-thinking',
+        name: 'Kimi K2 Thinking',
+        description: 'Extended reasoning model',
+        presetMapping: {
+          default: 'kimi-k2-thinking',
+          opus: 'kimi-k2.5',
+          sonnet: 'kimi-k2-thinking',
+          haiku: 'kimi-k2',
+        },
+      },
+      {
+        id: 'kimi-k2',
+        name: 'Kimi K2',
+        description: 'Flagship coding model',
+      },
+    ],
+  },
   kiro: {
     provider: 'kiro',
     displayName: 'Kiro (AWS)',

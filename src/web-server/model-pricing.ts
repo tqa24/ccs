@@ -450,37 +450,50 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
   },
 
   // ---------------------------------------------------------------------------
-  // Kimi Models (Moonshot AI) - Source: better-ccusage
+  // Kimi Models (Moonshot AI) - Source: Official Kimi Platform pricing
+  // inputPerMillion = cache miss price, cacheReadPerMillion = cache hit price
   // ---------------------------------------------------------------------------
-  'kimi-for-coding': {
-    inputPerMillion: 0.15,
-    outputPerMillion: 0.6,
+  'kimi-k2.5': {
+    inputPerMillion: 0.6,
+    outputPerMillion: 3.0,
     cacheCreationPerMillion: 0.0,
-    cacheReadPerMillion: 0.0,
+    cacheReadPerMillion: 0.1,
+  },
+  'kimi-for-coding': {
+    inputPerMillion: 0.6,
+    outputPerMillion: 2.5,
+    cacheCreationPerMillion: 0.0,
+    cacheReadPerMillion: 0.15,
   },
   'kimi-k2-0905-preview': {
-    inputPerMillion: 0.15,
-    outputPerMillion: 0.6,
+    inputPerMillion: 0.6,
+    outputPerMillion: 2.5,
     cacheCreationPerMillion: 0.0,
-    cacheReadPerMillion: 0.0,
+    cacheReadPerMillion: 0.15,
   },
   'kimi-k2-turbo-preview': {
-    inputPerMillion: 0.15,
-    outputPerMillion: 1.15,
+    inputPerMillion: 1.15,
+    outputPerMillion: 8.0,
     cacheCreationPerMillion: 0.0,
-    cacheReadPerMillion: 0.0,
+    cacheReadPerMillion: 0.15,
   },
   'kimi-k2-thinking': {
-    inputPerMillion: 0.15,
-    outputPerMillion: 0.6,
+    inputPerMillion: 0.6,
+    outputPerMillion: 2.5,
     cacheCreationPerMillion: 0.0,
-    cacheReadPerMillion: 0.0,
+    cacheReadPerMillion: 0.15,
   },
   'kimi-k2-thinking-turbo': {
-    inputPerMillion: 0.15,
-    outputPerMillion: 1.15,
+    inputPerMillion: 1.15,
+    outputPerMillion: 8.0,
     cacheCreationPerMillion: 0.0,
-    cacheReadPerMillion: 0.0,
+    cacheReadPerMillion: 0.15,
+  },
+  'kimi-k2': {
+    inputPerMillion: 0.6,
+    outputPerMillion: 2.5,
+    cacheCreationPerMillion: 0.0,
+    cacheReadPerMillion: 0.15,
   },
   'kimi-k2-instruct': {
     inputPerMillion: 1.0,
