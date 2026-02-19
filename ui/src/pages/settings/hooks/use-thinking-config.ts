@@ -156,6 +156,42 @@ export function useThinkingConfig() {
     [saveConfig]
   );
 
+  const setOverride = useCallback(
+    (value: string | number | undefined) => {
+      saveConfig({ override: value });
+    },
+    [saveConfig]
+  );
+
+  const setProviderOverride = useCallback(
+    (provider: string, tier: 'opus' | 'sonnet' | 'haiku', level: string | undefined) => {
+      const currentOverrides = config?.provider_overrides || {};
+      const currentProviderOverrides = currentOverrides[provider] || {};
+
+      if (level === undefined) {
+        // Remove the tier override
+        const { [tier]: _, ...rest } = currentProviderOverrides;
+        const updatedProvider = Object.keys(rest).length > 0 ? rest : undefined;
+        const { [provider]: __, ...otherProviders } = currentOverrides;
+        const updatedOverrides = updatedProvider
+          ? { ...otherProviders, [provider]: updatedProvider }
+          : otherProviders;
+        saveConfig({
+          provider_overrides:
+            Object.keys(updatedOverrides).length > 0 ? updatedOverrides : undefined,
+        });
+      } else {
+        saveConfig({
+          provider_overrides: {
+            ...currentOverrides,
+            [provider]: { ...currentProviderOverrides, [tier]: level },
+          },
+        });
+      }
+    },
+    [config, saveConfig]
+  );
+
   return {
     config: config || DEFAULT_THINKING_CONFIG,
     loading,
@@ -167,5 +203,7 @@ export function useThinkingConfig() {
     setMode,
     setTierDefault,
     setShowWarnings,
+    setOverride,
+    setProviderOverride,
   };
 }

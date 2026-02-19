@@ -25,6 +25,8 @@ export interface CodexReasoningProxyConfig {
    * Example: '/api/provider/codex' will transform '/api/provider/codex/v1/messages' to '/v1/messages'
    */
   stripPathPrefix?: string;
+  /** When true, skip reasoning effort injection entirely (thinking mode: off) */
+  disableEffort?: boolean;
 }
 
 const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
@@ -147,7 +149,12 @@ export class CodexReasoningProxy {
   private readonly config: Required<
     Pick<
       CodexReasoningProxyConfig,
-      'upstreamBaseUrl' | 'verbose' | 'timeoutMs' | 'defaultEffort' | 'traceFilePath'
+      | 'upstreamBaseUrl'
+      | 'verbose'
+      | 'timeoutMs'
+      | 'defaultEffort'
+      | 'traceFilePath'
+      | 'disableEffort'
     >
   > &
     Pick<CodexReasoningProxyConfig, 'modelMap' | 'stripPathPrefix'>;
@@ -170,6 +177,7 @@ export class CodexReasoningProxy {
       defaultEffort: config.defaultEffort ?? 'medium',
       traceFilePath: config.traceFilePath ?? '',
       stripPathPrefix: config.stripPathPrefix,
+      disableEffort: config.disableEffort ?? false,
     };
     this.modelEffort = buildCodexModelEffortMap(this.config.modelMap, this.config.defaultEffort);
   }
@@ -329,6 +337,20 @@ export class CodexReasoningProxy {
       const normalizedRequestModel = originalModel
         ? stripExtendedContextSuffix(originalModel)
         : null;
+
+      // When effort is disabled (thinking mode: off), strip model suffix but don't inject reasoning
+      if (this.config.disableEffort) {
+        const suffixParsed = normalizedRequestModel
+          ? parseModelEffortSuffix(normalizedRequestModel)
+          : null;
+        const upstreamModel = suffixParsed?.upstreamModel ?? normalizedRequestModel;
+        const forwarded =
+          upstreamModel && isRecord(parsed) ? { ...parsed, model: upstreamModel } : parsed;
+
+        this.log(`[disabled] model=${originalModel ?? 'null'} -> passthrough (no reasoning)`);
+        await this.forwardJson(req, res, fullUpstreamUrl, forwarded);
+        return;
+      }
 
       // Support "model aliases" like `gpt-5.2-codex-xhigh` by translating to:
       // - upstream model: `gpt-5.2-codex`

@@ -282,6 +282,8 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['ccs config auth show', 'Show dashboard auth status'],
     ['ccs config image-analysis', 'Show image analysis settings'],
     ['ccs config image-analysis --enable', 'Enable image analysis'],
+    ['ccs config thinking', 'Show thinking/reasoning settings'],
+    ['ccs config thinking --mode auto', 'Set thinking mode'],
     ['ccs config --port 3000', 'Use specific port'],
     ['ccs persist <profile>', 'Write profile env to ~/.claude/settings.json'],
     ['ccs persist --list-backups', 'List available settings.json backups'],
@@ -404,6 +406,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['CCS_DIR', 'Override CCS config directory (default: ~/.ccs)'],
     ['CCS_HOME', 'Override home directory (legacy, appends .ccs)'],
     ['CCS_DEBUG', 'Enable debug logging'],
+    ['CCS_THINKING', 'Override thinking level (flag > env > config)'],
   ]);
 
   // CLI Proxy env vars

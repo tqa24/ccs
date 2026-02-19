@@ -49,7 +49,7 @@ import {
   installWebSearchHook,
   displayWebSearchStatus,
 } from '../../utils/websearch-manager';
-import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
+import { loadOrCreateUnifiedConfig, getThinkingConfig } from '../../config/unified-config-loader';
 import { installImageAnalyzerHook } from '../../utils/hooks';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
 import { isKiroAuthMethod, KiroAuthMethod, normalizeKiroAuthMethod } from '../auth/auth-types';
@@ -354,7 +354,20 @@ export async function execClaudeWithCLIProxy(
     process.exit(1);
   }
 
-  const thinkingOverride = thinkingParse.value;
+  // Priority: CLI flag > CCS_THINKING env var > config.yaml
+  let thinkingOverride = thinkingParse.value;
+  let thinkingSource: 'flag' | 'env' | 'config' | undefined =
+    thinkingOverride !== undefined ? 'flag' : undefined;
+
+  if (thinkingOverride === undefined && process.env.CCS_THINKING) {
+    const envVal = process.env.CCS_THINKING.trim();
+    if (envVal) {
+      // Parse same as CLI: integer string → number, else string
+      thinkingOverride = /^-?\d+$/.test(envVal) ? Number.parseInt(envVal, 10) : envVal;
+      thinkingSource = 'env';
+    }
+  }
+
   if (thinkingParse.duplicateDisplays.length > 0) {
     console.warn(
       `[!] Multiple reasoning flags detected. Using first occurrence: ${thinkingParse.sourceDisplay}`
@@ -804,10 +817,18 @@ export async function execClaudeWithCLIProxy(
           process.env.CCS_CODEX_REASONING_TRACE === '1' ||
           process.env.CCS_CODEX_REASONING_TRACE === 'true';
         const stripPathPrefix = useRemoteProxy ? '/api/provider/codex' : undefined;
+        const thinkingCfg = getThinkingConfig();
+        const codexThinkingOff =
+          (thinkingCfg.mode === 'off' && thinkingOverride === undefined) ||
+          thinkingOverride === 'off' ||
+          (thinkingOverride === undefined &&
+            thinkingCfg.mode === 'manual' &&
+            thinkingCfg.override === 'off');
         codexReasoningProxy = new CodexReasoningProxy({
           upstreamBaseUrl: postSanitizationBaseUrl,
           verbose,
           defaultEffort: 'medium',
+          disableEffort: codexThinkingOff,
           traceFilePath: traceEnabled ? path.join(getCcsDir(), 'codex-reasoning-proxy.log') : '',
           modelMap: {
             defaultModel: initialEnvVars.ANTHROPIC_MODEL,
@@ -874,6 +895,33 @@ export async function execClaudeWithCLIProxy(
 
   const webSearchEnv = getWebSearchHookEnv();
   logEnvironment(env, webSearchEnv, verbose);
+
+  // 11b. Print thinking status feedback (TTY only, non-piped sessions)
+  if (process.stderr.isTTY) {
+    const thinkingCfgStatus = getThinkingConfig();
+    let thinkingLabel: string;
+    let sourceLabel: string;
+
+    if (thinkingOverride === 'off' || thinkingCfgStatus.mode === 'off') {
+      thinkingLabel = 'off';
+      sourceLabel =
+        thinkingSource === 'flag' ? 'flag' : thinkingSource === 'env' ? 'env' : 'config';
+    } else if (thinkingSource === 'flag') {
+      thinkingLabel = String(thinkingOverride);
+      sourceLabel = `flag: ${thinkingParse.sourceDisplay}`;
+    } else if (thinkingSource === 'env') {
+      thinkingLabel = String(thinkingOverride);
+      sourceLabel = 'env: CCS_THINKING';
+    } else if (thinkingCfgStatus.mode === 'manual' && thinkingCfgStatus.override !== undefined) {
+      thinkingLabel = String(thinkingCfgStatus.override);
+      sourceLabel = 'config: manual';
+    } else {
+      thinkingLabel = thinkingCfgStatus.mode === 'auto' ? 'auto' : 'default';
+      sourceLabel = 'config: auto';
+    }
+
+    console.error(`[i] Thinking: ${thinkingLabel} (${sourceLabel})`);
+  }
 
   // 12. Filter CCS-specific flags before passing to Claude CLI
   const ccsFlags = [

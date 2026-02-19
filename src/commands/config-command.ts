@@ -68,6 +68,11 @@ function showHelp(): void {
   console.log('    --timeout <s>    Set analysis timeout (seconds)');
   console.log('    --set-model <p> <m>  Set model for provider');
   console.log('');
+  console.log('  thinking           Manage thinking/reasoning settings');
+  console.log('    --mode <mode>    Set mode (auto, off, manual)');
+  console.log('    --override <l>   Set persistent override level');
+  console.log('    --tier <t> <l>   Set tier default level');
+  console.log('');
   console.log('Options:');
   console.log('  --port, -p PORT    Specify server port (default: auto-detect)');
   console.log('  --dev              Development mode with Vite HMR');
@@ -80,6 +85,8 @@ function showHelp(): void {
   console.log('  ccs config auth setup   Configure dashboard login');
   console.log('  ccs config image-analysis          Show image settings');
   console.log('  ccs config image-analysis --enable Enable feature');
+  console.log('  ccs config thinking                Show thinking settings');
+  console.log('  ccs config thinking --mode auto    Set auto mode');
   console.log('');
 }
 
@@ -98,6 +105,13 @@ export async function handleConfigCommand(args: string[]): Promise<void> {
   if (args[0] === 'image-analysis') {
     const { handleConfigImageAnalysisCommand } = await import('./config-image-analysis-command');
     await handleConfigImageAnalysisCommand(args.slice(1));
+    return;
+  }
+
+  // Route thinking subcommand
+  if (args[0] === 'thinking') {
+    const { handleConfigThinkingCommand } = await import('./config-thinking-command');
+    await handleConfigThinkingCommand(args.slice(1));
     return;
   }
 

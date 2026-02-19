@@ -3,7 +3,7 @@
  * Settings section for thinking budget configuration
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { RefreshCw, CheckCircle2, AlertCircle, Brain, Info } from 'lucide-react';
+import { RefreshCw, CheckCircle2, AlertCircle, Brain, Info, ChevronDown } from 'lucide-react';
 import { useThinkingConfig } from '../../hooks';
 import type { ThinkingMode } from '../../types';
 
@@ -29,6 +29,14 @@ const THINKING_LEVELS = [
   { value: 'auto', label: 'Auto (dynamic)' },
 ];
 
+const OVERRIDE_LEVELS = [
+  { value: '__none__', label: 'None (use CLI flags only)' },
+  ...THINKING_LEVELS,
+  { value: 'off', label: 'Off (disable thinking)' },
+];
+
+const KNOWN_PROVIDERS = ['agy', 'gemini', 'codex'] as const;
+
 export default function ThinkingSection() {
   const {
     config,
@@ -40,7 +48,10 @@ export default function ThinkingSection() {
     setMode,
     setTierDefault,
     setShowWarnings,
+    setOverride,
+    setProviderOverride,
   } = useThinkingConfig();
+  const [providerOverridesOpen, setProviderOverridesOpen] = useState(false);
 
   useEffect(() => {
     fetchConfig();
@@ -146,7 +157,7 @@ export default function ThinkingSection() {
                       {mode === 'auto' && 'Automatically set thinking based on model tier'}
                       {mode === 'off' && 'Disable extended thinking'}
                       {mode === 'manual' &&
-                        'Use --thinking (agy/gemini) or --effort (codex) per run'}
+                        'Set a persistent override level or use CLI flags per run'}
                     </p>
                   </div>
                   <div
@@ -195,6 +206,94 @@ export default function ThinkingSection() {
             </div>
           )}
 
+          {/* Manual Override (shown when mode is manual) */}
+          {config.mode === 'manual' && (
+            <div className="space-y-3">
+              <h3 className="text-base font-medium">Persistent Override</h3>
+              <p className="text-sm text-muted-foreground">
+                Applied to all sessions. CLI flags still take priority.
+              </p>
+              <Select
+                value={config.override !== undefined ? String(config.override) : '__none__'}
+                onValueChange={(value) => setOverride(value === '__none__' ? undefined : value)}
+                disabled={saving}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {OVERRIDE_LEVELS.map((level) => (
+                    <SelectItem key={level.value} value={level.value}>
+                      {level.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Provider Overrides (collapsible) */}
+          <div className="space-y-3">
+            <button
+              type="button"
+              className="flex items-center gap-2 text-base font-medium w-full text-left"
+              onClick={() => setProviderOverridesOpen(!providerOverridesOpen)}
+            >
+              <ChevronDown
+                className={`w-4 h-4 transition-transform ${providerOverridesOpen ? 'rotate-0' : '-rotate-90'}`}
+              />
+              Provider Overrides
+            </button>
+            {providerOverridesOpen && (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Override tier defaults for specific providers.
+                </p>
+                {KNOWN_PROVIDERS.map((provider) => (
+                  <div key={provider} className="space-y-2 p-3 rounded-lg bg-muted/30">
+                    <Label className="capitalize font-medium text-sm">{provider}</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['opus', 'sonnet', 'haiku'] as const).map((tier) => {
+                        const currentValue =
+                          config.provider_overrides?.[provider]?.[tier] || '__default__';
+                        return (
+                          <div key={tier} className="space-y-1">
+                            <Label className="text-xs text-muted-foreground capitalize">
+                              {tier}
+                            </Label>
+                            <Select
+                              value={currentValue}
+                              onValueChange={(value) =>
+                                setProviderOverride(
+                                  provider,
+                                  tier,
+                                  value === '__default__' ? undefined : value
+                                )
+                              }
+                              disabled={saving}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="__default__">Default</SelectItem>
+                                {THINKING_LEVELS.map((level) => (
+                                  <SelectItem key={level.value} value={level.value}>
+                                    {level.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Show Warnings Toggle */}
           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
             <div>
@@ -212,17 +311,17 @@ export default function ThinkingSection() {
 
           {/* Info Box */}
           <div className="p-4 rounded-lg border bg-muted/30">
-            <h4 className="text-sm font-medium mb-2">CLI Override</h4>
+            <h4 className="text-sm font-medium mb-2">CLI &amp; Env Override</h4>
             <p className="text-sm text-muted-foreground mb-2">
-              Override per session with{' '}
-              <code className="px-1.5 py-0.5 rounded bg-muted">--thinking</code> (agy/gemini) or{' '}
-              <code className="px-1.5 py-0.5 rounded bg-muted">--effort</code> (codex):
+              Override per session with flags or{' '}
+              <code className="px-1.5 py-0.5 rounded bg-muted">CCS_THINKING</code> env var.
+              Priority: flag &gt; env &gt; config.
             </p>
             <div className="space-y-1 text-sm font-mono text-muted-foreground">
               <p>ccs gemini --thinking high</p>
-              <p>ccs agy --thinking 16384</p>
               <p>ccs codex --effort xhigh</p>
-              <p>ccs codex -p "Refactor this module" --effort xhigh</p>
+              <p>CCS_THINKING=high ccs codex &quot;debug this&quot;</p>
+              <p>ccs config thinking --mode auto</p>
             </div>
           </div>
         </div>
