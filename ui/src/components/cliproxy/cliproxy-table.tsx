@@ -27,20 +27,11 @@ import { MoreHorizontal, Trash2, User, Pencil } from 'lucide-react';
 import { useDeleteVariant } from '@/hooks/use-cliproxy';
 import { CliproxyEditDialog } from './cliproxy-edit-dialog';
 import type { Variant } from '@/lib/api-client';
+import { getProviderDisplayName } from '@/lib/provider-config';
 
 interface CliproxyTableProps {
   data: Variant[];
 }
-
-const providerLabels: Record<string, string> = {
-  gemini: 'Google Gemini',
-  codex: 'OpenAI Codex',
-  agy: 'Antigravity',
-  qwen: 'Alibaba Qwen',
-  iflow: 'iFlow',
-  kiro: 'Kiro (AWS)',
-  ghcp: 'GitHub Copilot (OAuth)',
-};
 
 export function CliproxyTable({ data }: CliproxyTableProps) {
   const deleteMutation = useDeleteVariant();
@@ -59,7 +50,7 @@ export function CliproxyTable({ data }: CliproxyTableProps) {
         if (row.original.type === 'composite') {
           return <Badge variant="secondary">composite</Badge>;
         }
-        return providerLabels[row.original.provider] || row.original.provider;
+        return getProviderDisplayName(row.original.provider);
       },
     },
     {
