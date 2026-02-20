@@ -21,7 +21,13 @@ const CLAUDE_DOTTED_VERSION_REGEX = /claude-(sonnet|opus|haiku)-(\d+)\.(\d+)(?=(
 const CLAUDE_DOTTED_THINKING_REGEX =
   /claude-(sonnet|opus|haiku)-(\d+)\.(\d+)-thinking(?=(?:$|-|\[|\(|\/))/gi;
 
-/** Extract provider segment from /api/provider/{provider} paths. */
+/**
+ * Extract provider segment from `/api/provider/{provider}` request paths.
+ *
+ * @example
+ * extractProviderFromPathname('/api/provider/agy/v1/messages')
+ * // => 'agy'
+ */
 export function extractProviderFromPathname(pathname: string): string | null {
   const match = pathname.match(/\/api\/provider\/([^/]+)/i);
   if (!match?.[1]) return null;
@@ -59,6 +65,14 @@ export function normalizeClaudeDottedThinkingMajorMinor(model: string): string {
 /**
  * Normalize model ID for a specific provider.
  * Antigravity requires hyphenated Claude major.minor model IDs.
+ *
+ * @example
+ * normalizeModelIdForProvider('claude-opus-4.6-thinking', 'agy')
+ * // => 'claude-opus-4-6-thinking'
+ *
+ * @example
+ * normalizeModelIdForProvider('claude-opus-4.6-thinking', 'gemini')
+ * // => 'claude-opus-4.6-thinking'
  */
 export function normalizeModelIdForProvider(model: string, provider: ProviderLike): string {
   if (!isAntigravityProvider(provider)) return model;
@@ -70,6 +84,14 @@ export function normalizeModelIdForProvider(model: string, provider: ProviderLik
  * - Antigravity routes: normalize all dotted Claude major.minor forms.
  * - Root/composite routes: normalize only thinking forms to avoid mutating
  *   valid non-thinking dotted IDs used by other providers.
+ *
+ * @example
+ * normalizeModelIdForRouting('claude-sonnet-4.6-thinking', null)
+ * // => 'claude-sonnet-4-6-thinking'
+ *
+ * @example
+ * normalizeModelIdForRouting('claude-sonnet-4.6', null)
+ * // => 'claude-sonnet-4.6'
  */
 export function normalizeModelIdForRouting(model: string, provider: ProviderLike): string {
   if (isAntigravityProvider(provider)) {
@@ -81,6 +103,13 @@ export function normalizeModelIdForRouting(model: string, provider: ProviderLike
 /**
  * Normalize model-related env vars for a provider.
  * Returns original object when no changes are required.
+ *
+ * @example
+ * normalizeModelEnvVarsForProvider(
+ *   { ANTHROPIC_MODEL: 'claude-sonnet-4.6-thinking' },
+ *   'agy'
+ * )
+ * // => { ANTHROPIC_MODEL: 'claude-sonnet-4-6-thinking' }
  */
 export function normalizeModelEnvVarsForProvider(
   envVars: NodeJS.ProcessEnv,
