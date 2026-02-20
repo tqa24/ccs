@@ -35,9 +35,12 @@ import {
   isUsingUnifiedConfig,
   isOpenRouterUrl,
   pickOpenRouterModel,
+  PROVIDER_PRESETS,
   getPresetById,
+  getPresetAliases,
   getPresetIds,
   type ModelMapping,
+  type ProviderPreset,
 } from '../api/services';
 import { syncToLocalConfig } from '../cliproxy/sync/local-config-sync';
 
@@ -49,6 +52,22 @@ interface ApiCommandArgs {
   preset?: string;
   force?: boolean;
   yes?: boolean;
+}
+
+function sanitizeHelpText(value: string): string {
+  return value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[\x00-\x1f\x7f]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function renderPresetHelpLine(preset: ProviderPreset, idWidth: number): string {
+  const presetId = sanitizeHelpText(preset.id) || 'unknown';
+  const paddedId = presetId.padEnd(idWidth);
+  const presetName = sanitizeHelpText(preset.name) || 'Unknown preset';
+  const presetDescription = sanitizeHelpText(preset.description) || 'No description';
+  return `  ${color(paddedId, 'command')} ${presetName} - ${presetDescription}`;
 }
 
 /** Parse command line arguments for api commands */
@@ -92,7 +111,7 @@ async function handleCreate(args: string[]): Promise<void> {
     console.log(fail(`Unknown preset: ${parsedArgs.preset}`));
     console.log('');
     console.log('Available presets:');
-    getPresetIds().forEach((id) => console.log(`  - ${id}`));
+    getPresetIds().forEach((id) => console.log(`  - ${sanitizeHelpText(id)}`));
     process.exit(1);
   }
 
@@ -434,6 +453,11 @@ async function handleRemove(args: string[]): Promise<void> {
 /** Show help for api commands */
 async function showHelp(): Promise<void> {
   await initUI();
+  const presetIds = getPresetIds()
+    .map((id) => sanitizeHelpText(id))
+    .filter(Boolean);
+  const presetAliases = getPresetAliases();
+  const presetIdWidth = Math.max(0, ...presetIds.map((id) => id.length)) + 2;
 
   console.log(header('CCS API Management'));
   console.log('');
@@ -447,7 +471,7 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Options'));
   console.log(
-    `  ${color('--preset <id>', 'command')}        Use provider preset (openrouter, ollama, ollama-cloud, glm, glmt, km, foundry, mm, deepseek, qwen)`
+    `  ${color('--preset <id>', 'command')}        Use provider preset (${presetIds.join(', ')})`
   );
   console.log(`  ${color('--base-url <url>', 'command')}     API base URL (create)`);
   console.log(`  ${color('--api-key <key>', 'command')}      API key (create)`);
@@ -456,25 +480,14 @@ async function showHelp(): Promise<void> {
   console.log(`  ${color('--yes, -y', 'command')}            Skip confirmation prompts`);
   console.log('');
   console.log(subheader('Provider Presets'));
-  console.log(
-    `  ${color('openrouter', 'command')}    OpenRouter - 349+ models (Claude, GPT, Gemini, Llama)`
-  );
-  console.log(
-    `  ${color('ollama', 'command')}          Ollama - Local open-source models (no API key)`
-  );
-  console.log(
-    `  ${color('ollama-cloud', 'command')}   Ollama Cloud - glm-5:cloud, qwen3-coder:480b`
-  );
-  console.log(`  ${color('glm', 'command')}           GLM - Claude via Z.AI`);
-  console.log(`  ${color('glmt', 'command')}          GLMT - GLM with Thinking mode`);
-  console.log(`  ${color('km', 'command')}            Kimi - Moonshot AI reasoning model`);
-  console.log(`  ${dim('  Legacy alias: --preset kimi (auto-mapped to km)')}`);
-  console.log(`  ${color('foundry', 'command')}       Azure Foundry - Claude via Microsoft Azure`);
-  console.log(`  ${color('mm', 'command')}            Minimax - M2 series with 1M context`);
-  console.log(`  ${color('deepseek', 'command')}      DeepSeek - V3.2 and R1 reasoning (128K)`);
-  console.log(
-    `  ${color('qwen', 'command')}          Qwen - Alibaba Cloud qwen3-coder-plus (256K)`
-  );
+  PROVIDER_PRESETS.forEach((preset) => console.log(renderPresetHelpLine(preset, presetIdWidth)));
+  Object.entries(presetAliases).forEach(([alias, canonical]) => {
+    const safeAlias = sanitizeHelpText(alias);
+    const safeCanonical = sanitizeHelpText(canonical);
+    console.log(
+      `  ${dim(`Legacy alias: --preset ${safeAlias} (auto-mapped to ${safeCanonical})`)}`
+    );
+  });
   console.log('');
   console.log(subheader('Examples'));
   console.log(`  ${dim('# Interactive wizard')}`);
