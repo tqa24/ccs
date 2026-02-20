@@ -10,6 +10,9 @@ import {
   getProvidersByOAuthFlow,
 } from '../../../src/cliproxy/provider-capabilities';
 
+// Monorepo contract: UI consumes provider capability constants directly from backend
+// to enforce one source of truth and prevent provider drift across surfaces.
+
 /** Canonical list of CLIProxy provider IDs (shared with backend). */
 export const CLIPROXY_PROVIDERS = CLIPROXY_PROVIDER_IDS;
 

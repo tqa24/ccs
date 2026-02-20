@@ -7,6 +7,7 @@
 
 import { CLIProxyBackend } from '../../cliproxy/types';
 import { DEFAULT_BACKEND } from '../../cliproxy/platform-detector';
+import { CLIPROXY_PROVIDER_IDS } from '../../cliproxy/provider-capabilities';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { handleSync } from '../cliproxy-sync-handler';
 import { extractOption, hasAnyFlag } from '../arg-extractor';
@@ -76,8 +77,40 @@ function getEffectiveBackend(cliBackend?: CLIProxyBackend): CLIProxyBackend {
  * Returns the provider filter value and remaining args
  * Accepts: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all
  */
+type QuotaProvider = 'agy' | 'codex' | 'gemini' | 'ghcp';
+type QuotaProviderFilter = QuotaProvider | 'all';
+
+const PROVIDER_ARG_HELP_TEXT = 'agy, codex, gemini, gemini-cli, ghcp, github-copilot, all';
+
+const QUOTA_PROVIDER_ALIAS_MAP: Readonly<Record<string, QuotaProvider>> = {
+  'gemini-cli': 'gemini',
+  'github-copilot': 'ghcp',
+};
+
+const QUOTA_PROVIDER_IDS = Object.freeze(
+  CLIPROXY_PROVIDER_IDS.filter(
+    (provider): provider is QuotaProvider =>
+      provider === 'agy' || provider === 'codex' || provider === 'gemini' || provider === 'ghcp'
+  )
+);
+
+const QUOTA_PROVIDER_SET = new Set<QuotaProvider>(QUOTA_PROVIDER_IDS);
+
+function normalizeQuotaProvider(value: string): QuotaProviderFilter | null {
+  if (value === 'all') {
+    return 'all';
+  }
+
+  const normalized = QUOTA_PROVIDER_ALIAS_MAP[value] ?? value;
+  if (!QUOTA_PROVIDER_SET.has(normalized as QuotaProvider)) {
+    return null;
+  }
+
+  return normalized as QuotaProvider;
+}
+
 function parseProviderArg(args: string[]): {
-  provider: 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all';
+  provider: QuotaProviderFilter;
   remainingArgs: string[];
 } {
   const extracted = extractOption(args, ['--provider']);
@@ -86,29 +119,18 @@ function parseProviderArg(args: string[]): {
   }
 
   if (extracted.missingValue || !extracted.value) {
-    console.error(
-      'Warning: --provider requires a value. Valid options: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all'
-    );
+    console.error(`Warning: --provider requires a value. Valid options: ${PROVIDER_ARG_HELP_TEXT}`);
     return { provider: 'all', remainingArgs: extracted.remainingArgs };
   }
 
   const value = extracted.value.toLowerCase();
-  const normalized =
-    value === 'gemini-cli' ? 'gemini' : value === 'github-copilot' ? 'ghcp' : value;
-  if (
-    normalized !== 'agy' &&
-    normalized !== 'codex' &&
-    normalized !== 'gemini' &&
-    normalized !== 'ghcp' &&
-    normalized !== 'all'
-  ) {
-    console.error(
-      `Invalid provider '${value}'. Valid options: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all`
-    );
+  const normalized = normalizeQuotaProvider(value);
+  if (!normalized) {
+    console.error(`Invalid provider '${value}'. Valid options: ${PROVIDER_ARG_HELP_TEXT}`);
     return { provider: 'all', remainingArgs: extracted.remainingArgs };
   }
   return {
-    provider: normalized as 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all',
+    provider: normalized,
     remainingArgs: extracted.remainingArgs,
   };
 }
