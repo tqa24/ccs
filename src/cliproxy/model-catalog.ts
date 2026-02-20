@@ -6,6 +6,7 @@
  */
 
 import { CLIProxyProvider } from './types';
+import { normalizeModelIdForProvider } from './model-id-normalizer';
 
 /**
  * Thinking support configuration for a model.
@@ -322,7 +323,12 @@ export function findModel(provider: CLIProxyProvider, modelId: string): ModelEnt
   const catalog = MODEL_CATALOG[provider];
   if (!catalog || !modelId) return undefined;
   const normalizedId = modelId.trim().toLowerCase();
-  return catalog.models.find((m) => m.id.toLowerCase() === normalizedId);
+  const providerNormalizedId = normalizeModelIdForProvider(normalizedId, provider)
+    .trim()
+    .toLowerCase();
+  const lookupCandidates = new Set([normalizedId, providerNormalizedId]);
+
+  return catalog.models.find((m) => lookupCandidates.has(m.id.toLowerCase()));
 }
 
 /**

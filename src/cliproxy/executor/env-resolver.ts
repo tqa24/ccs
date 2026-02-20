@@ -24,6 +24,7 @@ import { stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { CodexReasoningProxy } from '../codex-reasoning-proxy';
 import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
+import { normalizeModelIdForProvider } from '../model-id-normalizer';
 
 export interface RemoteProxyConfig {
   host: string;
@@ -271,10 +272,11 @@ export function applyFallback(
   } as const;
   const result = { ...env };
   const originalModel = result[tierEnvMap[failedTier]];
-  result[tierEnvMap[failedTier]] = fallback.model;
+  const normalizedFallbackModel = normalizeModelIdForProvider(fallback.model, fallback.provider);
+  result[tierEnvMap[failedTier]] = normalizedFallbackModel;
   // If failed tier is default tier, also update ANTHROPIC_MODEL
   if (result.ANTHROPIC_MODEL === originalModel) {
-    result.ANTHROPIC_MODEL = fallback.model;
+    result.ANTHROPIC_MODEL = normalizedFallbackModel;
   }
   return result;
 }

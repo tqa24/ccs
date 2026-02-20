@@ -378,6 +378,25 @@ describe('applyThinkingConfig - composite variant integration', () => {
     expect(result.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-5-thinking(high)');
   });
 
+  it('handles dotted agy Claude IDs for thinking capability lookup', () => {
+    const envVars: NodeJS.ProcessEnv = {
+      ANTHROPIC_MODEL: 'claude-opus-4.5-thinking',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4.5-thinking',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4.5-thinking',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4.5',
+    };
+
+    const result = applyThinkingConfig(envVars, 'agy' as CLIProxyProvider, 'high');
+
+    // Capability lookup should succeed for dotted agy IDs after normalization.
+    // Main model value is validated for budget models; tier values keep raw override.
+    expect(result.ANTHROPIC_MODEL).toBe('claude-opus-4.5-thinking(24576)');
+    expect(result.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4.5-thinking(high)');
+    expect(result.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4.5-thinking(high)');
+    // Haiku does not support thinking in agy catalog.
+    expect(result.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-haiku-4.5');
+  });
+
   it('should handle numeric budgets in per-tier thinking', () => {
     const envVars: NodeJS.ProcessEnv = {
       ANTHROPIC_MODEL: 'claude-sonnet-4-5-thinking',
