@@ -1,3 +1,61 @@
+## [7.47.0](https://github.com/kaitranntt/ccs/compare/v7.46.0...v7.47.0) (2026-02-20)
+
+### Features
+
+* **quota:** add GitHub Copilot quota checks for ghcp and copilot ([8d9d498](https://github.com/kaitranntt/ccs/commit/8d9d4987dc42415ebe53760e1ac06c9c024ce17f))
+* **thinking:** complete thinking UX/DX for all providers ([c48ed2e](https://github.com/kaitranntt/ccs/commit/c48ed2ea7fe7fcf0725805274233bd5760f284d8)), closes [#583](https://github.com/kaitranntt/ccs/issues/583)
+
+### Bug Fixes
+
+* **api:** sanitize preset help text rendering ([5b12ce7](https://github.com/kaitranntt/ccs/commit/5b12ce7f0065ff19eff46f61171db20f6e1170a3))
+* **cliproxy:** add Kimi model catalog, sync, and pricing to dashboard ([3767b95](https://github.com/kaitranntt/ccs/commit/3767b95735950b506e2470a0454d4d0db7f00764)), closes [#581](https://github.com/kaitranntt/ccs/issues/581)
+* **cliproxy:** add kimi-k2 pricing and kimi catalog tests ([dd38df6](https://github.com/kaitranntt/ccs/commit/dd38df6b8d7a5367c06b14b0258a271af8545fd4))
+* **cliproxy:** address review feedback on kimi catalog ([c73a26c](https://github.com/kaitranntt/ccs/commit/c73a26c51c5340598aacf25f48fb2851bf61d5a8))
+* **cliproxy:** harden provider alias and refresh edge cases ([a71496c](https://github.com/kaitranntt/ccs/commit/a71496cc3d7db499780c2b257d74bb6cc101f450))
+* **cliproxy:** normalize codex model and provider routing ([ecc4a3f](https://github.com/kaitranntt/ccs/commit/ecc4a3fe58721b47f3c248053d06dcec8a5c2fbf))
+* **cliproxy:** warn gemini and agy users about issue 509 ([476eabe](https://github.com/kaitranntt/ccs/commit/476eabe08f06284fed3d35ed546534f9f73ef9d2))
+* **delegation:** strip CLAUDECODE env var to bypass nested session guard ([4303ee4](https://github.com/kaitranntt/ccs/commit/4303ee48c9849f6ba1cdfb420eddca4d9ae2d541)), closes [#588](https://github.com/kaitranntt/ccs/issues/588)
+* **delegation:** strip claudecode in core delegation spawn paths ([50412dc](https://github.com/kaitranntt/ccs/commit/50412dc6799921a3e536ab2fd86b011f8849e99c)), closes [#588](https://github.com/kaitranntt/ccs/issues/588)
+* **execution:** strip claudecode in remaining claude paths ([8e57d59](https://github.com/kaitranntt/ccs/commit/8e57d5947901c56ac39071dee14938551ad49c84)), closes [#588](https://github.com/kaitranntt/ccs/issues/588)
+* **profile:** close km legacy kimi compatibility gaps ([0bf00b2](https://github.com/kaitranntt/ccs/commit/0bf00b23d9085dde7fedfbed30f7924fee41da92))
+* **profile:** handle km compatibility for legacy kimi api users ([cf8070b](https://github.com/kaitranntt/ccs/commit/cf8070b5f00d8fa13f86d7324a7bfd85cfc8f78e))
+* **profiles:** reset form state on preset transitions ([14242b5](https://github.com/kaitranntt/ccs/commit/14242b568190920bd954ec9e093a9f9a2f766480))
+* **quota:** address ghcp review follow-ups ([8201204](https://github.com/kaitranntt/ccs/commit/8201204380ac5d3981d9c84a609b1c823f6696e6))
+* **spawn:** sanitize claudecode in shared claude env builders ([d25eda8](https://github.com/kaitranntt/ccs/commit/d25eda8435c72c24f16f28a84d6bfffb31b67174)), closes [#588](https://github.com/kaitranntt/ccs/issues/588)
+* **test:** pin real child_process passthrough refs ([04e4e61](https://github.com/kaitranntt/ccs/commit/04e4e61b686b50dd685917646af97b7d47e81ba1))
+* **test:** prevent child_process mock cross-test leakage ([5b164a6](https://github.com/kaitranntt/ccs/commit/5b164a64864a548192578eacd4bb149253d4be95))
+* **test:** scope child_process mock to test lifecycle ([873b7ad](https://github.com/kaitranntt/ccs/commit/873b7adb701f01d1686fab2ad98cb294c4143405))
+* **thinking:** handle clear no-op and tighten override coverage ([954baec](https://github.com/kaitranntt/ccs/commit/954baecfe429aad1c6fc4f60601b578af04ff37f))
+* **thinking:** harden codex reasoning controls across cli and dashboard ([92e2ec1](https://github.com/kaitranntt/ccs/commit/92e2ec111d08aecb55e4461fccebc93c544439eb))
+* **ui:** harden cliproxy panel and proxy edge handling ([c18adc9](https://github.com/kaitranntt/ccs/commit/c18adc90c33b45577422de4929edb9034e854941))
+* **ui:** harden provider preset/icon typing ([b317717](https://github.com/kaitranntt/ccs/commit/b3177179b11b55cb3ba0a660adade4f5898c11dd))
+* **ui:** make api profile dialog scrollable on small screens ([faa610f](https://github.com/kaitranntt/ccs/commit/faa610f843bae381aaa6553370fd1ae294a144e9))
+* **ui:** normalize ghcp quota tooltip and labels ([2c5b2af](https://github.com/kaitranntt/ccs/commit/2c5b2af55a9a7cf87716b98432c2c6d40311d860))
+* **ui:** replace stale BASE_URL references in api client ([5a78626](https://github.com/kaitranntt/ccs/commit/5a786263bc2501684593c2c1aa0b56b1d20a56ed))
+
+### Documentation
+
+* **spawn:** document claudecode env sanitization behavior ([f2ffb81](https://github.com/kaitranntt/ccs/commit/f2ffb815ab059e8f48b309ab4af05b2cde8b3215)), closes [#588](https://github.com/kaitranntt/ccs/issues/588)
+
+### Code Refactoring
+
+* **cliproxy:** address review feedback on parity and refresh flow ([39593c1](https://github.com/kaitranntt/ccs/commit/39593c161b4cbbfc6a5a125f6ef100922b73ef9b))
+* **cliproxy:** centralize provider auth capability metadata ([bd8daac](https://github.com/kaitranntt/ccs/commit/bd8daac094404bf834d77f5c4bebd9470d88c55f))
+* **cliproxy:** resolve remaining review parity and cleanup nits ([7e527af](https://github.com/kaitranntt/ccs/commit/7e527af777f1ca8ea36570f97aada469c77299ee))
+* **cliproxy:** use shared default port in management paths ([90b8d04](https://github.com/kaitranntt/ccs/commit/90b8d04d71c78b8a120ac8cd091ea0936ba5bb6f))
+* **commands:** share cliproxy default port for setup and help ([688f3e3](https://github.com/kaitranntt/ccs/commit/688f3e3889843931cde2e34fd56ec51df454b0a6))
+* **presets:** centralize shared provider preset catalog ([21d6754](https://github.com/kaitranntt/ccs/commit/21d6754ec6ae59002c2d393d41515dd105de692a))
+* **ui:** centralize default ports and add parity test ([63f4221](https://github.com/kaitranntt/ccs/commit/63f422179ed34678a8abc0f763a2a3e3525bac16))
+* **ui:** centralize provider metadata and fallbacks ([9ad8e64](https://github.com/kaitranntt/ccs/commit/9ad8e64e85458a0154c1cac7bac2e3f082f9c7ac))
+* **ui:** centralize provider metadata for setup wizard ([a53e6cb](https://github.com/kaitranntt/ccs/commit/a53e6cbd2505c2dab5c5e8fd940b75af5584d600))
+* **ui:** replace remaining hardcoded port defaults ([70116cb](https://github.com/kaitranntt/ccs/commit/70116cb3a15694532e57d370245176b905c8f375))
+* **ui:** unify api base path for cursor and copilot hooks ([feb556d](https://github.com/kaitranntt/ccs/commit/feb556dc90dab593e79aaf6145dd5b9a38eb6831))
+* **ui:** use shared default proxy port in settings cards ([5788ddc](https://github.com/kaitranntt/ccs/commit/5788ddc3b7747df898571470318d5df774603b95))
+
+### Tests
+
+* **delegation:** add regression coverage for claudecode stripping ([80a84ed](https://github.com/kaitranntt/ccs/commit/80a84edf1f7a7514dfb3fbd8c3786b0571b528bf)), closes [#588](https://github.com/kaitranntt/ccs/issues/588)
+
 ## [7.46.0](https://github.com/kaitranntt/ccs/compare/v7.45.0...v7.46.0) (2026-02-17)
 
 ### Features
