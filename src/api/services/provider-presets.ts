@@ -2,183 +2,44 @@
  * Provider Presets for CLI
  *
  * Pre-configured templates for common API providers.
- * Mirrors the UI presets in ui/src/lib/provider-presets.ts
+ * Uses shared source-of-truth catalog in src/shared/provider-preset-catalog.ts.
  */
 
-import { resolveAliasToCanonical } from '../../utils/profile-compat';
+import {
+  OPENROUTER_BASE_URL,
+  PROVIDER_PRESET_ALIASES,
+  createProviderPresetDefinitions,
+  normalizeProviderPresetId,
+  type PresetCategory,
+  type ProviderPresetDefinition,
+} from '../../shared/provider-preset-catalog';
 
-export type PresetCategory = 'recommended' | 'alternative';
-
-export interface ProviderPreset {
-  id: string;
-  name: string;
-  description: string;
-  baseUrl: string;
-  defaultProfileName: string;
-  defaultModel: string;
-  apiKeyPlaceholder: string;
-  apiKeyHint: string;
-  category: PresetCategory;
-  /** Whether API key is required (default: true, set false for local providers) */
-  requiresApiKey: boolean;
-  /** Additional env vars for thinking mode, etc. */
-  extraEnv?: Record<string, string>;
-  /** Enable always thinking mode */
-  alwaysThinkingEnabled?: boolean;
-}
-
-export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api';
+export { OPENROUTER_BASE_URL };
+export type { PresetCategory };
+export type ProviderPreset = ProviderPresetDefinition;
 
 /**
  * Provider presets available via CLI and UI
- *
- * NOTE: Keep in sync with ui/src/lib/provider-presets.ts
  */
-export const PROVIDER_PRESETS: ProviderPreset[] = [
-  // Recommended
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    description: '349+ models from OpenAI, Anthropic, Google, Meta',
-    baseUrl: OPENROUTER_BASE_URL,
-    defaultProfileName: 'openrouter',
-    defaultModel: 'anthropic/claude-opus-4.5',
-    apiKeyPlaceholder: 'sk-or-...',
-    apiKeyHint: 'Get your API key at openrouter.ai/keys',
-    category: 'recommended',
-    requiresApiKey: true,
-  },
-  {
-    id: 'ollama',
-    name: 'Ollama (Local)',
-    description: 'Local open-source models via Ollama (32K+ context)',
-    baseUrl: 'http://localhost:11434',
-    defaultProfileName: 'ollama',
-    defaultModel: 'qwen3-coder',
-    apiKeyPlaceholder: 'ollama',
-    apiKeyHint: 'Install Ollama from ollama.com - no API key needed for local',
-    category: 'recommended',
-    requiresApiKey: false,
-  },
-  // Alternative providers
-  {
-    id: 'glm',
-    name: 'GLM',
-    description: 'Claude via Z.AI',
-    baseUrl: 'https://api.z.ai/api/anthropic',
-    defaultProfileName: 'glm',
-    defaultModel: 'glm-5',
-    apiKeyPlaceholder: 'ghp_...',
-    apiKeyHint: 'Get your API key from Z.AI',
-    category: 'alternative',
-    requiresApiKey: true,
-  },
-  {
-    id: 'glmt',
-    name: 'GLMT',
-    description: 'GLM with Thinking mode support',
-    baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
-    defaultProfileName: 'glmt',
-    defaultModel: 'glm-5',
-    apiKeyPlaceholder: 'ghp_...',
-    apiKeyHint: 'Same API key as GLM',
-    category: 'alternative',
-    requiresApiKey: true,
-    extraEnv: {
-      ANTHROPIC_TEMPERATURE: '0.2',
-      ANTHROPIC_MAX_TOKENS: '65536',
-      MAX_THINKING_TOKENS: '32768',
-      ENABLE_STREAMING: 'true',
-      ANTHROPIC_SAFE_MODE: 'false',
-      API_TIMEOUT_MS: '3000000',
-    },
-    alwaysThinkingEnabled: true,
-  },
-  {
-    id: 'km',
-    name: 'Kimi',
-    description: 'Moonshot AI - Fast reasoning model',
-    baseUrl: 'https://api.kimi.com/coding/',
-    defaultProfileName: 'km',
-    defaultModel: 'kimi-k2-thinking-turbo',
-    apiKeyPlaceholder: 'sk-...',
-    apiKeyHint: 'Get your API key from Moonshot AI',
-    category: 'alternative',
-    requiresApiKey: true,
-    alwaysThinkingEnabled: true,
-  },
-  {
-    id: 'foundry',
-    name: 'Azure Foundry',
-    description: 'Claude via Microsoft Azure AI Foundry',
-    baseUrl: 'https://<your-resource>.services.ai.azure.com/api/anthropic',
-    defaultProfileName: 'foundry',
-    defaultModel: 'claude-sonnet-4-5',
-    apiKeyPlaceholder: 'YOUR_AZURE_API_KEY',
-    apiKeyHint: 'Create resource at ai.azure.com, get API key from Keys tab',
-    category: 'alternative',
-    requiresApiKey: true,
-  },
-  {
-    id: 'mm',
-    name: 'Minimax',
-    description: 'M2.1/M2.1-lightning/M2 - multilang coding (1M context)',
-    baseUrl: 'https://api.minimax.io/anthropic',
-    defaultProfileName: 'mm',
-    defaultModel: 'MiniMax-M2.1',
-    apiKeyPlaceholder: 'YOUR_MINIMAX_API_KEY_HERE',
-    apiKeyHint: 'Get your API key at platform.minimax.io',
-    category: 'alternative',
-    requiresApiKey: true,
-  },
-  {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    description: 'V3.2 and R1 reasoning model (128K context)',
-    baseUrl: 'https://api.deepseek.com/anthropic',
-    defaultProfileName: 'deepseek',
-    defaultModel: 'deepseek-chat',
-    apiKeyPlaceholder: 'sk-...',
-    apiKeyHint: 'Get your API key at platform.deepseek.com',
-    category: 'alternative',
-    requiresApiKey: true,
-  },
-  {
-    id: 'qwen',
-    name: 'Qwen',
-    description: 'Alibaba Cloud - Qwen3 models (256K-1M context, thinking support)',
-    baseUrl: 'https://dashscope-intl.aliyuncs.com/apps/anthropic',
-    defaultProfileName: 'qwen',
-    defaultModel: 'qwen3-coder-plus',
-    apiKeyPlaceholder: 'sk-...',
-    apiKeyHint: 'Get your API key from Alibaba Cloud Model Studio',
-    category: 'alternative',
-    requiresApiKey: true,
-  },
-  {
-    id: 'ollama-cloud',
-    name: 'Ollama Cloud',
-    description: 'Ollama cloud models via direct API (glm-5:cloud, minimax-m2.1:cloud)',
-    baseUrl: 'https://ollama.com',
-    defaultProfileName: 'ollama-cloud',
-    defaultModel: 'glm-5:cloud',
-    apiKeyPlaceholder: 'YOUR_OLLAMA_CLOUD_API_KEY',
-    apiKeyHint: 'Get your API key at ollama.com',
-    category: 'alternative',
-    requiresApiKey: true,
-  },
-];
+export const PROVIDER_PRESETS: readonly ProviderPreset[] = Object.freeze(
+  createProviderPresetDefinitions()
+);
+export const PRESET_ALIASES: Readonly<Record<string, string>> = PROVIDER_PRESET_ALIASES;
 
 /** Get preset by ID */
 export function getPresetById(id: string): ProviderPreset | undefined {
-  const normalized = id.trim().toLowerCase();
-  const canonical = resolveAliasToCanonical(normalized).toLowerCase();
+  const canonical = normalizeProviderPresetId(id);
   return PROVIDER_PRESETS.find((p) => p.id === canonical);
 }
 
 /** Get all preset IDs */
 export function getPresetIds(): string[] {
   return PROVIDER_PRESETS.map((p) => p.id);
+}
+
+/** Get alias map (alias -> canonical preset ID). */
+export function getPresetAliases(): Readonly<Record<string, string>> {
+  return PRESET_ALIASES;
 }
 
 /** Check if preset ID is valid */

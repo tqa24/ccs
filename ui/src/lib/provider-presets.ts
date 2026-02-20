@@ -1,199 +1,71 @@
 /**
  * Provider Presets Configuration
- * Pre-configured templates for common API providers
+ * Shared catalog from backend source-of-truth with UI-only presentation overrides.
  */
 
-export type PresetCategory = 'recommended' | 'alternative';
+import {
+  OPENROUTER_BASE_URL,
+  createProviderPresetDefinitions,
+  normalizeProviderPresetId,
+  type PresetCategory,
+  type ProviderPresetDefinition,
+  type ProviderPresetId,
+} from '../../../src/shared/provider-preset-catalog';
 
-export interface ProviderPreset {
-  id: string;
-  name: string;
-  description: string;
-  baseUrl: string;
-  defaultProfileName: string;
-  badge?: string;
-  featured?: boolean;
-  icon?: string;
-  defaultModel?: string;
-  requiresApiKey: boolean;
-  apiKeyPlaceholder: string;
-  apiKeyHint?: string;
-  category: PresetCategory;
-  /** Additional env vars for thinking mode, etc. */
-  extraEnv?: Record<string, string>;
-  /** Enable always thinking mode */
-  alwaysThinkingEnabled?: boolean;
+export { OPENROUTER_BASE_URL };
+export type { PresetCategory };
+
+export type ProviderPreset = ProviderPresetDefinition;
+
+/**
+ * UI-only overrides for presentation details that differ from CLI semantics.
+ * Keep this tiny; provider data itself belongs in shared catalog.
+ */
+type UiPresetOverride = Pick<ProviderPreset, 'apiKeyPlaceholder'>;
+
+const UI_PRESET_OVERRIDES = Object.freeze({
+  ollama: {
+    apiKeyPlaceholder: '',
+  },
+}) satisfies Readonly<Partial<Record<ProviderPresetId, UiPresetOverride>>>;
+
+function withUiOverrides(preset: ProviderPresetDefinition): ProviderPreset {
+  const overrides = UI_PRESET_OVERRIDES[preset.id];
+  return overrides ? { ...preset, ...overrides } : { ...preset };
 }
 
-export const OPENROUTER_BASE_URL = 'https://openrouter.ai/api';
+const BASE_PROVIDER_PRESETS = createProviderPresetDefinitions();
 
-export const PROVIDER_PRESETS: ProviderPreset[] = [
-  // Recommended - OpenRouter
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    description: '349+ models from OpenAI, Anthropic, Google, Meta',
-    baseUrl: OPENROUTER_BASE_URL,
-    defaultProfileName: 'openrouter',
-    badge: '349+ models',
-    featured: true,
-    icon: '/icons/openrouter.svg',
-    defaultModel: 'anthropic/claude-opus-4.5',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'sk-or-...',
-    apiKeyHint: 'Get your API key at openrouter.ai/keys',
-    category: 'recommended',
-  },
-  // Recommended - Ollama (Local)
-  {
-    id: 'ollama',
-    name: 'Ollama (Local)',
-    description: 'Local open-source models via Ollama (32K+ context)',
-    baseUrl: 'http://localhost:11434',
-    defaultProfileName: 'ollama',
-    badge: 'Local',
-    featured: true,
-    icon: '/icons/ollama.svg',
-    defaultModel: 'qwen3-coder',
-    requiresApiKey: false,
-    apiKeyPlaceholder: '',
-    apiKeyHint: 'No API key required for local Ollama',
-    category: 'recommended',
-  },
-  // Alternative providers - GLM/GLMT/Kimi
-  {
-    id: 'glm',
-    name: 'GLM',
-    description: 'Claude via Z.AI',
-    baseUrl: 'https://api.z.ai/api/anthropic',
-    defaultProfileName: 'glm',
-    badge: 'Z.AI',
-    icon: '/icons/zai.svg',
-    defaultModel: 'glm-5',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'ghp_...',
-    apiKeyHint: 'Get your API key from Z.AI',
-    category: 'alternative',
-  },
-  {
-    id: 'glmt',
-    name: 'GLMT',
-    description: 'GLM with Thinking mode support',
-    baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
-    defaultProfileName: 'glmt',
-    badge: 'Thinking',
-    icon: '/icons/zai.svg',
-    defaultModel: 'glm-5',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'ghp_...',
-    apiKeyHint: 'Same API key as GLM',
-    category: 'alternative',
-  },
-  {
-    id: 'km',
-    name: 'Kimi',
-    description: 'Moonshot AI - Fast reasoning model',
-    baseUrl: 'https://api.kimi.com/coding/',
-    defaultProfileName: 'km',
-    badge: 'Reasoning',
-    icon: '/icons/kimi.svg',
-    defaultModel: 'kimi-k2-thinking-turbo',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'sk-...',
-    apiKeyHint: 'Get your API key from Moonshot AI',
-    category: 'alternative',
-    alwaysThinkingEnabled: true,
-  },
-  {
-    id: 'foundry',
-    name: 'Azure Foundry',
-    description: 'Claude via Microsoft Azure AI Foundry',
-    baseUrl: 'https://<your-resource>.services.ai.azure.com/api/anthropic',
-    defaultProfileName: 'foundry',
-    badge: 'Azure',
-    icon: '/icons/azure.svg',
-    defaultModel: 'claude-sonnet-4-5',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'YOUR_AZURE_API_KEY',
-    apiKeyHint: 'Create resource at ai.azure.com, get API key from Keys tab',
-    category: 'alternative',
-  },
-  {
-    id: 'mm',
-    name: 'Minimax',
-    description: 'M2.1/M2.1-lightning/M2 - multilang coding (1M context)',
-    baseUrl: 'https://api.minimax.io/anthropic',
-    defaultProfileName: 'mm',
-    badge: '1M context',
-    icon: '/icons/minimax.svg',
-    defaultModel: 'MiniMax-M2.1',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'YOUR_MINIMAX_API_KEY_HERE',
-    apiKeyHint: 'Get your API key at platform.minimax.io',
-    category: 'alternative',
-  },
-  {
-    id: 'deepseek',
-    name: 'DeepSeek',
-    description: 'V3.2 and R1 reasoning model (128K context)',
-    baseUrl: 'https://api.deepseek.com/anthropic',
-    defaultProfileName: 'deepseek',
-    badge: 'Reasoning',
-    icon: '/icons/deepseek.svg',
-    defaultModel: 'deepseek-chat',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'sk-...',
-    apiKeyHint: 'Get your API key at platform.deepseek.com',
-    category: 'alternative',
-  },
-  {
-    id: 'qwen',
-    name: 'Qwen',
-    description: 'Alibaba Cloud - Qwen3 models (256K-1M context, thinking support)',
-    baseUrl: 'https://dashscope-intl.aliyuncs.com/apps/anthropic',
-    defaultProfileName: 'qwen',
-    badge: 'Alibaba',
-    icon: '/assets/providers/qwen-color.svg',
-    defaultModel: 'qwen3-coder-plus',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'sk-...',
-    apiKeyHint: 'Get your API key from Alibaba Cloud Model Studio',
-    category: 'alternative',
-  },
-  {
-    id: 'ollama-cloud',
-    name: 'Ollama Cloud',
-    description: 'Ollama cloud models via direct API (glm-5:cloud, minimax-m2.1:cloud)',
-    baseUrl: 'https://ollama.com',
-    defaultProfileName: 'ollama-cloud',
-    badge: 'Cloud',
-    icon: '/icons/ollama.svg',
-    defaultModel: 'glm-5:cloud',
-    requiresApiKey: true,
-    apiKeyPlaceholder: 'YOUR_OLLAMA_CLOUD_API_KEY',
-    apiKeyHint: 'Get your API key at ollama.com',
-    category: 'alternative',
-  },
-];
-
-const LEGACY_PRESET_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  kimi: 'km',
-});
+export const PROVIDER_PRESETS: readonly ProviderPreset[] = Object.freeze(
+  BASE_PROVIDER_PRESETS.map(withUiOverrides)
+);
 
 /** Get presets by category */
 export function getPresetsByCategory(category: PresetCategory): ProviderPreset[] {
-  return PROVIDER_PRESETS.filter((p) => p.category === category);
+  return PROVIDER_PRESETS.filter((preset) => preset.category === category);
 }
 
-/** Get preset by ID */
+/** Get preset by ID (supports legacy aliases via shared alias map). */
 export function getPresetById(id: string): ProviderPreset | undefined {
-  const normalized = id.trim().toLowerCase();
-  const canonical = LEGACY_PRESET_ALIASES[normalized] || normalized;
-  return PROVIDER_PRESETS.find((p) => p.id.toLowerCase() === canonical);
+  const canonical = normalizeProviderPresetId(id);
+  return PROVIDER_PRESETS.find((preset) => preset.id === canonical);
 }
 
 /** Check if a URL matches a known preset */
 export function detectPresetFromUrl(baseUrl: string): ProviderPreset | undefined {
-  const normalizedUrl = baseUrl.toLowerCase().trim();
-  return PROVIDER_PRESETS.find((p) => normalizedUrl.includes(p.baseUrl.toLowerCase()));
+  const normalizedInput = baseUrl.trim().toLowerCase().replace(/\/+$/, '');
+  if (!normalizedInput) {
+    return undefined;
+  }
+
+  return PROVIDER_PRESETS.find((preset) => {
+    const normalizedPresetUrl = preset.baseUrl.trim().toLowerCase().replace(/\/+$/, '');
+    if (!normalizedPresetUrl) {
+      return false;
+    }
+    return (
+      normalizedInput === normalizedPresetUrl ||
+      normalizedInput.startsWith(`${normalizedPresetUrl}/`)
+    );
+  });
 }
