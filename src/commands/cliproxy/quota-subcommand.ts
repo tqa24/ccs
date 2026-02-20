@@ -19,7 +19,12 @@ import {
 import { fetchAllProviderQuotas } from '../../cliproxy/quota-fetcher';
 import { fetchAllCodexQuotas } from '../../cliproxy/quota-fetcher-codex';
 import { fetchAllGeminiCliQuotas } from '../../cliproxy/quota-fetcher-gemini-cli';
-import type { CodexQuotaResult, GeminiCliQuotaResult } from '../../cliproxy/quota-types';
+import { fetchAllGhcpQuotas } from '../../cliproxy/quota-fetcher-ghcp';
+import type {
+  CodexQuotaResult,
+  GeminiCliQuotaResult,
+  GhcpQuotaResult,
+} from '../../cliproxy/quota-types';
 import { isOnCooldown } from '../../cliproxy/quota-manager';
 import { CLIProxyProvider } from '../../cliproxy/types';
 import { initUI, header, subheader, color, dim, ok, fail, warn, info, table } from '../../utils/ui';
@@ -417,9 +422,68 @@ function displayGeminiCliQuotaSection(
   }
 }
 
+function formatSnapshotLabel(
+  snapshot: GhcpQuotaResult['snapshots'][keyof GhcpQuotaResult['snapshots']]
+): string {
+  if (snapshot.unlimited) {
+    return `${snapshot.percentUsed.toFixed(0)}% used (unlimited)`;
+  }
+  return `${snapshot.used}/${snapshot.entitlement} used`;
+}
+
+function displayGhcpQuotaSection(results: { account: string; quota: GhcpQuotaResult }[]): void {
+  console.log(
+    subheader(`GitHub Copilot (${results.length} account${results.length !== 1 ? 's' : ''})`)
+  );
+  console.log('');
+
+  for (const { account, quota } of results) {
+    const accountInfo = findAccountByQuery('ghcp', account);
+    const defaultMark = accountInfo?.isDefault ? color(' (default)', 'info') : '';
+
+    if (!quota.success) {
+      console.log(`  ${fail(account)}${defaultMark}`);
+      console.log(`    ${color(quota.error || 'Failed to fetch quota', 'error')}`);
+      console.log('');
+      continue;
+    }
+
+    const rows = [
+      quota.snapshots.premiumInteractions.percentRemaining,
+      quota.snapshots.chat.percentRemaining,
+      quota.snapshots.completions.percentRemaining,
+    ];
+    const minQuota = rows.length > 0 ? Math.min(...rows) : 0;
+    const statusIcon = minQuota > 50 ? ok('') : minQuota > 10 ? warn('') : fail('');
+    const planBadge = quota.planType ? color(` [${quota.planType}]`, 'info') : '';
+
+    console.log(`  ${statusIcon}${account}${defaultMark}${planBadge}`);
+    if (quota.quotaResetDate) {
+      console.log(`    ${dim(`Resets ${formatResetTimeISO(quota.quotaResetDate)}`)}`);
+    }
+
+    const items: Array<[string, GhcpQuotaResult['snapshots'][keyof GhcpQuotaResult['snapshots']]]> =
+      [
+        ['Premium interactions', quota.snapshots.premiumInteractions],
+        ['Chat', quota.snapshots.chat],
+        ['Completions', quota.snapshots.completions],
+      ];
+
+    for (const [label, snapshot] of items) {
+      const bar = formatQuotaBar(snapshot.percentRemaining);
+      const usageLabel = dim(` ${formatSnapshotLabel(snapshot)}`);
+      console.log(
+        `    ${label.padEnd(24)} ${bar} ${snapshot.percentRemaining.toFixed(0)}%${usageLabel}`
+      );
+    }
+
+    console.log('');
+  }
+}
+
 export async function handleQuotaStatus(
   verbose = false,
-  providerFilter: 'agy' | 'codex' | 'gemini' | 'all' = 'all'
+  providerFilter: 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all' = 'all'
 ): Promise<void> {
   await initUI();
   console.log(header('Quota Status'));
@@ -429,14 +493,16 @@ export async function handleQuotaStatus(
     agy: providerFilter === 'all' || providerFilter === 'agy',
     codex: providerFilter === 'all' || providerFilter === 'codex',
     gemini: providerFilter === 'all' || providerFilter === 'gemini',
+    ghcp: providerFilter === 'all' || providerFilter === 'ghcp',
   };
 
   console.log(dim('Fetching quotas...'));
 
-  const [agyResults, codexResults, geminiResults] = await Promise.all([
+  const [agyResults, codexResults, geminiResults, ghcpResults] = await Promise.all([
     shouldFetch.agy ? fetchAllProviderQuotas('agy', verbose) : null,
     shouldFetch.codex ? fetchAllCodexQuotas(verbose) : null,
     shouldFetch.gemini ? fetchAllGeminiCliQuotas(verbose) : null,
+    shouldFetch.ghcp ? fetchAllGhcpQuotas(verbose) : null,
   ]);
 
   console.log('');
@@ -465,6 +531,15 @@ export async function handleQuotaStatus(
     console.log(subheader('Gemini CLI (0 accounts)'));
     console.log(info('No Gemini CLI accounts configured'));
     console.log(`  Run: ${color('ccs gemini --auth', 'command')} to authenticate`);
+    console.log('');
+  }
+
+  if (ghcpResults && ghcpResults.length > 0) {
+    displayGhcpQuotaSection(ghcpResults);
+  } else if (shouldFetch.ghcp) {
+    console.log(subheader('GitHub Copilot (0 accounts)'));
+    console.log(info('No GitHub Copilot accounts configured'));
+    console.log(`  Run: ${color('ccs ghcp --auth', 'command')} to authenticate`);
     console.log('');
   }
 }

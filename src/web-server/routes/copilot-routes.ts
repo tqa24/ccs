@@ -7,6 +7,8 @@ import {
   checkAuthStatus as checkCopilotAuth,
   startAuthFlow as startCopilotAuth,
   getCopilotStatus,
+  getCopilotUsage,
+  isDaemonRunning,
   startDaemon as startCopilotDaemon,
   stopDaemon as stopCopilotDaemon,
   getAvailableModels as getCopilotModels,
@@ -147,6 +149,38 @@ router.get('/models', async (_req: Request, res: Response): Promise<void> => {
     }));
 
     res.json({ models: modelsWithCurrent, current: currentModel });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * GET /api/copilot/usage - Get Copilot quota usage from copilot-api /usage endpoint
+ */
+router.get('/usage', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const config = loadOrCreateUnifiedConfig();
+    const port = config.copilot?.port ?? DEFAULT_COPILOT_CONFIG.port;
+    const daemonRunning = await isDaemonRunning(port);
+
+    if (!daemonRunning) {
+      res.status(503).json({
+        error: 'copilot-api daemon is not running',
+        message: 'Start daemon first: ccs copilot start',
+      });
+      return;
+    }
+
+    const usage = await getCopilotUsage(port);
+    if (!usage) {
+      res.status(503).json({
+        error: 'Failed to fetch Copilot usage',
+        message: 'copilot-api /usage endpoint is unavailable',
+      });
+      return;
+    }
+
+    res.json(usage);
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

@@ -2,11 +2,11 @@
  * Shared Quota Type Definitions
  *
  * Unified types for multi-provider quota system.
- * Supports Antigravity, Codex, and Gemini CLI providers.
+ * Supports Antigravity, Codex, Gemini CLI, and GitHub Copilot OAuth providers.
  */
 
 /** Supported quota providers */
-export type QuotaProvider = 'agy' | 'codex' | 'gemini';
+export type QuotaProvider = 'agy' | 'codex' | 'gemini' | 'ghcp';
 
 // Re-export Antigravity types for unified access
 export type { QuotaResult as AntigravityQuotaResult } from './quota-fetcher';
@@ -108,5 +108,54 @@ export interface GeminiCliQuotaResult {
   /** Account ID (email) this quota belongs to */
   accountId?: string;
   /** True if token is expired and needs re-authentication */
+  needsReauth?: boolean;
+}
+
+/**
+ * GitHub Copilot quota snapshot.
+ */
+export interface GhcpQuotaSnapshot {
+  /** Total quota allocation for this category */
+  entitlement: number;
+  /** Remaining quota count */
+  remaining: number;
+  /** Used quota count */
+  used: number;
+  /** Remaining quota percentage (0-100) */
+  percentRemaining: number;
+  /** Used quota percentage (0-100) */
+  percentUsed: number;
+  /** Whether this quota category is unlimited */
+  unlimited: boolean;
+  /** Overage usage count */
+  overageCount: number;
+  /** Whether overage is permitted */
+  overagePermitted: boolean;
+  /** Upstream quota identifier if available */
+  quotaId: string | null;
+}
+
+/**
+ * GitHub Copilot quota fetch result.
+ */
+export interface GhcpQuotaResult {
+  /** Whether fetch succeeded */
+  success: boolean;
+  /** Copilot plan type (individual/business/enterprise/free) */
+  planType: string | null;
+  /** Quota reset date/time (ISO string) */
+  quotaResetDate: string | null;
+  snapshots: {
+    premiumInteractions: GhcpQuotaSnapshot;
+    chat: GhcpQuotaSnapshot;
+    completions: GhcpQuotaSnapshot;
+  };
+  /** Timestamp of fetch */
+  lastUpdated: number;
+  /** Error message if fetch failed */
+  error?: string;
+  /** Account ID this quota belongs to */
+  accountId?: string;
+  /** True if token is expired/invalid and user needs re-authentication */
   needsReauth?: boolean;
 }

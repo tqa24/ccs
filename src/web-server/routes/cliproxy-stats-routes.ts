@@ -15,8 +15,13 @@ import {
 import { fetchAccountQuota } from '../../cliproxy/quota-fetcher';
 import { fetchCodexQuota } from '../../cliproxy/quota-fetcher-codex';
 import { fetchGeminiCliQuota } from '../../cliproxy/quota-fetcher-gemini-cli';
+import { fetchGhcpQuota } from '../../cliproxy/quota-fetcher-ghcp';
 import { getCachedQuota, setCachedQuota } from '../../cliproxy/quota-response-cache';
-import type { CodexQuotaResult, GeminiCliQuotaResult } from '../../cliproxy/quota-types';
+import type {
+  CodexQuotaResult,
+  GeminiCliQuotaResult,
+  GhcpQuotaResult,
+} from '../../cliproxy/quota-types';
 import type { QuotaResult } from '../../cliproxy/quota-fetcher';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
@@ -65,6 +70,20 @@ function shouldCacheCodexQuotaResult(result: CodexQuotaResult): boolean {
 }
 
 function shouldCacheGeminiQuotaResult(result: GeminiCliQuotaResult): boolean {
+  if (result.success) return true;
+  if (result.needsReauth) return true;
+
+  const msg = (result.error || '').toLowerCase();
+  if (!msg) return false;
+  if (msg.includes('timeout')) return false;
+  if (msg.includes('rate limited')) return false;
+  if (msg.includes('api error: 5')) return false;
+  if (msg.includes('fetch failed')) return false;
+
+  return false;
+}
+
+function shouldCacheGhcpQuotaResult(result: GhcpQuotaResult): boolean {
   if (result.success) return true;
   if (result.needsReauth) return true;
 
@@ -140,7 +159,7 @@ const handleStatsRequest = async (_req: Request, res: Response): Promise<void> =
     if (!running) {
       res.status(503).json({
         error: 'CLIProxy Plus not running',
-        message: 'Start a CLIProxy session (gemini, codex, agy) to collect stats',
+        message: 'Start a CLIProxy session (gemini, codex, agy, ghcp) to collect stats',
       });
       return;
     }
@@ -633,9 +652,50 @@ router.get('/quota/gemini/:accountId', async (req: Request, res: Response): Prom
 });
 
 /**
+ * GET /api/cliproxy/quota/ghcp/:accountId - Get GitHub Copilot (ghcp) quota for a specific account
+ * Returns: GhcpQuotaResult with premium/chat/completions quota snapshots
+ * Caching: 2 minute TTL to reduce GitHub API calls
+ */
+router.get('/quota/ghcp/:accountId', async (req: Request, res: Response): Promise<void> => {
+  const { accountId } = req.params;
+
+  // Validate accountId - prevent path traversal
+  if (
+    !accountId ||
+    accountId.includes('..') ||
+    accountId.includes('/') ||
+    accountId.includes('\\')
+  ) {
+    res.status(400).json({ error: 'Invalid account ID' });
+    return;
+  }
+
+  try {
+    // Check cache first
+    const cached = getCachedQuota<GhcpQuotaResult>('ghcp', accountId);
+    if (cached) {
+      res.json({ ...cached, cached: true });
+      return;
+    }
+
+    // Fetch from GitHub API
+    const result = await fetchGhcpQuota(accountId);
+
+    // Cache successful and stable failure states; skip transient network failures.
+    if (shouldCacheGhcpQuotaResult(result)) {
+      setCachedQuota('ghcp', accountId, result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
  * GET /api/cliproxy/quota/:provider/:accountId - Get quota for a specific account (generic)
  * Returns: QuotaResult with model quotas and reset times
- * NOTE: This generic route MUST come after specific routes (codex, gemini) to avoid matching them
+ * NOTE: This generic route MUST come after specific routes (codex, gemini, ghcp)
  * Caching: 2 minute TTL to reduce external API calls
  */
 router.get('/quota/:provider/:accountId', async (req: Request, res: Response): Promise<void> => {

@@ -80,10 +80,10 @@ function getEffectiveBackend(cliBackend?: CLIProxyBackend): CLIProxyBackend {
 /**
  * Parse --provider flag from args for quota command
  * Returns the provider filter value and remaining args
- * Accepts: agy, codex, gemini, gemini-cli, all
+ * Accepts: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all
  */
 function parseProviderArg(args: string[]): {
-  provider: 'agy' | 'codex' | 'gemini' | 'all';
+  provider: 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all';
   remainingArgs: string[];
 } {
   const providerIdx = args.indexOf('--provider');
@@ -97,24 +97,29 @@ function parseProviderArg(args: string[]): {
       // Handle empty value
       if (!value) {
         console.error(
-          'Warning: --provider requires a value. Valid options: agy, codex, gemini, gemini-cli, all'
+          'Warning: --provider requires a value. Valid options: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all'
         );
         return { provider: 'all', remainingArgs };
       }
       // Normalize gemini-cli to gemini
-      const normalized = value === 'gemini-cli' ? 'gemini' : value;
+      const normalized =
+        value === 'gemini-cli' ? 'gemini' : value === 'github-copilot' ? 'ghcp' : value;
       if (
         normalized !== 'agy' &&
         normalized !== 'codex' &&
         normalized !== 'gemini' &&
+        normalized !== 'ghcp' &&
         normalized !== 'all'
       ) {
         console.error(
-          `Invalid provider '${value}'. Valid options: agy, codex, gemini, gemini-cli, all`
+          `Invalid provider '${value}'. Valid options: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all`
         );
         return { provider: 'all', remainingArgs };
       }
-      return { provider: normalized as 'agy' | 'codex' | 'gemini' | 'all', remainingArgs };
+      return {
+        provider: normalized as 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all',
+        remainingArgs,
+      };
     }
     return { provider: 'all', remainingArgs: args };
   }
@@ -122,26 +127,31 @@ function parseProviderArg(args: string[]): {
   // Warn if no value or value looks like another flag
   if (!rawValue || rawValue.startsWith('-')) {
     console.error(
-      'Warning: --provider requires a value. Valid options: agy, codex, gemini, gemini-cli, all'
+      'Warning: --provider requires a value. Valid options: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all'
     );
   }
   const value = rawValue?.toLowerCase() || 'all';
   const remainingArgs = [...args];
   remainingArgs.splice(providerIdx, 2);
   // Normalize gemini-cli to gemini
-  const normalized = value === 'gemini-cli' ? 'gemini' : value;
+  const normalized =
+    value === 'gemini-cli' ? 'gemini' : value === 'github-copilot' ? 'ghcp' : value;
   if (
     normalized !== 'agy' &&
     normalized !== 'codex' &&
     normalized !== 'gemini' &&
+    normalized !== 'ghcp' &&
     normalized !== 'all'
   ) {
     console.error(
-      `Invalid provider '${value}'. Valid options: agy, codex, gemini, gemini-cli, all`
+      `Invalid provider '${value}'. Valid options: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all`
     );
     return { provider: 'all', remainingArgs };
   }
-  return { provider: normalized as 'agy' | 'codex' | 'gemini' | 'all', remainingArgs };
+  return {
+    provider: normalized as 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all',
+    remainingArgs,
+  };
 }
 
 /**

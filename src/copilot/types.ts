@@ -68,3 +68,36 @@ export interface CopilotDebugInfo {
   authenticated?: boolean;
   tokenPath?: string;
 }
+
+/**
+ * Quota snapshot from Copilot usage endpoint.
+ */
+export interface CopilotQuotaSnapshot {
+  /** Total quota allocation for this bucket */
+  entitlement: number;
+  /** Remaining quota count */
+  remaining: number;
+  /** Used quota count */
+  used: number;
+  /** Remaining quota percentage (0-100) */
+  percentRemaining: number;
+  /** Used quota percentage (0-100) */
+  percentUsed: number;
+  /** Whether quota is unlimited */
+  unlimited: boolean;
+}
+
+/**
+ * Normalized Copilot usage response used by CLI and dashboard.
+ */
+export interface CopilotUsage {
+  /** Copilot plan name (free/pro/business/enterprise) */
+  plan: string | null;
+  /** ISO date string when quota resets */
+  quotaResetDate: string | null;
+  quotas: {
+    premiumInteractions: CopilotQuotaSnapshot;
+    chat: CopilotQuotaSnapshot;
+    completions: CopilotQuotaSnapshot;
+  };
+}

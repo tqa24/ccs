@@ -55,7 +55,7 @@ export async function showHelp(): Promise<void> {
         ['pause <account>', 'Pause account (skip in rotation)'],
         ['resume <account>', 'Resume paused account'],
         ['quota', 'Show quota status for all providers (Codex includes 5h + weekly reset)'],
-        ['quota --provider <name>', 'Filter by provider (agy|codex|gemini)'],
+        ['quota --provider <name>', 'Filter by provider (agy|codex|gemini|ghcp)'],
       ],
     ],
     [

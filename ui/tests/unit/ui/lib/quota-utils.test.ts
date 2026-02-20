@@ -17,12 +17,14 @@ import {
   isAgyQuotaResult,
   isCodexQuotaResult,
   isGeminiQuotaResult,
+  isGhcpQuotaResult,
 } from '@/lib/utils';
 import type {
   CodexQuotaWindow,
   CodexQuotaResult,
   GeminiCliBucket,
   GeminiCliQuotaResult,
+  GhcpQuotaResult,
   QuotaResult,
   ModelQuota,
 } from '@/lib/api-client';
@@ -1051,6 +1053,63 @@ describe('isGeminiQuotaResult', () => {
   });
 });
 
+describe('isGhcpQuotaResult', () => {
+  it('returns true for valid GHCP quota result', () => {
+    const quota: GhcpQuotaResult = {
+      success: true,
+      planType: 'individual',
+      quotaResetDate: '2026-01-31T00:00:00Z',
+      snapshots: {
+        premiumInteractions: {
+          entitlement: 300,
+          remaining: 120,
+          used: 180,
+          percentRemaining: 40,
+          percentUsed: 60,
+          unlimited: false,
+          overageCount: 0,
+          overagePermitted: false,
+          quotaId: 'premium_interactions',
+        },
+        chat: {
+          entitlement: 999999,
+          remaining: 999999,
+          used: 0,
+          percentRemaining: 100,
+          percentUsed: 0,
+          unlimited: true,
+          overageCount: 0,
+          overagePermitted: true,
+          quotaId: 'chat',
+        },
+        completions: {
+          entitlement: 5000,
+          remaining: 4200,
+          used: 800,
+          percentRemaining: 84,
+          percentUsed: 16,
+          unlimited: false,
+          overageCount: 0,
+          overagePermitted: false,
+          quotaId: 'completions',
+        },
+      },
+      lastUpdated: Date.now(),
+    };
+    expect(isGhcpQuotaResult(quota)).toBe(true);
+  });
+
+  it('returns false for non-GHCP quota result', () => {
+    const quota: GeminiCliQuotaResult = {
+      success: true,
+      buckets: [],
+      projectId: null,
+      lastUpdated: Date.now(),
+    };
+    expect(isGhcpQuotaResult(quota)).toBe(false);
+  });
+});
+
 // ==================== Unified Provider Helpers ====================
 
 describe('getProviderMinQuota', () => {
@@ -1201,6 +1260,144 @@ describe('getProviderMinQuota', () => {
     it('returns null when quota is wrong type', () => {
       const quota: QuotaResult = { success: true, models: [], lastUpdated: Date.now() };
       expect(getProviderMinQuota('gemini', quota)).toBeNull();
+    });
+  });
+
+  describe('ghcp provider', () => {
+    it('returns minimum quota from snapshots', () => {
+      const quota: GhcpQuotaResult = {
+        success: true,
+        planType: 'individual',
+        quotaResetDate: '2026-01-31T00:00:00Z',
+        snapshots: {
+          premiumInteractions: {
+            entitlement: 300,
+            remaining: 90,
+            used: 210,
+            percentRemaining: 30,
+            percentUsed: 70,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: 'premium_interactions',
+          },
+          chat: {
+            entitlement: 1000,
+            remaining: 1000,
+            used: 0,
+            percentRemaining: 100,
+            percentUsed: 0,
+            unlimited: true,
+            overageCount: 0,
+            overagePermitted: true,
+            quotaId: 'chat',
+          },
+          completions: {
+            entitlement: 5000,
+            remaining: 2750,
+            used: 2250,
+            percentRemaining: 55,
+            percentUsed: 45,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: 'completions',
+          },
+        },
+        lastUpdated: Date.now(),
+      };
+      expect(getProviderMinQuota('ghcp', quota)).toBe(30);
+    });
+
+    it('supports github-copilot alias', () => {
+      const quota: GhcpQuotaResult = {
+        success: true,
+        planType: 'individual',
+        quotaResetDate: null,
+        snapshots: {
+          premiumInteractions: {
+            entitlement: 300,
+            remaining: 150,
+            used: 150,
+            percentRemaining: 50,
+            percentUsed: 50,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          chat: {
+            entitlement: 1000,
+            remaining: 900,
+            used: 100,
+            percentRemaining: 90,
+            percentUsed: 10,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          completions: {
+            entitlement: 1000,
+            remaining: 800,
+            used: 200,
+            percentRemaining: 80,
+            percentUsed: 20,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+        },
+        lastUpdated: Date.now(),
+      };
+      expect(getProviderMinQuota('github-copilot', quota)).toBe(50);
+    });
+
+    it('returns null when GHCP quota fetch failed', () => {
+      const quota: GhcpQuotaResult = {
+        success: false,
+        planType: null,
+        quotaResetDate: null,
+        snapshots: {
+          premiumInteractions: {
+            entitlement: 0,
+            remaining: 0,
+            used: 0,
+            percentRemaining: 0,
+            percentUsed: 0,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          chat: {
+            entitlement: 0,
+            remaining: 0,
+            used: 0,
+            percentRemaining: 0,
+            percentUsed: 0,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          completions: {
+            entitlement: 0,
+            remaining: 0,
+            used: 0,
+            percentRemaining: 0,
+            percentUsed: 0,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+        },
+        lastUpdated: Date.now(),
+        error: 'Failed',
+      };
+      expect(getProviderMinQuota('ghcp', quota)).toBeNull();
     });
   });
 
@@ -1366,6 +1563,100 @@ describe('getProviderResetTime', () => {
     it('returns null when quota is wrong type', () => {
       const quota: QuotaResult = { success: true, models: [], lastUpdated: Date.now() };
       expect(getProviderResetTime('gemini', quota)).toBeNull();
+    });
+  });
+
+  describe('ghcp provider', () => {
+    it('returns quota reset date', () => {
+      const quota: GhcpQuotaResult = {
+        success: true,
+        planType: 'individual',
+        quotaResetDate: '2026-01-31T00:00:00Z',
+        snapshots: {
+          premiumInteractions: {
+            entitlement: 300,
+            remaining: 120,
+            used: 180,
+            percentRemaining: 40,
+            percentUsed: 60,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          chat: {
+            entitlement: 1000,
+            remaining: 900,
+            used: 100,
+            percentRemaining: 90,
+            percentUsed: 10,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          completions: {
+            entitlement: 5000,
+            remaining: 2500,
+            used: 2500,
+            percentRemaining: 50,
+            percentUsed: 50,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+        },
+        lastUpdated: Date.now(),
+      };
+      expect(getProviderResetTime('ghcp', quota)).toBe('2026-01-31T00:00:00Z');
+      expect(getProviderResetTime('github-copilot', quota)).toBe('2026-01-31T00:00:00Z');
+    });
+
+    it('returns null when GHCP quota fetch failed', () => {
+      const quota: GhcpQuotaResult = {
+        success: false,
+        planType: null,
+        quotaResetDate: null,
+        snapshots: {
+          premiumInteractions: {
+            entitlement: 0,
+            remaining: 0,
+            used: 0,
+            percentRemaining: 0,
+            percentUsed: 0,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          chat: {
+            entitlement: 0,
+            remaining: 0,
+            used: 0,
+            percentRemaining: 0,
+            percentUsed: 0,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+          completions: {
+            entitlement: 0,
+            remaining: 0,
+            used: 0,
+            percentRemaining: 0,
+            percentUsed: 0,
+            unlimited: false,
+            overageCount: 0,
+            overagePermitted: false,
+            quotaId: null,
+          },
+        },
+        lastUpdated: Date.now(),
+        error: 'Failed',
+      };
+      expect(getProviderResetTime('ghcp', quota)).toBeNull();
     });
   });
 

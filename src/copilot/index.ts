@@ -44,5 +44,12 @@ export {
   getDefaultModel,
 } from './copilot-models';
 
+// Usage
+export {
+  normalizeCopilotUsage,
+  fetchCopilotUsageFromDaemon,
+  getCopilotUsage,
+} from './copilot-usage';
+
 // Executor
 export { getCopilotStatus, generateCopilotEnv, executeCopilotProfile } from './copilot-executor';

@@ -5,6 +5,7 @@ import type {
   CodexQuotaResult,
   GeminiCliBucket,
   GeminiCliQuotaResult,
+  GhcpQuotaResult,
   QuotaResult,
 } from './api-client';
 
@@ -35,6 +36,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   iflow: '#f94144', // Strawberry
   qwen: '#f9c74f', // Tuscan
   kiro: '#4d908e', // Dark Cyan (AWS-inspired)
+  ghcp: '#43aa8b', // Seaweed (GitHub-inspired)
   copilot: '#43aa8b', // Seaweed (GitHub-inspired)
 };
 
@@ -529,10 +531,37 @@ export function getGeminiResetTime(buckets: GeminiCliBucket[]): string | null {
   return resets.sort()[0];
 }
 
+/**
+ * Get minimum remaining percentage across GitHub Copilot quota snapshots
+ */
+export function getMinGhcpQuota(snapshots: GhcpQuotaResult['snapshots']): number | null {
+  if (!snapshots) return null;
+
+  const percentages = [
+    snapshots.premiumInteractions.percentRemaining,
+    snapshots.chat.percentRemaining,
+    snapshots.completions.percentRemaining,
+  ].filter((p) => typeof p === 'number' && isFinite(p));
+
+  if (percentages.length === 0) return null;
+  return Math.min(...percentages);
+}
+
+/**
+ * Get reset time from GitHub Copilot quota result
+ */
+export function getGhcpResetTime(quotaResetDate: string | null): string | null {
+  return quotaResetDate;
+}
+
 // ==================== Unified Quota Type Guards ====================
 
 /** Unified quota result type for provider-agnostic handling */
-export type UnifiedQuotaResult = QuotaResult | CodexQuotaResult | GeminiCliQuotaResult;
+export type UnifiedQuotaResult =
+  | QuotaResult
+  | CodexQuotaResult
+  | GeminiCliQuotaResult
+  | GhcpQuotaResult;
 
 /** Type guard: Check if quota result is from Antigravity (agy) provider */
 export function isAgyQuotaResult(quota: UnifiedQuotaResult): quota is QuotaResult {
@@ -547,6 +576,15 @@ export function isCodexQuotaResult(quota: UnifiedQuotaResult): quota is CodexQuo
 /** Type guard: Check if quota result is from Gemini CLI provider */
 export function isGeminiQuotaResult(quota: UnifiedQuotaResult): quota is GeminiCliQuotaResult {
   return 'buckets' in quota && Array.isArray((quota as GeminiCliQuotaResult).buckets);
+}
+
+/** Type guard: Check if quota result is from GitHub Copilot (ghcp) provider */
+export function isGhcpQuotaResult(quota: UnifiedQuotaResult): quota is GhcpQuotaResult {
+  return (
+    'snapshots' in quota &&
+    typeof (quota as GhcpQuotaResult).snapshots === 'object' &&
+    (quota as GhcpQuotaResult).snapshots !== null
+  );
 }
 
 // ==================== Unified Quota Helpers ====================
@@ -575,6 +613,12 @@ export function getProviderMinQuota(
     case 'gemini':
       if (isGeminiQuotaResult(quota)) {
         return getMinGeminiQuota(quota.buckets);
+      }
+      return null;
+    case 'ghcp':
+    case 'github-copilot':
+      if (isGhcpQuotaResult(quota)) {
+        return getMinGhcpQuota(quota.snapshots);
       }
       return null;
     default:
@@ -606,6 +650,12 @@ export function getProviderResetTime(
     case 'gemini':
       if (isGeminiQuotaResult(quota)) {
         return getGeminiResetTime(quota.buckets);
+      }
+      return null;
+    case 'ghcp':
+    case 'github-copilot':
+      if (isGhcpQuotaResult(quota)) {
+        return getGhcpResetTime(quota.quotaResetDate);
       }
       return null;
     default:

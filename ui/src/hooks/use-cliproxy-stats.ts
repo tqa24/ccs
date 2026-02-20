@@ -8,6 +8,7 @@ import type {
   QuotaResult,
   CodexQuotaResult,
   GeminiCliQuotaResult,
+  GhcpQuotaResult,
 } from '@/lib/api-client';
 import type { UnifiedQuotaResult } from '@/lib/utils';
 
@@ -202,10 +203,10 @@ export function useCliproxyErrorLogContent(name: string | null) {
 }
 
 // Re-export for consumers
-export type { ModelQuota, QuotaResult, CodexQuotaResult, GeminiCliQuotaResult };
+export type { ModelQuota, QuotaResult, CodexQuotaResult, GeminiCliQuotaResult, GhcpQuotaResult };
 
 /** Providers with quota API support */
-export const QUOTA_SUPPORTED_PROVIDERS = ['agy', 'codex', 'gemini'] as const;
+export const QUOTA_SUPPORTED_PROVIDERS = ['agy', 'codex', 'gemini', 'ghcp'] as const;
 export type QuotaSupportedProvider = (typeof QUOTA_SUPPORTED_PROVIDERS)[number];
 
 /**
@@ -262,6 +263,24 @@ async function fetchGeminiQuotaApi(accountId: string): Promise<GeminiCliQuotaRes
   return response.json();
 }
 
+/**
+ * Fetch GitHub Copilot (ghcp) quota from API
+ */
+async function fetchGhcpQuotaApi(accountId: string): Promise<GhcpQuotaResult> {
+  const response = await fetch(`/api/cliproxy/quota/ghcp/${encodeURIComponent(accountId)}`);
+  if (!response.ok) {
+    let message = 'Failed to fetch GitHub Copilot quota';
+    try {
+      const error = await response.json();
+      message = error.message || message;
+    } catch {
+      // Use default message if response isn't JSON
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
 // Re-export unified type from utils for consumers
 export type { UnifiedQuotaResult } from '@/lib/utils';
 
@@ -277,6 +296,8 @@ async function fetchQuotaByProvider(
       return fetchCodexQuotaApi(accountId);
     case 'gemini':
       return fetchGeminiQuotaApi(accountId);
+    case 'ghcp':
+      return fetchGhcpQuotaApi(accountId);
     default:
       return fetchAccountQuota(provider, accountId);
   }
@@ -284,7 +305,7 @@ async function fetchQuotaByProvider(
 
 /**
  * Hook to get account quota
- * Supports agy, codex, and gemini providers
+ * Supports agy, codex, gemini, and ghcp providers
  */
 export function useAccountQuota(provider: string, accountId: string, enabled = true) {
   return useQuery({

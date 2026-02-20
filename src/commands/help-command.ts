@@ -220,6 +220,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       ['ccs copilot auth', 'Authenticate with GitHub'],
       ['ccs copilot status', 'Show integration status'],
       ['ccs copilot models', 'List available models'],
+      ['ccs copilot usage', 'Show Copilot quota usage'],
       ['ccs copilot start', 'Start copilot-api daemon'],
       ['ccs copilot stop', 'Stop copilot-api daemon'],
       ['ccs copilot enable', 'Enable integration'],

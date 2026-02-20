@@ -7,6 +7,7 @@
 import {
   startAuthFlow,
   getCopilotStatus,
+  getCopilotUsage,
   startDaemon,
   stopDaemon,
   getAvailableModels,
@@ -29,6 +30,8 @@ export async function handleCopilotCommand(args: string[]): Promise<number> {
       return handleStatus();
     case 'models':
       return handleModels();
+    case 'usage':
+      return handleUsage();
     case 'start':
       return handleStart();
     case 'stop':
@@ -61,6 +64,7 @@ function handleHelp(): number {
   console.log('  auth      Start GitHub OAuth authentication');
   console.log('  status    Show authentication and daemon status');
   console.log('  models    List available models');
+  console.log('  usage     Show Copilot quota usage');
   console.log('  start     Start copilot-api daemon');
   console.log('  stop      Stop copilot-api daemon');
   console.log('  enable    Enable copilot integration');
@@ -71,6 +75,7 @@ function handleHelp(): number {
   console.log('  1. ccs copilot auth     # Authenticate with GitHub');
   console.log('  2. ccs copilot enable   # Enable integration');
   console.log('  3. ccs copilot start    # Start daemon');
+  console.log('  4. ccs copilot usage    # Check quota usage');
   console.log('');
   console.log('Or use the web UI: ccs config → Copilot tab');
   console.log('');
@@ -186,6 +191,67 @@ async function handleModels(): Promise<number> {
 
   console.log('');
   console.log('To change model: ccs config (Copilot section)');
+
+  return 0;
+}
+
+function formatQuotaLine(
+  label: string,
+  snapshot: {
+    entitlement: number;
+    used: number;
+    percentUsed: number;
+    percentRemaining: number;
+    unlimited: boolean;
+  }
+): string {
+  const quotaText = snapshot.unlimited
+    ? 'Unlimited'
+    : `${snapshot.used}/${snapshot.entitlement} used`;
+  return `${label.padEnd(20)} ${quotaText} (${snapshot.percentUsed.toFixed(1)}% used, ${snapshot.percentRemaining.toFixed(1)}% remaining)`;
+}
+
+function formatResetDate(resetDate: string | null): string {
+  if (!resetDate) return 'unknown';
+  const date = new Date(resetDate);
+  if (Number.isNaN(date.getTime())) return resetDate;
+  return date.toLocaleString();
+}
+
+/**
+ * Handle usage subcommand.
+ */
+async function handleUsage(): Promise<number> {
+  const config = loadOrCreateUnifiedConfig();
+  const copilotConfig = config.copilot ?? DEFAULT_COPILOT_CONFIG;
+  const status = await getCopilotStatus(copilotConfig);
+
+  if (!status.daemon.running) {
+    console.error(fail('copilot-api daemon is not running.'));
+    console.error('');
+    console.error('Start daemon first: ccs copilot start');
+    return 1;
+  }
+
+  const usage = await getCopilotUsage(copilotConfig.port);
+  if (!usage) {
+    console.error(fail('Failed to fetch Copilot usage.'));
+    console.error('');
+    console.error('Try restarting daemon: ccs copilot stop && ccs copilot start');
+    return 1;
+  }
+
+  console.log('GitHub Copilot Usage');
+  console.log('────────────────────');
+  console.log('');
+  console.log(`Plan:        ${usage.plan || 'unknown'}`);
+  console.log(`Quota Reset: ${formatResetDate(usage.quotaResetDate)}`);
+  console.log('');
+  console.log('Quotas:');
+  console.log(`  ${formatQuotaLine('Premium Interactions', usage.quotas.premiumInteractions)}`);
+  console.log(`  ${formatQuotaLine('Chat', usage.quotas.chat)}`);
+  console.log(`  ${formatQuotaLine('Completions', usage.quotas.completions)}`);
+  console.log('');
 
   return 0;
 }

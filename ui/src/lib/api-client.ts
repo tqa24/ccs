@@ -337,6 +337,53 @@ export interface GeminiCliQuotaResult {
   cached?: boolean;
 }
 
+/** GitHub Copilot quota snapshot */
+export interface GhcpQuotaSnapshot {
+  /** Total quota allocation for this category */
+  entitlement: number;
+  /** Remaining quota count */
+  remaining: number;
+  /** Used quota count */
+  used: number;
+  /** Remaining quota percentage (0-100) */
+  percentRemaining: number;
+  /** Used quota percentage (0-100) */
+  percentUsed: number;
+  /** Whether this quota category is unlimited */
+  unlimited: boolean;
+  /** Overage usage count */
+  overageCount: number;
+  /** Whether overage is permitted */
+  overagePermitted: boolean;
+  /** Upstream quota identifier if available */
+  quotaId: string | null;
+}
+
+/** GitHub Copilot (ghcp) quota result */
+export interface GhcpQuotaResult {
+  /** Whether fetch succeeded */
+  success: boolean;
+  /** Copilot plan type */
+  planType: string | null;
+  /** Quota reset date/time */
+  quotaResetDate: string | null;
+  snapshots: {
+    premiumInteractions: GhcpQuotaSnapshot;
+    chat: GhcpQuotaSnapshot;
+    completions: GhcpQuotaSnapshot;
+  };
+  /** Timestamp of fetch */
+  lastUpdated: number;
+  /** Error message if fetch failed */
+  error?: string;
+  /** Account ID this quota belongs to */
+  accountId?: string;
+  /** True if token is expired and needs re-authentication */
+  needsReauth?: boolean;
+  /** True if result was served from cache */
+  cached?: boolean;
+}
+
 /** Provider accounts summary */
 export type ProviderAccountsMap = Record<string, OAuthAccount[]>;
 

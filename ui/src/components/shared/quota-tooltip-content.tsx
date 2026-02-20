@@ -14,6 +14,7 @@ import {
   isAgyQuotaResult,
   isCodexQuotaResult,
   isGeminiQuotaResult,
+  isGhcpQuotaResult,
   type ModelTier,
   type UnifiedQuotaResult,
 } from '@/lib/utils';
@@ -118,6 +119,37 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
           </div>
         ))}
         <ResetTimeIndicator resetTime={resetTime} />
+      </div>
+    );
+  }
+
+  // GitHub Copilot (ghcp) provider tooltip
+  if (isGhcpQuotaResult(quota)) {
+    const snapshotRows = [
+      { label: 'Premium Interactions', snapshot: quota.snapshots.premiumInteractions },
+      { label: 'Chat', snapshot: quota.snapshots.chat },
+      { label: 'Completions', snapshot: quota.snapshots.completions },
+    ];
+    const effectiveResetTime = quota.quotaResetDate ?? resetTime;
+
+    return (
+      <div className="text-xs space-y-1">
+        <p className="font-medium">Quota Snapshots:</p>
+        {quota.planType && <p className="text-muted-foreground">Plan: {quota.planType}</p>}
+        {snapshotRows.map(({ label, snapshot }) => (
+          <div key={label} className="flex justify-between gap-4">
+            <span className={cn(snapshot.percentRemaining < 20 && 'text-red-500')}>
+              {label}
+              {snapshot.unlimited ? ' (Unlimited)' : ''}
+            </span>
+            <span className={cn('font-mono', snapshot.percentRemaining < 20 && 'text-red-500')}>
+              {snapshot.unlimited
+                ? 'inf'
+                : `${snapshot.percentRemaining}% (${snapshot.remaining}/${snapshot.entitlement})`}
+            </span>
+          </div>
+        ))}
+        <ResetTimeIndicator resetTime={effectiveResetTime} />
       </div>
     );
   }

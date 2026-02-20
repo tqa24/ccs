@@ -597,6 +597,7 @@ async function main(): Promise<void> {
     'auth',
     'status',
     'models',
+    'usage',
     'start',
     'stop',
     'enable',
