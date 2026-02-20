@@ -8,9 +8,14 @@
 import * as fs from 'node:fs';
 import { getAccountTokenPath, getProviderAccounts } from './account-manager';
 import type { GhcpQuotaResult, GhcpQuotaSnapshot } from './quota-types';
+import { clampPercent } from '../utils/percentage';
 
 const GHCP_USAGE_URL = 'https://api.github.com/copilot_internal/user';
 const GHCP_USAGE_TIMEOUT_MS = 10000;
+/**
+ * Mirrors headers currently accepted by GitHub Copilot internal usage endpoint.
+ * Keep aligned with upstream Copilot client/API changes when quota calls break.
+ */
 const GHCP_USER_AGENT = 'GitHubCopilotChat/0.26.7';
 const GHCP_API_VERSION = '2025-04-01';
 
@@ -40,11 +45,6 @@ interface TokenData {
   token?: {
     access_token?: string;
   };
-}
-
-function clampPercent(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, value));
 }
 
 function normalizeSnapshot(raw?: RawGhcpQuotaSnapshot): GhcpQuotaSnapshot {
@@ -161,6 +161,7 @@ function normalizeUsageResponse(raw: RawGhcpUsageResponse): GhcpQuotaResult {
 export async function fetchGhcpQuota(accountId: string, verbose = false): Promise<GhcpQuotaResult> {
   const { accessToken, error } = readGhcpAccessToken(accountId);
   if (!accessToken) {
+    // Safe diagnostic: accountId + generic error only (never log token values/file contents).
     if (verbose) console.error(`[!] ghcp quota token error (${accountId}): ${error}`);
     return buildEmptyQuotaResult(error || 'Failed to load auth token', accountId);
   }
@@ -231,3 +232,6 @@ export async function fetchAllGhcpQuotas(
   );
   return results;
 }
+
+// Export for testing
+export { normalizeSnapshot as normalizeGhcpSnapshot, extractAccessToken as extractGhcpAccessToken };

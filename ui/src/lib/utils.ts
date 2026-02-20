@@ -590,10 +590,16 @@ export function isGeminiQuotaResult(quota: UnifiedQuotaResult): quota is GeminiC
 
 /** Type guard: Check if quota result is from GitHub Copilot (ghcp) provider */
 export function isGhcpQuotaResult(quota: UnifiedQuotaResult): quota is GhcpQuotaResult {
+  const candidate = quota as GhcpQuotaResult;
+  const snapshots = candidate.snapshots as Record<string, unknown> | null | undefined;
+
   return (
     'snapshots' in quota &&
-    typeof (quota as GhcpQuotaResult).snapshots === 'object' &&
-    (quota as GhcpQuotaResult).snapshots !== null
+    typeof snapshots === 'object' &&
+    snapshots !== null &&
+    'premiumInteractions' in snapshots &&
+    'chat' in snapshots &&
+    'completions' in snapshots
   );
 }
 

@@ -7,6 +7,7 @@
 
 import * as http from 'http';
 import type { CopilotQuotaSnapshot, CopilotUsage } from './types';
+import { clampPercent } from '../utils/percentage';
 
 interface RawCopilotQuotaSnapshot {
   entitlement?: number;
@@ -23,11 +24,6 @@ interface RawCopilotUsage {
     chat?: RawCopilotQuotaSnapshot;
     completions?: RawCopilotQuotaSnapshot;
   };
-}
-
-function clampPercent(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, value));
 }
 
 function normalizeSnapshot(raw?: RawCopilotQuotaSnapshot): CopilotQuotaSnapshot {
