@@ -5,7 +5,7 @@
  */
 
 import { cn } from '@/lib/utils';
-import { PROVIDER_ASSETS, PROVIDER_COLORS } from '@/lib/provider-config';
+import { getProviderLogoAsset, PROVIDER_COLORS } from '@/lib/provider-config';
 
 interface ProviderIconProps {
   provider: string;
@@ -22,7 +22,8 @@ export function ProviderIcon({
   withBackground = false,
 }: ProviderIconProps) {
   const normalized = provider.toLowerCase();
-  const assetPath = PROVIDER_ASSETS[normalized];
+  const assetPath = getProviderLogoAsset(provider);
+  const providerColor = PROVIDER_COLORS[normalized as keyof typeof PROVIDER_COLORS] || '#6b7280';
 
   // Icon size is smaller when inside background circle
   const iconSize = withBackground ? Math.floor(size * 0.65) : size;
@@ -40,7 +41,7 @@ export function ProviderIcon({
     <span
       className="font-bold"
       style={{
-        color: PROVIDER_COLORS[normalized] || '#6b7280',
+        color: providerColor,
         fontSize: iconSize * 0.6,
       }}
     >
@@ -75,7 +76,7 @@ export function ProviderIcon({
     );
   }
 
-  const bgColor = PROVIDER_COLORS[normalized] || '#6b7280';
+  const bgColor = providerColor;
   return (
     <div
       className={cn(

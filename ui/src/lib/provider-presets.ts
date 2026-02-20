@@ -23,11 +23,12 @@ export type ProviderPreset = ProviderPresetDefinition;
  */
 type UiPresetOverride = Pick<ProviderPreset, 'apiKeyPlaceholder'>;
 
-const UI_PRESET_OVERRIDES = Object.freeze({
-  ollama: {
-    apiKeyPlaceholder: '',
-  },
-}) satisfies Readonly<Partial<Record<ProviderPresetId, UiPresetOverride>>>;
+const UI_PRESET_OVERRIDES: Readonly<Partial<Record<ProviderPresetId, UiPresetOverride>>> =
+  Object.freeze({
+    ollama: {
+      apiKeyPlaceholder: '',
+    },
+  });
 
 function withUiOverrides(preset: ProviderPresetDefinition): ProviderPreset {
   const overrides = UI_PRESET_OVERRIDES[preset.id];
