@@ -15,6 +15,7 @@ import { CopilotStatus } from './types';
 import { fail, info, ok } from '../utils/ui';
 import { getWebSearchHookEnv } from '../utils/websearch-manager';
 import { getImageAnalysisHookEnv } from '../utils/hooks';
+import { stripClaudeCodeEnv } from '../utils/shell-executor';
 
 /**
  * Get full copilot status (auth + daemon).
@@ -138,14 +139,14 @@ export async function executeCopilotProfile(
   // Merge with current environment (global env first, copilot overrides, then hook env vars)
   const webSearchEnv = getWebSearchHookEnv();
   const imageAnalysisEnv = getImageAnalysisHookEnv('copilot');
-  const env = {
+  const env = stripClaudeCodeEnv({
     ...process.env,
     ...globalEnv,
     ...copilotEnv,
     ...webSearchEnv,
     ...imageAnalysisEnv,
     CCS_PROFILE_TYPE: 'copilot',
-  };
+  });
 
   console.log(info(`Using GitHub Copilot proxy (model: ${config.model})`));
   console.log('');

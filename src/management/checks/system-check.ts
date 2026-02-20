@@ -5,7 +5,7 @@
 import * as fs from 'fs';
 import { spawn } from 'child_process';
 import { getClaudeCliInfo } from '../../utils/claude-detector';
-import { escapeShellArg } from '../../utils/shell-executor';
+import { escapeShellArg, stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { ok, fail } from '../../utils/ui';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
 import { getCcsDir } from '../../utils/config-manager';
@@ -48,10 +48,12 @@ export class ClaudeCliChecker implements IHealthChecker {
               stdio: 'pipe',
               timeout: 5000,
               shell: true,
+              env: stripClaudeCodeEnv(process.env),
             })
           : spawn(claudeCli, ['--version'], {
               stdio: 'pipe',
               timeout: 5000,
+              env: stripClaudeCodeEnv(process.env),
             });
 
         let output = '';

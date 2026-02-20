@@ -7,7 +7,7 @@
 import { spawn, ChildProcess } from 'child_process';
 import { initUI, header, color, fail, warn, info, infoBox, warnBox } from '../../utils/ui';
 import { getClaudeCliInfo } from '../../utils/claude-detector';
-import { escapeShellArg } from '../../utils/shell-executor';
+import { escapeShellArg, stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { isUnifiedMode } from '../../config/unified-config-loader';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
@@ -82,6 +82,7 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     }
 
     const { path: claudeCli, needsShell } = claudeInfo;
+    const childEnv = stripClaudeCodeEnv({ ...process.env, CLAUDE_CONFIG_DIR: instancePath });
 
     // Execute Claude in isolated instance (will auto-prompt for login if no credentials)
     // On Windows, .cmd/.bat/.ps1 files need shell: true to execute properly
@@ -92,13 +93,13 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
         stdio: 'inherit',
         windowsHide: true,
         shell: true,
-        env: { ...process.env, CLAUDE_CONFIG_DIR: instancePath },
+        env: childEnv,
       });
     } else {
       child = spawn(claudeCli, [], {
         stdio: 'inherit',
         windowsHide: true,
-        env: { ...process.env, CLAUDE_CONFIG_DIR: instancePath },
+        env: childEnv,
       });
     }
 
