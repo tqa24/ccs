@@ -20,6 +20,7 @@ import { CLIProxyProvider } from '../types';
 import { CompositeTierConfig } from '../../config/unified-config-types';
 import { getWebSearchHookEnv } from '../../utils/websearch-manager';
 import { getImageAnalysisHookEnv } from '../../utils/hooks/get-image-analysis-hook-env';
+import { stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { CodexReasoningProxy } from '../codex-reasoning-proxy';
 import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
@@ -219,13 +220,17 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
     Object.entries(effectiveEnvVars).filter(([, v]) => v !== undefined)
   ) as Record<string, string>;
 
-  return {
+  const mergedEnv = {
     ...baseEnv,
     ...effectiveEnvVarsFiltered,
     ...webSearchEnv,
     ...imageAnalysisEnv,
     CCS_PROFILE_TYPE: 'cliproxy', // Signal to WebSearch hook this is a third-party provider
   };
+
+  return Object.fromEntries(
+    Object.entries(stripClaudeCodeEnv(mergedEnv)).filter(([, v]) => v !== undefined)
+  ) as Record<string, string>;
 }
 
 /**

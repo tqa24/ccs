@@ -9,7 +9,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { TargetAdapter, TargetBinaryInfo, TargetCredentials, TargetType } from './target-adapter';
 import { detectClaudeCli, getClaudeCliInfo } from '../utils/claude-detector';
 import type { ProfileType } from '../types/profile';
-import { escapeShellArg, stripAnthropicEnv } from '../utils/shell-executor';
+import { escapeShellArg, stripAnthropicEnv, stripClaudeCodeEnv } from '../utils/shell-executor';
 import { ErrorManager } from '../utils/error-manager';
 import { getWebSearchHookEnv } from '../utils/websearch-manager';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
@@ -56,7 +56,7 @@ export class ClaudeAdapter implements TargetAdapter {
     if (creds.apiKey) env['ANTHROPIC_AUTH_TOKEN'] = creds.apiKey;
     if (creds.model) env['ANTHROPIC_MODEL'] = creds.model;
 
-    return env;
+    return stripClaudeCodeEnv(env);
   }
 
   exec(

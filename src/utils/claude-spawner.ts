@@ -6,7 +6,7 @@
  */
 
 import { spawn, ChildProcess, SpawnOptions } from 'child_process';
-import { escapeShellArg } from './shell-executor';
+import { escapeShellArg, stripClaudeCodeEnv } from './shell-executor';
 import { getClaudeCliInfo } from './claude-detector';
 import { ErrorManager } from './error-manager';
 
@@ -46,7 +46,8 @@ export function spawnClaude(options: SpawnClaudeOptions = {}): SpawnClaudeResult
   const { args = [], env, cwd, stdio = 'inherit' } = options;
 
   // Merge environment
-  const mergedEnv = env ? { ...process.env, ...env } : process.env;
+  const mergedEnvBase = env ? { ...process.env, ...env } : process.env;
+  const mergedEnv = stripClaudeCodeEnv(mergedEnvBase);
 
   let child: ChildProcess;
   if (needsShell) {
