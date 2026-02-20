@@ -3,7 +3,7 @@
  * Types for CLIProxyAPI binary management and execution
  */
 
-import { CompositeTierConfig } from '../config/unified-config-types';
+import type { CompositeTierConfig } from '../config/unified-config-types';
 
 /**
  * Supported operating systems
