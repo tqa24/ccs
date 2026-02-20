@@ -6,7 +6,7 @@ import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
+import { getClaudeSettingsPath } from '../../utils/claude-config-path';
 
 const router = Router();
 
@@ -65,11 +65,6 @@ class RestoreMutex {
 }
 
 const restoreMutex = new RestoreMutex();
-
-/** Get Claude settings.json path */
-function getClaudeSettingsPath(): string {
-  return path.join(os.homedir(), '.claude', 'settings.json');
-}
 
 /** Check if path is a symlink (security check) */
 function isSymlink(filePath: string): boolean {

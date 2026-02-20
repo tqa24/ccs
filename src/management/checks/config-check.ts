@@ -4,10 +4,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { ok, fail, warn, info } from '../../utils/ui';
 import { HealthCheck, IHealthChecker, createSpinner } from './types';
 import { getCcsDir } from '../../utils/config-manager';
+import { getClaudeConfigDir } from '../../utils/claude-config-path';
 
 const ora = createSpinner();
 
@@ -195,7 +195,7 @@ export class ClaudeSettingsChecker implements IHealthChecker {
   private readonly claudeDir: string;
 
   constructor() {
-    this.claudeDir = path.join(os.homedir(), '.claude');
+    this.claudeDir = getClaudeConfigDir();
   }
 
   run(results: HealthCheck): void {

@@ -10,7 +10,6 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { initUI, header, subheader, color, dim, ok, fail, warn, info } from '../utils/ui';
 import { InteractivePrompt } from '../utils/prompt';
 import ProfileDetector, {
@@ -21,6 +20,8 @@ import ProfileDetector, {
 import { getEffectiveEnvVars, CLIPROXY_DEFAULT_PORT } from '../cliproxy/config-generator';
 import { generateCopilotEnv } from '../copilot/copilot-executor';
 import { expandPath } from '../utils/helpers';
+import { getClaudeConfigDir, getClaudeSettingsPath } from '../utils/claude-config-path';
+import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface PersistCommandArgs {
   profile?: string;
@@ -37,34 +38,37 @@ interface ResolvedEnv {
 
 /** Parse command line arguments */
 function parseArgs(args: string[]): PersistCommandArgs {
-  const result: PersistCommandArgs = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--yes' || arg === '-y') {
-      result.yes = true;
-    } else if (arg === '--help' || arg === '-h') {
-      // Will be handled in main function
-    } else if (arg === '--list-backups') {
-      result.listBackups = true;
-    } else if (arg === '--restore') {
-      // Check if next arg is a timestamp (not a flag)
-      const nextArg = args[i + 1];
-      if (nextArg && !nextArg.startsWith('-')) {
-        result.restore = nextArg;
-        i++; // Skip next arg
-      } else {
-        result.restore = true; // Use latest
-      }
-    } else if (!arg.startsWith('-') && !result.profile) {
+  const result: PersistCommandArgs = {
+    yes: hasAnyFlag(args, ['--yes', '-y']),
+    listBackups: hasAnyFlag(args, ['--list-backups']),
+  };
+
+  const restoreOption = extractOption(args, ['--restore']);
+  if (restoreOption.found) {
+    result.restore = restoreOption.missingValue ? true : restoreOption.value || true;
+  }
+
+  for (const arg of restoreOption.remainingArgs) {
+    if (!arg.startsWith('-')) {
       result.profile = arg;
+      break;
     }
   }
   return result;
 }
 
-/** Get Claude settings.json path */
-function getClaudeSettingsPath(): string {
-  return path.join(os.homedir(), '.claude', 'settings.json');
+function formatDisplayPath(filePath: string): string {
+  const claudeDir = getClaudeConfigDir();
+  if (filePath === claudeDir) {
+    return '~/.claude';
+  }
+
+  const claudePrefix = `${claudeDir}${path.sep}`;
+  if (filePath.startsWith(claudePrefix)) {
+    return filePath.replace(claudePrefix, '~/.claude/');
+  }
+
+  return filePath;
 }
 
 /** Read existing Claude settings.json with validation */
@@ -517,7 +521,7 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     if (createBackupFlag) {
       try {
         createdBackupPath = createBackup();
-        console.log(ok(`Backup created: ${createdBackupPath.replace(os.homedir(), '~')}`));
+        console.log(ok(`Backup created: ${formatDisplayPath(createdBackupPath)}`));
         console.log('');
       } catch (error) {
         console.log(fail(`Failed to create backup: ${(error as Error).message}`));
@@ -560,7 +564,7 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     if (createdBackupPath) {
       console.log('');
       console.log(info(`A backup was created before this error:`));
-      console.log(`    ${createdBackupPath.replace(os.homedir(), '~')}`);
+      console.log(`    ${formatDisplayPath(createdBackupPath)}`);
       console.log(dim('    To restore: ccs persist --restore'));
     }
     process.exit(1);

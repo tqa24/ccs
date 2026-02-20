@@ -1,26 +1,17 @@
 /**
  * Provider Configuration
- * Shared constants for CLIProxy providers - SINGLE SOURCE OF TRUTH for UI
- *
- * When adding a new provider, update CLIPROXY_PROVIDERS array and related mappings.
+ * Backend provider capabilities are the source of truth.
+ * UI keeps only presentation-specific overrides (assets/colors/instructions).
  */
 
-/**
- * Canonical list of CLIProxy provider IDs
- * This is the UI's single source of truth for valid providers.
- * Must stay in sync with backend's CLIPROXY_PROFILES in src/auth/profile-detector.ts
- */
-export const CLIPROXY_PROVIDERS = [
-  'gemini',
-  'codex',
-  'agy',
-  'qwen',
-  'iflow',
-  'kiro',
-  'ghcp',
-  'claude',
-  'kimi',
-] as const;
+import {
+  CLIPROXY_PROVIDER_IDS,
+  PROVIDER_CAPABILITIES,
+  getProvidersByOAuthFlow,
+} from '../../../src/cliproxy/provider-capabilities';
+
+/** Canonical list of CLIProxy provider IDs (shared with backend). */
+export const CLIPROXY_PROVIDERS = CLIPROXY_PROVIDER_IDS;
 
 /** Union type for CLIProxy provider IDs */
 export type CLIProxyProvider = (typeof CLIPROXY_PROVIDERS)[number];
@@ -39,44 +30,17 @@ interface ProviderMetadata {
   description: string;
 }
 
-export const PROVIDER_METADATA: Record<CLIProxyProvider, ProviderMetadata> = {
-  agy: {
-    displayName: 'Antigravity',
-    description: 'Antigravity AI models',
-  },
-  claude: {
-    displayName: 'Claude (Anthropic)',
-    description: 'Claude Opus/Sonnet models',
-  },
-  gemini: {
-    displayName: 'Google Gemini',
-    description: 'Gemini Pro/Flash models',
-  },
-  codex: {
-    displayName: 'OpenAI Codex',
-    description: 'GPT-4 and codex models',
-  },
-  qwen: {
-    displayName: 'Alibaba Qwen',
-    description: 'Qwen Code models',
-  },
-  iflow: {
-    displayName: 'iFlow',
-    description: 'iFlow AI models',
-  },
-  kiro: {
-    displayName: 'Kiro (AWS)',
-    description: 'AWS CodeWhisperer models',
-  },
-  ghcp: {
-    displayName: 'GitHub Copilot (OAuth)',
-    description: 'GitHub Copilot via OAuth',
-  },
-  kimi: {
-    displayName: 'Kimi (Moonshot)',
-    description: 'Moonshot AI K2/K2.5 models',
-  },
-};
+export const PROVIDER_METADATA: Record<CLIProxyProvider, ProviderMetadata> = Object.freeze(
+  Object.fromEntries(
+    CLIPROXY_PROVIDERS.map((provider) => [
+      provider,
+      {
+        displayName: PROVIDER_CAPABILITIES[provider].displayName,
+        description: PROVIDER_CAPABILITIES[provider].description,
+      },
+    ])
+  ) as Record<CLIProxyProvider, ProviderMetadata>
+);
 
 // Map provider names to asset filenames (only providers with actual logos)
 export const PROVIDER_ASSETS: Record<CLIProxyProvider, string> = {
@@ -149,13 +113,12 @@ export const PROVIDER_COLORS: Record<string, string> = {
   vertex: '#4285F4',
   iflow: '#f94144',
   qwen: '#6236FF',
-  kiro: '#4d908e', // Dark Cyan (AWS-inspired)
-  ghcp: '#43aa8b', // Seaweed (GitHub-inspired)
-  claude: '#D97757', // Anthropic brand color (matches SVG)
-  kimi: '#FF6B35', // Moonshot AI brand orange
+  kiro: '#4d908e',
+  ghcp: '#43aa8b',
+  claude: '#D97757',
+  kimi: '#FF6B35',
 };
 
-// Provider display names
 const PROVIDER_NAMES: Record<string, string> = {
   ...Object.fromEntries(
     CLIPROXY_PROVIDERS.map((provider) => [provider, PROVIDER_METADATA[provider].displayName])
@@ -163,7 +126,6 @@ const PROVIDER_NAMES: Record<string, string> = {
   vertex: 'Vertex AI',
 };
 
-// Map provider to display name
 export function getProviderDisplayName(provider: unknown): string {
   const normalized = normalizeProviderInput(provider);
   if (!normalized) {
@@ -181,9 +143,10 @@ export function getProviderDescription(provider: unknown): string {
 
 /**
  * Providers that use Device Code OAuth flow instead of Authorization Code flow.
- * Device Code flow requires displaying a user code for manual entry at provider's website.
  */
-export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = ['ghcp', 'kiro', 'qwen', 'kimi'];
+export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = [
+  ...getProvidersByOAuthFlow('device_code'),
+];
 
 const DEVICE_CODE_PROVIDER_DISPLAY_NAMES: Readonly<Partial<Record<CLIProxyProvider, string>>> =
   Object.freeze({

@@ -43,6 +43,7 @@ import {
   type ProviderPreset,
 } from '../api/services';
 import { syncToLocalConfig } from '../cliproxy/sync/local-config-sync';
+import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface ApiCommandArgs {
   name?: string;
@@ -72,28 +73,30 @@ function renderPresetHelpLine(preset: ProviderPreset, idWidth: number): string {
 
 /** Parse command line arguments for api commands */
 function parseArgs(args: string[]): ApiCommandArgs {
-  const result: ApiCommandArgs = {};
+  const result: ApiCommandArgs = {
+    force: hasAnyFlag(args, ['--force']),
+    yes: hasAnyFlag(args, ['--yes', '-y']),
+  };
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+  let remaining = [...args];
 
-    if (arg === '--base-url' && args[i + 1]) {
-      result.baseUrl = args[++i];
-    } else if (arg === '--api-key' && args[i + 1]) {
-      result.apiKey = args[++i];
-    } else if (arg === '--model' && args[i + 1]) {
-      result.model = args[++i];
-    } else if (arg === '--preset' && args[i + 1]) {
-      result.preset = args[++i];
-    } else if (arg === '--force') {
-      result.force = true;
-    } else if (arg === '--yes' || arg === '-y') {
-      result.yes = true;
-    } else if (!arg.startsWith('-') && !result.name) {
-      result.name = arg;
-    }
-  }
+  const baseUrl = extractOption(remaining, ['--base-url']);
+  if (baseUrl.value) result.baseUrl = baseUrl.value;
+  remaining = baseUrl.remainingArgs;
 
+  const apiKey = extractOption(remaining, ['--api-key']);
+  if (apiKey.value) result.apiKey = apiKey.value;
+  remaining = apiKey.remainingArgs;
+
+  const model = extractOption(remaining, ['--model']);
+  if (model.value) result.model = model.value;
+  remaining = model.remainingArgs;
+
+  const preset = extractOption(remaining, ['--preset']);
+  if (preset.value) result.preset = preset.value;
+  remaining = preset.remainingArgs;
+
+  result.name = remaining.find((arg) => !arg.startsWith('-'));
   return result;
 }
 

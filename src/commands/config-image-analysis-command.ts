@@ -12,6 +12,8 @@ import {
   loadOrCreateUnifiedConfig,
 } from '../config/unified-config-loader';
 import { DEFAULT_IMAGE_ANALYSIS_CONFIG } from '../config/unified-config-types';
+import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
+import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface ImageAnalysisCommandOptions {
   enable?: boolean;
@@ -22,29 +24,28 @@ interface ImageAnalysisCommandOptions {
 }
 
 function parseArgs(args: string[]): ImageAnalysisCommandOptions {
-  const options: ImageAnalysisCommandOptions = {};
+  const options: ImageAnalysisCommandOptions = {
+    enable: hasAnyFlag(args, ['--enable']),
+    disable: hasAnyFlag(args, ['--disable']),
+    help: hasAnyFlag(args, ['--help', '-h']),
+  };
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+  const timeoutOption = extractOption(args, ['--timeout']);
+  if (timeoutOption.found) {
+    const timeout = parseInt(timeoutOption.value || '', 10);
+    if (isNaN(timeout) || timeout < 10 || timeout > 600) {
+      console.error(fail('Timeout must be between 10 and 600 seconds'));
+      process.exit(1);
+    }
+    options.timeout = timeout;
+  }
 
-    if (arg === '--enable') {
-      options.enable = true;
-    } else if (arg === '--disable') {
-      options.disable = true;
-    } else if (arg === '--timeout' && args[i + 1]) {
-      const timeout = parseInt(args[++i], 10);
-      if (isNaN(timeout) || timeout < 10 || timeout > 600) {
-        console.error(fail('Timeout must be between 10 and 600 seconds'));
-        process.exit(1);
-      }
-      options.timeout = timeout;
-    } else if (arg === '--set-model' && args[i + 1] && args[i + 2]) {
-      options.setModel = {
-        provider: args[++i],
-        model: args[++i],
-      };
-    } else if (arg === '--help' || arg === '-h') {
-      options.help = true;
+  const setModelIdx = args.indexOf('--set-model');
+  if (setModelIdx !== -1) {
+    const provider = args[setModelIdx + 1];
+    const model = args[setModelIdx + 2];
+    if (provider && model && !provider.startsWith('-') && !model.startsWith('-')) {
+      options.setModel = { provider, model };
     }
   }
 
@@ -186,8 +187,10 @@ export async function handleConfigImageAnalysisCommand(args: string[]): Promise<
   }
 
   if (options.setModel) {
-    const validProviders = ['agy', 'gemini', 'codex', 'kiro', 'ghcp', 'claude', 'qwen', 'iflow'];
-    if (!validProviders.includes(options.setModel.provider)) {
+    const validProviders = [...CLIPROXY_PROVIDER_IDS];
+    if (
+      !validProviders.includes(options.setModel.provider as (typeof CLIPROXY_PROVIDER_IDS)[number])
+    ) {
       console.error(fail(`Invalid provider: ${options.setModel.provider}`));
       console.error(info(`Valid providers: ${validProviders.join(', ')}`));
       process.exit(1);

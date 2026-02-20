@@ -14,7 +14,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
-import * as os from 'os';
+import { getClaudeConfigDir } from '../utils/claude-config-path';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -176,8 +176,7 @@ export async function parseProjectDirectory(projectDir: string): Promise<RawUsag
  * Get default Claude projects directory
  */
 export function getDefaultProjectsDir(): string {
-  const configDir = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-  return path.join(configDir, 'projects');
+  return path.join(getClaudeConfigDir(), 'projects');
 }
 
 /**

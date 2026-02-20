@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir, getConfigPath, loadConfigSafe, loadSettings } from '../../utils/config-manager';
 import { expandPath } from '../../utils/helpers';
+import { getClaudeSettingsPath } from '../../utils/claude-config-path';
 import type { Config, Settings } from '../../types/config';
 
 /** Model mapping for API profiles */
@@ -168,7 +169,7 @@ export function validateFilePath(filePath: string): {
   const expandedPath = expandPath(filePath);
   const normalizedPath = path.normalize(expandedPath);
   const ccsDir = getCcsDir();
-  const claudeSettingsPath = expandPath('~/.claude/settings.json');
+  const claudeSettingsPath = path.normalize(getClaudeSettingsPath());
 
   // Check if path is within ~/.ccs/
   if (normalizedPath.startsWith(ccsDir)) {
