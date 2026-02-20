@@ -36,9 +36,12 @@ export { pickOpenRouterModel, type OpenRouterSelection } from './openrouter-pick
 // Provider presets for CLI
 export {
   PROVIDER_PRESETS,
+  PRESET_ALIASES,
   OPENROUTER_BASE_URL,
   getPresetById,
+  getPresetAliases,
   getPresetIds,
   isValidPresetId,
   type ProviderPreset,
+  type PresetCategory,
 } from './provider-presets';

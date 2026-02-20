@@ -17,6 +17,10 @@ import {
 import { Button } from '@/components/ui/button';
 import { ExternalLink, Copy, Check, Loader2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  getDeviceCodeProviderDisplayName,
+  getDeviceCodeProviderInstruction,
+} from '@/lib/provider-config';
 
 interface DeviceCodeDialogProps {
   open: boolean;
@@ -27,18 +31,6 @@ interface DeviceCodeDialogProps {
   verificationUrl: string;
   expiresAt: number;
 }
-
-/** Provider display names */
-const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
-  ghcp: 'GitHub Copilot',
-  qwen: 'Qwen Code',
-};
-
-/** Provider specific instructions */
-const PROVIDER_INSTRUCTIONS: Record<string, string> = {
-  ghcp: 'Sign in with your GitHub account that has Copilot access.',
-  qwen: 'Sign in with your Qwen account to authorize access.',
-};
 
 export function DeviceCodeDialog({
   open,
@@ -91,9 +83,12 @@ export function DeviceCodeDialog({
     window.open(verificationUrl, '_blank', 'noopener,noreferrer');
   }, [verificationUrl]);
 
-  const providerDisplay = PROVIDER_DISPLAY_NAMES[provider] || provider;
-  const instructions =
-    PROVIDER_INSTRUCTIONS[provider] || 'Complete the authorization in your browser.';
+  const providerDisplay = getDeviceCodeProviderDisplayName(provider);
+  const instructions = getDeviceCodeProviderInstruction(provider);
+  const openActionLabel =
+    providerDisplay === 'Unknown provider'
+      ? 'Open verification page'
+      : `Open ${providerDisplay.split(' ')[0]}`;
 
   // Format remaining time
   const formatTime = (seconds: number): string => {
@@ -155,7 +150,7 @@ export function DeviceCodeDialog({
           <div className="flex flex-col gap-3">
             <Button onClick={handleOpenUrl} className="w-full">
               <ExternalLink className="w-4 h-4 mr-2" />
-              Open {providerDisplay.split(' ')[0]}
+              {openActionLabel}
             </Button>
             <Button variant="outline" onClick={handleCopyCode} className="w-full">
               {hasCopied ? (

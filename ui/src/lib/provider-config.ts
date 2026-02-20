@@ -30,6 +30,10 @@ export function isValidProvider(provider: string): provider is CLIProxyProvider 
   return CLIPROXY_PROVIDERS.includes(provider as CLIProxyProvider);
 }
 
+function normalizeProviderInput(provider: unknown): string {
+  return typeof provider === 'string' ? provider.trim().toLowerCase() : '';
+}
+
 interface ProviderMetadata {
   displayName: string;
   description: string;
@@ -75,7 +79,7 @@ export const PROVIDER_METADATA: Record<CLIProxyProvider, ProviderMetadata> = {
 };
 
 // Map provider names to asset filenames (only providers with actual logos)
-export const PROVIDER_ASSETS: Record<string, string> = {
+export const PROVIDER_ASSETS: Record<CLIProxyProvider, string> = {
   gemini: '/assets/providers/gemini-color.svg',
   agy: '/assets/providers/agy.png',
   codex: '/assets/providers/openai.svg',
@@ -86,6 +90,56 @@ export const PROVIDER_ASSETS: Record<string, string> = {
   claude: '/assets/providers/claude.svg',
   kimi: '/assets/providers/kimi.svg',
 };
+
+interface ProviderFallbackVisual {
+  textClass: string;
+  letter: string;
+}
+
+const DEFAULT_PROVIDER_FALLBACK_VISUAL: ProviderFallbackVisual = {
+  textClass: 'text-gray-600',
+  letter: '?',
+};
+
+/** Fallback visual style when a provider logo asset is unavailable. */
+export const PROVIDER_FALLBACK_VISUALS: Record<CLIProxyProvider, ProviderFallbackVisual> = {
+  gemini: { textClass: 'text-blue-600', letter: 'G' },
+  claude: { textClass: 'text-orange-600', letter: 'C' },
+  codex: { textClass: 'text-emerald-600', letter: 'X' },
+  agy: { textClass: 'text-violet-600', letter: 'A' },
+  qwen: { textClass: 'text-cyan-600', letter: 'Q' },
+  iflow: { textClass: 'text-indigo-600', letter: 'i' },
+  kiro: { textClass: 'text-teal-600', letter: 'K' },
+  ghcp: { textClass: 'text-green-600', letter: 'C' },
+  kimi: { textClass: 'text-orange-500', letter: 'K' },
+};
+
+/** Providers whose logo looks better on dark background. */
+export const PROVIDERS_WITH_DARK_LOGO_BG: ReadonlySet<CLIProxyProvider> = new Set(['kimi']);
+
+export function getProviderLogoAsset(provider: unknown): string | undefined {
+  const normalized = normalizeProviderInput(provider);
+  if (!isValidProvider(normalized)) {
+    return undefined;
+  }
+  return PROVIDER_ASSETS[normalized];
+}
+
+export function getProviderFallbackVisual(provider: unknown): ProviderFallbackVisual {
+  const normalized = normalizeProviderInput(provider);
+  if (isValidProvider(normalized)) {
+    return PROVIDER_FALLBACK_VISUALS[normalized];
+  }
+  return {
+    ...DEFAULT_PROVIDER_FALLBACK_VISUAL,
+    letter: normalized[0]?.toUpperCase() || DEFAULT_PROVIDER_FALLBACK_VISUAL.letter,
+  };
+}
+
+export function providerNeedsDarkLogoBackground(provider: unknown): boolean {
+  const normalized = normalizeProviderInput(provider);
+  return isValidProvider(normalized) && PROVIDERS_WITH_DARK_LOGO_BG.has(normalized);
+}
 
 // Provider brand colors
 export const PROVIDER_COLORS: Record<string, string> = {
@@ -110,13 +164,17 @@ const PROVIDER_NAMES: Record<string, string> = {
 };
 
 // Map provider to display name
-export function getProviderDisplayName(provider: string): string {
-  return PROVIDER_NAMES[provider.toLowerCase()] || provider;
+export function getProviderDisplayName(provider: unknown): string {
+  const normalized = normalizeProviderInput(provider);
+  if (!normalized) {
+    return 'Unknown provider';
+  }
+  return PROVIDER_NAMES[normalized] || String(provider);
 }
 
 /** Map provider to user-facing short description */
-export function getProviderDescription(provider: string): string {
-  const normalized = provider.toLowerCase();
+export function getProviderDescription(provider: unknown): string {
+  const normalized = normalizeProviderInput(provider);
   if (!isValidProvider(normalized)) return '';
   return PROVIDER_METADATA[normalized].description;
 }
@@ -127,17 +185,57 @@ export function getProviderDescription(provider: string): string {
  */
 export const DEVICE_CODE_PROVIDERS: CLIProxyProvider[] = ['ghcp', 'kiro', 'qwen', 'kimi'];
 
+const DEVICE_CODE_PROVIDER_DISPLAY_NAMES: Readonly<Partial<Record<CLIProxyProvider, string>>> =
+  Object.freeze({
+    ghcp: 'GitHub Copilot',
+    kiro: 'Kiro (AWS)',
+    qwen: 'Qwen Code',
+  });
+
+const DEVICE_CODE_PROVIDER_INSTRUCTIONS: Readonly<Partial<Record<CLIProxyProvider, string>>> =
+  Object.freeze({
+    ghcp: 'Sign in with your GitHub account that has Copilot access.',
+    qwen: 'Sign in with your Qwen account to authorize access.',
+    kiro: 'Sign in with your selected Kiro auth provider to continue.',
+    kimi: 'Sign in with your Kimi account and finish the device authorization.',
+  });
+
 /** Check if provider uses Device Code flow */
-export function isDeviceCodeProvider(provider: string): boolean {
-  return DEVICE_CODE_PROVIDERS.includes(provider as CLIProxyProvider);
+export function isDeviceCodeProvider(provider: unknown): boolean {
+  const normalized = normalizeProviderInput(provider);
+  return isValidProvider(normalized) && DEVICE_CODE_PROVIDERS.includes(normalized);
+}
+
+/** Provider display name tuned for device-code UX copy. */
+export function getDeviceCodeProviderDisplayName(provider: unknown): string {
+  const normalized = normalizeProviderInput(provider);
+  if (!normalized) {
+    return 'Unknown provider';
+  }
+  if (isValidProvider(normalized)) {
+    return DEVICE_CODE_PROVIDER_DISPLAY_NAMES[normalized] || getProviderDisplayName(normalized);
+  }
+  return String(provider);
+}
+
+/** Provider-specific helper text for device-code dialog. */
+export function getDeviceCodeProviderInstruction(provider: unknown): string {
+  const normalized = normalizeProviderInput(provider);
+  if (isValidProvider(normalized)) {
+    return (
+      DEVICE_CODE_PROVIDER_INSTRUCTIONS[normalized] || 'Complete the authorization in your browser.'
+    );
+  }
+  return 'Complete the authorization in your browser.';
 }
 
 /** Providers that require nickname because token payload may not include email. */
 export const NICKNAME_REQUIRED_PROVIDERS: CLIProxyProvider[] = ['ghcp', 'kiro'];
 
 /** Check if provider requires user-supplied nickname in auth flow */
-export function isNicknameRequiredProvider(provider: string): boolean {
-  return NICKNAME_REQUIRED_PROVIDERS.includes(provider as CLIProxyProvider);
+export function isNicknameRequiredProvider(provider: unknown): boolean {
+  const normalized = normalizeProviderInput(provider);
+  return isValidProvider(normalized) && NICKNAME_REQUIRED_PROVIDERS.includes(normalized);
 }
 
 /** Kiro auth methods exposed in CCS UI (aligned with CLIProxyAPIPlus support). */
