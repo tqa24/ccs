@@ -429,6 +429,15 @@ if (needsShell) {
 
 This pattern is used in both `ClaudeAdapter` and `DroidAdapter` to ensure cross-platform consistency.
 
+For all Claude child-process launches (delegation, adapters, proxies, helper spawners), sanitize env before spawn:
+
+```typescript
+const cleanEnv = stripClaudeCodeEnv(mergedEnv); // case-insensitive remove of CLAUDECODE
+spawn(binaryPath, args, { env: cleanEnv, stdio: 'inherit' });
+```
+
+This prevents Claude Code nested-session guard failures when CCS runs inside parent Claude sessions.
+
 ---
 
 ## React Component Standards (UI)

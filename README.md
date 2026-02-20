@@ -193,6 +193,8 @@ Detailed guide: [`docs/cursor-integration.md`](./docs/cursor-integration.md)
 
 Run multiple terminals with different providers:
 
+> Delegation compatibility: when CCS spawns child Claude sessions, it strips the `CLAUDECODE` guard variable to avoid nested-session blocking in Claude Code v2.1.39+.
+
 ```bash
 # Terminal 1: Planning (Claude Pro)
 ccs work "design the authentication system"
@@ -282,6 +284,8 @@ If Claude CLI is installed in a non-standard location:
 export CCS_CLAUDE_PATH="/path/to/claude"              # Unix
 $env:CCS_CLAUDE_PATH = "D:\Tools\Claude\claude.exe"   # Windows
 ```
+
+CCS sanitizes child Claude spawn environments by stripping `CLAUDECODE` (case-insensitive) to prevent nested-session guard failures during delegation. `CCS_CLAUDE_PATH` is still respected after this sanitization step.
 
 </details>
 
