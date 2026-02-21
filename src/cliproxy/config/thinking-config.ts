@@ -8,6 +8,7 @@ import { ThinkingConfig, DEFAULT_THINKING_TIER_DEFAULTS } from '../../config/uni
 import { getThinkingConfig } from '../../config/unified-config-loader';
 import { supportsThinking } from '../model-catalog';
 import { isThinkingOffValue, validateThinking } from '../thinking-validator';
+import { normalizeModelIdForProvider } from '../model-id-normalizer';
 import { warn } from '../../utils/ui';
 
 /** Model tier types for thinking budget defaults */
@@ -19,22 +20,23 @@ export type ModelTier = 'opus' | 'sonnet' | 'haiku';
  */
 function normalizeModelForThinkingLookup(model: string, provider: CLIProxyProvider): string {
   const withoutExtendedContext = model.replace(/\[1m\]$/i, '').trim();
+  const providerNormalized = normalizeModelIdForProvider(withoutExtendedContext, provider);
 
-  if (provider !== 'codex') return withoutExtendedContext;
+  if (provider !== 'codex') return providerNormalized;
 
   // New codex suffix form: gpt-5.3-codex-high -> gpt-5.3-codex
-  const codexSuffixMatch = withoutExtendedContext.match(/^(.*)-(xhigh|high|medium)$/i);
+  const codexSuffixMatch = providerNormalized.match(/^(.*)-(xhigh|high|medium)$/i);
   if (codexSuffixMatch?.[1]) {
     return codexSuffixMatch[1].trim();
   }
 
   // Legacy codex suffix form: gpt-5.3-codex(high) -> gpt-5.3-codex
-  const codexLegacyMatch = withoutExtendedContext.match(/^(.*)\((xhigh|high|medium)\)$/i);
+  const codexLegacyMatch = providerNormalized.match(/^(.*)\((xhigh|high|medium)\)$/i);
   if (codexLegacyMatch?.[1]) {
     return codexLegacyMatch[1].trim();
   }
 
-  return withoutExtendedContext;
+  return providerNormalized;
 }
 
 /**
