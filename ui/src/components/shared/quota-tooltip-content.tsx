@@ -13,6 +13,7 @@ import {
   getModelsWithTiers,
   groupModelsByTier,
   isAgyQuotaResult,
+  isClaudeQuotaResult,
   isCodexQuotaResult,
   isGeminiQuotaResult,
   isGhcpQuotaResult,
@@ -33,6 +34,27 @@ function formatPlanLabel(planType: string | null | undefined): string | null {
     .filter((part) => part.length > 0)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
   return normalized.length > 0 ? normalized.join(' ') : planType;
+}
+
+function getClaudeWindowDisplayLabel(rateLimitType: string, fallback: string): string {
+  switch (rateLimitType) {
+    case 'five_hour':
+      return '5h usage limit';
+    case 'seven_day':
+      return 'Weekly usage limit';
+    case 'seven_day_opus':
+      return 'Weekly usage (Opus)';
+    case 'seven_day_sonnet':
+      return 'Weekly usage (Sonnet)';
+    case 'seven_day_oauth_apps':
+      return 'Weekly usage (OAuth apps)';
+    case 'seven_day_cowork':
+      return 'Weekly usage (Cowork)';
+    case 'overage':
+      return 'Extra usage';
+    default:
+      return fallback;
+  }
 }
 
 /**
@@ -104,6 +126,74 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
               {getCodexWindowDisplayLabel(w, orderedWindows)}
             </span>
             <span className="font-mono">{w.remainingPercent}%</span>
+          </div>
+        ))}
+        <CodexResetIndicators
+          fiveHourResetTime={fiveHourResetAt}
+          weeklyResetTime={weeklyResetAt}
+          fallbackResetTime={resetTime}
+        />
+      </div>
+    );
+  }
+
+  // Claude provider tooltip
+  if (isClaudeQuotaResult(quota)) {
+    const coreWindows = [quota.coreUsage?.fiveHour, quota.coreUsage?.weekly]
+      .filter((window): window is NonNullable<typeof window> => !!window)
+      .map((window) => ({
+        rateLimitType: window.rateLimitType,
+        label: window.label,
+        remainingPercent: window.remainingPercent,
+        resetAt: window.resetAt,
+        status: window.status,
+      }));
+    const policyWindows = quota.windows.map((window) => ({
+      rateLimitType: window.rateLimitType,
+      label: window.label,
+      remainingPercent: window.remainingPercent,
+      resetAt: window.resetAt,
+      status: window.status,
+    }));
+    const orderedWindows = [...coreWindows, ...policyWindows].filter(
+      (window, index, arr) =>
+        arr.findIndex(
+          (candidate) =>
+            candidate.rateLimitType === window.rateLimitType &&
+            candidate.resetAt === window.resetAt &&
+            candidate.status === window.status
+        ) === index
+    );
+
+    const fiveHourResetAt =
+      quota.coreUsage?.fiveHour?.resetAt ??
+      quota.windows.find((window) => window.rateLimitType === 'five_hour')?.resetAt ??
+      null;
+    const weeklyResetAt =
+      quota.coreUsage?.weekly?.resetAt ??
+      quota.windows.find((window) =>
+        [
+          'seven_day',
+          'seven_day_opus',
+          'seven_day_sonnet',
+          'seven_day_oauth_apps',
+          'seven_day_cowork',
+        ].includes(window.rateLimitType)
+      )?.resetAt ??
+      null;
+
+    return (
+      <div className="text-xs space-y-1">
+        <p className="font-medium">Rate Limits:</p>
+        {orderedWindows.map((window, index) => (
+          <div
+            key={`${window.rateLimitType}-${window.resetAt ?? 'no-reset'}-${window.status}-${index}`}
+            className="flex justify-between gap-4"
+          >
+            <span className={cn(window.remainingPercent < 20 && 'text-red-500')}>
+              {getClaudeWindowDisplayLabel(window.rateLimitType, window.label)}
+            </span>
+            <span className="font-mono">{window.remainingPercent}%</span>
           </div>
         ))}
         <CodexResetIndicators

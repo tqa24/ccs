@@ -249,14 +249,14 @@ ccs sync
 
 Re-creates symlinks for shared commands, skills, and settings.
 
-### Antigravity Quota Management
+### Quota Management
 
 ```bash
 ccs cliproxy doctor     # Check quota status for all agy accounts
-ccs cliproxy quota      # Show agy/codex/gemini quotas (Codex: 5h + weekly reset schedule)
+ccs cliproxy quota      # Show agy/claude/codex/gemini/ghcp quotas (Claude/Codex: 5h + weekly reset schedule)
 ```
 
-**Auto-Failover**: When an Antigravity account runs out of quota, CCS automatically switches to another account with remaining capacity. Shared GCP project accounts are excluded (pooled quota).
+**Auto-Failover**: When a managed account runs out of quota, CCS automatically switches to another account with remaining capacity. Shared GCP project accounts are excluded (pooled quota).
 
 ### CLIProxy Lifecycle
 

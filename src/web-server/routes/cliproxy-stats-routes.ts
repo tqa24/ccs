@@ -14,11 +14,13 @@ import {
 } from '../../cliproxy/stats-fetcher';
 import { fetchAccountQuota } from '../../cliproxy/quota-fetcher';
 import { fetchCodexQuota } from '../../cliproxy/quota-fetcher-codex';
+import { fetchClaudeQuota } from '../../cliproxy/quota-fetcher-claude';
 import { fetchGeminiCliQuota } from '../../cliproxy/quota-fetcher-gemini-cli';
 import { fetchGhcpQuota } from '../../cliproxy/quota-fetcher-ghcp';
 import { getCachedQuota, setCachedQuota } from '../../cliproxy/quota-response-cache';
 import type {
   CodexQuotaResult,
+  ClaudeQuotaResult,
   GeminiCliQuotaResult,
   GhcpQuotaResult,
 } from '../../cliproxy/quota-types';
@@ -70,6 +72,20 @@ function shouldCacheCodexQuotaResult(result: CodexQuotaResult): boolean {
 }
 
 function shouldCacheGeminiQuotaResult(result: GeminiCliQuotaResult): boolean {
+  if (result.success) return true;
+  if (result.needsReauth) return true;
+
+  const msg = (result.error || '').toLowerCase();
+  if (!msg) return false;
+  if (msg.includes('timeout')) return false;
+  if (msg.includes('rate limited')) return false;
+  if (msg.includes('api error: 5')) return false;
+  if (msg.includes('fetch failed')) return false;
+
+  return false;
+}
+
+function shouldCacheClaudeQuotaResult(result: ClaudeQuotaResult): boolean {
   if (result.success) return true;
   if (result.needsReauth) return true;
 
@@ -159,7 +175,7 @@ const handleStatsRequest = async (_req: Request, res: Response): Promise<void> =
     if (!running) {
       res.status(503).json({
         error: 'CLIProxy Plus not running',
-        message: 'Start a CLIProxy session (gemini, codex, agy, ghcp) to collect stats',
+        message: 'Start a CLIProxy session (gemini, codex, claude, agy, ghcp) to collect stats',
       });
       return;
     }
@@ -292,7 +308,7 @@ router.get('/models', async (_req: Request, res: Response): Promise<void> => {
     if (!running) {
       res.status(503).json({
         error: 'CLIProxy Plus not running',
-        message: 'Start a CLIProxy session (gemini, codex, agy) to fetch available models',
+        message: 'Start a CLIProxy session (gemini, codex, claude, agy) to fetch available models',
       });
       return;
     }
@@ -611,6 +627,47 @@ router.get('/quota/codex/:accountId', async (req: Request, res: Response): Promi
 });
 
 /**
+ * GET /api/cliproxy/quota/claude/:accountId - Get Claude quota for a specific account
+ * Returns: ClaudeQuotaResult with policy windows (5h + weekly)
+ * Caching: 2 minute TTL to reduce Anthropic API calls
+ */
+router.get('/quota/claude/:accountId', async (req: Request, res: Response): Promise<void> => {
+  const { accountId } = req.params;
+
+  // Validate accountId - prevent path traversal
+  if (
+    !accountId ||
+    accountId.includes('..') ||
+    accountId.includes('/') ||
+    accountId.includes('\\')
+  ) {
+    res.status(400).json({ error: 'Invalid account ID' });
+    return;
+  }
+
+  try {
+    // Check cache first
+    const cached = getCachedQuota<ClaudeQuotaResult>('claude', accountId);
+    if (cached) {
+      res.json({ ...cached, cached: true });
+      return;
+    }
+
+    // Fetch from external API
+    const result = await fetchClaudeQuota(accountId);
+
+    // Cache successful and stable failure states; skip transient network failures.
+    if (shouldCacheClaudeQuotaResult(result)) {
+      setCachedQuota('claude', accountId, result);
+    }
+
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
  * GET /api/cliproxy/quota/gemini/:accountId - Get Gemini quota for a specific account
  * Returns: GeminiCliQuotaResult with quota buckets
  * Caching: 2 minute TTL to reduce Google Cloud API calls
@@ -695,7 +752,7 @@ router.get('/quota/ghcp/:accountId', async (req: Request, res: Response): Promis
 /**
  * GET /api/cliproxy/quota/:provider/:accountId - Get quota for a specific account (generic)
  * Returns: QuotaResult with model quotas and reset times
- * NOTE: This generic route MUST come after specific routes (codex, gemini, ghcp)
+ * NOTE: This generic route MUST come after specific routes (codex, claude, gemini, ghcp)
  * Caching: 2 minute TTL to reduce external API calls
  */
 router.get('/quota/:provider/:accountId', async (req: Request, res: Response): Promise<void> => {

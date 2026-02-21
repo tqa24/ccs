@@ -1,0 +1,257 @@
+/**
+ * Claude Quota Fetcher Unit Tests
+ *
+ * Covers policy limits parsing and auth/token edge cases.
+ */
+
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import {
+  buildClaudeQuotaWindows,
+  buildClaudeCoreUsageSummary,
+  fetchClaudeQuota,
+  fetchAllClaudeQuotas,
+} from '../../../src/cliproxy/quota-fetcher-claude';
+import { sanitizeEmail } from '../../../src/cliproxy/auth-utils';
+
+let tmpDir: string;
+let originalCcsHome: string | undefined;
+let originalFetch: typeof fetch;
+
+function createClaudeAccount(
+  accountId: string,
+  tokenPayload: Record<string, unknown>,
+  tokenPrefix: 'claude' | 'anthropic' = 'claude'
+): void {
+  const cliproxyDir = path.join(tmpDir, '.ccs', 'cliproxy');
+  const authDir = path.join(cliproxyDir, 'auth');
+  const sanitized = sanitizeEmail(accountId);
+  const tokenFile = `${tokenPrefix}-${sanitized}.json`;
+
+  fs.mkdirSync(authDir, { recursive: true });
+  fs.writeFileSync(path.join(authDir, tokenFile), JSON.stringify(tokenPayload, null, 2));
+  fs.writeFileSync(
+    path.join(cliproxyDir, 'accounts.json'),
+    JSON.stringify(
+      {
+        version: 1,
+        providers: {
+          claude: {
+            default: accountId,
+            accounts: {
+              [accountId]: {
+                email: accountId,
+                tokenFile,
+                createdAt: '2026-02-20T00:00:00.000Z',
+                lastUsedAt: '2026-02-20T00:00:00.000Z',
+              },
+            },
+          },
+        },
+      },
+      null,
+      2
+    )
+  );
+}
+
+beforeEach(() => {
+  tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-claude-quota-test-'));
+  originalCcsHome = process.env.CCS_HOME;
+  process.env.CCS_HOME = tmpDir;
+  originalFetch = global.fetch;
+});
+
+afterEach(() => {
+  global.fetch = originalFetch;
+  if (originalCcsHome !== undefined) {
+    process.env.CCS_HOME = originalCcsHome;
+  } else {
+    delete process.env.CCS_HOME;
+  }
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe('Claude Quota Fetcher', () => {
+  describe('buildClaudeQuotaWindows', () => {
+    it('parses restrictions array payload', () => {
+      const windows = buildClaudeQuotaWindows({
+        restrictions: [
+          {
+            rateLimitType: 'five_hour',
+            utilization: 0.4,
+            resetsAt: '2026-02-28T10:00:00Z',
+            status: 'allowed',
+          },
+          {
+            rateLimitType: 'seven_day',
+            utilization: 0.8,
+            resetsAt: '2026-03-06T10:00:00Z',
+            status: 'allowed_warning',
+          },
+        ],
+      });
+
+      expect(windows).toHaveLength(2);
+      expect(windows[0].rateLimitType).toBe('five_hour');
+      expect(windows[0].remainingPercent).toBe(60);
+      expect(windows[1].rateLimitType).toBe('seven_day');
+      expect(windows[1].remainingPercent).toBe(20);
+    });
+
+    it('parses object-map restrictions payload', () => {
+      const windows = buildClaudeQuotaWindows({
+        restrictions: {
+          five_hour: {
+            utilization: 0.25,
+            resetsAt: '2026-02-28T10:00:00Z',
+            status: 'allowed',
+          },
+          seven_day_opus: {
+            utilization: 0.9,
+            resetsAt: '2026-03-06T10:00:00Z',
+            status: 'allowed_warning',
+          },
+        },
+      });
+
+      expect(windows.map((window) => window.rateLimitType)).toEqual(
+        expect.arrayContaining(['five_hour', 'seven_day_opus'])
+      );
+    });
+  });
+
+  describe('buildClaudeCoreUsageSummary', () => {
+    it('selects most restrictive weekly window', () => {
+      const summary = buildClaudeCoreUsageSummary([
+        {
+          rateLimitType: 'five_hour',
+          label: 'Session limit',
+          status: 'allowed',
+          utilization: 0.35,
+          usedPercent: 35,
+          remainingPercent: 65,
+          resetAt: '2026-02-28T10:00:00Z',
+        },
+        {
+          rateLimitType: 'seven_day',
+          label: 'Weekly limit',
+          status: 'allowed',
+          utilization: 0.45,
+          usedPercent: 45,
+          remainingPercent: 55,
+          resetAt: '2026-03-06T10:00:00Z',
+        },
+        {
+          rateLimitType: 'seven_day_opus',
+          label: 'Opus limit',
+          status: 'allowed_warning',
+          utilization: 0.85,
+          usedPercent: 85,
+          remainingPercent: 15,
+          resetAt: '2026-03-06T12:00:00Z',
+        },
+      ]);
+
+      expect(summary.fiveHour?.rateLimitType).toBe('five_hour');
+      expect(summary.weekly?.rateLimitType).toBe('seven_day_opus');
+      expect(summary.weekly?.remainingPercent).toBe(15);
+    });
+  });
+
+  describe('fetchClaudeQuota', () => {
+    it('fetches and normalizes policy limits response', async () => {
+      createClaudeAccount('claude-main@example.com', {
+        access_token: 'claude-token',
+        expired: '2099-01-01T00:00:00.000Z',
+        type: 'claude',
+      });
+
+      global.fetch = mock((url: string, options?: RequestInit) => {
+        expect(url).toBe('https://api.anthropic.com/api/claude_code/policy_limits');
+        expect(options?.method).toBe('GET');
+        expect(options?.headers).toMatchObject({
+          Authorization: 'Bearer claude-token',
+          Accept: 'application/json',
+        });
+
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              restrictions: [
+                {
+                  rateLimitType: 'five_hour',
+                  utilization: 0.5,
+                  resetsAt: '2026-03-01T01:00:00Z',
+                  status: 'allowed',
+                },
+                {
+                  rateLimitType: 'seven_day',
+                  utilization: 0.75,
+                  resetsAt: '2026-03-07T01:00:00Z',
+                  status: 'allowed_warning',
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          )
+        );
+      }) as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-main@example.com');
+
+      expect(result.success).toBe(true);
+      expect(result.accountId).toBe('claude-main@example.com');
+      expect(result.windows).toHaveLength(2);
+      expect(result.coreUsage?.fiveHour?.remainingPercent).toBe(50);
+      expect(result.coreUsage?.weekly?.remainingPercent).toBe(25);
+
+      const all = await fetchAllClaudeQuotas();
+      expect(all).toHaveLength(1);
+      expect(all[0].account).toBe('claude-main@example.com');
+      expect(all[0].quota.success).toBe(true);
+    });
+
+    it('returns needsReauth on 401 responses', async () => {
+      createClaudeAccount(
+        'claude-auth@example.com',
+        {
+          access_token: 'expired-token',
+          expired: '2099-01-01T00:00:00.000Z',
+          type: 'anthropic',
+        },
+        'anthropic'
+      );
+
+      global.fetch = mock(() => Promise.resolve(new Response('', { status: 401 }))) as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-auth@example.com');
+
+      expect(result.success).toBe(false);
+      expect(result.needsReauth).toBe(true);
+      expect(result.error).toContain('Authentication');
+    });
+
+    it('fails fast when auth file has no token', async () => {
+      createClaudeAccount('claude-missing@example.com', {
+        access_token: '   ',
+        expired: '2099-01-01T00:00:00.000Z',
+        type: 'claude',
+      });
+
+      const fetchMock = mock(() => Promise.resolve(new Response('', { status: 200 })));
+      global.fetch = fetchMock as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-missing@example.com');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Auth file not found');
+      expect(fetchMock).toHaveBeenCalledTimes(0);
+    });
+  });
+});

@@ -610,12 +610,15 @@ export async function execClaudeWithCLIProxy(
     }
   }
 
-  // 3b. Preflight quota check (Antigravity only)
+  // 3b. Preflight quota check (providers with quota-based rotation)
   if (!skipLocalAuth) {
-    // Multi-tier quota check for composite variants (check if ANY tier uses 'agy')
+    // Multi-tier quota check for composite variants (check if any tier uses a managed provider)
     if (compositeProviders.length > 0) {
-      if (compositeProviders.includes('agy')) {
-        await handleQuotaCheck('agy');
+      const managedQuotaProviders = ['agy', 'claude'] as const;
+      for (const managedProvider of managedQuotaProviders) {
+        if (compositeProviders.includes(managedProvider)) {
+          await handleQuotaCheck(managedProvider);
+        }
       }
     } else {
       await handleQuotaCheck(provider);

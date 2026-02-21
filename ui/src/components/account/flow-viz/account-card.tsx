@@ -8,6 +8,7 @@ import {
   getCodexQuotaBreakdown,
   getProviderMinQuota,
   getProviderResetTime,
+  isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
@@ -90,7 +91,7 @@ export function AccountCard({
   const borderColor = getBorderColorStyle(zone, account.color);
   const connectorPosition = CONNECTOR_POSITION_MAP[zone];
 
-  // Quota for CLIProxy accounts (agy, codex, gemini)
+  // Quota for CLIProxy accounts (agy, codex, claude, gemini, ghcp)
   const isCliproxyProvider = QUOTA_SUPPORTED_PROVIDERS.includes(
     account.provider as QuotaSupportedProvider
   );
@@ -111,6 +112,40 @@ export function AccountCard({
     { label: '5h', value: codexBreakdown?.fiveHourWindow?.remainingPercent ?? null },
     { label: 'Wk', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
   ].filter((row): row is { label: string; value: number } => row.value !== null);
+  const claudeQuotaRows =
+    account.provider === 'claude' && quota && isClaudeQuotaResult(quota)
+      ? [
+          {
+            label: '5h',
+            value:
+              quota.coreUsage?.fiveHour?.remainingPercent ??
+              quota.windows.find((window) => window.rateLimitType === 'five_hour')
+                ?.remainingPercent ??
+              null,
+          },
+          {
+            label: 'Wk',
+            value:
+              quota.coreUsage?.weekly?.remainingPercent ??
+              quota.windows.find((window) =>
+                [
+                  'seven_day',
+                  'seven_day_opus',
+                  'seven_day_sonnet',
+                  'seven_day_oauth_apps',
+                  'seven_day_cowork',
+                ].includes(window.rateLimitType)
+              )?.remainingPercent ??
+              null,
+          },
+        ].filter((row): row is { label: string; value: number } => row.value !== null)
+      : [];
+  const compactQuotaRows =
+    account.provider === 'codex'
+      ? codexQuotaRows
+      : account.provider === 'claude'
+        ? claudeQuotaRows
+        : [];
   const minQuotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
 
   // Tier badge (AGY only) - show P for Pro, U for Ultra
@@ -215,7 +250,7 @@ export function AccountCard({
         failure={account.failureCount}
         showDetails={showDetails}
       />
-      {/* Quota bar for CLIProxy accounts (agy, codex, gemini) */}
+      {/* Quota bar for CLIProxy accounts */}
       {isCliproxyProvider && (
         <div className="mt-2 px-0.5">
           {quotaLoading ? (
@@ -245,9 +280,9 @@ export function AccountCard({
                         {minQuotaLabel}%
                       </span>
                     </div>
-                    {account.provider === 'codex' && codexQuotaRows.length > 0 && (
+                    {compactQuotaRows.length > 0 && (
                       <div className="flex items-center justify-between text-[7px] text-muted-foreground/70">
-                        {codexQuotaRows.map((row) => (
+                        {compactQuotaRows.map((row) => (
                           <span key={row.label}>
                             {row.label} {row.value}%
                           </span>

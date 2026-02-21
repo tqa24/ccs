@@ -54,8 +54,8 @@ export async function showHelp(): Promise<void> {
         ['default <account>', 'Set default account for rotation'],
         ['pause <account>', 'Pause account (skip in rotation)'],
         ['resume <account>', 'Resume paused account'],
-        ['quota', 'Show quota status for all providers (Codex includes 5h + weekly reset)'],
-        ['quota --provider <name>', 'Filter by provider (agy|codex|gemini|ghcp)'],
+        ['quota', 'Show quota status for all providers (Codex/Claude include 5h + weekly reset)'],
+        ['quota --provider <name>', 'Filter by provider (agy|codex|claude|gemini|ghcp)'],
       ],
     ],
     [

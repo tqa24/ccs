@@ -77,10 +77,10 @@ export async function handleTokenExpiration(
 }
 
 /**
- * Handle quota check and auto-switching for Antigravity
+ * Handle quota check and auto-switching for providers with quota-based rotation.
  */
 export async function handleQuotaCheck(provider: CLIProxyProvider): Promise<void> {
-  if (provider !== 'agy') return;
+  if (provider !== 'agy' && provider !== 'claude') return;
 
   const { preflightCheck } = await import('../quota-manager');
   const preflight = await preflightCheck(provider);

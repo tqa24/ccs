@@ -36,6 +36,7 @@ import {
   getCodexQuotaBreakdown,
   getProviderMinQuota,
   getProviderResetTime,
+  isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
@@ -130,6 +131,40 @@ export function AccountItem({
     { label: '5h', value: codexBreakdown?.fiveHourWindow?.remainingPercent ?? null },
     { label: 'Weekly', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
   ].filter((row): row is { label: string; value: number } => row.value !== null);
+  const claudeQuotaRows =
+    account.provider === 'claude' && quota && isClaudeQuotaResult(quota)
+      ? [
+          {
+            label: '5h',
+            value:
+              quota.coreUsage?.fiveHour?.remainingPercent ??
+              quota.windows.find((window) => window.rateLimitType === 'five_hour')
+                ?.remainingPercent ??
+              null,
+          },
+          {
+            label: 'Weekly',
+            value:
+              quota.coreUsage?.weekly?.remainingPercent ??
+              quota.windows.find((window) =>
+                [
+                  'seven_day',
+                  'seven_day_opus',
+                  'seven_day_sonnet',
+                  'seven_day_oauth_apps',
+                  'seven_day_cowork',
+                ].includes(window.rateLimitType)
+              )?.remainingPercent ??
+              null,
+          },
+        ].filter((row): row is { label: string; value: number } => row.value !== null)
+      : [];
+  const dualWindowQuotaRows =
+    account.provider === 'codex'
+      ? codexQuotaRows
+      : account.provider === 'claude'
+        ? claudeQuotaRows
+        : [];
   const minQuotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
 
   return (
@@ -353,9 +388,9 @@ export function AccountItem({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    {account.provider === 'codex' && codexQuotaRows.length > 0 ? (
+                    {dualWindowQuotaRows.length > 0 ? (
                       <div className="space-y-1.5">
-                        {codexQuotaRows.map((row) => (
+                        {dualWindowQuotaRows.map((row) => (
                           <div key={row.label} className="flex items-center gap-2">
                             <span className="w-10 text-[10px] text-muted-foreground">
                               {row.label}

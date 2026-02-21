@@ -3,6 +3,7 @@ import { twMerge } from 'tailwind-merge';
 import type {
   CodexQuotaWindow,
   CodexQuotaResult,
+  ClaudeQuotaResult,
   GeminiCliBucket,
   GeminiCliQuotaResult,
   GhcpQuotaResult,
@@ -42,6 +43,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   agy: '#f3722c', // Pumpkin
   gemini: '#277da1', // Cerulean
   codex: '#f8961e', // Carrot
+  claude: '#4d908e', // Dark Cyan
   vertex: '#577590', // Blue Slate
   iflow: '#f94144', // Strawberry
   qwen: '#f9c74f', // Tuscan
@@ -523,6 +525,48 @@ export function getCodexResetTime(windows: CodexQuotaWindow[]): string | null {
 }
 
 /**
+ * Get minimum remaining percentage across Claude policy windows.
+ */
+export function getMinClaudePolicyQuota(quota: ClaudeQuotaResult): number | null {
+  if (!quota.success) return null;
+
+  const coreWindows = [quota.coreUsage?.fiveHour, quota.coreUsage?.weekly].filter(
+    (window): window is NonNullable<typeof window> => !!window
+  );
+  if (coreWindows.length > 0) {
+    return Math.min(...coreWindows.map((window) => window.remainingPercent));
+  }
+
+  const usageWindows = quota.windows.filter((window) => window.rateLimitType !== 'overage');
+  if (usageWindows.length > 0) {
+    return Math.min(...usageWindows.map((window) => window.remainingPercent));
+  }
+
+  return null;
+}
+
+/**
+ * Get earliest reset time from Claude policy windows.
+ */
+export function getClaudePolicyResetTime(quota: ClaudeQuotaResult): string | null {
+  if (!quota.success) return null;
+
+  const coreResets = [quota.coreUsage?.fiveHour?.resetAt, quota.coreUsage?.weekly?.resetAt].filter(
+    (value): value is string => !!value
+  );
+  if (coreResets.length > 0) {
+    return coreResets.sort()[0];
+  }
+
+  const resets = quota.windows
+    .filter((window) => window.rateLimitType !== 'overage')
+    .map((window) => window.resetAt)
+    .filter((value): value is string => value !== null);
+  if (resets.length === 0) return null;
+  return resets.sort()[0];
+}
+
+/**
  * Get minimum remaining percentage across Gemini CLI buckets
  */
 export function getMinGeminiQuota(buckets: GeminiCliBucket[]): number | null {
@@ -570,6 +614,7 @@ export function getGhcpResetTime(quotaResetDate: string | null): string | null {
 export type UnifiedQuotaResult =
   | QuotaResult
   | CodexQuotaResult
+  | ClaudeQuotaResult
   | GeminiCliQuotaResult
   | GhcpQuotaResult;
 
@@ -580,7 +625,18 @@ export function isAgyQuotaResult(quota: UnifiedQuotaResult): quota is QuotaResul
 
 /** Type guard: Check if quota result is from Codex provider */
 export function isCodexQuotaResult(quota: UnifiedQuotaResult): quota is CodexQuotaResult {
-  return 'windows' in quota && Array.isArray((quota as CodexQuotaResult).windows);
+  return (
+    'windows' in quota && 'planType' in quota && Array.isArray((quota as CodexQuotaResult).windows)
+  );
+}
+
+/** Type guard: Check if quota result is from Claude provider */
+export function isClaudeQuotaResult(quota: UnifiedQuotaResult): quota is ClaudeQuotaResult {
+  return (
+    'windows' in quota &&
+    !('planType' in quota) &&
+    Array.isArray((quota as ClaudeQuotaResult).windows)
+  );
 }
 
 /** Type guard: Check if quota result is from Gemini CLI provider */
@@ -626,6 +682,12 @@ export function getProviderMinQuota(
         return getMinCodexQuota(quota.windows);
       }
       return null;
+    case 'claude':
+    case 'anthropic':
+      if (isClaudeQuotaResult(quota)) {
+        return getMinClaudePolicyQuota(quota);
+      }
+      return null;
     case 'gemini':
       if (isGeminiQuotaResult(quota)) {
         return getMinGeminiQuota(quota.buckets);
@@ -661,6 +723,12 @@ export function getProviderResetTime(
     case 'codex':
       if (isCodexQuotaResult(quota)) {
         return getCodexResetTime(quota.windows);
+      }
+      return null;
+    case 'claude':
+    case 'anthropic':
+      if (isClaudeQuotaResult(quota)) {
+        return getClaudePolicyResetTime(quota);
       }
       return null;
     case 'gemini':

@@ -7,6 +7,7 @@ import type {
   ModelQuota,
   QuotaResult,
   CodexQuotaResult,
+  ClaudeQuotaResult,
   GeminiCliQuotaResult,
   GhcpQuotaResult,
 } from '@/lib/api-client';
@@ -203,14 +204,21 @@ export function useCliproxyErrorLogContent(name: string | null) {
 }
 
 // Re-export for consumers
-export type { ModelQuota, QuotaResult, CodexQuotaResult, GeminiCliQuotaResult, GhcpQuotaResult };
+export type {
+  ModelQuota,
+  QuotaResult,
+  CodexQuotaResult,
+  ClaudeQuotaResult,
+  GeminiCliQuotaResult,
+  GhcpQuotaResult,
+};
 
 /** Providers with quota API support */
-export const QUOTA_SUPPORTED_PROVIDERS = ['agy', 'codex', 'gemini', 'ghcp'] as const;
+export const QUOTA_SUPPORTED_PROVIDERS = ['agy', 'codex', 'claude', 'gemini', 'ghcp'] as const;
 export type QuotaSupportedProvider = (typeof QUOTA_SUPPORTED_PROVIDERS)[number];
 
 /**
- * Fetch account quota from API (Antigravity only)
+ * Fetch account quota from generic API route
  */
 async function fetchAccountQuota(provider: string, accountId: string): Promise<QuotaResult> {
   const response = await fetch(`/api/cliproxy/quota/${provider}/${encodeURIComponent(accountId)}`);
@@ -234,6 +242,24 @@ async function fetchCodexQuotaApi(accountId: string): Promise<CodexQuotaResult> 
   const response = await fetch(`/api/cliproxy/quota/codex/${encodeURIComponent(accountId)}`);
   if (!response.ok) {
     let message = 'Failed to fetch Codex quota';
+    try {
+      const error = await response.json();
+      message = error.message || message;
+    } catch {
+      // Use default message if response isn't JSON
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+/**
+ * Fetch Claude quota from API
+ */
+async function fetchClaudeQuotaApi(accountId: string): Promise<ClaudeQuotaResult> {
+  const response = await fetch(`/api/cliproxy/quota/claude/${encodeURIComponent(accountId)}`);
+  if (!response.ok) {
+    let message = 'Failed to fetch Claude quota';
     try {
       const error = await response.json();
       message = error.message || message;
@@ -294,6 +320,8 @@ async function fetchQuotaByProvider(
   switch (provider) {
     case 'codex':
       return fetchCodexQuotaApi(accountId);
+    case 'claude':
+      return fetchClaudeQuotaApi(accountId);
     case 'gemini':
       return fetchGeminiQuotaApi(accountId);
     case 'ghcp':
@@ -305,7 +333,7 @@ async function fetchQuotaByProvider(
 
 /**
  * Hook to get account quota
- * Supports agy, codex, gemini, and ghcp providers
+ * Supports agy, codex, claude, gemini, and ghcp providers
  */
 export function useAccountQuota(provider: string, accountId: string, enabled = true) {
   return useQuery({
