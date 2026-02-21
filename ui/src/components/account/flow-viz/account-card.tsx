@@ -315,7 +315,7 @@ export function AccountCard({
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
-                  {quota && <QuotaTooltipContent quota={quota} resetTime={resetTime} />}
+                  <QuotaTooltipContent quota={quota} resetTime={resetTime} />
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

@@ -22,7 +22,7 @@ import {
 } from '@/lib/utils';
 
 interface QuotaTooltipContentProps {
-  quota: UnifiedQuotaResult;
+  quota: UnifiedQuotaResult | null | undefined;
   resetTime: string | null;
 }
 
@@ -62,7 +62,13 @@ function getClaudeWindowDisplayLabel(rateLimitType: string, fallback: string): s
  * Uses type guards for proper TypeScript narrowing
  */
 export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentProps) {
-  if (!quota?.success) return null;
+  if (!quota) {
+    return <p className="text-xs text-muted-foreground">Loading quota...</p>;
+  }
+
+  if (!quota.success) {
+    return <p className="text-xs text-destructive">{quota.error || 'Failed to load quota'}</p>;
+  }
 
   // Antigravity (agy) provider tooltip
   if (isAgyQuotaResult(quota)) {

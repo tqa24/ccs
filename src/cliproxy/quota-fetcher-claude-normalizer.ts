@@ -7,6 +7,9 @@
 import type { ClaudeCoreUsageSummary, ClaudeQuotaWindow } from './quota-types';
 import { clampPercent } from '../utils/percentage';
 
+// Distinguishes epoch milliseconds from seconds (1e12 ~= 2001-09-09T01:46:40Z).
+const EPOCH_MS_THRESHOLD = 1e12;
+
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
@@ -32,7 +35,7 @@ function asNumber(value: unknown): number | null {
 function normalizeTimestamp(value: unknown): string | null {
   const asNum = asNumber(value);
   if (asNum !== null) {
-    const millis = asNum > 1e12 ? asNum : asNum * 1000;
+    const millis = asNum > EPOCH_MS_THRESHOLD ? asNum : asNum * 1000;
     const date = new Date(millis);
     return isNaN(date.getTime()) ? null : date.toISOString();
   }
@@ -44,7 +47,7 @@ function normalizeTimestamp(value: unknown): string | null {
   if (/^\d+$/.test(str)) {
     const numeric = Number(str);
     if (isFinite(numeric)) {
-      const millis = numeric > 1e12 ? numeric : numeric * 1000;
+      const millis = numeric > EPOCH_MS_THRESHOLD ? numeric : numeric * 1000;
       const date = new Date(millis);
       return isNaN(date.getTime()) ? null : date.toISOString();
     }
@@ -260,6 +263,19 @@ const WEEKLY_RATE_LIMIT_TYPES = new Set([
   'seven_day_cowork',
 ]);
 
+export function isClaudeWeeklyRateLimitType(rateLimitType: string): boolean {
+  return WEEKLY_RATE_LIMIT_TYPES.has(rateLimitType);
+}
+
+export function pickMostRestrictiveClaudeWeeklyWindow(
+  windows: ClaudeQuotaWindow[]
+): ClaudeQuotaWindow | null {
+  const weeklyCandidates = windows.filter((window) =>
+    isClaudeWeeklyRateLimitType(window.rateLimitType)
+  );
+  return pickMostRestrictiveWeekly(weeklyCandidates);
+}
+
 /**
  * Build explicit 5h + weekly usage summary from Claude policy windows.
  */
@@ -269,10 +285,7 @@ export function buildClaudeCoreUsageSummary(windows: ClaudeQuotaWindow[]): Claud
   }
 
   const fiveHourWindow = windows.find((window) => window.rateLimitType === 'five_hour') || null;
-  const weeklyCandidates = windows.filter((window) =>
-    WEEKLY_RATE_LIMIT_TYPES.has(window.rateLimitType)
-  );
-  const weeklyWindow = pickMostRestrictiveWeekly(weeklyCandidates);
+  const weeklyWindow = pickMostRestrictiveClaudeWeeklyWindow(windows);
 
   if (fiveHourWindow && weeklyWindow) {
     return {

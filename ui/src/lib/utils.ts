@@ -618,45 +618,97 @@ export type UnifiedQuotaResult =
   | GeminiCliQuotaResult
   | GhcpQuotaResult;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
 /** Type guard: Check if quota result is from Antigravity (agy) provider */
 export function isAgyQuotaResult(quota: UnifiedQuotaResult): quota is QuotaResult {
-  return 'models' in quota && Array.isArray((quota as QuotaResult).models);
+  if (!isRecord(quota)) return false;
+  const models = (quota as Partial<QuotaResult>).models;
+  return typeof quota.success === 'boolean' && Array.isArray(models);
 }
 
 /** Type guard: Check if quota result is from Codex provider */
 export function isCodexQuotaResult(quota: UnifiedQuotaResult): quota is CodexQuotaResult {
-  return (
-    'windows' in quota && 'planType' in quota && Array.isArray((quota as CodexQuotaResult).windows)
+  if (!isRecord(quota)) return false;
+
+  const candidate = quota as Partial<CodexQuotaResult>;
+  if (typeof candidate.success !== 'boolean') return false;
+  if (!Array.isArray(candidate.windows)) return false;
+  if (!('planType' in candidate)) return false;
+
+  return candidate.windows.every(
+    (window) =>
+      isRecord(window) &&
+      typeof window.label === 'string' &&
+      isFiniteNumber(window.usedPercent) &&
+      isFiniteNumber(window.remainingPercent)
   );
 }
 
 /** Type guard: Check if quota result is from Claude provider */
 export function isClaudeQuotaResult(quota: UnifiedQuotaResult): quota is ClaudeQuotaResult {
-  return (
-    'windows' in quota &&
-    !('planType' in quota) &&
-    Array.isArray((quota as ClaudeQuotaResult).windows)
+  if (!isRecord(quota)) return false;
+
+  const candidate = quota as Partial<ClaudeQuotaResult>;
+  if (typeof candidate.success !== 'boolean') return false;
+  if (!Array.isArray(candidate.windows)) return false;
+  if ('planType' in candidate) return false;
+
+  return candidate.windows.every(
+    (window) =>
+      isRecord(window) &&
+      typeof window.rateLimitType === 'string' &&
+      isFiniteNumber(window.remainingPercent) &&
+      typeof window.status === 'string'
   );
 }
 
 /** Type guard: Check if quota result is from Gemini CLI provider */
 export function isGeminiQuotaResult(quota: UnifiedQuotaResult): quota is GeminiCliQuotaResult {
-  return 'buckets' in quota && Array.isArray((quota as GeminiCliQuotaResult).buckets);
+  if (!isRecord(quota)) return false;
+
+  const candidate = quota as Partial<GeminiCliQuotaResult>;
+  if (typeof candidate.success !== 'boolean') return false;
+  if (!Array.isArray(candidate.buckets)) return false;
+
+  return candidate.buckets.every(
+    (bucket) =>
+      isRecord(bucket) &&
+      typeof bucket.id === 'string' &&
+      isFiniteNumber(bucket.remainingFraction) &&
+      isFiniteNumber(bucket.remainingPercent) &&
+      Array.isArray(bucket.modelIds)
+  );
 }
 
 /** Type guard: Check if quota result is from GitHub Copilot (ghcp) provider */
 export function isGhcpQuotaResult(quota: UnifiedQuotaResult): quota is GhcpQuotaResult {
-  const candidate = quota as GhcpQuotaResult;
-  const snapshots = candidate.snapshots as Record<string, unknown> | null | undefined;
+  if (!isRecord(quota)) return false;
 
-  return (
-    'snapshots' in quota &&
-    typeof snapshots === 'object' &&
-    snapshots !== null &&
-    'premiumInteractions' in snapshots &&
-    'chat' in snapshots &&
-    'completions' in snapshots
-  );
+  const candidate = quota as Partial<GhcpQuotaResult>;
+  const snapshots = candidate.snapshots as Record<string, unknown> | null | undefined;
+  if (typeof candidate.success !== 'boolean') return false;
+  if (!isRecord(snapshots)) return false;
+
+  const snapshotKeys: Array<keyof GhcpQuotaResult['snapshots']> = [
+    'premiumInteractions',
+    'chat',
+    'completions',
+  ];
+  return snapshotKeys.every((key) => {
+    const snapshot = snapshots[key] as Record<string, unknown> | undefined;
+    return (
+      isRecord(snapshot) &&
+      isFiniteNumber(snapshot.percentRemaining) &&
+      isFiniteNumber(snapshot.percentUsed)
+    );
+  });
 }
 
 // ==================== Unified Quota Helpers ====================

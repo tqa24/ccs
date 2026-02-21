@@ -17,7 +17,7 @@ import {
 
 export { buildClaudeQuotaWindows, buildClaudeCoreUsageSummary };
 
-const CLAUDE_POLICY_LIMITS_URL = 'https://api.anthropic.com/api/claude_code/policy_limits';
+export const CLAUDE_POLICY_LIMITS_URL = 'https://api.anthropic.com/api/claude_code/policy_limits';
 const CLAUDE_QUOTA_TIMEOUT_MS = 10000;
 const CLAUDE_QUOTA_MAX_ATTEMPTS = 2;
 const CLAUDE_USER_AGENT = 'ccs-cli/claude-quota';
@@ -61,6 +61,10 @@ function extractExpiry(data: Record<string, unknown>): string | null {
   return null;
 }
 
+function isAuthExpired(expiry: string | null): boolean {
+  return expiry ? isTokenExpired(expiry) : false;
+}
+
 async function readJsonFile(filePath: string): Promise<Record<string, unknown> | null> {
   try {
     const raw = await fsp.readFile(filePath, 'utf-8');
@@ -81,7 +85,7 @@ async function readAuthCandidate(filePath: string): Promise<ClaudeAuthData | nul
   const expiry = extractExpiry(data);
   return {
     accessToken,
-    isExpired: isTokenExpired(expiry ?? undefined),
+    isExpired: isAuthExpired(expiry),
   };
 }
 
@@ -132,7 +136,7 @@ async function readClaudeAuthData(accountId: string): Promise<ClaudeAuthData | n
         const expiry = extractExpiry(data);
         return {
           accessToken,
-          isExpired: isTokenExpired(expiry ?? undefined),
+          isExpired: isAuthExpired(expiry),
         };
       }
     }
@@ -260,7 +264,11 @@ export async function fetchClaudeQuota(
             : 'Unknown error';
 
       if (verbose) {
-        console.error(`[!] Claude policy limits failed (attempt ${attempt}): ${lastError}`);
+        const errorDetails =
+          error instanceof Error ? (error.stack ?? error.message) : JSON.stringify(error);
+        console.error(
+          `[!] Claude policy limits failed (attempt ${attempt}): ${lastError}${errorDetails ? `\n${errorDetails}` : ''}`
+        );
       }
 
       if (attempt >= CLAUDE_QUOTA_MAX_ATTEMPTS) {

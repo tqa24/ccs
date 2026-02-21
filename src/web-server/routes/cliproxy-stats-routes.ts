@@ -54,6 +54,36 @@ import { CLIPROXY_DEFAULT_PORT } from '../../cliproxy/config/port-manager';
 
 const router = Router();
 
+const QUOTA_RATE_LIMIT_WINDOW_MS = 60_000;
+const QUOTA_RATE_LIMIT_MAX_REQUESTS = 120;
+
+interface QuotaRateLimitEntry {
+  windowStart: number;
+  count: number;
+}
+
+const quotaRateLimits = new Map<string, QuotaRateLimitEntry>();
+
+function buildQuotaRateLimitKey(req: Request, provider: string): string {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  return `${clientIp}:${provider}`;
+}
+
+function isQuotaRouteRateLimited(req: Request, provider: string): boolean {
+  const key = buildQuotaRateLimitKey(req, provider);
+  const now = Date.now();
+  const current = quotaRateLimits.get(key);
+
+  if (!current || now - current.windowStart >= QUOTA_RATE_LIMIT_WINDOW_MS) {
+    quotaRateLimits.set(key, { windowStart: now, count: 1 });
+    return false;
+  }
+
+  current.count += 1;
+  quotaRateLimits.set(key, current);
+  return current.count > QUOTA_RATE_LIMIT_MAX_REQUESTS;
+}
+
 /**
  * Cache only stable failures; avoid pinning transient network failures (timeouts, 429s).
  */
@@ -592,6 +622,12 @@ router.put('/models/:provider', async (req: Request, res: Response): Promise<voi
  */
 router.get('/quota/codex/:accountId', async (req: Request, res: Response): Promise<void> => {
   const { accountId } = req.params;
+  if (isQuotaRouteRateLimited(req, 'codex')) {
+    res
+      .status(429)
+      .json({ error: 'Too many quota requests', message: 'Retry after a short delay' });
+    return;
+  }
 
   // Validate accountId - prevent path traversal
   if (
@@ -633,6 +669,12 @@ router.get('/quota/codex/:accountId', async (req: Request, res: Response): Promi
  */
 router.get('/quota/claude/:accountId', async (req: Request, res: Response): Promise<void> => {
   const { accountId } = req.params;
+  if (isQuotaRouteRateLimited(req, 'claude')) {
+    res
+      .status(429)
+      .json({ error: 'Too many quota requests', message: 'Retry after a short delay' });
+    return;
+  }
 
   // Validate accountId - prevent path traversal
   if (
@@ -674,6 +716,12 @@ router.get('/quota/claude/:accountId', async (req: Request, res: Response): Prom
  */
 router.get('/quota/gemini/:accountId', async (req: Request, res: Response): Promise<void> => {
   const { accountId } = req.params;
+  if (isQuotaRouteRateLimited(req, 'gemini')) {
+    res
+      .status(429)
+      .json({ error: 'Too many quota requests', message: 'Retry after a short delay' });
+    return;
+  }
 
   // Validate accountId - prevent path traversal
   if (
@@ -715,6 +763,12 @@ router.get('/quota/gemini/:accountId', async (req: Request, res: Response): Prom
  */
 router.get('/quota/ghcp/:accountId', async (req: Request, res: Response): Promise<void> => {
   const { accountId } = req.params;
+  if (isQuotaRouteRateLimited(req, 'ghcp')) {
+    res
+      .status(429)
+      .json({ error: 'Too many quota requests', message: 'Retry after a short delay' });
+    return;
+  }
 
   // Validate accountId - prevent path traversal
   if (
@@ -757,6 +811,12 @@ router.get('/quota/ghcp/:accountId', async (req: Request, res: Response): Promis
  */
 router.get('/quota/:provider/:accountId', async (req: Request, res: Response): Promise<void> => {
   const { provider, accountId } = req.params;
+  if (isQuotaRouteRateLimited(req, provider)) {
+    res
+      .status(429)
+      .json({ error: 'Too many quota requests', message: 'Retry after a short delay' });
+    return;
+  }
 
   // Validate provider - use canonical CLIPROXY_PROFILES
   const validProviders: CLIProxyProvider[] = [...CLIPROXY_PROFILES];

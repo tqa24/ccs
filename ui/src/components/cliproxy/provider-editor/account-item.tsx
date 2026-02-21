@@ -424,7 +424,7 @@ export function AccountItem({
                     )}
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
-                    {quota && <QuotaTooltipContent quota={quota} resetTime={nextReset} />}
+                    <QuotaTooltipContent quota={quota} resetTime={nextReset} />
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

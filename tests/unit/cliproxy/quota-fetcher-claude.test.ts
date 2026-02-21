@@ -377,6 +377,27 @@ describe('Claude Quota Fetcher', () => {
       expect(fetchMock).toHaveBeenCalledTimes(0);
     });
 
+    it('treats missing expiry as not expired', async () => {
+      createClaudeAccount('claude-no-expiry@example.com', {
+        access_token: 'no-expiry-token',
+        type: 'claude',
+      });
+
+      global.fetch = mock(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ restrictions: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        )
+      ) as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-no-expiry@example.com');
+
+      expect(result.success).toBe(true);
+      expect(result.windows).toHaveLength(0);
+    });
+
     it('retries once on transient 500 then succeeds', async () => {
       createClaudeAccount('claude-retry@example.com', {
         access_token: 'retry-token',

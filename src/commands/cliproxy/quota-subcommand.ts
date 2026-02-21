@@ -19,6 +19,7 @@ import {
 import { fetchAllProviderQuotas } from '../../cliproxy/quota-fetcher';
 import { fetchAllCodexQuotas } from '../../cliproxy/quota-fetcher-codex';
 import { fetchAllClaudeQuotas } from '../../cliproxy/quota-fetcher-claude';
+import { pickMostRestrictiveClaudeWeeklyWindow } from '../../cliproxy/quota-fetcher-claude-normalizer';
 import { fetchAllGeminiCliQuotas } from '../../cliproxy/quota-fetcher-gemini-cli';
 import { fetchAllGhcpQuotas } from '../../cliproxy/quota-fetcher-ghcp';
 import type {
@@ -438,30 +439,6 @@ function toClaudeCoreDisplayWindow(
   };
 }
 
-function pickClaudeWeeklyWindow(
-  windows: ClaudeQuotaResult['windows']
-): ClaudeQuotaResult['windows'][number] | null {
-  const weeklyCandidates = windows.filter((window) =>
-    [
-      'seven_day',
-      'seven_day_opus',
-      'seven_day_sonnet',
-      'seven_day_oauth_apps',
-      'seven_day_cowork',
-    ].includes(window.rateLimitType)
-  );
-  if (weeklyCandidates.length === 0) return null;
-
-  return [...weeklyCandidates].sort((a, b) => {
-    if (a.remainingPercent !== b.remainingPercent) {
-      return a.remainingPercent - b.remainingPercent;
-    }
-    const aReset = a.resetAt ? new Date(a.resetAt).getTime() : Number.POSITIVE_INFINITY;
-    const bReset = b.resetAt ? new Date(b.resetAt).getTime() : Number.POSITIVE_INFINITY;
-    return aReset - bReset;
-  })[0];
-}
-
 function getClaudeCoreUsageWindows(quota: ClaudeQuotaResult): {
   fiveHourWindow: ClaudeDisplayWindow | null;
   weeklyWindow: ClaudeDisplayWindow | null;
@@ -478,7 +455,7 @@ function getClaudeCoreUsageWindows(quota: ClaudeQuotaResult): {
 
   const fiveHourPolicy =
     quota.windows.find((window) => window.rateLimitType === 'five_hour') ?? null;
-  const weeklyPolicy = pickClaudeWeeklyWindow(quota.windows);
+  const weeklyPolicy = pickMostRestrictiveClaudeWeeklyWindow(quota.windows);
 
   return {
     fiveHourWindow: fiveHourPolicy ? toClaudeDisplayWindow(fiveHourPolicy) : null,
