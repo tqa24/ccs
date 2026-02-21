@@ -10,6 +10,7 @@ import { getProviderDisplayName } from '../provider-capabilities';
 import { getModelMappingFromConfig } from '../base-config-loader';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { getEffectiveApiKey, getEffectiveManagementSecret } from '../auth-token-manager';
+import { getCachedCatalog } from '../catalog-cache';
 import { getAuthDir, getProviderAuthDir, getConfigPathForPort } from './path-resolver';
 import { CLIPROXY_DEFAULT_PORT } from './port-manager';
 
@@ -29,15 +30,24 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v6: Added oauth-model-alias with Opus 4.6 support
  * v7: Added fork:true for Claude model aliases (keep both upstream and alias names)
  * v8: Added Gemini 3.1 preview aliases for provider routing compatibility
+ * v9: Added resilient alias compatibility expansion and cache-assisted alias enrichment
  */
-export const CLIPROXY_CONFIG_VERSION = 8;
+export const CLIPROXY_CONFIG_VERSION = 9;
+
+interface OAuthModelAliasEntry {
+  name: string;
+  alias: string;
+  fork?: boolean;
+}
+
+const GEMINI_MINOR_COMPAT_RANGE = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 
 /**
  * Default Antigravity oauth-model-alias entries.
  * Maps user-facing model names to Antigravity internal model names.
- * Must stay in sync with CLIProxyAPIPlus defaultAntigravityAliases().
+ * Additional compatibility aliases are derived automatically at generation time.
  */
-const DEFAULT_ANTIGRAVITY_ALIASES: Array<{ name: string; alias: string; fork?: boolean }> = [
+const DEFAULT_ANTIGRAVITY_ALIASES: OAuthModelAliasEntry[] = [
   { name: 'rev19-uic3-1p', alias: 'gemini-2.5-computer-use-preview-10-2025' },
   { name: 'gemini-3-pro-image', alias: 'gemini-3-pro-image-preview' },
   { name: 'gemini-3-pro-high', alias: 'gemini-3-pro-preview' },
@@ -78,49 +88,248 @@ function getLoggingSettings(): { loggingToFile: boolean; requestLog: boolean } {
   };
 }
 
+function sanitizeYamlScalar(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function addAliasEntry(
+  entries: OAuthModelAliasEntry[],
+  indexByKey: Map<string, number>,
+  entry: OAuthModelAliasEntry
+): void {
+  const normalized: OAuthModelAliasEntry = {
+    name: sanitizeYamlScalar(entry.name),
+    alias: sanitizeYamlScalar(entry.alias),
+    fork: entry.fork || undefined,
+  };
+  if (!normalized.name || !normalized.alias) return;
+
+  const key = `${normalized.name}\u0000${normalized.alias}`;
+  const existingIndex = indexByKey.get(key);
+  if (existingIndex !== undefined) {
+    if (normalized.fork) entries[existingIndex].fork = true;
+    return;
+  }
+
+  indexByKey.set(key, entries.length);
+  entries.push(normalized);
+}
+
+function parseExistingAntigravityAliases(existingAliases: string): OAuthModelAliasEntry[] {
+  const entries: OAuthModelAliasEntry[] = [];
+  const lines = existingAliases.replace(/\r\n/g, '\n').split('\n');
+
+  let currentChannel = '';
+  let currentName = '';
+  let currentAlias = '';
+  let currentFork = false;
+
+  const flushCurrent = () => {
+    if (currentName && currentAlias && (!currentChannel || currentChannel === 'antigravity')) {
+      entries.push({
+        name: sanitizeYamlScalar(currentName),
+        alias: sanitizeYamlScalar(currentAlias),
+        fork: currentFork || undefined,
+      });
+    }
+    currentName = '';
+    currentAlias = '';
+    currentFork = false;
+  };
+
+  for (const line of lines) {
+    const channelMatch = line.match(/^\s{2}([a-zA-Z0-9_-]+):\s*$/);
+    if (channelMatch) {
+      flushCurrent();
+      currentChannel = channelMatch[1].trim().toLowerCase();
+      continue;
+    }
+
+    if (currentChannel && currentChannel !== 'antigravity') continue;
+
+    const nameMatch = line.match(/^\s+-\s*name:\s*(.+)/);
+    const aliasMatch = line.match(/^\s+alias:\s*(.+)/);
+    const forkMatch = line.match(/^\s+fork:\s*(.+)/);
+
+    if (nameMatch) {
+      flushCurrent();
+      currentName = nameMatch[1];
+      continue;
+    }
+
+    if (aliasMatch) {
+      currentAlias = aliasMatch[1];
+      continue;
+    }
+
+    if (forkMatch) {
+      currentFork = sanitizeYamlScalar(forkMatch[1]).toLowerCase() === 'true';
+    }
+  }
+
+  flushCurrent();
+  return entries;
+}
+
+function toDottedGeminiVersionAlias(alias: string): string | null {
+  const match = alias.match(/^(gemini-\d+)-(\d+)(-.+)$/);
+  if (!match) return null;
+  return `${match[1]}.${match[2]}${match[3]}`;
+}
+
+function toHyphenatedGeminiVersionAlias(alias: string): string | null {
+  const match = alias.match(/^(gemini-\d+)\.(\d+)(-.+)$/);
+  if (!match) return null;
+  return `${match[1]}-${match[2]}${match[3]}`;
+}
+
+function buildGeminiCompatibilityAliases(alias: string): string[] {
+  if (!alias.startsWith('gemini-') || !alias.includes('-preview')) return [];
+
+  const variants = new Set<string>();
+  const queue: string[] = [alias];
+
+  const enqueue = (candidate: string) => {
+    if (!candidate || candidate === alias || variants.has(candidate)) return;
+    variants.add(candidate);
+    queue.push(candidate);
+  };
+
+  const basePreviewMatch = alias.match(/^gemini-(\d+)-(pro|flash)-preview(?:-customtools)?$/);
+  if (basePreviewMatch) {
+    const major = basePreviewMatch[1];
+    const family = basePreviewMatch[2];
+    for (const minor of GEMINI_MINOR_COMPAT_RANGE) {
+      enqueue(`gemini-${major}.${minor}-${family}-preview`);
+      enqueue(`gemini-${major}-${minor}-${family}-preview`);
+    }
+  }
+
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const current = queue.pop();
+    if (!current || visited.has(current)) continue;
+    visited.add(current);
+
+    if (current.startsWith('gemini-') && current.includes('-preview')) {
+      if (current.endsWith('-customtools')) {
+        enqueue(current.slice(0, -'-customtools'.length));
+      } else {
+        enqueue(`${current}-customtools`);
+      }
+    }
+
+    const dotted = toDottedGeminiVersionAlias(current);
+    if (dotted) enqueue(dotted);
+
+    const hyphenated = toHyphenatedGeminiVersionAlias(current);
+    if (hyphenated) enqueue(hyphenated);
+  }
+
+  return [...variants];
+}
+
+function getGeminiPreviewFamily(alias: string): string | null {
+  const withoutCustomTools = alias.replace(/-customtools$/, '');
+  const normalized = toHyphenatedGeminiVersionAlias(withoutCustomTools) || withoutCustomTools;
+
+  const majorMinorMatch = normalized.match(/^gemini-(\d+)-(\d+)-(.+-preview(?:-[0-9-]+)?)$/);
+  if (majorMinorMatch) {
+    return `gemini-${majorMinorMatch[1]}-${majorMinorMatch[3]}`;
+  }
+
+  const majorOnlyMatch = normalized.match(/^gemini-(\d+)-(.+-preview(?:-[0-9-]+)?)$/);
+  if (majorOnlyMatch) {
+    return `gemini-${majorOnlyMatch[1]}-${majorOnlyMatch[2]}`;
+  }
+
+  return null;
+}
+
+function getCacheDerivedAntigravityAliases(
+  currentEntries: OAuthModelAliasEntry[]
+): OAuthModelAliasEntry[] {
+  const cached = getCachedCatalog();
+  const remoteAgyModels = cached?.providers?.agy;
+  if (!remoteAgyModels || remoteAgyModels.length === 0) return [];
+
+  const familyToName = new Map<string, string>();
+  for (const entry of currentEntries) {
+    const family = getGeminiPreviewFamily(entry.alias);
+    if (family && !familyToName.has(family)) {
+      familyToName.set(family, entry.name);
+    }
+  }
+
+  const derivedAliases: OAuthModelAliasEntry[] = [];
+  for (const remoteModel of remoteAgyModels) {
+    if (!remoteModel || typeof remoteModel.id !== 'string') continue;
+    const family = getGeminiPreviewFamily(remoteModel.id);
+    if (!family) continue;
+
+    const mappedName = familyToName.get(family);
+    if (mappedName) {
+      derivedAliases.push({
+        name: mappedName,
+        alias: remoteModel.id,
+      });
+    }
+  }
+
+  return derivedAliases;
+}
+
+function getCompatibilityAliases(entries: OAuthModelAliasEntry[]): OAuthModelAliasEntry[] {
+  const compatibilityAliases: OAuthModelAliasEntry[] = [];
+  for (const entry of entries) {
+    const variants = buildGeminiCompatibilityAliases(entry.alias);
+    for (const variant of variants) {
+      compatibilityAliases.push({
+        name: entry.name,
+        alias: variant,
+        fork: entry.fork,
+      });
+    }
+  }
+  return compatibilityAliases;
+}
+
 /**
  * Generate oauth-model-alias YAML section.
  * Merges default Antigravity aliases with any user-added custom aliases.
  */
 function generateOAuthModelAliasSection(existingAliases?: string): string {
-  // Start with default aliases
-  const aliasEntries = [...DEFAULT_ANTIGRAVITY_ALIASES];
+  const aliasEntries: OAuthModelAliasEntry[] = [];
+  const aliasIndexByKey = new Map<string, number>();
 
-  // Parse and merge existing user aliases if provided
+  // Start with default aliases.
+  for (const alias of DEFAULT_ANTIGRAVITY_ALIASES) {
+    addAliasEntry(aliasEntries, aliasIndexByKey, alias);
+  }
+
+  // Merge existing user aliases (dedupe by name+alias, not by name only).
   if (existingAliases) {
-    const existingNames = new Set(aliasEntries.map((a) => a.name));
-    const lines = existingAliases.split('\n');
-    let currentName = '';
-    let currentAlias = '';
-    let currentFork = false;
-    for (const line of lines) {
-      const nameMatch = line.match(/^\s+-\s*name:\s*(.+)/);
-      const aliasMatch = line.match(/^\s+alias:\s*(.+)/);
-      const forkMatch = line.match(/^\s+fork:\s*(.+)/);
-      if (nameMatch) {
-        // Flush previous entry if complete
-        if (currentName && currentAlias && !existingNames.has(currentName)) {
-          aliasEntries.push({
-            name: currentName,
-            alias: currentAlias,
-            fork: currentFork || undefined,
-          });
-          existingNames.add(currentName);
-        }
-        currentName = nameMatch[1].trim();
-        currentAlias = '';
-        currentFork = false;
-      } else if (aliasMatch) {
-        currentAlias = aliasMatch[1].trim();
-      } else if (forkMatch) {
-        currentFork = forkMatch[1].trim().toLowerCase() === 'true';
-      }
+    const parsed = parseExistingAntigravityAliases(existingAliases);
+    for (const alias of parsed) {
+      addAliasEntry(aliasEntries, aliasIndexByKey, alias);
     }
-    // Flush last entry
-    if (currentName && currentAlias && !existingNames.has(currentName)) {
-      aliasEntries.push({ name: currentName, alias: currentAlias, fork: currentFork || undefined });
-      existingNames.add(currentName);
-    }
+  }
+
+  // Pull latest known aliases from cached remote catalog when available.
+  for (const alias of getCacheDerivedAntigravityAliases(aliasEntries)) {
+    addAliasEntry(aliasEntries, aliasIndexByKey, alias);
+  }
+
+  // Expand compatibility aliases to reduce breakage on upstream naming drift.
+  for (const alias of getCompatibilityAliases(aliasEntries)) {
+    addAliasEntry(aliasEntries, aliasIndexByKey, alias);
   }
 
   const entries = aliasEntries
