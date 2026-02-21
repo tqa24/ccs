@@ -12,7 +12,11 @@ import {
   loadOrCreateUnifiedConfig,
 } from '../config/unified-config-loader';
 import { DEFAULT_IMAGE_ANALYSIS_CONFIG } from '../config/unified-config-types';
-import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
+import {
+  CLIPROXY_PROVIDER_IDS,
+  PROVIDER_CAPABILITIES,
+  mapExternalProviderName,
+} from '../cliproxy/provider-capabilities';
 import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface ImageAnalysisCommandOptions {
@@ -20,8 +24,15 @@ interface ImageAnalysisCommandOptions {
   disable?: boolean;
   timeout?: number;
   setModel?: { provider: string; model: string };
+  setModelError?: string;
   help?: boolean;
 }
+
+const IMAGE_ANALYSIS_PROVIDER_ALIASES = Object.freeze(
+  CLIPROXY_PROVIDER_IDS.flatMap((provider) => PROVIDER_CAPABILITIES[provider].aliases).filter(
+    (alias, index, aliases) => aliases.indexOf(alias) === index
+  )
+);
 
 function parseArgs(args: string[]): ImageAnalysisCommandOptions {
   const options: ImageAnalysisCommandOptions = {
@@ -46,6 +57,8 @@ function parseArgs(args: string[]): ImageAnalysisCommandOptions {
     const model = args[setModelIdx + 2];
     if (provider && model && !provider.startsWith('-') && !model.startsWith('-')) {
       options.setModel = { provider, model };
+    } else {
+      options.setModelError = '--set-model requires <provider> <model>';
     }
   }
 
@@ -73,7 +86,10 @@ function showHelp(): void {
   console.log('');
 
   console.log(subheader('Provider Models:'));
-  console.log(`  ${dim('Providers with vision support: agy, gemini, codex, kiro, ghcp, claude')}`);
+  console.log(`  ${dim(`Valid providers: ${CLIPROXY_PROVIDER_IDS.join(', ')}`)}`);
+  if (IMAGE_ANALYSIS_PROVIDER_ALIASES.length > 0) {
+    console.log(`  ${dim(`Aliases accepted: ${IMAGE_ANALYSIS_PROVIDER_ALIASES.join(', ')}`)}`);
+  }
   console.log(`  ${dim('Default model: gemini-2.5-flash (most providers)')}`);
   console.log('');
 
@@ -160,6 +176,11 @@ export async function handleConfigImageAnalysisCommand(args: string[]): Promise<
     return;
   }
 
+  if (options.setModelError) {
+    console.error(fail(options.setModelError));
+    process.exit(1);
+  }
+
   // Validate conflicting flags (Edge case #2: --enable + --disable conflict)
   if (options.enable && options.disable) {
     console.error(fail('Cannot use --enable and --disable together'));
@@ -188,9 +209,9 @@ export async function handleConfigImageAnalysisCommand(args: string[]): Promise<
 
   if (options.setModel) {
     const validProviders = [...CLIPROXY_PROVIDER_IDS];
-    if (
-      !validProviders.includes(options.setModel.provider as (typeof CLIPROXY_PROVIDER_IDS)[number])
-    ) {
+    const normalizedProviderInput = options.setModel.provider.trim().toLowerCase();
+    const canonicalProvider = mapExternalProviderName(normalizedProviderInput);
+    if (!canonicalProvider) {
       console.error(fail(`Invalid provider: ${options.setModel.provider}`));
       console.error(info(`Valid providers: ${validProviders.join(', ')}`));
       process.exit(1);
@@ -203,7 +224,7 @@ export async function handleConfigImageAnalysisCommand(args: string[]): Promise<
     }
     imageConfig.provider_models = {
       ...imageConfig.provider_models,
-      [options.setModel.provider]: model,
+      [canonicalProvider]: model,
     };
     hasChanges = true;
   }

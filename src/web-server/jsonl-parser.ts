@@ -63,6 +63,9 @@ export interface ParserOptions {
   projectsDir?: string;
 }
 
+const DEFAULT_SCAN_CONCURRENCY = 10;
+const MAX_SCAN_CONCURRENCY = 64;
+
 // ============================================================================
 // CORE PARSING FUNCTIONS
 // ============================================================================
@@ -71,6 +74,14 @@ export interface ParserOptions {
  * Parse a single JSONL line into RawUsageEntry if valid
  * Returns null for non-assistant entries or entries without usage data
  */
+function toNonNegativeNumber(value: unknown): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) {
+    return 0;
+  }
+  return numeric;
+}
+
 export function parseUsageEntry(line: string, projectPath: string): RawUsageEntry | null {
   // Strip UTF-8 BOM if present (can occur on first line of some files)
   const cleanLine = line.replace(/^\uFEFF/, '').trim();
@@ -88,10 +99,10 @@ export function parseUsageEntry(line: string, projectPath: string): RawUsageEntr
     const assistant = entry as JsonlAssistantEntry;
 
     return {
-      inputTokens: usage.input_tokens || 0,
-      outputTokens: usage.output_tokens || 0,
-      cacheCreationTokens: usage.cache_creation_input_tokens || 0,
-      cacheReadTokens: usage.cache_read_input_tokens || 0,
+      inputTokens: toNonNegativeNumber(usage.input_tokens),
+      outputTokens: toNonNegativeNumber(usage.output_tokens),
+      cacheCreationTokens: toNonNegativeNumber(usage.cache_creation_input_tokens),
+      cacheReadTokens: toNonNegativeNumber(usage.cache_read_input_tokens),
       model: assistant.message.model,
       sessionId: assistant.sessionId || '',
       timestamp: assistant.timestamp || new Date().toISOString(),
@@ -118,24 +129,38 @@ export async function parseJsonlFile(
 ): Promise<RawUsageEntry[]> {
   const entries: RawUsageEntry[] = [];
 
-  if (!fs.existsSync(filePath)) {
-    return entries;
-  }
+  let fileStream: fs.ReadStream | null = null;
+  let rl: readline.Interface | null = null;
+  try {
+    fileStream = fs.createReadStream(filePath, { encoding: 'utf8' });
+    rl = readline.createInterface({
+      input: fileStream,
+      crlfDelay: Infinity,
+    });
 
-  const fileStream = fs.createReadStream(filePath, { encoding: 'utf8' });
-  const rl = readline.createInterface({
-    input: fileStream,
-    crlfDelay: Infinity,
-  });
-
-  for await (const line of rl) {
-    const entry = parseUsageEntry(line, projectPath);
-    if (entry) {
-      entries.push(entry);
+    for await (const line of rl) {
+      const entry = parseUsageEntry(line, projectPath);
+      if (entry) {
+        entries.push(entry);
+      }
     }
+  } catch {
+    // File read/stream error - return whatever was parsed so far
+  } finally {
+    rl?.close();
+    fileStream?.destroy();
   }
 
   return entries;
+}
+
+function decodeProjectPath(projectDir: string): string {
+  const raw = path.basename(projectDir).replace(/-/g, '/');
+  const safeSegments = raw
+    .split('/')
+    .filter((segment) => segment && segment !== '.' && segment !== '..');
+
+  return `/${safeSegments.join('/')}`;
 }
 
 /**
@@ -144,12 +169,8 @@ export async function parseJsonlFile(
 export async function parseProjectDirectory(projectDir: string): Promise<RawUsageEntry[]> {
   const entries: RawUsageEntry[] = [];
 
-  if (!fs.existsSync(projectDir)) {
-    return entries;
-  }
-
   // Get project path from directory name (e.g., "-home-kai-project" -> "/home/kai/project")
-  const projectPath = path.basename(projectDir).replace(/-/g, '/');
+  const projectPath = decodeProjectPath(projectDir);
 
   try {
     const files = await fs.promises.readdir(projectDir);
@@ -185,10 +206,6 @@ export function getDefaultProjectsDir(): string {
 export function findProjectDirectories(projectsDir?: string): string[] {
   const dir = projectsDir || getDefaultProjectsDir();
 
-  if (!fs.existsSync(dir)) {
-    return [];
-  }
-
   try {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     return entries
@@ -207,7 +224,14 @@ export function findProjectDirectories(projectsDir?: string): string[] {
  * @returns All parsed usage entries from all projects
  */
 export async function scanProjectsDirectory(options: ParserOptions = {}): Promise<RawUsageEntry[]> {
-  const { concurrency = 10, projectsDir } = options;
+  const requestedConcurrency = options.concurrency;
+  const concurrency =
+    typeof requestedConcurrency === 'number' &&
+    Number.isInteger(requestedConcurrency) &&
+    requestedConcurrency > 0
+      ? Math.min(requestedConcurrency, MAX_SCAN_CONCURRENCY)
+      : DEFAULT_SCAN_CONCURRENCY;
+  const { projectsDir } = options;
   const allEntries: RawUsageEntry[] = [];
 
   const projectDirs = findProjectDirectories(projectsDir);
@@ -230,8 +254,8 @@ export async function scanProjectsDirectory(options: ParserOptions = {}): Promis
   if (options.minDate) {
     const minTime = options.minDate.getTime();
     return allEntries.filter((entry) => {
-      const entryTime = new Date(entry.timestamp).getTime();
-      return entryTime >= minTime;
+      const entryTime = Date.parse(entry.timestamp);
+      return Number.isFinite(entryTime) && entryTime >= minTime;
     });
   }
 

@@ -28,39 +28,28 @@ interface BackupFile {
 /**
  * Async mutex for restore operations - prevents race conditions
  *
- * Design: Uses a Promise queue pattern for atomic lock acquisition.
- * When the mutex is locked, subsequent callers are added to a queue
- * and immediately receive `false` when released, signaling they should
- * return a 409 Conflict rather than wait. This prevents request pileup
- * while ensuring only one restore can execute at a time.
+ * Design: Fast-fail lock.
+ * If a restore is already running, callers immediately get `false`
+ * and the route returns HTTP 409. This avoids request pileup.
  */
 class RestoreMutex {
   private locked = false;
-  private queue: Array<() => void> = [];
 
   /**
    * Attempt to acquire the mutex
-   * @returns true if acquired, false if already locked (queued request)
+   * @returns true if acquired, false if already locked
    */
   async acquire(): Promise<boolean> {
     if (this.locked) {
-      // Already locked - add to queue and wait
-      return new Promise((resolve) => {
-        this.queue.push(() => resolve(false)); // Return false = was queued, reject
-      });
+      return false;
     }
     this.locked = true;
     return true;
   }
 
-  /** Release the mutex, signaling next queued request (if any) to fail */
+  /** Release the mutex */
   release(): void {
-    const next = this.queue.shift();
-    if (next) {
-      next(); // Signal queued request to fail
-    } else {
-      this.locked = false;
-    }
+    this.locked = false;
   }
 }
 
@@ -74,6 +63,25 @@ function isSymlink(filePath: string): boolean {
   } catch {
     return false;
   }
+}
+
+function parseBackupTimestamp(timestamp: string): Date | null {
+  const year = parseInt(timestamp.slice(0, 4), 10);
+  const month = parseInt(timestamp.slice(4, 6), 10);
+  const day = parseInt(timestamp.slice(6, 8), 10);
+  const hour = parseInt(timestamp.slice(9, 11), 10);
+  const minute = parseInt(timestamp.slice(11, 13), 10);
+  const second = parseInt(timestamp.slice(13, 15), 10);
+  const date = new Date(year, month - 1, day, hour, minute, second);
+
+  if (date.getFullYear() !== year) return null;
+  if (date.getMonth() !== month - 1) return null;
+  if (date.getDate() !== day) return null;
+  if (date.getHours() !== hour) return null;
+  if (date.getMinutes() !== minute) return null;
+  if (date.getSeconds() !== second) return null;
+
+  return date;
 }
 
 /** Get all backup files sorted by date (newest first) */
@@ -91,16 +99,12 @@ function getBackupFiles(): BackupFile[] {
       const match = f.match(backupPattern);
       if (!match) return null;
       const timestamp = match[1];
-      const year = parseInt(timestamp.slice(0, 4));
-      const month = parseInt(timestamp.slice(4, 6)) - 1;
-      const day = parseInt(timestamp.slice(6, 8));
-      const hour = parseInt(timestamp.slice(9, 11));
-      const min = parseInt(timestamp.slice(11, 13));
-      const sec = parseInt(timestamp.slice(13, 15));
+      const date = parseBackupTimestamp(timestamp);
+      if (!date) return null;
       return {
         path: path.join(dir, f),
         timestamp,
-        date: new Date(year, month, day, hour, min, sec),
+        date,
       };
     })
     .filter((f): f is BackupFile => f !== null)
@@ -178,16 +182,18 @@ router.post('/restore', restoreRateLimiter, async (req: Request, res: Response):
     let backupContent: string;
     let fd: number | undefined;
     try {
-      // Verify not symlink immediately before open
-      const stats = fs.lstatSync(backup.path);
-      if (stats.isSymbolicLink()) {
-        res
-          .status(400)
-          .json({ error: 'Backup became symlink during read - refusing for security' });
+      if (typeof fs.constants.O_NOFOLLOW !== 'number') {
+        res.status(500).json({ error: 'Secure restore unsupported on this platform' });
         return;
       }
       // Open file descriptor for atomic read
-      fd = fs.openSync(backup.path, 'r');
+      const openFlags = fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW;
+      fd = fs.openSync(backup.path, openFlags);
+      const stats = fs.fstatSync(fd);
+      if (!stats.isFile()) {
+        res.status(400).json({ error: 'Backup path is not a regular file' });
+        return;
+      }
       const buffer = Buffer.alloc(stats.size);
       fs.readSync(fd, buffer, 0, stats.size, 0);
       backupContent = buffer.toString('utf8');
@@ -199,6 +205,10 @@ router.post('/restore', restoreRateLimiter, async (req: Request, res: Response):
       }
     } catch (err) {
       const error = err as NodeJS.ErrnoException;
+      if (error.code === 'ELOOP') {
+        res.status(400).json({ error: 'Backup file is a symlink - refusing for security' });
+        return;
+      }
       if (error.code === 'ENOENT') {
         res.status(404).json({ error: 'Backup was deleted during restore' });
         return;
@@ -217,17 +227,18 @@ router.post('/restore', restoreRateLimiter, async (req: Request, res: Response):
 
     // Atomic restore with rollback capability
     const settingsDir = path.dirname(settingsPath);
-    const tempPath = path.join(settingsDir, 'settings.json.restore-tmp');
-    const rollbackPath = path.join(settingsDir, 'settings.json.rollback-tmp');
+    const restoreNonce = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const tempPath = path.join(settingsDir, `settings.json.restore-${restoreNonce}.tmp`);
+    const rollbackPath = path.join(settingsDir, `settings.json.rollback-${restoreNonce}.tmp`);
 
     try {
       // Step 1: Backup current settings for rollback
       if (fs.existsSync(settingsPath)) {
-        fs.copyFileSync(settingsPath, rollbackPath);
+        fs.copyFileSync(settingsPath, rollbackPath, fs.constants.COPYFILE_EXCL);
       }
 
       // Step 2: Write validated content to temp file
-      fs.writeFileSync(tempPath, backupContent, 'utf8');
+      fs.writeFileSync(tempPath, backupContent, { encoding: 'utf8', flag: 'wx', mode: 0o600 });
 
       // Step 3: Atomic rename (replaces existing file)
       fs.renameSync(tempPath, settingsPath);

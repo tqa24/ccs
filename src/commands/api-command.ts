@@ -53,7 +53,13 @@ interface ApiCommandArgs {
   preset?: string;
   force?: boolean;
   yes?: boolean;
+  errors: string[];
 }
+
+const API_BOOLEAN_FLAGS = ['--force', '--yes', '-y'] as const;
+const API_VALUE_FLAGS = ['--base-url', '--api-key', '--model', '--preset'] as const;
+const API_KNOWN_FLAGS: readonly string[] = [...API_BOOLEAN_FLAGS, ...API_VALUE_FLAGS];
+const API_VALUE_FLAG_SET = new Set<string>(API_VALUE_FLAGS);
 
 function sanitizeHelpText(value: string): string {
   return value
@@ -71,39 +77,129 @@ function renderPresetHelpLine(preset: ProviderPreset, idWidth: number): string {
   return `  ${color(paddedId, 'command')} ${presetName} - ${presetDescription}`;
 }
 
+function applyRepeatedOption(
+  args: string[],
+  flags: readonly string[],
+  onValue: (value: string) => void,
+  onMissing: () => void
+): string[] {
+  let remaining = [...args];
+
+  while (true) {
+    const extracted = extractOption(remaining, flags, {
+      allowDashValue: true,
+      knownFlags: API_KNOWN_FLAGS,
+    });
+    if (!extracted.found) {
+      return remaining;
+    }
+
+    if (extracted.missingValue || !extracted.value) {
+      onMissing();
+    } else {
+      onValue(extracted.value);
+    }
+
+    remaining = extracted.remainingArgs;
+  }
+}
+
+function extractPositionalArgs(args: string[]): string[] {
+  const positionals: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const token = args[i];
+    if (token === '--') {
+      positionals.push(...args.slice(i + 1));
+      break;
+    }
+
+    if (token.startsWith('-')) {
+      if (!token.includes('=') && API_VALUE_FLAG_SET.has(token)) {
+        const next = args[i + 1];
+        if (next && !next.startsWith('-')) {
+          i++;
+        }
+      }
+      continue;
+    }
+
+    positionals.push(token);
+  }
+
+  return positionals;
+}
+
 /** Parse command line arguments for api commands */
-function parseArgs(args: string[]): ApiCommandArgs {
+export function parseApiCommandArgs(args: string[]): ApiCommandArgs {
   const result: ApiCommandArgs = {
     force: hasAnyFlag(args, ['--force']),
     yes: hasAnyFlag(args, ['--yes', '-y']),
+    errors: [],
   };
 
   let remaining = [...args];
 
-  const baseUrl = extractOption(remaining, ['--base-url']);
-  if (baseUrl.value) result.baseUrl = baseUrl.value;
-  remaining = baseUrl.remainingArgs;
+  remaining = applyRepeatedOption(
+    remaining,
+    ['--base-url'],
+    (value) => {
+      result.baseUrl = value;
+    },
+    () => {
+      result.errors.push('Missing value for --base-url');
+    }
+  );
 
-  const apiKey = extractOption(remaining, ['--api-key']);
-  if (apiKey.value) result.apiKey = apiKey.value;
-  remaining = apiKey.remainingArgs;
+  remaining = applyRepeatedOption(
+    remaining,
+    ['--api-key'],
+    (value) => {
+      result.apiKey = value;
+    },
+    () => {
+      result.errors.push('Missing value for --api-key');
+    }
+  );
 
-  const model = extractOption(remaining, ['--model']);
-  if (model.value) result.model = model.value;
-  remaining = model.remainingArgs;
+  remaining = applyRepeatedOption(
+    remaining,
+    ['--model'],
+    (value) => {
+      result.model = value;
+    },
+    () => {
+      result.errors.push('Missing value for --model');
+    }
+  );
 
-  const preset = extractOption(remaining, ['--preset']);
-  if (preset.value) result.preset = preset.value;
-  remaining = preset.remainingArgs;
+  remaining = applyRepeatedOption(
+    remaining,
+    ['--preset'],
+    (value) => {
+      result.preset = value;
+    },
+    () => {
+      result.errors.push('Missing value for --preset');
+    }
+  );
 
-  result.name = remaining.find((arg) => !arg.startsWith('-'));
+  const positionalArgs = extractPositionalArgs(remaining);
+  result.name = positionalArgs[0];
   return result;
 }
 
 /** Handle 'ccs api create' command */
 async function handleCreate(args: string[]): Promise<void> {
   await initUI();
-  const parsedArgs = parseArgs(args);
+  const parsedArgs = parseApiCommandArgs(args);
+
+  if (parsedArgs.errors.length > 0) {
+    parsedArgs.errors.forEach((errorMessage) => {
+      console.log(fail(errorMessage));
+    });
+    process.exit(1);
+  }
 
   console.log(header('Create API Profile'));
   console.log('');
@@ -389,7 +485,14 @@ async function handleList(): Promise<void> {
 /** Handle 'ccs api remove' command */
 async function handleRemove(args: string[]): Promise<void> {
   await initUI();
-  const parsedArgs = parseArgs(args);
+  const parsedArgs = parseApiCommandArgs(args);
+
+  if (parsedArgs.errors.length > 0) {
+    parsedArgs.errors.forEach((errorMessage) => {
+      console.log(fail(errorMessage));
+    });
+    process.exit(1);
+  }
 
   const apis = getApiProfileNames();
 

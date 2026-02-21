@@ -9,6 +9,10 @@ import {
   getProvidersByOAuthFlow,
   isCLIProxyProvider,
   mapExternalProviderName,
+  QUOTA_SUPPORTED_PROVIDER_IDS,
+  isQuotaSupportedProvider,
+  QUOTA_PROVIDER_OPTION_VALUES,
+  QUOTA_PROVIDER_HELP_TEXT,
 } from '../../../src/cliproxy/provider-capabilities';
 import {
   OAUTH_CALLBACK_PORTS as DIAGNOSTIC_CALLBACK_PORTS,
@@ -63,7 +67,29 @@ describe('provider-capabilities', () => {
     expect(mapExternalProviderName('github-copilot')).toBe('ghcp');
     expect(mapExternalProviderName('copilot')).toBe('ghcp');
     expect(mapExternalProviderName('anthropic')).toBe('claude');
+    expect(mapExternalProviderName('  COPILOT  ')).toBe('ghcp');
+    expect(mapExternalProviderName('')).toBeNull();
     expect(mapExternalProviderName('unknown-provider')).toBeNull();
+  });
+
+  it('exposes quota-supported providers and guards correctly', () => {
+    expect(QUOTA_SUPPORTED_PROVIDER_IDS).toEqual(['agy', 'codex', 'gemini', 'ghcp']);
+    expect(QUOTA_PROVIDER_OPTION_VALUES).toEqual([
+      'agy',
+      'codex',
+      'gemini',
+      'ghcp',
+      'antigravity',
+      'gemini-cli',
+      'github-copilot',
+      'copilot',
+      'all',
+    ]);
+    expect(QUOTA_PROVIDER_HELP_TEXT).toBe(
+      'agy, codex, gemini, ghcp, antigravity, gemini-cli, github-copilot, copilot, all'
+    );
+    expect(isQuotaSupportedProvider('ghcp')).toBe(true);
+    expect(isQuotaSupportedProvider('kiro')).toBe(false);
   });
 
   it('exposes callback port and display name capabilities', () => {

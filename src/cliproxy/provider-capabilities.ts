@@ -140,6 +140,25 @@ export const CLIPROXY_PROVIDER_IDS = Object.freeze(
   Object.keys(PROVIDER_CAPABILITIES) as CLIProxyProvider[]
 );
 
+/** Providers currently supported by quota status fetchers. */
+export const QUOTA_SUPPORTED_PROVIDER_IDS = Object.freeze([
+  'agy',
+  'codex',
+  'gemini',
+  'ghcp',
+] as const);
+export type QuotaSupportedProvider = (typeof QUOTA_SUPPORTED_PROVIDER_IDS)[number];
+const QUOTA_SUPPORTED_PROVIDER_SET = new Set<QuotaSupportedProvider>(QUOTA_SUPPORTED_PROVIDER_IDS);
+
+export const QUOTA_PROVIDER_OPTION_VALUES = Object.freeze(
+  [
+    ...QUOTA_SUPPORTED_PROVIDER_IDS,
+    ...QUOTA_SUPPORTED_PROVIDER_IDS.flatMap((provider) => PROVIDER_CAPABILITIES[provider].aliases),
+    'all',
+  ].filter((value, index, values) => values.indexOf(value) === index)
+);
+export const QUOTA_PROVIDER_HELP_TEXT = QUOTA_PROVIDER_OPTION_VALUES.join(', ');
+
 export function buildProviderMap<T>(
   valueFor: (provider: CLIProxyProvider) => T
 ): Record<CLIProxyProvider, T> {
@@ -243,6 +262,15 @@ export function getProviderTokenTypeValues(provider: CLIProxyProvider): readonly
 }
 
 export function mapExternalProviderName(providerName: string): CLIProxyProvider | null {
-  const normalized = providerName.toLowerCase();
+  const normalized = providerName.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
   return PROVIDER_ALIAS_MAP.get(normalized) ?? null;
+}
+
+export function isQuotaSupportedProvider(
+  provider: CLIProxyProvider
+): provider is QuotaSupportedProvider {
+  return QUOTA_SUPPORTED_PROVIDER_SET.has(provider as QuotaSupportedProvider);
 }

@@ -7,7 +7,12 @@
 
 import { CLIProxyBackend } from '../../cliproxy/types';
 import { DEFAULT_BACKEND } from '../../cliproxy/platform-detector';
-import { CLIPROXY_PROVIDER_IDS } from '../../cliproxy/provider-capabilities';
+import {
+  type QuotaSupportedProvider,
+  QUOTA_PROVIDER_HELP_TEXT,
+  mapExternalProviderName,
+  isQuotaSupportedProvider,
+} from '../../cliproxy/provider-capabilities';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { handleSync } from '../cliproxy-sync-handler';
 import { extractOption, hasAnyFlag } from '../arg-extractor';
@@ -75,38 +80,21 @@ function getEffectiveBackend(cliBackend?: CLIProxyBackend): CLIProxyBackend {
 /**
  * Parse --provider flag from args for quota command
  * Returns the provider filter value and remaining args
- * Accepts: agy, codex, gemini, gemini-cli, ghcp, github-copilot, all
+ * Accepts canonical + aliases from quota-supported providers, and `all`
  */
-type QuotaProvider = 'agy' | 'codex' | 'gemini' | 'ghcp';
-type QuotaProviderFilter = QuotaProvider | 'all';
-
-const PROVIDER_ARG_HELP_TEXT = 'agy, codex, gemini, gemini-cli, ghcp, github-copilot, all';
-
-const QUOTA_PROVIDER_ALIAS_MAP: Readonly<Record<string, QuotaProvider>> = {
-  'gemini-cli': 'gemini',
-  'github-copilot': 'ghcp',
-};
-
-const QUOTA_PROVIDER_IDS = Object.freeze(
-  CLIPROXY_PROVIDER_IDS.filter(
-    (provider): provider is QuotaProvider =>
-      provider === 'agy' || provider === 'codex' || provider === 'gemini' || provider === 'ghcp'
-  )
-);
-
-const QUOTA_PROVIDER_SET = new Set<QuotaProvider>(QUOTA_PROVIDER_IDS);
+type QuotaProviderFilter = QuotaSupportedProvider | 'all';
 
 function normalizeQuotaProvider(value: string): QuotaProviderFilter | null {
   if (value === 'all') {
     return 'all';
   }
 
-  const normalized = QUOTA_PROVIDER_ALIAS_MAP[value] ?? value;
-  if (!QUOTA_PROVIDER_SET.has(normalized as QuotaProvider)) {
+  const canonicalProvider = mapExternalProviderName(value);
+  if (!canonicalProvider || !isQuotaSupportedProvider(canonicalProvider)) {
     return null;
   }
 
-  return normalized as QuotaProvider;
+  return canonicalProvider;
 }
 
 function parseProviderArg(args: string[]): {
@@ -119,14 +107,16 @@ function parseProviderArg(args: string[]): {
   }
 
   if (extracted.missingValue || !extracted.value) {
-    console.error(`Warning: --provider requires a value. Valid options: ${PROVIDER_ARG_HELP_TEXT}`);
+    console.error(
+      `Warning: --provider requires a value. Valid options: ${QUOTA_PROVIDER_HELP_TEXT}`
+    );
     return { provider: 'all', remainingArgs: extracted.remainingArgs };
   }
 
   const value = extracted.value.toLowerCase();
   const normalized = normalizeQuotaProvider(value);
   if (!normalized) {
-    console.error(`Invalid provider '${value}'. Valid options: ${PROVIDER_ARG_HELP_TEXT}`);
+    console.error(`Invalid provider '${value}'. Valid options: ${QUOTA_PROVIDER_HELP_TEXT}`);
     return { provider: 'all', remainingArgs: extracted.remainingArgs };
   }
   return {

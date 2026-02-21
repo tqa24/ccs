@@ -27,6 +27,10 @@ import type {
 } from '../../cliproxy/quota-types';
 import { isOnCooldown } from '../../cliproxy/quota-manager';
 import { CLIProxyProvider } from '../../cliproxy/types';
+import {
+  QUOTA_SUPPORTED_PROVIDER_IDS,
+  type QuotaSupportedProvider,
+} from '../../cliproxy/provider-capabilities';
 import { initUI, header, subheader, color, dim, ok, fail, warn, info, table } from '../../utils/ui';
 
 interface CliproxyProfileArgs {
@@ -481,65 +485,99 @@ function displayGhcpQuotaSection(results: { account: string; quota: GhcpQuotaRes
   }
 }
 
+interface QuotaProviderRuntime {
+  fetch: (verbose: boolean) => Promise<unknown>;
+  hasData: (result: unknown) => boolean;
+  render: (result: unknown) => void;
+  emptyTitle: string;
+  emptyMessage: string;
+  authCommand: string;
+}
+
+const QUOTA_PROVIDER_RUNTIME: Record<QuotaSupportedProvider, QuotaProviderRuntime> = {
+  agy: {
+    fetch: (verbose) => fetchAllProviderQuotas('agy', verbose),
+    hasData: (result) =>
+      (result as Awaited<ReturnType<typeof fetchAllProviderQuotas>>).accounts.length > 0,
+    render: (result) =>
+      displayAntigravityQuotaSection(result as Awaited<ReturnType<typeof fetchAllProviderQuotas>>),
+    emptyTitle: 'Antigravity (0 accounts)',
+    emptyMessage: 'No Antigravity accounts configured',
+    authCommand: 'ccs agy --auth',
+  },
+  codex: {
+    fetch: (verbose) => fetchAllCodexQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: CodexQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayCodexQuotaSection(result as { account: string; quota: CodexQuotaResult }[]),
+    emptyTitle: 'Codex (0 accounts)',
+    emptyMessage: 'No Codex accounts configured',
+    authCommand: 'ccs codex --auth',
+  },
+  gemini: {
+    fetch: (verbose) => fetchAllGeminiCliQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: GeminiCliQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayGeminiCliQuotaSection(result as { account: string; quota: GeminiCliQuotaResult }[]),
+    emptyTitle: 'Gemini CLI (0 accounts)',
+    emptyMessage: 'No Gemini CLI accounts configured',
+    authCommand: 'ccs gemini --auth',
+  },
+  ghcp: {
+    fetch: (verbose) => fetchAllGhcpQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: GhcpQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayGhcpQuotaSection(result as { account: string; quota: GhcpQuotaResult }[]),
+    emptyTitle: 'GitHub Copilot (0 accounts)',
+    emptyMessage: 'No GitHub Copilot accounts configured',
+    authCommand: 'ccs ghcp --auth',
+  },
+};
+
 export async function handleQuotaStatus(
   verbose = false,
-  providerFilter: 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all' = 'all'
+  providerFilter: QuotaSupportedProvider | 'all' = 'all'
 ): Promise<void> {
   await initUI();
   console.log(header('Quota Status'));
   console.log('');
 
-  const shouldFetch = {
-    agy: providerFilter === 'all' || providerFilter === 'agy',
-    codex: providerFilter === 'all' || providerFilter === 'codex',
-    gemini: providerFilter === 'all' || providerFilter === 'gemini',
-    ghcp: providerFilter === 'all' || providerFilter === 'ghcp',
-  };
+  const requestedProviders = new Set<QuotaSupportedProvider>(
+    providerFilter === 'all' ? QUOTA_SUPPORTED_PROVIDER_IDS : [providerFilter]
+  );
+  const shouldFetch = (provider: QuotaSupportedProvider): boolean =>
+    requestedProviders.has(provider);
 
   console.log(dim('Fetching quotas...'));
 
-  const [agyResults, codexResults, geminiResults, ghcpResults] = await Promise.all([
-    shouldFetch.agy ? fetchAllProviderQuotas('agy', verbose) : null,
-    shouldFetch.codex ? fetchAllCodexQuotas(verbose) : null,
-    shouldFetch.gemini ? fetchAllGeminiCliQuotas(verbose) : null,
-    shouldFetch.ghcp ? fetchAllGhcpQuotas(verbose) : null,
-  ]);
+  const providerResults = new Map<QuotaSupportedProvider, unknown | null>(
+    await Promise.all(
+      QUOTA_SUPPORTED_PROVIDER_IDS.map(async (provider) => {
+        if (!shouldFetch(provider)) {
+          return [provider, null] as const;
+        }
+        return [provider, await QUOTA_PROVIDER_RUNTIME[provider].fetch(verbose)] as const;
+      })
+    )
+  );
 
   console.log('');
 
-  if (agyResults && agyResults.accounts.length > 0) {
-    displayAntigravityQuotaSection(agyResults);
-  } else if (shouldFetch.agy) {
-    console.log(subheader('Antigravity (0 accounts)'));
-    console.log(info('No Antigravity accounts configured'));
-    console.log(`  Run: ${color('ccs agy --auth', 'command')} to authenticate`);
-    console.log('');
-  }
+  for (const provider of QUOTA_SUPPORTED_PROVIDER_IDS) {
+    if (!shouldFetch(provider)) {
+      continue;
+    }
 
-  if (codexResults && codexResults.length > 0) {
-    displayCodexQuotaSection(codexResults);
-  } else if (shouldFetch.codex) {
-    console.log(subheader('Codex (0 accounts)'));
-    console.log(info('No Codex accounts configured'));
-    console.log(`  Run: ${color('ccs codex --auth', 'command')} to authenticate`);
-    console.log('');
-  }
+    const runtime = QUOTA_PROVIDER_RUNTIME[provider];
+    const result = providerResults.get(provider) ?? null;
+    if (result !== null && runtime.hasData(result)) {
+      runtime.render(result);
+      continue;
+    }
 
-  if (geminiResults && geminiResults.length > 0) {
-    displayGeminiCliQuotaSection(geminiResults);
-  } else if (shouldFetch.gemini) {
-    console.log(subheader('Gemini CLI (0 accounts)'));
-    console.log(info('No Gemini CLI accounts configured'));
-    console.log(`  Run: ${color('ccs gemini --auth', 'command')} to authenticate`);
-    console.log('');
-  }
-
-  if (ghcpResults && ghcpResults.length > 0) {
-    displayGhcpQuotaSection(ghcpResults);
-  } else if (shouldFetch.ghcp) {
-    console.log(subheader('GitHub Copilot (0 accounts)'));
-    console.log(info('No GitHub Copilot accounts configured'));
-    console.log(`  Run: ${color('ccs ghcp --auth', 'command')} to authenticate`);
+    console.log(subheader(runtime.emptyTitle));
+    console.log(info(runtime.emptyMessage));
+    console.log(`  Run: ${color(runtime.authCommand, 'command')} to authenticate`);
     console.log('');
   }
 }

@@ -56,6 +56,53 @@ describe('arg-extractor', () => {
       });
     });
 
+    it('accepts dash-prefixed value when allowDashValue is enabled', () => {
+      const result = extractOption(['--model', '-preview', '--yes'], ['--model'], {
+        allowDashValue: true,
+        knownFlags: ['--model', '--yes'],
+      });
+
+      expect(result).toEqual({
+        found: true,
+        value: '-preview',
+        missingValue: false,
+        remainingArgs: ['--yes'],
+      });
+    });
+
+    it('still treats known flags as missing when allowDashValue is enabled', () => {
+      const result = extractOption(['--model', '--yes', 'prompt'], ['--model'], {
+        allowDashValue: true,
+        knownFlags: ['--model', '--yes'],
+      });
+
+      expect(result).toEqual({
+        found: true,
+        missingValue: true,
+        remainingArgs: ['--yes', 'prompt'],
+      });
+    });
+
+    it('supports repeated extraction loops with deterministic last-value wins behavior', () => {
+      let remaining = ['--model', 'gpt-4.1-mini', '--model', 'gpt-4.1'];
+      let selected: string | undefined;
+
+      while (true) {
+        const extracted = extractOption(remaining, ['--model']);
+        if (!extracted.found) {
+          break;
+        }
+
+        if (!extracted.missingValue && extracted.value) {
+          selected = extracted.value;
+        }
+        remaining = extracted.remainingArgs;
+      }
+
+      expect(selected).toBe('gpt-4.1');
+      expect(remaining).toEqual([]);
+    });
+
     it('returns non-match state without altering args content', () => {
       const args = ['--yes', 'prompt'];
       const result = extractOption(args, ['--profile', '-p']);
@@ -75,8 +122,14 @@ describe('arg-extractor', () => {
       expect(hasAnyFlag(['prompt', '-y'], ['--yes', '-y'])).toBe(true);
     });
 
-    it('returns false when only non-matching or inline tokens exist', () => {
-      expect(hasAnyFlag(['prompt', '--yes=true'], ['--yes', '-y'])).toBe(false);
+    it('supports inline truthy values for boolean flags', () => {
+      expect(hasAnyFlag(['prompt', '--yes=true'], ['--yes', '-y'])).toBe(true);
+      expect(hasAnyFlag(['prompt', '--yes=1'], ['--yes', '-y'])).toBe(true);
+      expect(hasAnyFlag(['prompt', '--yes=on'], ['--yes', '-y'])).toBe(true);
+    });
+
+    it('returns false for non-truthy or unrelated inline tokens', () => {
+      expect(hasAnyFlag(['prompt', '--yes=false'], ['--yes', '-y'])).toBe(false);
       expect(hasAnyFlag(['prompt', '--profile=gemini'], ['--yes', '-y'])).toBe(false);
     });
   });
