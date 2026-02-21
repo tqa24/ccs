@@ -10,26 +10,17 @@
  */
 
 import { CLIProxyProvider } from '../types';
-import { supportsExtendedContext, isNativeGeminiModel } from '../model-catalog';
+import { supportsExtendedContext } from '../model-catalog';
 import { warn } from '../../utils/ui';
+import {
+  applyExtendedContextSuffix as applyExtendedContextSuffixShared,
+  isNativeGeminiModel,
+  stripExtendedContextSuffix,
+} from '../../shared/extended-context-utils';
 
-/** Extended context suffix recognized by Claude Code */
-const EXTENDED_CONTEXT_SUFFIX = '[1m]';
-
-/**
- * Apply extended context suffix to model name.
- * Appends [1m] suffix if not already present.
- *
- * @param model - Model name (may include thinking suffix like "model(high)")
- * @returns Model name with [1m] suffix, e.g., "gemini-2.5-pro[1m]" or "gemini-2.5-pro(high)[1m]"
- */
-export function applyExtendedContextSuffix(model: string): string {
-  if (!model) return model;
-  // Case-insensitive check to avoid double suffix (handles [1M], [1m], etc.)
-  if (model.toLowerCase().endsWith(EXTENDED_CONTEXT_SUFFIX.toLowerCase())) {
-    return model;
-  }
-  return `${model}${EXTENDED_CONTEXT_SUFFIX}`;
+// Backward-compatible export retained for tests/importers that reference this module.
+export function applyExtendedContextSuffix(modelId: string): string {
+  return applyExtendedContextSuffixShared(modelId);
 }
 
 /**
@@ -109,7 +100,7 @@ export function applyExtendedContextConfig(
 
   // Apply suffix to main model
   if (envVars.ANTHROPIC_MODEL) {
-    envVars.ANTHROPIC_MODEL = applyExtendedContextSuffix(envVars.ANTHROPIC_MODEL);
+    envVars.ANTHROPIC_MODEL = applyExtendedContextSuffixShared(envVars.ANTHROPIC_MODEL);
   }
 
   // Apply to tier models if they support extended context
@@ -119,7 +110,7 @@ export function applyExtendedContextConfig(
     if (model) {
       const tierCleanId = stripModelSuffixes(model);
       if (shouldApplyExtendedContext(provider, tierCleanId, extendedContextOverride)) {
-        envVars[tierVar] = applyExtendedContextSuffix(model);
+        envVars[tierVar] = applyExtendedContextSuffixShared(model);
       }
     }
   }
@@ -133,8 +124,5 @@ export function applyExtendedContextConfig(
  *   "gemini-2.5-pro" -> "gemini-2.5-pro"
  */
 function stripModelSuffixes(modelId: string): string {
-  return modelId
-    .trim()
-    .replace(/\[1m\]$/i, '') // Remove [1m] suffix
-    .replace(/\([^)]+\)$/, ''); // Remove thinking suffix like (high) or (8192)
+  return stripExtendedContextSuffix(modelId.trim()).replace(/\([^)]+\)$/, '');
 }

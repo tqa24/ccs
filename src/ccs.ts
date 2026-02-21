@@ -433,56 +433,6 @@ async function main(): Promise<void> {
     console.warn('[!] Recovery failed:', (err as Error).message);
   }
 
-  // Special case: version command (check BEFORE profile detection)
-  if (firstArg === 'version' || firstArg === '--version' || firstArg === '-v') {
-    await handleVersionCommand();
-    return;
-  }
-
-  // Special case: help command
-  if (firstArg === '--help' || firstArg === '-h' || firstArg === 'help') {
-    await handleHelpCommand();
-    return;
-  }
-
-  // Special case: install command
-  if (firstArg === '--install') {
-    handleInstallCommand();
-    return;
-  }
-
-  // Special case: uninstall command
-  if (firstArg === '--uninstall') {
-    handleUninstallCommand();
-    return;
-  }
-
-  // Special case: shell completion installer
-  if (firstArg === '--shell-completion' || firstArg === '-sc') {
-    await handleShellCompletionCommand(args.slice(1));
-    return;
-  }
-
-  // Special case: doctor command
-  if (firstArg === 'doctor' || firstArg === '--doctor') {
-    const restArgs = args.slice(args.indexOf(firstArg) + 1);
-    await handleDoctorCommand(restArgs);
-    return;
-  }
-
-  // Special case: sync command
-  if (firstArg === 'sync' || firstArg === '--sync') {
-    await handleSyncCommand();
-    return;
-  }
-
-  // Special case: cleanup command
-  if (firstArg === 'cleanup' || firstArg === '--cleanup') {
-    const { handleCleanupCommand } = await import('./commands/cleanup-command');
-    await handleCleanupCommand(args.slice(1));
-    return;
-  }
-
   // Special case: migrate command
   if (firstArg === 'migrate' || firstArg === '--migrate') {
     const { handleMigrateCommand, printMigrateHelp } = await import('./commands/migrate-command');
@@ -525,70 +475,78 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Special case: auth command
-  if (firstArg === 'auth') {
-    const AuthCommandsModule = await import('./auth/auth-commands');
-    const AuthCommands = AuthCommandsModule.default;
-    const authCommands = new AuthCommands();
-    await authCommands.route(args.slice(1));
+  const commandAliases: Record<string, string> = {
+    '--version': 'version',
+    '-v': 'version',
+    '--help': 'help',
+    '-h': 'help',
+    '--doctor': 'doctor',
+    '--sync': 'sync',
+    '--cleanup': 'cleanup',
+    '--setup': 'setup',
+  };
+
+  const normalizedFirstArg = commandAliases[firstArg] || firstArg;
+
+  const earlyCommandHandlers: Record<string, () => Promise<void>> = {
+    version: async () => handleVersionCommand(),
+    help: async () => handleHelpCommand(),
+    '--install': async () => handleInstallCommand(),
+    '--uninstall': async () => handleUninstallCommand(),
+    '--shell-completion': async () => handleShellCompletionCommand(args.slice(1)),
+    '-sc': async () => handleShellCompletionCommand(args.slice(1)),
+    doctor: async () => handleDoctorCommand(args.slice(1)),
+    sync: async () => handleSyncCommand(),
+    cleanup: async () => {
+      const { handleCleanupCommand } = await import('./commands/cleanup-command');
+      await handleCleanupCommand(args.slice(1));
+    },
+    auth: async () => {
+      const AuthCommandsModule = await import('./auth/auth-commands');
+      const AuthCommands = AuthCommandsModule.default;
+      const authCommands = new AuthCommands();
+      await authCommands.route(args.slice(1));
+    },
+    api: async () => {
+      const { handleApiCommand } = await import('./commands/api-command');
+      await handleApiCommand(args.slice(1));
+    },
+    cliproxy: async () => {
+      const { handleCliproxyCommand } = await import('./commands/cliproxy-command');
+      await handleCliproxyCommand(args.slice(1));
+    },
+    config: async () => {
+      const { handleConfigCommand } = await import('./commands/config-command');
+      await handleConfigCommand(args.slice(1));
+    },
+    tokens: async () => {
+      const { handleTokensCommand } = await import('./commands/tokens-command');
+      const exitCode = await handleTokensCommand(args.slice(1));
+      process.exit(exitCode);
+    },
+    persist: async () => {
+      const { handlePersistCommand } = await import('./commands/persist-command');
+      await handlePersistCommand(args.slice(1));
+    },
+    env: async () => {
+      const { handleEnvCommand } = await import('./commands/env-command');
+      await handleEnvCommand(args.slice(1));
+    },
+    setup: async () => {
+      const { handleSetupCommand } = await import('./commands/setup-command');
+      await handleSetupCommand(args.slice(1));
+    },
+    cursor: async () => {
+      const { handleCursorCommand } = await import('./commands/cursor-command');
+      const exitCode = await handleCursorCommand(args.slice(1));
+      process.exit(exitCode);
+    },
+  };
+
+  const earlyCommandHandler = earlyCommandHandlers[normalizedFirstArg];
+  if (earlyCommandHandler) {
+    await earlyCommandHandler();
     return;
-  }
-
-  // Special case: api command (manages API profiles)
-  if (firstArg === 'api') {
-    const { handleApiCommand } = await import('./commands/api-command');
-    await handleApiCommand(args.slice(1));
-    return;
-  }
-
-  // Special case: cliproxy command (manages CLIProxyAPI binary)
-  if (firstArg === 'cliproxy') {
-    const { handleCliproxyCommand } = await import('./commands/cliproxy-command');
-    await handleCliproxyCommand(args.slice(1));
-    return;
-  }
-
-  // Special case: config command (web dashboard)
-  if (firstArg === 'config') {
-    const { handleConfigCommand } = await import('./commands/config-command');
-    await handleConfigCommand(args.slice(1));
-    return;
-  }
-
-  // Special case: tokens command (auth token management)
-  if (firstArg === 'tokens') {
-    const { handleTokensCommand } = await import('./commands/tokens-command');
-    const exitCode = await handleTokensCommand(args.slice(1));
-    process.exit(exitCode);
-  }
-
-  // Special case: persist command (write profile env to ~/.claude/settings.json)
-  if (firstArg === 'persist') {
-    const { handlePersistCommand } = await import('./commands/persist-command');
-    await handlePersistCommand(args.slice(1));
-    return;
-  }
-
-  // Special case: env command (export env vars for third-party tools)
-  if (firstArg === 'env') {
-    const { handleEnvCommand } = await import('./commands/env-command');
-    await handleEnvCommand(args.slice(1));
-    return;
-  }
-
-  // Special case: setup command (first-time wizard)
-  if (firstArg === 'setup' || firstArg === '--setup') {
-    const { handleSetupCommand } = await import('./commands/setup-command');
-    await handleSetupCommand(args.slice(1));
-    return;
-  }
-
-  // Special case: cursor command (Cursor IDE integration)
-  // All `ccs cursor *` routes to cursor command handler — cursor has no profile-switching mode
-  if (firstArg === 'cursor') {
-    const { handleCursorCommand } = await import('./commands/cursor-command');
-    const exitCode = await handleCursorCommand(args.slice(1));
-    process.exit(exitCode);
   }
 
   // Special case: copilot command (GitHub Copilot integration)

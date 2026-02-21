@@ -117,7 +117,17 @@ image_analysis:
 
   describe('provider validation', () => {
     it('should accept valid providers', () => {
-      const validProviders = ['agy', 'gemini', 'codex', 'kiro', 'ghcp', 'claude', 'qwen', 'iflow'];
+      const validProviders = [
+        'agy',
+        'gemini',
+        'codex',
+        'kiro',
+        'ghcp',
+        'claude',
+        'qwen',
+        'iflow',
+        'kimi',
+      ];
 
       for (const provider of validProviders) {
         expect(validProviders.includes(provider)).toBe(true);
@@ -125,7 +135,17 @@ image_analysis:
     });
 
     it('should reject invalid providers', () => {
-      const validProviders = ['agy', 'gemini', 'codex', 'kiro', 'ghcp', 'claude', 'qwen', 'iflow'];
+      const validProviders = [
+        'agy',
+        'gemini',
+        'codex',
+        'kiro',
+        'ghcp',
+        'claude',
+        'qwen',
+        'iflow',
+        'kimi',
+      ];
       const invalidProviders = ['unknown', 'custom', 'my-provider', 'test'];
 
       for (const provider of invalidProviders) {
@@ -147,12 +167,15 @@ image_analysis:
           kiro: 'kiro-claude-haiku-4-5',
           ghcp: 'claude-haiku-4.5',
           claude: 'claude-haiku-4-5-20251001',
+          qwen: 'vision-model',
+          iflow: 'qwen3-vl-plus',
+          kimi: 'vision-model',
         },
       };
 
       expect(defaultConfig.enabled).toBe(true);
       expect(defaultConfig.timeout).toBe(60);
-      expect(Object.keys(defaultConfig.provider_models).length).toBe(6);
+      expect(Object.keys(defaultConfig.provider_models).length).toBe(9);
     });
   });
 

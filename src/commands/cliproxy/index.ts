@@ -7,8 +7,15 @@
 
 import { CLIProxyBackend } from '../../cliproxy/types';
 import { DEFAULT_BACKEND } from '../../cliproxy/platform-detector';
+import {
+  type QuotaSupportedProvider,
+  QUOTA_PROVIDER_HELP_TEXT,
+  mapExternalProviderName,
+  isQuotaSupportedProvider,
+} from '../../cliproxy/provider-capabilities';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { handleSync } from '../cliproxy-sync-handler';
+import { extractOption, hasAnyFlag } from '../arg-extractor';
 
 // Import subcommand handlers
 import { handleList } from './auth-subcommand';
@@ -42,30 +49,23 @@ function parseBackendArg(args: string[]): {
   backend: CLIProxyBackend | undefined;
   remainingArgs: string[];
 } {
-  const backendIdx = args.indexOf('--backend');
-  if (backendIdx === -1) {
-    // Also check for --backend=value format
-    const backendEqualsIdx = args.findIndex((a) => a.startsWith('--backend='));
-    if (backendEqualsIdx !== -1) {
-      const value = args[backendEqualsIdx].split('=')[1] as CLIProxyBackend;
-      if (value !== 'original' && value !== 'plus') {
-        console.warn(`Invalid backend '${value}'. Valid options: original, plus`);
-        return { backend: undefined, remainingArgs: args };
-      }
-      const remainingArgs = [...args];
-      remainingArgs.splice(backendEqualsIdx, 1);
-      return { backend: value, remainingArgs };
-    }
+  const extracted = extractOption(args, ['--backend']);
+  if (!extracted.found) {
     return { backend: undefined, remainingArgs: args };
   }
-  const value = args[backendIdx + 1];
+
+  if (extracted.missingValue || !extracted.value) {
+    console.warn(`Invalid backend ''. Valid options: original, plus`);
+    return { backend: undefined, remainingArgs: extracted.remainingArgs };
+  }
+
+  const value = extracted.value as CLIProxyBackend;
   if (value !== 'original' && value !== 'plus') {
     console.warn(`Invalid backend '${value}'. Valid options: original, plus`);
-    return { backend: undefined, remainingArgs: args };
+    return { backend: undefined, remainingArgs: extracted.remainingArgs };
   }
-  const remainingArgs = [...args];
-  remainingArgs.splice(backendIdx, 2);
-  return { backend: value, remainingArgs };
+
+  return { backend: value, remainingArgs: extracted.remainingArgs };
 }
 
 /**
@@ -80,91 +80,48 @@ function getEffectiveBackend(cliBackend?: CLIProxyBackend): CLIProxyBackend {
 /**
  * Parse --provider flag from args for quota command
  * Returns the provider filter value and remaining args
- * Accepts: agy, codex, claude, anthropic, gemini, gemini-cli, ghcp, github-copilot, all
+ * Accepts canonical + aliases from quota-supported providers, and `all`
  */
+type QuotaProviderFilter = QuotaSupportedProvider | 'all';
+
+function normalizeQuotaProvider(value: string): QuotaProviderFilter | null {
+  if (value === 'all') {
+    return 'all';
+  }
+
+  const canonicalProvider = mapExternalProviderName(value);
+  if (!canonicalProvider || !isQuotaSupportedProvider(canonicalProvider)) {
+    return null;
+  }
+
+  return canonicalProvider;
+}
+
 function parseProviderArg(args: string[]): {
-  provider: 'agy' | 'codex' | 'claude' | 'gemini' | 'ghcp' | 'all';
+  provider: QuotaProviderFilter;
   remainingArgs: string[];
 } {
-  const providerIdx = args.indexOf('--provider');
-  if (providerIdx === -1) {
-    // Also check for --provider=value format
-    const providerEqualsIdx = args.findIndex((a) => a.startsWith('--provider='));
-    if (providerEqualsIdx !== -1) {
-      const value = args[providerEqualsIdx].split('=')[1]?.toLowerCase() || '';
-      const remainingArgs = [...args];
-      remainingArgs.splice(providerEqualsIdx, 1);
-      // Handle empty value
-      if (!value) {
-        console.error(
-          'Warning: --provider requires a value. Valid options: agy, codex, claude, anthropic, gemini, gemini-cli, ghcp, github-copilot, all'
-        );
-        return { provider: 'all', remainingArgs };
-      }
-      // Normalize aliases
-      const normalized =
-        value === 'gemini-cli'
-          ? 'gemini'
-          : value === 'github-copilot'
-            ? 'ghcp'
-            : value === 'anthropic'
-              ? 'claude'
-              : value;
-      if (
-        normalized !== 'agy' &&
-        normalized !== 'codex' &&
-        normalized !== 'claude' &&
-        normalized !== 'gemini' &&
-        normalized !== 'ghcp' &&
-        normalized !== 'all'
-      ) {
-        console.error(
-          `Invalid provider '${value}'. Valid options: agy, codex, claude, anthropic, gemini, gemini-cli, ghcp, github-copilot, all`
-        );
-        return { provider: 'all', remainingArgs };
-      }
-      return {
-        provider: normalized as 'agy' | 'codex' | 'claude' | 'gemini' | 'ghcp' | 'all',
-        remainingArgs,
-      };
-    }
+  const extracted = extractOption(args, ['--provider']);
+  if (!extracted.found) {
     return { provider: 'all', remainingArgs: args };
   }
-  const rawValue = args[providerIdx + 1];
-  // Warn if no value or value looks like another flag
-  if (!rawValue || rawValue.startsWith('-')) {
+
+  if (extracted.missingValue || !extracted.value) {
     console.error(
-      'Warning: --provider requires a value. Valid options: agy, codex, claude, anthropic, gemini, gemini-cli, ghcp, github-copilot, all'
+      `Warning: --provider requires a value. Valid options: ${QUOTA_PROVIDER_HELP_TEXT}`
     );
+    return { provider: 'all', remainingArgs: extracted.remainingArgs };
   }
-  const value = rawValue?.toLowerCase() || 'all';
-  const remainingArgs = [...args];
-  remainingArgs.splice(providerIdx, 2);
-  // Normalize aliases
-  const normalized =
-    value === 'gemini-cli'
-      ? 'gemini'
-      : value === 'github-copilot'
-        ? 'ghcp'
-        : value === 'anthropic'
-          ? 'claude'
-          : value;
-  if (
-    normalized !== 'agy' &&
-    normalized !== 'codex' &&
-    normalized !== 'claude' &&
-    normalized !== 'gemini' &&
-    normalized !== 'ghcp' &&
-    normalized !== 'all'
-  ) {
-    console.error(
-      `Invalid provider '${value}'. Valid options: agy, codex, claude, anthropic, gemini, gemini-cli, ghcp, github-copilot, all`
-    );
-    return { provider: 'all', remainingArgs };
+
+  const value = extracted.value.toLowerCase();
+  const normalized = normalizeQuotaProvider(value);
+  if (!normalized) {
+    console.error(`Invalid provider '${value}'. Valid options: ${QUOTA_PROVIDER_HELP_TEXT}`);
+    return { provider: 'all', remainingArgs: extracted.remainingArgs };
   }
   return {
-    provider: normalized as 'agy' | 'codex' | 'claude' | 'gemini' | 'ghcp' | 'all',
-    remainingArgs,
+    provider: normalized,
+    remainingArgs: extracted.remainingArgs,
   };
 }
 
@@ -176,32 +133,11 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
   const { backend: cliBackend, remainingArgs } = parseBackendArg(args);
   const effectiveBackend = getEffectiveBackend(cliBackend);
 
-  const verbose = remainingArgs.includes('--verbose') || remainingArgs.includes('-v');
+  const verbose = hasAnyFlag(remainingArgs, ['--verbose', '-v']);
   const command = remainingArgs[0];
 
-  if (remainingArgs.includes('--help') || remainingArgs.includes('-h')) {
+  if (hasAnyFlag(remainingArgs, ['--help', '-h'])) {
     await showHelp();
-    return;
-  }
-
-  // Profile commands
-  if (command === 'create') {
-    await handleCreate(remainingArgs.slice(1), effectiveBackend);
-    return;
-  }
-
-  if (command === 'edit') {
-    await handleEdit(remainingArgs.slice(1), effectiveBackend);
-    return;
-  }
-
-  if (command === 'list' || command === 'ls') {
-    await handleList();
-    return;
-  }
-
-  if (command === 'remove' || command === 'delete' || command === 'rm') {
-    await handleRemove(remainingArgs.slice(1));
     return;
   }
 
@@ -226,52 +162,34 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
     return;
   }
 
-  // Proxy lifecycle commands
-  if (command === 'start') {
-    await handleStart(verbose);
-    return;
-  }
-
-  if (command === 'stop') {
-    await handleStop();
-    return;
-  }
-
-  if (command === 'restart') {
-    await handleRestart(verbose);
-    return;
-  }
-
-  if (command === 'status') {
-    await handleProxyStatus();
-    return;
-  }
-
-  // Diagnostics
-  if (command === 'doctor' || command === 'diag') {
-    await handleDoctor(verbose);
-    return;
-  }
-
-  // Quota management commands
-  if (command === 'default') {
-    await handleSetDefault(remainingArgs.slice(1));
-    return;
-  }
-
-  if (command === 'pause') {
-    await handlePauseAccount(remainingArgs.slice(1));
-    return;
-  }
-
-  if (command === 'resume') {
-    await handleResumeAccount(remainingArgs.slice(1));
-    return;
-  }
-
   if (command === 'quota') {
     const { provider: providerFilter } = parseProviderArg(remainingArgs.slice(1));
     await handleQuotaStatus(verbose, providerFilter);
+    return;
+  }
+
+  const commandHandlers: Record<string, () => Promise<void>> = {
+    create: async () => handleCreate(remainingArgs.slice(1), effectiveBackend),
+    edit: async () => handleEdit(remainingArgs.slice(1), effectiveBackend),
+    list: async () => handleList(),
+    ls: async () => handleList(),
+    remove: async () => handleRemove(remainingArgs.slice(1)),
+    delete: async () => handleRemove(remainingArgs.slice(1)),
+    rm: async () => handleRemove(remainingArgs.slice(1)),
+    start: async () => handleStart(verbose),
+    stop: async () => handleStop(),
+    restart: async () => handleRestart(verbose),
+    status: async () => handleProxyStatus(),
+    doctor: async () => handleDoctor(verbose),
+    diag: async () => handleDoctor(verbose),
+    default: async () => handleSetDefault(remainingArgs.slice(1)),
+    pause: async () => handlePauseAccount(remainingArgs.slice(1)),
+    resume: async () => handleResumeAccount(remainingArgs.slice(1)),
+  };
+
+  const commandHandler = command ? commandHandlers[command] : undefined;
+  if (commandHandler) {
+    await commandHandler();
     return;
   }
 

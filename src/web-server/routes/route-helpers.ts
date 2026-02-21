@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir, getConfigPath, loadConfigSafe, loadSettings } from '../../utils/config-manager';
 import { expandPath } from '../../utils/helpers';
+import { getClaudeSettingsPath } from '../../utils/claude-config-path';
 import type { Config, Settings } from '../../types/config';
 
 /** Model mapping for API profiles */
@@ -160,21 +161,69 @@ export function updateSettingsFile(
  * - ~/.ccs/ directory: read/write allowed
  * - ~/.claude/settings.json: read-only
  */
+function normalizePathForComparison(filePath: string): string {
+  const normalized = path.resolve(path.normalize(filePath));
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function isPathWithin(basePath: string, targetPath: string): boolean {
+  const relative = path.relative(basePath, targetPath);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function isSymlinkPath(filePath: string): boolean {
+  try {
+    return fs.lstatSync(filePath).isSymbolicLink();
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'ENOENT' || nodeError.code === 'ENOTDIR') {
+      return false;
+    }
+    return true;
+  }
+}
+
+function hasSymlinkSegment(basePath: string, targetPath: string): boolean {
+  const relative = path.relative(basePath, targetPath);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    return false;
+  }
+
+  let currentPath = basePath;
+  const segments = relative.split(path.sep).filter(Boolean);
+  for (const segment of segments) {
+    currentPath = path.join(currentPath, segment);
+    if (isSymlinkPath(currentPath)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function validateFilePath(filePath: string): {
   valid: boolean;
   readonly: boolean;
   error?: string;
 } {
   const expandedPath = expandPath(filePath);
-  const normalizedPath = path.normalize(expandedPath);
-  const ccsDir = getCcsDir();
-  const claudeSettingsPath = expandPath('~/.claude/settings.json');
+  const resolvedPath = path.resolve(path.normalize(expandedPath));
+  const resolvedCcsDir = path.resolve(path.normalize(getCcsDir()));
+  const resolvedClaudeSettingsPath = path.resolve(path.normalize(getClaudeSettingsPath()));
+  const normalizedPath = normalizePathForComparison(resolvedPath);
+  const ccsDir = normalizePathForComparison(resolvedCcsDir);
+  const claudeSettingsPath = normalizePathForComparison(resolvedClaudeSettingsPath);
 
   // Check if path is within ~/.ccs/
-  if (normalizedPath.startsWith(ccsDir)) {
+  if (isPathWithin(ccsDir, normalizedPath)) {
+    if (hasSymlinkSegment(resolvedCcsDir, resolvedPath)) {
+      return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
+    }
+
     // Block access to sensitive subdirectories
-    const relativePath = normalizedPath.slice(ccsDir.length);
-    if (relativePath.includes('/.git/') || relativePath.includes('/node_modules/')) {
+    const relativePath = path.relative(ccsDir, normalizedPath);
+    const pathSegments = relativePath.split(path.sep).filter(Boolean);
+    if (pathSegments.includes('.git') || pathSegments.includes('node_modules')) {
       return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
     }
     return { valid: true, readonly: false };
@@ -182,6 +231,9 @@ export function validateFilePath(filePath: string): {
 
   // Allow read-only access to ~/.claude/settings.json
   if (normalizedPath === claudeSettingsPath) {
+    if (isSymlinkPath(resolvedClaudeSettingsPath)) {
+      return { valid: false, readonly: false, error: 'Access to this path is not allowed' };
+    }
     return { valid: true, readonly: true };
   }
 
