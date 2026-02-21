@@ -216,6 +216,26 @@ export type {
 /** Providers with quota API support */
 export const QUOTA_SUPPORTED_PROVIDERS = ['agy', 'codex', 'claude', 'gemini', 'ghcp'] as const;
 export type QuotaSupportedProvider = (typeof QUOTA_SUPPORTED_PROVIDERS)[number];
+const QUOTA_PROVIDER_ALIAS_MAP: Readonly<Record<string, QuotaSupportedProvider>> = {
+  antigravity: 'agy',
+  anthropic: 'claude',
+  'gemini-cli': 'gemini',
+  copilot: 'ghcp',
+  'github-copilot': 'ghcp',
+};
+
+function normalizeQuotaProvider(provider: string): QuotaSupportedProvider | null {
+  const normalized = provider.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if ((QUOTA_SUPPORTED_PROVIDERS as readonly string[]).includes(normalized)) {
+    return normalized as QuotaSupportedProvider;
+  }
+
+  return QUOTA_PROVIDER_ALIAS_MAP[normalized] ?? null;
+}
 
 /**
  * Fetch account quota from generic API route
@@ -317,7 +337,12 @@ async function fetchQuotaByProvider(
   provider: string,
   accountId: string
 ): Promise<UnifiedQuotaResult> {
-  switch (provider) {
+  const canonicalProvider = normalizeQuotaProvider(provider);
+  if (!canonicalProvider) {
+    return fetchAccountQuota(provider, accountId);
+  }
+
+  switch (canonicalProvider) {
     case 'codex':
       return fetchCodexQuotaApi(accountId);
     case 'claude':
@@ -336,13 +361,12 @@ async function fetchQuotaByProvider(
  * Supports agy, codex, claude, gemini, and ghcp providers
  */
 export function useAccountQuota(provider: string, accountId: string, enabled = true) {
+  const canonicalProvider = normalizeQuotaProvider(provider);
+
   return useQuery({
-    queryKey: ['account-quota', provider, accountId],
-    queryFn: () => fetchQuotaByProvider(provider, accountId),
-    enabled:
-      enabled &&
-      QUOTA_SUPPORTED_PROVIDERS.includes(provider as QuotaSupportedProvider) &&
-      !!accountId,
+    queryKey: ['account-quota', canonicalProvider ?? provider, accountId],
+    queryFn: () => fetchQuotaByProvider(canonicalProvider ?? provider, accountId),
+    enabled: enabled && !!canonicalProvider && !!accountId,
     staleTime: 60000, // Match refetchInterval to prevent early refetching
     refetchInterval: 60000, // Refresh every 1 minute
     refetchOnWindowFocus: false, // Don't refetch on tab switch

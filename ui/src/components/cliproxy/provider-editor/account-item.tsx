@@ -106,12 +106,16 @@ export function AccountItem({
   selected,
   onSelectChange,
 }: AccountItemProps) {
+  const normalizedProvider = account.provider.toLowerCase();
+  const isCodexProvider = normalizedProvider === 'codex';
+  const isClaudeProvider = normalizedProvider === 'claude' || normalizedProvider === 'anthropic';
+
   // Fetch runtime stats to get actual lastUsedAt (more accurate than file state)
   const { data: stats } = useCliproxyStats(showQuota);
 
   // Fetch quota for all provider accounts
   const { data: quota, isLoading: quotaLoading } = useAccountQuota(
-    account.provider,
+    normalizedProvider,
     account.id,
     showQuota
   );
@@ -124,7 +128,7 @@ export function AccountItem({
   const minQuota = getProviderMinQuota(account.provider, quota);
   const nextReset = getProviderResetTime(account.provider, quota);
   const codexBreakdown =
-    account.provider === 'codex' && quota && isCodexQuotaResult(quota)
+    isCodexProvider && quota && isCodexQuotaResult(quota)
       ? getCodexQuotaBreakdown(quota.windows)
       : null;
   const codexQuotaRows = [
@@ -132,7 +136,7 @@ export function AccountItem({
     { label: 'Weekly', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
   ].filter((row): row is { label: string; value: number } => row.value !== null);
   const claudeQuotaRows =
-    account.provider === 'claude' && quota && isClaudeQuotaResult(quota)
+    isClaudeProvider && quota && isClaudeQuotaResult(quota)
       ? [
           {
             label: '5h',
@@ -159,13 +163,13 @@ export function AccountItem({
           },
         ].filter((row): row is { label: string; value: number } => row.value !== null)
       : [];
-  const dualWindowQuotaRows =
-    account.provider === 'codex'
-      ? codexQuotaRows
-      : account.provider === 'claude'
-        ? claudeQuotaRows
-        : [];
+  const dualWindowQuotaRows = isCodexProvider
+    ? codexQuotaRows
+    : isClaudeProvider
+      ? claudeQuotaRows
+      : [];
   const minQuotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
+  const minQuotaValue = minQuotaLabel !== null ? Number(minQuotaLabel) : null;
 
   return (
     <div
@@ -359,7 +363,7 @@ export function AccountItem({
               <Loader2 className="w-3 h-3 animate-spin" />
               <span>Loading quota...</span>
             </div>
-          ) : minQuota !== null ? (
+          ) : minQuotaValue !== null ? (
             <div className="space-y-1.5">
               {/* Status indicator based on runtime usage, not file state */}
               <div className="flex items-center gap-1.5 text-xs">
@@ -409,9 +413,9 @@ export function AccountItem({
                     ) : (
                       <div className="flex items-center gap-2">
                         <Progress
-                          value={Math.max(0, Math.min(100, minQuota))}
+                          value={Math.max(0, Math.min(100, minQuotaValue))}
                           className="h-2 flex-1"
-                          indicatorClassName={getQuotaColor(minQuota)}
+                          indicatorClassName={getQuotaColor(minQuotaValue)}
                         />
                         <span className="text-xs font-medium w-10 text-right">
                           {minQuotaLabel}%
@@ -424,6 +428,16 @@ export function AccountItem({
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+            </div>
+          ) : quota?.success ? (
+            <div className="flex items-center gap-1.5">
+              <Badge
+                variant="outline"
+                className="text-[10px] h-5 px-2 gap-1 border-muted-foreground/50 text-muted-foreground"
+              >
+                <HelpCircle className="w-3 h-3" />
+                No limits
+              </Badge>
             </div>
           ) : quota?.needsReauth ? (
             <TooltipProvider>

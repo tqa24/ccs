@@ -64,11 +64,19 @@ function getClaudeWindowLabel(rateLimitType: string): string {
       return 'Opus limit';
     case 'seven_day_sonnet':
       return 'Sonnet limit';
+    case 'seven_day_oauth_apps':
+      return 'OAuth apps limit';
+    case 'seven_day_cowork':
+      return 'Cowork limit';
     case 'overage':
       return 'Extra usage';
     default:
       return rateLimitType || 'Unknown limit';
   }
+}
+
+function clampUnit(value: number): number {
+  return Math.max(0, Math.min(1, value));
 }
 
 function normalizeUtilization(raw: Record<string, unknown>): {
@@ -82,9 +90,10 @@ function normalizeUtilization(raw: Record<string, unknown>): {
 
   if (utilizationRaw !== null) {
     const ratio = utilizationRaw <= 1 ? utilizationRaw : utilizationRaw / 100;
-    const usedPercent = clampPercent(ratio * 100);
+    const normalizedRatio = clampUnit(ratio);
+    const usedPercent = clampPercent(normalizedRatio * 100);
     return {
-      utilization: ratio,
+      utilization: normalizedRatio,
       usedPercent,
       remainingPercent: clampPercent(100 - usedPercent),
     };
@@ -243,6 +252,14 @@ function mapCoreWindow(window: ClaudeQuotaWindow | null): ClaudeCoreUsageSummary
   };
 }
 
+const WEEKLY_RATE_LIMIT_TYPES = new Set([
+  'seven_day',
+  'seven_day_opus',
+  'seven_day_sonnet',
+  'seven_day_oauth_apps',
+  'seven_day_cowork',
+]);
+
 /**
  * Build explicit 5h + weekly usage summary from Claude policy windows.
  */
@@ -253,42 +270,38 @@ export function buildClaudeCoreUsageSummary(windows: ClaudeQuotaWindow[]): Claud
 
   const fiveHourWindow = windows.find((window) => window.rateLimitType === 'five_hour') || null;
   const weeklyCandidates = windows.filter((window) =>
-    ['seven_day', 'seven_day_opus', 'seven_day_sonnet'].includes(window.rateLimitType)
+    WEEKLY_RATE_LIMIT_TYPES.has(window.rateLimitType)
   );
   const weeklyWindow = pickMostRestrictiveWeekly(weeklyCandidates);
 
-  // Fallback: infer shortest/longest reset windows from non-overage limits.
-  if (!fiveHourWindow || !weeklyWindow) {
-    const nonOverage = windows.filter((window) => window.rateLimitType !== 'overage');
-    const withReset = nonOverage
-      .map((window) => ({
-        window,
-        resetMs: toEpochMs(window.resetAt),
-      }))
-      .filter((entry) => entry.resetMs !== null)
-      .sort((a, b) => (a.resetMs as number) - (b.resetMs as number));
-
-    const inferredFiveHour =
-      fiveHourWindow ||
-      (withReset.length > 0
-        ? withReset[0].window
-        : nonOverage.length > 0
-          ? pickMostRestrictiveWeekly(nonOverage)
-          : null);
-    const inferredWeekly =
-      weeklyWindow ||
-      (withReset.length > 1
-        ? withReset[withReset.length - 1].window
-        : nonOverage.find((window) => window !== inferredFiveHour) || null);
-
+  if (fiveHourWindow && weeklyWindow) {
     return {
-      fiveHour: mapCoreWindow(inferredFiveHour),
-      weekly: mapCoreWindow(inferredWeekly),
+      fiveHour: mapCoreWindow(fiveHourWindow),
+      weekly: mapCoreWindow(weeklyWindow),
     };
   }
 
+  // Fallback: infer shortest/longest reset windows from non-overage limits.
+  const nonOverage = windows.filter((window) => window.rateLimitType !== 'overage');
+  const withReset = nonOverage
+    .map((window) => ({
+      window,
+      resetMs: toEpochMs(window.resetAt),
+    }))
+    .filter((entry) => entry.resetMs !== null)
+    .sort((a, b) => (a.resetMs as number) - (b.resetMs as number));
+
+  const inferredWeekly =
+    weeklyWindow ||
+    [...withReset].reverse().find((entry) => entry.window !== fiveHourWindow)?.window ||
+    pickMostRestrictiveWeekly(nonOverage.filter((window) => window !== fiveHourWindow));
+  const inferredFiveHour =
+    fiveHourWindow ||
+    withReset.find((entry) => entry.window !== inferredWeekly)?.window ||
+    pickMostRestrictiveWeekly(nonOverage.filter((window) => window !== inferredWeekly));
+
   return {
-    fiveHour: mapCoreWindow(fiveHourWindow),
-    weekly: mapCoreWindow(weeklyWindow),
+    fiveHour: mapCoreWindow(inferredFiveHour),
+    weekly: mapCoreWindow(inferredWeekly),
   };
 }

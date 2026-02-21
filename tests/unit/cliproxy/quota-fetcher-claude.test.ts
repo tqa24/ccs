@@ -121,6 +121,42 @@ describe('Claude Quota Fetcher', () => {
         expect.arrayContaining(['five_hour', 'seven_day_opus'])
       );
     });
+
+    it('clamps utilization ratio into 0..1', () => {
+      const windows = buildClaudeQuotaWindows({
+        restrictions: [
+          {
+            rateLimitType: 'five_hour',
+            utilization: 150,
+            status: 'allowed',
+          },
+          {
+            rateLimitType: 'seven_day',
+            utilization: -25,
+            status: 'allowed',
+          },
+        ],
+      });
+
+      expect(windows).toHaveLength(2);
+      expect(windows[0].utilization).toBe(1);
+      expect(windows[0].remainingPercent).toBe(0);
+      expect(windows[1].utilization).toBe(0);
+      expect(windows[1].remainingPercent).toBe(100);
+    });
+
+    it('parses direct single restriction payload shape', () => {
+      const windows = buildClaudeQuotaWindows({
+        rateLimitType: 'five_hour',
+        utilization: 0.6,
+        status: 'allowed',
+        resetsAt: '2026-02-28T10:00:00Z',
+      });
+
+      expect(windows).toHaveLength(1);
+      expect(windows[0].rateLimitType).toBe('five_hour');
+      expect(windows[0].remainingPercent).toBe(40);
+    });
   });
 
   describe('buildClaudeCoreUsageSummary', () => {
@@ -158,6 +194,93 @@ describe('Claude Quota Fetcher', () => {
       expect(summary.fiveHour?.rateLimitType).toBe('five_hour');
       expect(summary.weekly?.rateLimitType).toBe('seven_day_opus');
       expect(summary.weekly?.remainingPercent).toBe(15);
+    });
+
+    it('considers oauth/cowork weekly windows in core summary', () => {
+      const summary = buildClaudeCoreUsageSummary([
+        {
+          rateLimitType: 'five_hour',
+          label: 'Session limit',
+          status: 'allowed',
+          utilization: 0.35,
+          usedPercent: 35,
+          remainingPercent: 65,
+          resetAt: '2026-02-28T10:00:00Z',
+        },
+        {
+          rateLimitType: 'seven_day_oauth_apps',
+          label: 'OAuth apps limit',
+          status: 'allowed_warning',
+          utilization: 0.92,
+          usedPercent: 92,
+          remainingPercent: 8,
+          resetAt: '2026-03-06T10:00:00Z',
+        },
+        {
+          rateLimitType: 'seven_day_cowork',
+          label: 'Cowork limit',
+          status: 'allowed',
+          utilization: 0.4,
+          usedPercent: 40,
+          remainingPercent: 60,
+          resetAt: '2026-03-06T12:00:00Z',
+        },
+      ]);
+
+      expect(summary.fiveHour?.rateLimitType).toBe('five_hour');
+      expect(summary.weekly?.rateLimitType).toBe('seven_day_oauth_apps');
+      expect(summary.weekly?.remainingPercent).toBe(8);
+    });
+
+    it('does not duplicate weekly window into fiveHour when only weekly exists', () => {
+      const summary = buildClaudeCoreUsageSummary([
+        {
+          rateLimitType: 'seven_day',
+          label: 'Weekly limit',
+          status: 'allowed',
+          utilization: 0.45,
+          usedPercent: 45,
+          remainingPercent: 55,
+          resetAt: '2026-03-06T10:00:00Z',
+        },
+      ]);
+
+      expect(summary.fiveHour).toBeNull();
+      expect(summary.weekly?.rateLimitType).toBe('seven_day');
+    });
+
+    it('uses earliest reset as tie-breaker for equal weekly remaining quota', () => {
+      const summary = buildClaudeCoreUsageSummary([
+        {
+          rateLimitType: 'five_hour',
+          label: 'Session limit',
+          status: 'allowed',
+          utilization: 0.2,
+          usedPercent: 20,
+          remainingPercent: 80,
+          resetAt: '2026-02-28T10:00:00Z',
+        },
+        {
+          rateLimitType: 'seven_day_opus',
+          label: 'Opus limit',
+          status: 'allowed',
+          utilization: 0.6,
+          usedPercent: 60,
+          remainingPercent: 40,
+          resetAt: '2026-03-06T12:00:00Z',
+        },
+        {
+          rateLimitType: 'seven_day_sonnet',
+          label: 'Sonnet limit',
+          status: 'allowed',
+          utilization: 0.6,
+          usedPercent: 60,
+          remainingPercent: 40,
+          resetAt: '2026-03-06T10:00:00Z',
+        },
+      ]);
+
+      expect(summary.weekly?.rateLimitType).toBe('seven_day_sonnet');
     });
   });
 
@@ -252,6 +375,143 @@ describe('Claude Quota Fetcher', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('Auth file not found');
       expect(fetchMock).toHaveBeenCalledTimes(0);
+    });
+
+    it('retries once on transient 500 then succeeds', async () => {
+      createClaudeAccount('claude-retry@example.com', {
+        access_token: 'retry-token',
+        expired: '2099-01-01T00:00:00.000Z',
+        type: 'claude',
+      });
+
+      let attempt = 0;
+      global.fetch = mock(() => {
+        attempt += 1;
+        if (attempt === 1) {
+          return Promise.resolve(new Response('', { status: 500 }));
+        }
+
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              restrictions: [
+                {
+                  rateLimitType: 'five_hour',
+                  utilization: 0.4,
+                  resetsAt: '2026-03-01T01:00:00Z',
+                  status: 'allowed',
+                },
+              ],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        );
+      }) as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-retry@example.com');
+
+      expect(result.success).toBe(true);
+      expect(attempt).toBe(2);
+      expect(result.coreUsage?.fiveHour?.remainingPercent).toBe(60);
+    });
+
+    it('retries once after AbortError and succeeds', async () => {
+      createClaudeAccount('claude-timeout@example.com', {
+        access_token: 'timeout-token',
+        expired: '2099-01-01T00:00:00.000Z',
+        type: 'claude',
+      });
+
+      let attempt = 0;
+      global.fetch = mock(() => {
+        attempt += 1;
+        if (attempt === 1) {
+          const abortError = Object.assign(new Error('aborted'), { name: 'AbortError' });
+          return Promise.reject(abortError);
+        }
+
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              restrictions: [
+                {
+                  rateLimitType: 'seven_day',
+                  utilization: 0.3,
+                  resetsAt: '2026-03-07T01:00:00Z',
+                  status: 'allowed',
+                },
+              ],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          )
+        );
+      }) as typeof fetch;
+
+      const result = await fetchClaudeQuota('claude-timeout@example.com');
+
+      expect(result.success).toBe(true);
+      expect(attempt).toBe(2);
+      expect(result.coreUsage?.weekly?.remainingPercent).toBe(70);
+    });
+
+    it('falls back to alternate auth file when preferred file is invalid JSON', async () => {
+      const accountId = 'claude-fallback@example.com';
+      const cliproxyDir = path.join(tmpDir, '.ccs', 'cliproxy');
+      const authDir = path.join(cliproxyDir, 'auth');
+      const sanitized = sanitizeEmail(accountId);
+
+      fs.mkdirSync(authDir, { recursive: true });
+      fs.writeFileSync(path.join(authDir, `claude-${sanitized}.json`), '{invalid');
+      fs.writeFileSync(
+        path.join(authDir, `anthropic-${sanitized}.json`),
+        JSON.stringify(
+          {
+            access_token: 'valid-anthropic-token',
+            expired: '2099-01-01T00:00:00.000Z',
+            type: 'anthropic',
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(
+        path.join(cliproxyDir, 'accounts.json'),
+        JSON.stringify(
+          {
+            version: 1,
+            providers: {
+              claude: {
+                default: accountId,
+                accounts: {
+                  [accountId]: {
+                    email: accountId,
+                    tokenFile: `anthropic-${sanitized}.json`,
+                    createdAt: '2026-02-20T00:00:00.000Z',
+                    lastUsedAt: '2026-02-20T00:00:00.000Z',
+                  },
+                },
+              },
+            },
+          },
+          null,
+          2
+        )
+      );
+
+      global.fetch = mock((_url: string, options?: RequestInit) => {
+        expect(options?.headers).toMatchObject({
+          Authorization: 'Bearer valid-anthropic-token',
+        });
+        return Promise.resolve(
+          new Response(JSON.stringify({ restrictions: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }) as typeof fetch;
+
+      const result = await fetchClaudeQuota(accountId);
+      expect(result.success).toBe(true);
     });
   });
 });

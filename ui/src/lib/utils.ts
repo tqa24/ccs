@@ -670,8 +670,9 @@ export function getProviderMinQuota(
   quota: UnifiedQuotaResult | null | undefined
 ): number | null {
   if (!quota?.success) return null;
+  const normalizedProvider = provider.trim().toLowerCase();
 
-  switch (provider) {
+  switch (normalizedProvider) {
     case 'agy':
       if (isAgyQuotaResult(quota)) {
         return getMinClaudeQuota(quota.models);
@@ -713,8 +714,9 @@ export function getProviderResetTime(
   quota: UnifiedQuotaResult | null | undefined
 ): string | null {
   if (!quota?.success) return null;
+  const normalizedProvider = provider.trim().toLowerCase();
 
-  switch (provider) {
+  switch (normalizedProvider) {
     case 'agy':
       if (isAgyQuotaResult(quota)) {
         return getClaudeResetTime(quota.models);

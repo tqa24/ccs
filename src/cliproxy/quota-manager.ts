@@ -520,7 +520,18 @@ function scheduleNextPoll(
     try {
       const quota = await fetchQuotaWithDedup(provider, accountId);
       if (monitorStopped) return; // Re-check after async fetch
-      const avgQuota = calculateQuotaPercent(quota) ?? 100;
+      const avgQuota = calculateQuotaPercent(quota);
+
+      if (avgQuota === null) {
+        // Quota data unavailable: keep polling, but do not treat unknown as healthy/exhausted.
+        scheduleNextPoll(
+          provider,
+          accountId,
+          monitorConfig,
+          monitorConfig.normal_interval_seconds * 1000
+        );
+        return;
+      }
 
       if (avgQuota <= monitorConfig.exhaustion_threshold) {
         // EXHAUSTED: cooldown + switch default + stop monitoring.

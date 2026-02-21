@@ -24,6 +24,13 @@ import { cleanEmail } from './utils';
 import { AccountCardStats } from './account-card-stats';
 
 type Zone = 'left' | 'right' | 'top' | 'bottom';
+const QUOTA_PROVIDER_ALIASES = [
+  'antigravity',
+  'anthropic',
+  'gemini-cli',
+  'copilot',
+  'github-copilot',
+];
 
 interface AccountCardProps {
   account: AccountData;
@@ -92,11 +99,14 @@ export function AccountCard({
   const connectorPosition = CONNECTOR_POSITION_MAP[zone];
 
   // Quota for CLIProxy accounts (agy, codex, claude, gemini, ghcp)
-  const isCliproxyProvider = QUOTA_SUPPORTED_PROVIDERS.includes(
-    account.provider as QuotaSupportedProvider
-  );
+  const normalizedProvider = account.provider.toLowerCase();
+  const isCliproxyProvider =
+    QUOTA_SUPPORTED_PROVIDERS.includes(normalizedProvider as QuotaSupportedProvider) ||
+    QUOTA_PROVIDER_ALIASES.includes(normalizedProvider);
+  const isCodexProvider = normalizedProvider === 'codex';
+  const isClaudeProvider = normalizedProvider === 'claude' || normalizedProvider === 'anthropic';
   const { data: quota, isLoading: quotaLoading } = useAccountQuota(
-    account.provider,
+    normalizedProvider,
     account.id,
     isCliproxyProvider
   );
@@ -105,7 +115,7 @@ export function AccountCard({
   const minQuota = getProviderMinQuota(account.provider, quota);
   const resetTime = getProviderResetTime(account.provider, quota);
   const codexBreakdown =
-    account.provider === 'codex' && quota && isCodexQuotaResult(quota)
+    isCodexProvider && quota && isCodexQuotaResult(quota)
       ? getCodexQuotaBreakdown(quota.windows)
       : null;
   const codexQuotaRows = [
@@ -113,7 +123,7 @@ export function AccountCard({
     { label: 'Wk', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
   ].filter((row): row is { label: string; value: number } => row.value !== null);
   const claudeQuotaRows =
-    account.provider === 'claude' && quota && isClaudeQuotaResult(quota)
+    isClaudeProvider && quota && isClaudeQuotaResult(quota)
       ? [
           {
             label: '5h',
@@ -140,13 +150,13 @@ export function AccountCard({
           },
         ].filter((row): row is { label: string; value: number } => row.value !== null)
       : [];
-  const compactQuotaRows =
-    account.provider === 'codex'
-      ? codexQuotaRows
-      : account.provider === 'claude'
-        ? claudeQuotaRows
-        : [];
+  const compactQuotaRows = isCodexProvider
+    ? codexQuotaRows
+    : isClaudeProvider
+      ? claudeQuotaRows
+      : [];
   const minQuotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
+  const minQuotaValue = minQuotaLabel !== null ? Number(minQuotaLabel) : null;
 
   // Tier badge (AGY only) - show P for Pro, U for Ultra
   const showTierBadge =
@@ -258,7 +268,7 @@ export function AccountCard({
               <Loader2 className="w-2.5 h-2.5 animate-spin" />
               <span>Quota...</span>
             </div>
-          ) : minQuota !== null ? (
+          ) : minQuotaValue !== null ? (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -270,9 +280,9 @@ export function AccountCard({
                       <span
                         className={cn(
                           'text-[10px] font-mono font-bold',
-                          minQuota > 50
+                          minQuotaValue > 50
                             ? 'text-emerald-600 dark:text-emerald-400'
-                            : minQuota > 20
+                            : minQuotaValue > 20
                               ? 'text-amber-500'
                               : 'text-red-500'
                         )}
@@ -293,13 +303,13 @@ export function AccountCard({
                       <div
                         className={cn(
                           'h-full rounded-full transition-all',
-                          minQuota > 50
+                          minQuotaValue > 50
                             ? 'bg-emerald-500'
-                            : minQuota > 20
+                            : minQuotaValue > 20
                               ? 'bg-amber-500'
                               : 'bg-red-500'
                         )}
-                        style={{ width: `${minQuota}%` }}
+                        style={{ width: `${minQuotaValue}%` }}
                       />
                     </div>
                   </div>
@@ -309,6 +319,8 @@ export function AccountCard({
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          ) : quota?.success ? (
+            <div className="text-[8px] text-muted-foreground/60">Quota limits unavailable</div>
           ) : quota?.needsReauth ? (
             <TooltipProvider>
               <Tooltip>

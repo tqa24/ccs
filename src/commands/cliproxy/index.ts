@@ -97,31 +97,33 @@ function normalizeQuotaProvider(value: string): QuotaProviderFilter | null {
   return canonicalProvider;
 }
 
-function parseProviderArg(args: string[]): {
+export function parseProviderArg(args: string[]): {
   provider: QuotaProviderFilter;
   remainingArgs: string[];
+  invalid: boolean;
 } {
   const extracted = extractOption(args, ['--provider']);
   if (!extracted.found) {
-    return { provider: 'all', remainingArgs: args };
+    return { provider: 'all', remainingArgs: args, invalid: false };
   }
 
   if (extracted.missingValue || !extracted.value) {
     console.error(
-      `Warning: --provider requires a value. Valid options: ${QUOTA_PROVIDER_HELP_TEXT}`
+      `Invalid provider value. --provider requires a value. Valid options: ${QUOTA_PROVIDER_HELP_TEXT}`
     );
-    return { provider: 'all', remainingArgs: extracted.remainingArgs };
+    return { provider: 'all', remainingArgs: extracted.remainingArgs, invalid: true };
   }
 
   const value = extracted.value.toLowerCase();
   const normalized = normalizeQuotaProvider(value);
   if (!normalized) {
     console.error(`Invalid provider '${value}'. Valid options: ${QUOTA_PROVIDER_HELP_TEXT}`);
-    return { provider: 'all', remainingArgs: extracted.remainingArgs };
+    return { provider: 'all', remainingArgs: extracted.remainingArgs, invalid: true };
   }
   return {
     provider: normalized,
     remainingArgs: extracted.remainingArgs,
+    invalid: false,
   };
 }
 
@@ -163,7 +165,11 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
   }
 
   if (command === 'quota') {
-    const { provider: providerFilter } = parseProviderArg(remainingArgs.slice(1));
+    const { provider: providerFilter, invalid } = parseProviderArg(remainingArgs.slice(1));
+    if (invalid) {
+      process.exitCode = 1;
+      return;
+    }
     await handleQuotaStatus(verbose, providerFilter);
     return;
   }
