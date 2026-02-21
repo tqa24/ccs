@@ -299,6 +299,59 @@ export interface CodexQuotaResult {
   isForbidden?: boolean;
 }
 
+/** Claude policy limit window */
+export interface ClaudeQuotaWindow {
+  /** Source identifier: five_hour, seven_day, seven_day_opus, seven_day_sonnet, overage, ... */
+  rateLimitType: string;
+  /** Human-friendly label for UI display */
+  label: string;
+  /** Upstream status: allowed, allowed_warning, rejected */
+  status: string;
+  /** Utilization ratio (0-1) when available */
+  utilization: number | null;
+  /** Utilization as percentage (0-100) */
+  usedPercent: number;
+  /** Remaining percentage (100 - usedPercent) */
+  remainingPercent: number;
+  /** Reset timestamp for this window, null if unknown */
+  resetAt: string | null;
+  surpassedThreshold?: boolean;
+  severity?: string;
+  overageStatus?: string;
+  overageResetsAt?: string | null;
+  overageDisabledReason?: string | null;
+  isUsingOverage?: boolean;
+  hasExtraUsageEnabled?: boolean;
+}
+
+/** Core Claude usage window (5h/weekly) */
+export interface ClaudeCoreUsageWindow {
+  rateLimitType: string;
+  label: string;
+  remainingPercent: number;
+  resetAt: string | null;
+  status: string;
+}
+
+/** Core Claude usage summary (5h + weekly) */
+export interface ClaudeCoreUsageSummary {
+  fiveHour: ClaudeCoreUsageWindow | null;
+  weekly: ClaudeCoreUsageWindow | null;
+}
+
+/** Claude quota result */
+export interface ClaudeQuotaResult {
+  success: boolean;
+  windows: ClaudeQuotaWindow[];
+  coreUsage?: ClaudeCoreUsageSummary;
+  lastUpdated: number;
+  error?: string;
+  accountId?: string;
+  needsReauth?: boolean;
+  /** True if result was served from cache */
+  cached?: boolean;
+}
+
 /** Gemini CLI bucket (grouped by model series) */
 export interface GeminiCliBucket {
   /** Unique bucket identifier (e.g., "gemini-flash-series::input") */
@@ -793,6 +846,9 @@ export const api = {
     /** Fetch Codex quota for a specific account */
     getCodex: (accountId: string) =>
       request<CodexQuotaResult>(`/cliproxy/quota/codex/${encodeURIComponent(accountId)}`),
+    /** Fetch Claude quota for a specific account */
+    getClaude: (accountId: string) =>
+      request<ClaudeQuotaResult>(`/cliproxy/quota/claude/${encodeURIComponent(accountId)}`),
     /** Fetch Gemini CLI quota for a specific account */
     getGemini: (accountId: string) =>
       request<GeminiCliQuotaResult>(`/cliproxy/quota/gemini/${encodeURIComponent(accountId)}`),

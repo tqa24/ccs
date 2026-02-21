@@ -94,6 +94,14 @@ export function ModelConfigTab({
   privacyMode,
   isRemoteMode,
 }: ModelConfigTabProps) {
+  const normalizedProvider = provider.toLowerCase();
+  const showQuota =
+    (QUOTA_SUPPORTED_PROVIDERS.includes(normalizedProvider as QuotaSupportedProvider) ||
+      ['anthropic', 'antigravity', 'gemini-cli', 'copilot', 'github-copilot'].includes(
+        normalizedProvider
+      )) &&
+    !isRemoteMode;
+
   // Kiro-specific: no-incognito setting (defaults to true = normal browser)
   const isKiro = provider === 'kiro';
   const [kiroNoIncognito, setKiroNoIncognito] = useState(true);
@@ -177,9 +185,7 @@ export function ModelConfigTab({
           isBulkPausing={isBulkPausing}
           isBulkResuming={isBulkResuming}
           privacyMode={privacyMode}
-          showQuota={
-            QUOTA_SUPPORTED_PROVIDERS.includes(provider as QuotaSupportedProvider) && !isRemoteMode
-          }
+          showQuota={showQuota}
           isKiro={isKiro}
           kiroNoIncognito={kiroNoIncognito}
           onKiroNoIncognitoChange={saveKiroNoIncognito}

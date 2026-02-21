@@ -144,6 +144,7 @@ export const CLIPROXY_PROVIDER_IDS = Object.freeze(
 export const QUOTA_SUPPORTED_PROVIDER_IDS = Object.freeze([
   'agy',
   'codex',
+  'claude',
   'gemini',
   'ghcp',
 ] as const);

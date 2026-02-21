@@ -2,11 +2,11 @@
  * Shared Quota Type Definitions
  *
  * Unified types for multi-provider quota system.
- * Supports Antigravity, Codex, Gemini CLI, and GitHub Copilot OAuth providers.
+ * Supports Antigravity, Codex, Claude, Gemini CLI, and GitHub Copilot OAuth providers.
  */
 
 /** Supported quota providers */
-export type QuotaProvider = 'agy' | 'codex' | 'gemini' | 'ghcp';
+export type QuotaProvider = 'agy' | 'codex' | 'claude' | 'gemini' | 'ghcp';
 
 // Re-export Antigravity types for unified access
 export type { QuotaResult as AntigravityQuotaResult } from './quota-fetcher';
@@ -69,6 +69,82 @@ export interface CodexQuotaResult {
   needsReauth?: boolean;
   /** True if account lacks quota access (403) - displayed as 0% instead of error */
   isForbidden?: boolean;
+}
+
+/**
+ * Claude policy limit window (5h/weekly/overage)
+ */
+export interface ClaudeQuotaWindow {
+  /** Source identifier: five_hour, seven_day, seven_day_opus, seven_day_sonnet, overage, ... */
+  rateLimitType: string;
+  /** Human-friendly label for UI/CLI display */
+  label: string;
+  /** Upstream status: allowed, allowed_warning, rejected */
+  status: string;
+  /** Utilization ratio (0-1) reported by API; null when unavailable */
+  utilization: number | null;
+  /** Utilization as percentage (0-100) */
+  usedPercent: number;
+  /** Remaining percentage (100 - usedPercent) */
+  remainingPercent: number;
+  /** ISO timestamp when this window resets, null if unknown */
+  resetAt: string | null;
+  /** Whether usage surpassed threshold for this window (if provided by API) */
+  surpassedThreshold?: boolean;
+  /** Optional severity hint (warning/error) */
+  severity?: string;
+  /** Overage status when provided by API */
+  overageStatus?: string;
+  /** ISO timestamp when overage resets, if provided */
+  overageResetsAt?: string | null;
+  /** Why overage is disabled, if provided */
+  overageDisabledReason?: string | null;
+  /** Whether account is currently using overage */
+  isUsingOverage?: boolean;
+  /** Whether extra usage is enabled */
+  hasExtraUsageEnabled?: boolean;
+}
+
+/** Core Claude usage window (5h/weekly) extracted from policy limits */
+export interface ClaudeCoreUsageWindow {
+  /** Source rate limit type */
+  rateLimitType: string;
+  /** Display label */
+  label: string;
+  /** Percentage remaining (0-100) */
+  remainingPercent: number;
+  /** ISO timestamp when quota resets, null if unknown */
+  resetAt: string | null;
+  /** Raw status string */
+  status: string;
+}
+
+/** Core Claude usage summary with explicit 5h + weekly windows */
+export interface ClaudeCoreUsageSummary {
+  /** Short-cycle usage limit window (5h/session) */
+  fiveHour: ClaudeCoreUsageWindow | null;
+  /** Long-cycle usage limit window (weekly) */
+  weekly: ClaudeCoreUsageWindow | null;
+}
+
+/**
+ * Claude quota fetch result
+ */
+export interface ClaudeQuotaResult {
+  /** Whether fetch succeeded */
+  success: boolean;
+  /** Policy limit windows */
+  windows: ClaudeQuotaWindow[];
+  /** Explicit core usage windows (5h + weekly) */
+  coreUsage?: ClaudeCoreUsageSummary;
+  /** Timestamp of fetch */
+  lastUpdated: number;
+  /** Error message if fetch failed */
+  error?: string;
+  /** Account ID (email) this quota belongs to */
+  accountId?: string;
+  /** True if token is expired/invalid and re-auth is required */
+  needsReauth?: boolean;
 }
 
 /**

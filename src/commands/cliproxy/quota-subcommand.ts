@@ -18,10 +18,13 @@ import {
 } from '../../cliproxy/account-manager';
 import { fetchAllProviderQuotas } from '../../cliproxy/quota-fetcher';
 import { fetchAllCodexQuotas } from '../../cliproxy/quota-fetcher-codex';
+import { fetchAllClaudeQuotas } from '../../cliproxy/quota-fetcher-claude';
+import { pickMostRestrictiveClaudeWeeklyWindow } from '../../cliproxy/quota-fetcher-claude-normalizer';
 import { fetchAllGeminiCliQuotas } from '../../cliproxy/quota-fetcher-gemini-cli';
 import { fetchAllGhcpQuotas } from '../../cliproxy/quota-fetcher-ghcp';
 import type {
   CodexQuotaResult,
+  ClaudeQuotaResult,
   GeminiCliQuotaResult,
   GhcpQuotaResult,
 } from '../../cliproxy/quota-types';
@@ -382,6 +385,157 @@ function displayCodexQuotaSection(results: { account: string; quota: CodexQuotaR
   }
 }
 
+interface ClaudeDisplayWindow {
+  rateLimitType: string;
+  label: string;
+  remainingPercent: number;
+  resetAt: string | null;
+  status: string;
+}
+
+function getClaudeWindowDisplayLabel(
+  window: Pick<ClaudeDisplayWindow, 'rateLimitType' | 'label'>
+): string {
+  switch (window.rateLimitType) {
+    case 'five_hour':
+      return '5h usage limit';
+    case 'seven_day':
+      return 'Weekly usage limit';
+    case 'seven_day_opus':
+      return 'Weekly usage (Opus)';
+    case 'seven_day_sonnet':
+      return 'Weekly usage (Sonnet)';
+    case 'seven_day_oauth_apps':
+      return 'Weekly usage (OAuth apps)';
+    case 'seven_day_cowork':
+      return 'Weekly usage (Cowork)';
+    case 'overage':
+      return 'Extra usage';
+    default:
+      return window.label;
+  }
+}
+
+function toClaudeDisplayWindow(window: ClaudeQuotaResult['windows'][number]): ClaudeDisplayWindow {
+  return {
+    rateLimitType: window.rateLimitType,
+    label: window.label,
+    remainingPercent: window.remainingPercent,
+    resetAt: window.resetAt,
+    status: window.status,
+  };
+}
+
+function toClaudeCoreDisplayWindow(
+  window: NonNullable<ClaudeQuotaResult['coreUsage']>['fiveHour']
+): ClaudeDisplayWindow | null {
+  if (!window) return null;
+  return {
+    rateLimitType: window.rateLimitType,
+    label: window.label,
+    remainingPercent: window.remainingPercent,
+    resetAt: window.resetAt,
+    status: window.status,
+  };
+}
+
+function getClaudeCoreUsageWindows(quota: ClaudeQuotaResult): {
+  fiveHourWindow: ClaudeDisplayWindow | null;
+  weeklyWindow: ClaudeDisplayWindow | null;
+} {
+  const coreUsage = quota.coreUsage;
+  const fiveHourFromCore = toClaudeCoreDisplayWindow(coreUsage?.fiveHour ?? null);
+  const weeklyFromCore = toClaudeCoreDisplayWindow(coreUsage?.weekly ?? null);
+  if (fiveHourFromCore || weeklyFromCore) {
+    return {
+      fiveHourWindow: fiveHourFromCore,
+      weeklyWindow: weeklyFromCore,
+    };
+  }
+
+  const fiveHourPolicy =
+    quota.windows.find((window) => window.rateLimitType === 'five_hour') ?? null;
+  const weeklyPolicy = pickMostRestrictiveClaudeWeeklyWindow(quota.windows);
+
+  return {
+    fiveHourWindow: fiveHourPolicy ? toClaudeDisplayWindow(fiveHourPolicy) : null,
+    weeklyWindow: weeklyPolicy ? toClaudeDisplayWindow(weeklyPolicy) : null,
+  };
+}
+
+function displayClaudeQuotaSection(results: { account: string; quota: ClaudeQuotaResult }[]): void {
+  console.log(subheader(`Claude (${results.length} account${results.length !== 1 ? 's' : ''})`));
+  console.log('');
+
+  for (const { account, quota } of results) {
+    const accountInfo = findAccountByQuery('claude', account);
+    const defaultMark = accountInfo?.isDefault ? color(' (default)', 'info') : '';
+
+    if (!quota.success) {
+      console.log(`  ${fail(account)}${defaultMark}`);
+      console.log(`    ${color(quota.error || 'Failed to fetch quota', 'error')}`);
+      console.log('');
+      continue;
+    }
+
+    const { fiveHourWindow, weeklyWindow } = getClaudeCoreUsageWindows(quota);
+    const coreWindows = [fiveHourWindow, weeklyWindow].filter(
+      (window, index, arr): window is ClaudeDisplayWindow =>
+        !!window && arr.indexOf(window) === index
+    );
+    const statusWindows =
+      coreWindows.length > 0 ? coreWindows : quota.windows.map(toClaudeDisplayWindow);
+    const minQuota =
+      statusWindows.length > 0
+        ? Math.min(...statusWindows.map((window) => window.remainingPercent))
+        : null;
+    const statusIcon =
+      minQuota === null ? info('') : minQuota > 50 ? ok('') : minQuota > 10 ? warn('') : fail('');
+
+    console.log(`  ${statusIcon}${account}${defaultMark}`);
+
+    const resetParts: string[] = [];
+    if (fiveHourWindow?.resetAt)
+      resetParts.push(`5h ${formatResetTimeISO(fiveHourWindow.resetAt)}`);
+    if (weeklyWindow?.resetAt)
+      resetParts.push(`weekly ${formatResetTimeISO(weeklyWindow.resetAt)}`);
+    if (resetParts.length > 0) {
+      console.log(`    ${dim(`Reset schedule: ${resetParts.join(' | ')}`)}`);
+    }
+
+    const orderedWindows = [...coreWindows, ...quota.windows.map(toClaudeDisplayWindow)].filter(
+      (window, index, arr) =>
+        arr.findIndex(
+          (candidate) =>
+            candidate.rateLimitType === window.rateLimitType &&
+            candidate.resetAt === window.resetAt &&
+            candidate.status === window.status
+        ) === index
+    );
+
+    if (orderedWindows.length === 0) {
+      console.log(`    ${dim('Policy limits unavailable for this account')}`);
+      console.log('');
+      continue;
+    }
+
+    for (const window of orderedWindows) {
+      const bar = formatQuotaBar(window.remainingPercent);
+      const resetLabel = window.resetAt ? dim(` Resets ${formatResetTimeISO(window.resetAt)}`) : '';
+      const statusLabel =
+        window.status === 'rejected'
+          ? dim(' [blocked]')
+          : window.status === 'allowed_warning'
+            ? dim(' [warning]')
+            : '';
+      console.log(
+        `    ${getClaudeWindowDisplayLabel(window).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}%${statusLabel}${resetLabel}`
+      );
+    }
+    console.log('');
+  }
+}
+
 function displayGeminiCliQuotaSection(
   results: { account: string; quota: GeminiCliQuotaResult }[]
 ): void {
@@ -513,6 +667,15 @@ const QUOTA_PROVIDER_RUNTIME: Record<QuotaSupportedProvider, QuotaProviderRuntim
     emptyTitle: 'Codex (0 accounts)',
     emptyMessage: 'No Codex accounts configured',
     authCommand: 'ccs codex --auth',
+  },
+  claude: {
+    fetch: (verbose) => fetchAllClaudeQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: ClaudeQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayClaudeQuotaSection(result as { account: string; quota: ClaudeQuotaResult }[]),
+    emptyTitle: 'Claude (0 accounts)',
+    emptyMessage: 'No Claude accounts configured',
+    authCommand: 'ccs claude --auth',
   },
   gemini: {
     fetch: (verbose) => fetchAllGeminiCliQuotas(verbose),

@@ -73,20 +73,22 @@ describe('provider-capabilities', () => {
   });
 
   it('exposes quota-supported providers and guards correctly', () => {
-    expect(QUOTA_SUPPORTED_PROVIDER_IDS).toEqual(['agy', 'codex', 'gemini', 'ghcp']);
+    expect(QUOTA_SUPPORTED_PROVIDER_IDS).toEqual(['agy', 'codex', 'claude', 'gemini', 'ghcp']);
     expect(QUOTA_PROVIDER_OPTION_VALUES).toEqual([
       'agy',
       'codex',
+      'claude',
       'gemini',
       'ghcp',
       'antigravity',
+      'anthropic',
       'gemini-cli',
       'github-copilot',
       'copilot',
       'all',
     ]);
     expect(QUOTA_PROVIDER_HELP_TEXT).toBe(
-      'agy, codex, gemini, ghcp, antigravity, gemini-cli, github-copilot, copilot, all'
+      'agy, codex, claude, gemini, ghcp, antigravity, anthropic, gemini-cli, github-copilot, copilot, all'
     );
     expect(isQuotaSupportedProvider('ghcp')).toBe(true);
     expect(isQuotaSupportedProvider('kiro')).toBe(false);
