@@ -28,8 +28,9 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v5: Added disable-cooling: true for stability
  * v6: Added oauth-model-alias with Opus 4.6 support
  * v7: Added fork:true for Claude model aliases (keep both upstream and alias names)
+ * v8: Added Gemini 3.1 preview aliases for provider routing compatibility
  */
-export const CLIPROXY_CONFIG_VERSION = 7;
+export const CLIPROXY_CONFIG_VERSION = 8;
 
 /**
  * Default Antigravity oauth-model-alias entries.
@@ -40,6 +41,8 @@ const DEFAULT_ANTIGRAVITY_ALIASES: Array<{ name: string; alias: string; fork?: b
   { name: 'rev19-uic3-1p', alias: 'gemini-2.5-computer-use-preview-10-2025' },
   { name: 'gemini-3-pro-image', alias: 'gemini-3-pro-image-preview' },
   { name: 'gemini-3-pro-high', alias: 'gemini-3-pro-preview' },
+  { name: 'gemini-3-pro-high', alias: 'gemini-3.1-pro-preview' },
+  { name: 'gemini-3-pro-high', alias: 'gemini-3.1-pro-preview-customtools' },
   { name: 'gemini-3-flash', alias: 'gemini-3-flash-preview' },
   { name: 'claude-sonnet-4-5', alias: 'gemini-claude-sonnet-4-5', fork: true },
   { name: 'claude-sonnet-4-5-thinking', alias: 'gemini-claude-sonnet-4-5-thinking', fork: true },

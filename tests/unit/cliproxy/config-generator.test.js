@@ -621,6 +621,29 @@ auth-dir: "${cliproxyDir.replace(/\\/g, '/')}/auth"
       }
     });
 
+    it('generates Gemini 3.1 compatibility aliases without fork', () => {
+      regenerateConfig();
+
+      const cliproxyDir = path.join(testDir, '.ccs', 'cliproxy');
+      const config = fs.readFileSync(path.join(cliproxyDir, 'config.yaml'), 'utf-8');
+      const lines = config.split('\n');
+
+      const gemini31AliasLines = [
+        'alias: gemini-3.1-pro-preview',
+        'alias: gemini-3.1-pro-preview-customtools',
+      ];
+
+      for (const aliasLine of gemini31AliasLines) {
+        const lineIndex = lines.findIndex((line) => line.includes(aliasLine));
+        assert(lineIndex >= 0, `Should include ${aliasLine}`);
+        const nextLine = lines[lineIndex + 1] || '';
+        assert(
+          !nextLine.trim().startsWith('fork:'),
+          `Gemini alias should not have fork: ${aliasLine}`
+        );
+      }
+    });
+
     it('preserves user-added aliases with fork during regeneration', () => {
       const cliproxyDir = path.join(testDir, '.ccs', 'cliproxy');
       fs.mkdirSync(cliproxyDir, { recursive: true });
