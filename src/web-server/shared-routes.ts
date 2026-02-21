@@ -7,8 +7,8 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { getCcsDir } from '../utils/config-manager';
+import { getClaudeConfigDir } from '../utils/claude-config-path';
 
 export const sharedRoutes = Router();
 
@@ -141,7 +141,7 @@ function checkSymlinkStatus(): { valid: boolean; message: string } {
         if (stats.isSymbolicLink()) {
           const target = fs.readlinkSync(linkPath);
           // Check if it points to ~/.claude/{linkType}
-          const expectedTarget = path.join(os.homedir(), '.claude', linkType);
+          const expectedTarget = path.join(getClaudeConfigDir(), linkType);
           if (path.resolve(path.dirname(linkPath), target) === path.resolve(expectedTarget)) {
             validLinks++;
           }

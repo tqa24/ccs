@@ -8,29 +8,14 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { info, warn } from '../ui';
 import { getWebSearchConfig } from '../../config/unified-config-loader';
 import { getCcsHooksDir } from '../config-manager';
+import { getClaudeSettingsPath } from '../claude-config-path';
 import { isCcsWebSearchHook, deduplicateCcsHooks } from './hook-utils';
 
 // Hook file name
 const WEBSEARCH_HOOK = 'websearch-transformer.cjs';
-
-/**
- * Get Claude settings path (respects CCS_HOME for test isolation)
- * In tests, returns path under CCS_HOME; in production, uses real ~/.claude/
- */
-function getClaudeSettingsPath(): string {
-  const ccsHome = process.env.CCS_HOME;
-  if (ccsHome) {
-    // Test mode: use CCS_HOME parent for .claude directory
-    // This prevents tests from modifying user's real settings
-    return path.join(path.dirname(ccsHome), '.claude', 'settings.json');
-  }
-  // Production: use real home directory
-  return path.join(os.homedir(), '.claude', 'settings.json');
-}
 
 // Buffer time added to max provider timeout for hook timeout (seconds)
 const HOOK_TIMEOUT_BUFFER = 30;

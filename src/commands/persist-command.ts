@@ -21,6 +21,8 @@ import ProfileDetector, {
 import { getEffectiveEnvVars, CLIPROXY_DEFAULT_PORT } from '../cliproxy/config-generator';
 import { generateCopilotEnv } from '../copilot/copilot-executor';
 import { expandPath } from '../utils/helpers';
+import { getClaudeConfigDir, getClaudeSettingsPath } from '../utils/claude-config-path';
+import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface PersistCommandArgs {
   profile?: string;
@@ -37,34 +39,48 @@ interface ResolvedEnv {
 
 /** Parse command line arguments */
 function parseArgs(args: string[]): PersistCommandArgs {
-  const result: PersistCommandArgs = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--yes' || arg === '-y') {
-      result.yes = true;
-    } else if (arg === '--help' || arg === '-h') {
-      // Will be handled in main function
-    } else if (arg === '--list-backups') {
-      result.listBackups = true;
-    } else if (arg === '--restore') {
-      // Check if next arg is a timestamp (not a flag)
-      const nextArg = args[i + 1];
-      if (nextArg && !nextArg.startsWith('-')) {
-        result.restore = nextArg;
-        i++; // Skip next arg
-      } else {
-        result.restore = true; // Use latest
-      }
-    } else if (!arg.startsWith('-') && !result.profile) {
+  const result: PersistCommandArgs = {
+    yes: hasAnyFlag(args, ['--yes', '-y']),
+    listBackups: hasAnyFlag(args, ['--list-backups']),
+  };
+
+  const restoreOption = extractOption(args, ['--restore']);
+  if (restoreOption.found) {
+    result.restore = restoreOption.missingValue ? true : restoreOption.value || true;
+  }
+
+  for (const arg of restoreOption.remainingArgs) {
+    if (!arg.startsWith('-')) {
       result.profile = arg;
+      break;
     }
   }
   return result;
 }
 
-/** Get Claude settings.json path */
-function getClaudeSettingsPath(): string {
-  return path.join(os.homedir(), '.claude', 'settings.json');
+function formatDisplayPath(filePath: string): string {
+  const defaultClaudeDir = path.join(os.homedir(), '.claude');
+  const claudeDir = getClaudeConfigDir();
+
+  // Keep real path when user overrides Claude directory.
+  if (path.resolve(claudeDir) !== path.resolve(defaultClaudeDir)) {
+    return filePath;
+  }
+
+  if (filePath === claudeDir) {
+    return '~/.claude';
+  }
+
+  const claudePrefix = `${claudeDir}${path.sep}`;
+  if (filePath.startsWith(claudePrefix)) {
+    return filePath.replace(claudePrefix, '~/.claude/');
+  }
+
+  return filePath;
+}
+
+function getClaudeSettingsDisplayPath(): string {
+  return formatDisplayPath(getClaudeSettingsPath());
 }
 
 /** Read existing Claude settings.json with validation */
@@ -171,6 +187,25 @@ interface BackupFile {
   date: Date;
 }
 
+function parseBackupTimestamp(timestamp: string): Date | null {
+  const year = parseInt(timestamp.slice(0, 4), 10);
+  const month = parseInt(timestamp.slice(4, 6), 10);
+  const day = parseInt(timestamp.slice(6, 8), 10);
+  const hour = parseInt(timestamp.slice(9, 11), 10);
+  const minute = parseInt(timestamp.slice(11, 13), 10);
+  const second = parseInt(timestamp.slice(13, 15), 10);
+  const date = new Date(year, month - 1, day, hour, minute, second);
+
+  if (date.getFullYear() !== year) return null;
+  if (date.getMonth() !== month - 1) return null;
+  if (date.getDate() !== day) return null;
+  if (date.getHours() !== hour) return null;
+  if (date.getMinutes() !== minute) return null;
+  if (date.getSeconds() !== second) return null;
+
+  return date;
+}
+
 /** Get all backup files sorted by date (newest first) */
 function getBackupFiles(): BackupFile[] {
   const settingsPath = getClaudeSettingsPath();
@@ -186,17 +221,12 @@ function getBackupFiles(): BackupFile[] {
       const match = f.match(backupPattern);
       if (!match) return null;
       const timestamp = match[1];
-      // Parse YYYYMMDD_HHMMSS
-      const year = parseInt(timestamp.slice(0, 4));
-      const month = parseInt(timestamp.slice(4, 6)) - 1;
-      const day = parseInt(timestamp.slice(6, 8));
-      const hour = parseInt(timestamp.slice(9, 11));
-      const min = parseInt(timestamp.slice(11, 13));
-      const sec = parseInt(timestamp.slice(13, 15));
+      const date = parseBackupTimestamp(timestamp);
+      if (!date) return null;
       return {
         path: path.join(dir, f),
         timestamp,
-        date: new Date(year, month, day, hour, min, sec),
+        date,
       };
     })
     .filter((f): f is BackupFile => f !== null)
@@ -324,7 +354,7 @@ async function handleRestore(timestamp: string | boolean, yes: boolean): Promise
   console.log(`Backup: ${color(backup.timestamp, 'command')}`);
   console.log(`Date:   ${backup.date.toLocaleString()}`);
   console.log('');
-  console.log(warn('This will replace ~/.claude/settings.json'));
+  console.log(warn(`This will replace ${getClaudeSettingsDisplayPath()}`));
   console.log('');
   if (!yes) {
     const proceed = await InteractivePrompt.confirm('Proceed with restore?', { default: false });
@@ -342,6 +372,11 @@ async function handleRestore(timestamp: string | boolean, yes: boolean): Promise
       process.exit(1);
     }
   } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'ENOENT') {
+      console.log(fail('Backup was deleted during restore'));
+      process.exit(1);
+    }
     console.log(fail(`Backup file is corrupted: ${(error as Error).message}`));
     process.exit(1);
   }
@@ -373,7 +408,7 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Description'));
   console.log("  Writes a profile's environment variables directly to");
-  console.log('  ~/.claude/settings.json for native Claude Code usage.');
+  console.log(`  ${getClaudeSettingsDisplayPath()} for native Claude Code usage.`);
   console.log('');
   console.log('  This allows Claude Code to use the profile without CCS,');
   console.log('  enabling compatibility with IDEs and extensions.');
@@ -414,7 +449,9 @@ async function showHelp(): Promise<void> {
   console.log(subheader('Notes'));
   console.log('  [i] CLIProxy profiles require the proxy to be running.');
   console.log('  [i] Copilot profiles require copilot-api daemon.');
-  console.log('  [i] Backups are saved as ~/.claude/settings.json.backup.YYYYMMDD_HHMMSS');
+  console.log(
+    `  [i] Backups are saved as ${getClaudeSettingsDisplayPath()}.backup.YYYYMMDD_HHMMSS`
+  );
   console.log('');
 }
 
@@ -474,7 +511,7 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
   console.log('');
   console.log(`Profile type: ${color(resolved.profileType, 'command')}`);
   console.log('');
-  console.log('The following env vars will be written to ~/.claude/settings.json:');
+  console.log(`The following env vars will be written to ${getClaudeSettingsDisplayPath()}:`);
   console.log('');
   // Display env vars (mask sensitive values)
   const envKeys = Object.keys(resolved.env);
@@ -498,7 +535,7 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     console.log('');
   }
   // Warning about modification
-  console.log(warn('This will modify ~/.claude/settings.json'));
+  console.log(warn(`This will modify ${getClaudeSettingsDisplayPath()}`));
   console.log(dim('    Existing hooks and other settings will be preserved.'));
   console.log('');
   // Check if settings.json exists for backup
@@ -517,7 +554,7 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     if (createBackupFlag) {
       try {
         createdBackupPath = createBackup();
-        console.log(ok(`Backup created: ${createdBackupPath.replace(os.homedir(), '~')}`));
+        console.log(ok(`Backup created: ${formatDisplayPath(createdBackupPath)}`));
         console.log('');
       } catch (error) {
         console.log(fail(`Failed to create backup: ${(error as Error).message}`));
@@ -560,13 +597,13 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     if (createdBackupPath) {
       console.log('');
       console.log(info(`A backup was created before this error:`));
-      console.log(`    ${createdBackupPath.replace(os.homedir(), '~')}`);
+      console.log(`    ${formatDisplayPath(createdBackupPath)}`);
       console.log(dim('    To restore: ccs persist --restore'));
     }
     process.exit(1);
   }
   console.log('');
-  console.log(ok(`Profile '${parsedArgs.profile}' written to ~/.claude/settings.json`));
+  console.log(ok(`Profile '${parsedArgs.profile}' written to ${getClaudeSettingsDisplayPath()}`));
   console.log('');
   console.log(info('Claude Code will now use this profile by default.'));
   console.log(dim('    To revert, restore the backup or edit settings.json manually.'));
