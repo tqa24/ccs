@@ -61,7 +61,7 @@ export interface AccountItemProps {
   /** Solo mode mutation in progress */
   isSoloingAccount?: boolean;
   privacyMode?: boolean;
-  /** Show quota bar (only for 'agy' provider) */
+  /** Show quota bar for providers with quota API support */
   showQuota?: boolean;
   /** Enable checkbox for multi-select */
   selectable?: boolean;

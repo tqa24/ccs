@@ -37,17 +37,12 @@ interface SettingsFile {
 
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
 
-function hasCodexEffortSuffix(model: string): boolean {
-  return CODEX_EFFORT_SUFFIX_REGEX.test(model);
-}
-
-function normalizeCodexTierModel(
+function canonicalizeModelForProvider(
   provider: CLIProxyProfileName | undefined,
-  model: string,
-  fallbackEffort: 'medium' | 'high' | 'xhigh'
+  model: string
 ): string {
   if (provider !== 'codex') return model;
-  return hasCodexEffortSuffix(model) ? model : `${model}-${fallbackEffort}`;
+  return model.replace(CODEX_EFFORT_SUFFIX_REGEX, '');
 }
 
 /**
@@ -59,13 +54,13 @@ function buildSettingsEnv(
   port: number = CLIPROXY_DEFAULT_PORT
 ): SettingsEnv {
   const baseEnv = getClaudeEnvVars(provider as CLIProxyProvider, port);
-  const defaultModel = normalizeCodexTierModel(provider, model, 'xhigh');
-  const opusModel = normalizeCodexTierModel(provider, model, 'xhigh');
-  const sonnetModel = normalizeCodexTierModel(provider, model, 'high');
-  const haikuModel = normalizeCodexTierModel(
+  const normalizedModel = canonicalizeModelForProvider(provider, model);
+  const defaultModel = normalizedModel;
+  const opusModel = normalizedModel;
+  const sonnetModel = normalizedModel;
+  const haikuModel = canonicalizeModelForProvider(
     provider,
-    baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
-    'medium'
+    baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || model
   );
 
   return {
@@ -313,18 +308,14 @@ export function updateSettingsModel(
 
     if (model) {
       settings.env = settings.env || ({} as SettingsEnv);
-      settings.env.ANTHROPIC_MODEL = normalizeCodexTierModel(provider, model, 'xhigh');
-      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = normalizeCodexTierModel(provider, model, 'xhigh');
-      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = normalizeCodexTierModel(
-        provider,
-        model,
-        'high'
-      );
+      const normalizedModel = canonicalizeModelForProvider(provider, model);
+      settings.env.ANTHROPIC_MODEL = normalizedModel;
+      settings.env.ANTHROPIC_DEFAULT_OPUS_MODEL = normalizedModel;
+      settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL = normalizedModel;
       if (provider === 'codex' && settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL) {
-        settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = normalizeCodexTierModel(
+        settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = canonicalizeModelForProvider(
           provider,
-          settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL,
-          'medium'
+          settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL
         );
       }
     } else {

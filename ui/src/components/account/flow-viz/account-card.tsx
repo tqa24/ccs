@@ -8,6 +8,7 @@ import {
   getCodexQuotaBreakdown,
   getProviderMinQuota,
   getProviderResetTime,
+  isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
@@ -23,6 +24,13 @@ import { cleanEmail } from './utils';
 import { AccountCardStats } from './account-card-stats';
 
 type Zone = 'left' | 'right' | 'top' | 'bottom';
+const QUOTA_PROVIDER_ALIASES = [
+  'antigravity',
+  'anthropic',
+  'gemini-cli',
+  'copilot',
+  'github-copilot',
+];
 
 interface AccountCardProps {
   account: AccountData;
@@ -90,12 +98,15 @@ export function AccountCard({
   const borderColor = getBorderColorStyle(zone, account.color);
   const connectorPosition = CONNECTOR_POSITION_MAP[zone];
 
-  // Quota for CLIProxy accounts (agy, codex, gemini)
-  const isCliproxyProvider = QUOTA_SUPPORTED_PROVIDERS.includes(
-    account.provider as QuotaSupportedProvider
-  );
+  // Quota for CLIProxy accounts (agy, codex, claude, gemini, ghcp)
+  const normalizedProvider = account.provider.toLowerCase();
+  const isCliproxyProvider =
+    QUOTA_SUPPORTED_PROVIDERS.includes(normalizedProvider as QuotaSupportedProvider) ||
+    QUOTA_PROVIDER_ALIASES.includes(normalizedProvider);
+  const isCodexProvider = normalizedProvider === 'codex';
+  const isClaudeProvider = normalizedProvider === 'claude' || normalizedProvider === 'anthropic';
   const { data: quota, isLoading: quotaLoading } = useAccountQuota(
-    account.provider,
+    normalizedProvider,
     account.id,
     isCliproxyProvider
   );
@@ -104,14 +115,48 @@ export function AccountCard({
   const minQuota = getProviderMinQuota(account.provider, quota);
   const resetTime = getProviderResetTime(account.provider, quota);
   const codexBreakdown =
-    account.provider === 'codex' && quota && isCodexQuotaResult(quota)
+    isCodexProvider && quota && isCodexQuotaResult(quota)
       ? getCodexQuotaBreakdown(quota.windows)
       : null;
   const codexQuotaRows = [
     { label: '5h', value: codexBreakdown?.fiveHourWindow?.remainingPercent ?? null },
     { label: 'Wk', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
   ].filter((row): row is { label: string; value: number } => row.value !== null);
+  const claudeQuotaRows =
+    isClaudeProvider && quota && isClaudeQuotaResult(quota)
+      ? [
+          {
+            label: '5h',
+            value:
+              quota.coreUsage?.fiveHour?.remainingPercent ??
+              quota.windows.find((window) => window.rateLimitType === 'five_hour')
+                ?.remainingPercent ??
+              null,
+          },
+          {
+            label: 'Wk',
+            value:
+              quota.coreUsage?.weekly?.remainingPercent ??
+              quota.windows.find((window) =>
+                [
+                  'seven_day',
+                  'seven_day_opus',
+                  'seven_day_sonnet',
+                  'seven_day_oauth_apps',
+                  'seven_day_cowork',
+                ].includes(window.rateLimitType)
+              )?.remainingPercent ??
+              null,
+          },
+        ].filter((row): row is { label: string; value: number } => row.value !== null)
+      : [];
+  const compactQuotaRows = isCodexProvider
+    ? codexQuotaRows
+    : isClaudeProvider
+      ? claudeQuotaRows
+      : [];
   const minQuotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
+  const minQuotaValue = minQuotaLabel !== null ? Number(minQuotaLabel) : null;
 
   // Tier badge (AGY only) - show P for Pro, U for Ultra
   const showTierBadge =
@@ -215,7 +260,7 @@ export function AccountCard({
         failure={account.failureCount}
         showDetails={showDetails}
       />
-      {/* Quota bar for CLIProxy accounts (agy, codex, gemini) */}
+      {/* Quota bar for CLIProxy accounts */}
       {isCliproxyProvider && (
         <div className="mt-2 px-0.5">
           {quotaLoading ? (
@@ -223,7 +268,7 @@ export function AccountCard({
               <Loader2 className="w-2.5 h-2.5 animate-spin" />
               <span>Quota...</span>
             </div>
-          ) : minQuota !== null ? (
+          ) : minQuotaValue !== null ? (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -235,9 +280,9 @@ export function AccountCard({
                       <span
                         className={cn(
                           'text-[10px] font-mono font-bold',
-                          minQuota > 50
+                          minQuotaValue > 50
                             ? 'text-emerald-600 dark:text-emerald-400'
-                            : minQuota > 20
+                            : minQuotaValue > 20
                               ? 'text-amber-500'
                               : 'text-red-500'
                         )}
@@ -245,9 +290,9 @@ export function AccountCard({
                         {minQuotaLabel}%
                       </span>
                     </div>
-                    {account.provider === 'codex' && codexQuotaRows.length > 0 && (
+                    {compactQuotaRows.length > 0 && (
                       <div className="flex items-center justify-between text-[7px] text-muted-foreground/70">
-                        {codexQuotaRows.map((row) => (
+                        {compactQuotaRows.map((row) => (
                           <span key={row.label}>
                             {row.label} {row.value}%
                           </span>
@@ -258,22 +303,24 @@ export function AccountCard({
                       <div
                         className={cn(
                           'h-full rounded-full transition-all',
-                          minQuota > 50
+                          minQuotaValue > 50
                             ? 'bg-emerald-500'
-                            : minQuota > 20
+                            : minQuotaValue > 20
                               ? 'bg-amber-500'
                               : 'bg-red-500'
                         )}
-                        style={{ width: `${minQuota}%` }}
+                        style={{ width: `${minQuotaValue}%` }}
                       />
                     </div>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-xs">
-                  {quota && <QuotaTooltipContent quota={quota} resetTime={resetTime} />}
+                  <QuotaTooltipContent quota={quota} resetTime={resetTime} />
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          ) : quota?.success ? (
+            <div className="text-[8px] text-muted-foreground/60">Quota limits unavailable</div>
           ) : quota?.needsReauth ? (
             <TooltipProvider>
               <Tooltip>

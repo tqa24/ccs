@@ -36,6 +36,7 @@ import {
   getCodexQuotaBreakdown,
   getProviderMinQuota,
   getProviderResetTime,
+  isClaudeQuotaResult,
   isCodexQuotaResult,
 } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
@@ -105,12 +106,16 @@ export function AccountItem({
   selected,
   onSelectChange,
 }: AccountItemProps) {
+  const normalizedProvider = account.provider.toLowerCase();
+  const isCodexProvider = normalizedProvider === 'codex';
+  const isClaudeProvider = normalizedProvider === 'claude' || normalizedProvider === 'anthropic';
+
   // Fetch runtime stats to get actual lastUsedAt (more accurate than file state)
   const { data: stats } = useCliproxyStats(showQuota);
 
   // Fetch quota for all provider accounts
   const { data: quota, isLoading: quotaLoading } = useAccountQuota(
-    account.provider,
+    normalizedProvider,
     account.id,
     showQuota
   );
@@ -123,14 +128,48 @@ export function AccountItem({
   const minQuota = getProviderMinQuota(account.provider, quota);
   const nextReset = getProviderResetTime(account.provider, quota);
   const codexBreakdown =
-    account.provider === 'codex' && quota && isCodexQuotaResult(quota)
+    isCodexProvider && quota && isCodexQuotaResult(quota)
       ? getCodexQuotaBreakdown(quota.windows)
       : null;
   const codexQuotaRows = [
     { label: '5h', value: codexBreakdown?.fiveHourWindow?.remainingPercent ?? null },
     { label: 'Weekly', value: codexBreakdown?.weeklyWindow?.remainingPercent ?? null },
   ].filter((row): row is { label: string; value: number } => row.value !== null);
+  const claudeQuotaRows =
+    isClaudeProvider && quota && isClaudeQuotaResult(quota)
+      ? [
+          {
+            label: '5h',
+            value:
+              quota.coreUsage?.fiveHour?.remainingPercent ??
+              quota.windows.find((window) => window.rateLimitType === 'five_hour')
+                ?.remainingPercent ??
+              null,
+          },
+          {
+            label: 'Weekly',
+            value:
+              quota.coreUsage?.weekly?.remainingPercent ??
+              quota.windows.find((window) =>
+                [
+                  'seven_day',
+                  'seven_day_opus',
+                  'seven_day_sonnet',
+                  'seven_day_oauth_apps',
+                  'seven_day_cowork',
+                ].includes(window.rateLimitType)
+              )?.remainingPercent ??
+              null,
+          },
+        ].filter((row): row is { label: string; value: number } => row.value !== null)
+      : [];
+  const dualWindowQuotaRows = isCodexProvider
+    ? codexQuotaRows
+    : isClaudeProvider
+      ? claudeQuotaRows
+      : [];
   const minQuotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
+  const minQuotaValue = minQuotaLabel !== null ? Number(minQuotaLabel) : null;
 
   return (
     <div
@@ -324,7 +363,7 @@ export function AccountItem({
               <Loader2 className="w-3 h-3 animate-spin" />
               <span>Loading quota...</span>
             </div>
-          ) : minQuota !== null ? (
+          ) : minQuotaValue !== null ? (
             <div className="space-y-1.5">
               {/* Status indicator based on runtime usage, not file state */}
               <div className="flex items-center gap-1.5 text-xs">
@@ -353,9 +392,9 @@ export function AccountItem({
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    {account.provider === 'codex' && codexQuotaRows.length > 0 ? (
+                    {dualWindowQuotaRows.length > 0 ? (
                       <div className="space-y-1.5">
-                        {codexQuotaRows.map((row) => (
+                        {dualWindowQuotaRows.map((row) => (
                           <div key={row.label} className="flex items-center gap-2">
                             <span className="w-10 text-[10px] text-muted-foreground">
                               {row.label}
@@ -374,9 +413,9 @@ export function AccountItem({
                     ) : (
                       <div className="flex items-center gap-2">
                         <Progress
-                          value={Math.max(0, Math.min(100, minQuota))}
+                          value={Math.max(0, Math.min(100, minQuotaValue))}
                           className="h-2 flex-1"
-                          indicatorClassName={getQuotaColor(minQuota)}
+                          indicatorClassName={getQuotaColor(minQuotaValue)}
                         />
                         <span className="text-xs font-medium w-10 text-right">
                           {minQuotaLabel}%
@@ -385,10 +424,20 @@ export function AccountItem({
                     )}
                   </TooltipTrigger>
                   <TooltipContent side="bottom" className="max-w-xs">
-                    {quota && <QuotaTooltipContent quota={quota} resetTime={nextReset} />}
+                    <QuotaTooltipContent quota={quota} resetTime={nextReset} />
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+            </div>
+          ) : quota?.success ? (
+            <div className="flex items-center gap-1.5">
+              <Badge
+                variant="outline"
+                className="text-[10px] h-5 px-2 gap-1 border-muted-foreground/50 text-muted-foreground"
+              >
+                <HelpCircle className="w-3 h-3" />
+                No limits
+              </Badge>
             </div>
           ) : quota?.needsReauth ? (
             <TooltipProvider>

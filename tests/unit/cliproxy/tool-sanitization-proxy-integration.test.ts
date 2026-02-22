@@ -184,6 +184,77 @@ describe('ToolSanitizationProxy Integration', () => {
       }
     });
 
+    it('normalizes dotted Claude thinking model IDs for root/composite routes', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4.6-thinking',
+            messages: [{ role: 'user', content: 'test' }],
+          }),
+        });
+
+        expect(lastRequest).not.toBeNull();
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe(
+          'claude-sonnet-4-6-thinking'
+        );
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('keeps dotted non-thinking model IDs unchanged', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4.5',
+            messages: [{ role: 'user', content: 'test' }],
+          }),
+        });
+
+        expect(lastRequest).not.toBeNull();
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('claude-sonnet-4.5');
+      } finally {
+        proxy.stop();
+      }
+    });
+
+    it('normalizes dotted Claude major.minor IDs on antigravity provider route', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        await fetch(`http://127.0.0.1:${port}/api/provider/agy/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-opus-4.6',
+            messages: [{ role: 'user', content: 'test' }],
+          }),
+        });
+
+        expect(lastRequest).not.toBeNull();
+        expect((lastRequest!.body as Record<string, unknown>).model).toBe('claude-opus-4-6');
+      } finally {
+        proxy.stop();
+      }
+    });
+
     it('preserves other tool properties during sanitization', async () => {
       const proxy = new ToolSanitizationProxy({
         upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,

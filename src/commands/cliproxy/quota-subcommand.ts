@@ -18,15 +18,22 @@ import {
 } from '../../cliproxy/account-manager';
 import { fetchAllProviderQuotas } from '../../cliproxy/quota-fetcher';
 import { fetchAllCodexQuotas } from '../../cliproxy/quota-fetcher-codex';
+import { fetchAllClaudeQuotas } from '../../cliproxy/quota-fetcher-claude';
+import { pickMostRestrictiveClaudeWeeklyWindow } from '../../cliproxy/quota-fetcher-claude-normalizer';
 import { fetchAllGeminiCliQuotas } from '../../cliproxy/quota-fetcher-gemini-cli';
 import { fetchAllGhcpQuotas } from '../../cliproxy/quota-fetcher-ghcp';
 import type {
   CodexQuotaResult,
+  ClaudeQuotaResult,
   GeminiCliQuotaResult,
   GhcpQuotaResult,
 } from '../../cliproxy/quota-types';
 import { isOnCooldown } from '../../cliproxy/quota-manager';
 import { CLIProxyProvider } from '../../cliproxy/types';
+import {
+  QUOTA_SUPPORTED_PROVIDER_IDS,
+  type QuotaSupportedProvider,
+} from '../../cliproxy/provider-capabilities';
 import { initUI, header, subheader, color, dim, ok, fail, warn, info, table } from '../../utils/ui';
 
 interface CliproxyProfileArgs {
@@ -378,6 +385,157 @@ function displayCodexQuotaSection(results: { account: string; quota: CodexQuotaR
   }
 }
 
+interface ClaudeDisplayWindow {
+  rateLimitType: string;
+  label: string;
+  remainingPercent: number;
+  resetAt: string | null;
+  status: string;
+}
+
+function getClaudeWindowDisplayLabel(
+  window: Pick<ClaudeDisplayWindow, 'rateLimitType' | 'label'>
+): string {
+  switch (window.rateLimitType) {
+    case 'five_hour':
+      return '5h usage limit';
+    case 'seven_day':
+      return 'Weekly usage limit';
+    case 'seven_day_opus':
+      return 'Weekly usage (Opus)';
+    case 'seven_day_sonnet':
+      return 'Weekly usage (Sonnet)';
+    case 'seven_day_oauth_apps':
+      return 'Weekly usage (OAuth apps)';
+    case 'seven_day_cowork':
+      return 'Weekly usage (Cowork)';
+    case 'overage':
+      return 'Extra usage';
+    default:
+      return window.label;
+  }
+}
+
+function toClaudeDisplayWindow(window: ClaudeQuotaResult['windows'][number]): ClaudeDisplayWindow {
+  return {
+    rateLimitType: window.rateLimitType,
+    label: window.label,
+    remainingPercent: window.remainingPercent,
+    resetAt: window.resetAt,
+    status: window.status,
+  };
+}
+
+function toClaudeCoreDisplayWindow(
+  window: NonNullable<ClaudeQuotaResult['coreUsage']>['fiveHour']
+): ClaudeDisplayWindow | null {
+  if (!window) return null;
+  return {
+    rateLimitType: window.rateLimitType,
+    label: window.label,
+    remainingPercent: window.remainingPercent,
+    resetAt: window.resetAt,
+    status: window.status,
+  };
+}
+
+function getClaudeCoreUsageWindows(quota: ClaudeQuotaResult): {
+  fiveHourWindow: ClaudeDisplayWindow | null;
+  weeklyWindow: ClaudeDisplayWindow | null;
+} {
+  const coreUsage = quota.coreUsage;
+  const fiveHourFromCore = toClaudeCoreDisplayWindow(coreUsage?.fiveHour ?? null);
+  const weeklyFromCore = toClaudeCoreDisplayWindow(coreUsage?.weekly ?? null);
+  if (fiveHourFromCore || weeklyFromCore) {
+    return {
+      fiveHourWindow: fiveHourFromCore,
+      weeklyWindow: weeklyFromCore,
+    };
+  }
+
+  const fiveHourPolicy =
+    quota.windows.find((window) => window.rateLimitType === 'five_hour') ?? null;
+  const weeklyPolicy = pickMostRestrictiveClaudeWeeklyWindow(quota.windows);
+
+  return {
+    fiveHourWindow: fiveHourPolicy ? toClaudeDisplayWindow(fiveHourPolicy) : null,
+    weeklyWindow: weeklyPolicy ? toClaudeDisplayWindow(weeklyPolicy) : null,
+  };
+}
+
+function displayClaudeQuotaSection(results: { account: string; quota: ClaudeQuotaResult }[]): void {
+  console.log(subheader(`Claude (${results.length} account${results.length !== 1 ? 's' : ''})`));
+  console.log('');
+
+  for (const { account, quota } of results) {
+    const accountInfo = findAccountByQuery('claude', account);
+    const defaultMark = accountInfo?.isDefault ? color(' (default)', 'info') : '';
+
+    if (!quota.success) {
+      console.log(`  ${fail(account)}${defaultMark}`);
+      console.log(`    ${color(quota.error || 'Failed to fetch quota', 'error')}`);
+      console.log('');
+      continue;
+    }
+
+    const { fiveHourWindow, weeklyWindow } = getClaudeCoreUsageWindows(quota);
+    const coreWindows = [fiveHourWindow, weeklyWindow].filter(
+      (window, index, arr): window is ClaudeDisplayWindow =>
+        !!window && arr.indexOf(window) === index
+    );
+    const statusWindows =
+      coreWindows.length > 0 ? coreWindows : quota.windows.map(toClaudeDisplayWindow);
+    const minQuota =
+      statusWindows.length > 0
+        ? Math.min(...statusWindows.map((window) => window.remainingPercent))
+        : null;
+    const statusIcon =
+      minQuota === null ? info('') : minQuota > 50 ? ok('') : minQuota > 10 ? warn('') : fail('');
+
+    console.log(`  ${statusIcon}${account}${defaultMark}`);
+
+    const resetParts: string[] = [];
+    if (fiveHourWindow?.resetAt)
+      resetParts.push(`5h ${formatResetTimeISO(fiveHourWindow.resetAt)}`);
+    if (weeklyWindow?.resetAt)
+      resetParts.push(`weekly ${formatResetTimeISO(weeklyWindow.resetAt)}`);
+    if (resetParts.length > 0) {
+      console.log(`    ${dim(`Reset schedule: ${resetParts.join(' | ')}`)}`);
+    }
+
+    const orderedWindows = [...coreWindows, ...quota.windows.map(toClaudeDisplayWindow)].filter(
+      (window, index, arr) =>
+        arr.findIndex(
+          (candidate) =>
+            candidate.rateLimitType === window.rateLimitType &&
+            candidate.resetAt === window.resetAt &&
+            candidate.status === window.status
+        ) === index
+    );
+
+    if (orderedWindows.length === 0) {
+      console.log(`    ${dim('Policy limits unavailable for this account')}`);
+      console.log('');
+      continue;
+    }
+
+    for (const window of orderedWindows) {
+      const bar = formatQuotaBar(window.remainingPercent);
+      const resetLabel = window.resetAt ? dim(` Resets ${formatResetTimeISO(window.resetAt)}`) : '';
+      const statusLabel =
+        window.status === 'rejected'
+          ? dim(' [blocked]')
+          : window.status === 'allowed_warning'
+            ? dim(' [warning]')
+            : '';
+      console.log(
+        `    ${getClaudeWindowDisplayLabel(window).padEnd(24)} ${bar} ${window.remainingPercent.toFixed(0)}%${statusLabel}${resetLabel}`
+      );
+    }
+    console.log('');
+  }
+}
+
 function displayGeminiCliQuotaSection(
   results: { account: string; quota: GeminiCliQuotaResult }[]
 ): void {
@@ -481,65 +639,108 @@ function displayGhcpQuotaSection(results: { account: string; quota: GhcpQuotaRes
   }
 }
 
+interface QuotaProviderRuntime {
+  fetch: (verbose: boolean) => Promise<unknown>;
+  hasData: (result: unknown) => boolean;
+  render: (result: unknown) => void;
+  emptyTitle: string;
+  emptyMessage: string;
+  authCommand: string;
+}
+
+const QUOTA_PROVIDER_RUNTIME: Record<QuotaSupportedProvider, QuotaProviderRuntime> = {
+  agy: {
+    fetch: (verbose) => fetchAllProviderQuotas('agy', verbose),
+    hasData: (result) =>
+      (result as Awaited<ReturnType<typeof fetchAllProviderQuotas>>).accounts.length > 0,
+    render: (result) =>
+      displayAntigravityQuotaSection(result as Awaited<ReturnType<typeof fetchAllProviderQuotas>>),
+    emptyTitle: 'Antigravity (0 accounts)',
+    emptyMessage: 'No Antigravity accounts configured',
+    authCommand: 'ccs agy --auth',
+  },
+  codex: {
+    fetch: (verbose) => fetchAllCodexQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: CodexQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayCodexQuotaSection(result as { account: string; quota: CodexQuotaResult }[]),
+    emptyTitle: 'Codex (0 accounts)',
+    emptyMessage: 'No Codex accounts configured',
+    authCommand: 'ccs codex --auth',
+  },
+  claude: {
+    fetch: (verbose) => fetchAllClaudeQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: ClaudeQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayClaudeQuotaSection(result as { account: string; quota: ClaudeQuotaResult }[]),
+    emptyTitle: 'Claude (0 accounts)',
+    emptyMessage: 'No Claude accounts configured',
+    authCommand: 'ccs claude --auth',
+  },
+  gemini: {
+    fetch: (verbose) => fetchAllGeminiCliQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: GeminiCliQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayGeminiCliQuotaSection(result as { account: string; quota: GeminiCliQuotaResult }[]),
+    emptyTitle: 'Gemini CLI (0 accounts)',
+    emptyMessage: 'No Gemini CLI accounts configured',
+    authCommand: 'ccs gemini --auth',
+  },
+  ghcp: {
+    fetch: (verbose) => fetchAllGhcpQuotas(verbose),
+    hasData: (result) => (result as { account: string; quota: GhcpQuotaResult }[]).length > 0,
+    render: (result) =>
+      displayGhcpQuotaSection(result as { account: string; quota: GhcpQuotaResult }[]),
+    emptyTitle: 'GitHub Copilot (0 accounts)',
+    emptyMessage: 'No GitHub Copilot accounts configured',
+    authCommand: 'ccs ghcp --auth',
+  },
+};
+
 export async function handleQuotaStatus(
   verbose = false,
-  providerFilter: 'agy' | 'codex' | 'gemini' | 'ghcp' | 'all' = 'all'
+  providerFilter: QuotaSupportedProvider | 'all' = 'all'
 ): Promise<void> {
   await initUI();
   console.log(header('Quota Status'));
   console.log('');
 
-  const shouldFetch = {
-    agy: providerFilter === 'all' || providerFilter === 'agy',
-    codex: providerFilter === 'all' || providerFilter === 'codex',
-    gemini: providerFilter === 'all' || providerFilter === 'gemini',
-    ghcp: providerFilter === 'all' || providerFilter === 'ghcp',
-  };
+  const requestedProviders = new Set<QuotaSupportedProvider>(
+    providerFilter === 'all' ? QUOTA_SUPPORTED_PROVIDER_IDS : [providerFilter]
+  );
+  const shouldFetch = (provider: QuotaSupportedProvider): boolean =>
+    requestedProviders.has(provider);
 
   console.log(dim('Fetching quotas...'));
 
-  const [agyResults, codexResults, geminiResults, ghcpResults] = await Promise.all([
-    shouldFetch.agy ? fetchAllProviderQuotas('agy', verbose) : null,
-    shouldFetch.codex ? fetchAllCodexQuotas(verbose) : null,
-    shouldFetch.gemini ? fetchAllGeminiCliQuotas(verbose) : null,
-    shouldFetch.ghcp ? fetchAllGhcpQuotas(verbose) : null,
-  ]);
+  const providerResults = new Map<QuotaSupportedProvider, unknown | null>(
+    await Promise.all(
+      QUOTA_SUPPORTED_PROVIDER_IDS.map(async (provider) => {
+        if (!shouldFetch(provider)) {
+          return [provider, null] as const;
+        }
+        return [provider, await QUOTA_PROVIDER_RUNTIME[provider].fetch(verbose)] as const;
+      })
+    )
+  );
 
   console.log('');
 
-  if (agyResults && agyResults.accounts.length > 0) {
-    displayAntigravityQuotaSection(agyResults);
-  } else if (shouldFetch.agy) {
-    console.log(subheader('Antigravity (0 accounts)'));
-    console.log(info('No Antigravity accounts configured'));
-    console.log(`  Run: ${color('ccs agy --auth', 'command')} to authenticate`);
-    console.log('');
-  }
+  for (const provider of QUOTA_SUPPORTED_PROVIDER_IDS) {
+    if (!shouldFetch(provider)) {
+      continue;
+    }
 
-  if (codexResults && codexResults.length > 0) {
-    displayCodexQuotaSection(codexResults);
-  } else if (shouldFetch.codex) {
-    console.log(subheader('Codex (0 accounts)'));
-    console.log(info('No Codex accounts configured'));
-    console.log(`  Run: ${color('ccs codex --auth', 'command')} to authenticate`);
-    console.log('');
-  }
+    const runtime = QUOTA_PROVIDER_RUNTIME[provider];
+    const result = providerResults.get(provider) ?? null;
+    if (result !== null && runtime.hasData(result)) {
+      runtime.render(result);
+      continue;
+    }
 
-  if (geminiResults && geminiResults.length > 0) {
-    displayGeminiCliQuotaSection(geminiResults);
-  } else if (shouldFetch.gemini) {
-    console.log(subheader('Gemini CLI (0 accounts)'));
-    console.log(info('No Gemini CLI accounts configured'));
-    console.log(`  Run: ${color('ccs gemini --auth', 'command')} to authenticate`);
-    console.log('');
-  }
-
-  if (ghcpResults && ghcpResults.length > 0) {
-    displayGhcpQuotaSection(ghcpResults);
-  } else if (shouldFetch.ghcp) {
-    console.log(subheader('GitHub Copilot (0 accounts)'));
-    console.log(info('No GitHub Copilot accounts configured'));
-    console.log(`  Run: ${color('ccs ghcp --auth', 'command')} to authenticate`);
+    console.log(subheader(runtime.emptyTitle));
+    console.log(info(runtime.emptyMessage));
+    console.log(`  Run: ${color(runtime.authCommand, 'command')} to authenticate`);
     console.log('');
   }
 }

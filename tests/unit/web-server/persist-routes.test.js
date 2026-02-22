@@ -235,26 +235,18 @@ describe('Persist Routes', function () {
     class RestoreMutex {
       constructor() {
         this.locked = false;
-        this.queue = [];
       }
 
       async acquire() {
         if (this.locked) {
-          return new Promise((resolve) => {
-            this.queue.push(() => resolve(false));
-          });
+          return false;
         }
         this.locked = true;
         return true;
       }
 
       release() {
-        const next = this.queue.shift();
-        if (next) {
-          next();
-        } else {
-          this.locked = false;
-        }
+        this.locked = false;
       }
     }
 
@@ -266,21 +258,16 @@ describe('Persist Routes', function () {
       assert.strictEqual(mutex.locked, true);
     });
 
-    it('should queue and reject concurrent requests', async function () {
+    it('should reject concurrent requests while locked', async function () {
       const mutex = new RestoreMutex();
 
       // First acquire succeeds
       const first = await mutex.acquire();
       assert.strictEqual(first, true);
 
-      // Second acquire queues and gets false when released
-      const secondPromise = mutex.acquire();
-
-      // Release the mutex
-      mutex.release();
-
-      const second = await secondPromise;
-      assert.strictEqual(second, false); // Queued request returns false
+      // Second acquire fails immediately
+      const second = await mutex.acquire();
+      assert.strictEqual(second, false);
     });
 
     it('should unlock after release with no queue', async function () {
@@ -293,30 +280,12 @@ describe('Persist Routes', function () {
       assert.strictEqual(mutex.locked, false);
     });
 
-    it('should process multiple queued requests in order', async function () {
+    it('should allow new acquire after release', async function () {
       const mutex = new RestoreMutex();
-      const results = [];
-
-      // First acquire
-      const first = await mutex.acquire();
-      results.push({ id: 1, acquired: first });
-
-      // Queue multiple requests
-      const p2 = mutex.acquire().then((r) => results.push({ id: 2, acquired: r }));
-      const p3 = mutex.acquire().then((r) => results.push({ id: 3, acquired: r }));
-
-      // Release all
-      mutex.release(); // Signals #2
-      mutex.release(); // Signals #3
-
-      await Promise.all([p2, p3]);
-
-      assert.strictEqual(results[0].id, 1);
-      assert.strictEqual(results[0].acquired, true);
-      assert.strictEqual(results[1].id, 2);
-      assert.strictEqual(results[1].acquired, false);
-      assert.strictEqual(results[2].id, 3);
-      assert.strictEqual(results[2].acquired, false);
+      assert.strictEqual(await mutex.acquire(), true);
+      assert.strictEqual(await mutex.acquire(), false);
+      mutex.release();
+      assert.strictEqual(await mutex.acquire(), true);
     });
   });
 

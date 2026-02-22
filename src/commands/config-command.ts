@@ -13,6 +13,7 @@ import { setupGracefulShutdown } from '../web-server/shutdown';
 import { ensureCliproxyService } from '../cliproxy/service-manager';
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config-generator';
 import { initUI, header, ok, info, warn, fail } from '../utils/ui';
+import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface ConfigOptions {
   port?: number;
@@ -25,25 +26,28 @@ interface ConfigOptions {
 function parseArgs(args: string[]): ConfigOptions {
   const result: ConfigOptions = {};
 
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
+  if (hasAnyFlag(args, ['--help', '-h'])) {
+    showHelp();
+    process.exit(0);
+  }
 
-    if ((arg === '--port' || arg === '-p') && args[i + 1]) {
-      const port = parseInt(args[++i], 10);
-      if (!isNaN(port) && port > 0 && port < 65536) {
-        result.port = port;
-      } else {
-        console.error(fail('Invalid port number'));
-        process.exit(1);
-      }
-    } else if (arg === '--dev') {
-      result.dev = true;
-    } else if (arg === '--help' || arg === '-h') {
-      showHelp();
-      process.exit(0);
+  const portOption = extractOption(args, ['--port', '-p']);
+  if (portOption.found) {
+    if (portOption.missingValue || !portOption.value) {
+      console.error(fail('Invalid port number'));
+      process.exit(1);
+    }
+
+    const port = parseInt(portOption.value, 10);
+    if (!isNaN(port) && port > 0 && port < 65536) {
+      result.port = port;
+    } else {
+      console.error(fail('Invalid port number'));
+      process.exit(1);
     }
   }
 
+  result.dev = hasAnyFlag(args, ['--dev']);
   return result;
 }
 

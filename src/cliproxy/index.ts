@@ -85,6 +85,16 @@ export {
 export type { ModelEntry, ProviderCatalog } from './model-catalog';
 export { MODEL_CATALOG, supportsModelConfig, getProviderCatalog, findModel } from './model-catalog';
 export {
+  MODEL_ENV_VAR_KEYS,
+  extractProviderFromPathname,
+  isAntigravityProvider,
+  normalizeClaudeDottedMajorMinor,
+  normalizeClaudeDottedThinkingMajorMinor,
+  normalizeModelIdForProvider,
+  normalizeModelIdForRouting,
+  normalizeModelEnvVarsForProvider,
+} from './model-id-normalizer';
+export {
   hasUserSettings,
   getCurrentModel,
   configureProviderModel,

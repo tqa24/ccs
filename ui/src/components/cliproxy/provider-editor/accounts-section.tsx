@@ -35,7 +35,7 @@ interface AccountsSectionProps {
   /** Bulk resume mutation in progress */
   isBulkResuming?: boolean;
   privacyMode?: boolean;
-  /** Show quota bars for accounts (only applicable for 'agy' provider) */
+  /** Show quota bars for accounts when provider supports quota API */
   showQuota?: boolean;
   /** Kiro-specific: show "use normal browser" toggle */
   isKiro?: boolean;
