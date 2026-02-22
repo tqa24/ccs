@@ -21,13 +21,9 @@ function stripCodexEffortSuffix(model: string, provider: CLIProxyProvider): stri
   return model.replace(CODEX_EFFORT_SUFFIX_REGEX, '');
 }
 
-function normalizeCodexTierModel(
-  provider: CLIProxyProvider,
-  model: string,
-  fallbackEffort: 'medium' | 'high' | 'xhigh'
-): string {
+function normalizeCodexTierModel(provider: CLIProxyProvider, model: string): string {
   if (provider !== 'codex') return model;
-  return CODEX_EFFORT_SUFFIX_REGEX.test(model) ? model : `${model}-${fallbackEffort}`;
+  return stripCodexEffortSuffix(model, provider);
 }
 
 /**
@@ -160,13 +156,12 @@ export async function configureProviderModel(
 
   // Get base env vars for defaults
   const baseEnv = getClaudeEnvVars(provider);
-  const selectedDefaultModel = normalizeCodexTierModel(provider, selectedModel, 'xhigh');
-  const selectedOpusModel = normalizeCodexTierModel(provider, selectedModel, 'xhigh');
-  const selectedSonnetModel = normalizeCodexTierModel(provider, selectedModel, 'high');
+  const selectedDefaultModel = normalizeCodexTierModel(provider, selectedModel);
+  const selectedOpusModel = normalizeCodexTierModel(provider, selectedModel);
+  const selectedSonnetModel = normalizeCodexTierModel(provider, selectedModel);
   const selectedHaikuModel = normalizeCodexTierModel(
     provider,
-    baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || selectedModel,
-    'medium'
+    baseEnv.ANTHROPIC_DEFAULT_HAIKU_MODEL || selectedModel
   );
 
   // Read existing settings to preserve user customizations
