@@ -341,14 +341,7 @@ export async function checkRemoteProxy(
   }
 }
 
-/**
- * Test connection to remote CLIProxyAPI (alias for dashboard use)
- *
- * This is an alias for checkRemoteProxy() for semantic clarity in UI contexts.
- *
- * @param config Remote proxy client configuration
- * @returns RemoteProxyStatus with reachability and latency
- */
+/** Alias for dashboard connection tests. */
 export async function testConnection(config: RemoteProxyClientConfig): Promise<RemoteProxyStatus> {
   return checkRemoteProxy(config);
 }
