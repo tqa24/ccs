@@ -23,6 +23,17 @@ describe('Persist Command', () => {
      */
     function parseArgs(args) {
       const validPermissionModes = ['default', 'plan', 'acceptEdits', 'bypassPermissions'];
+      const knownFlags = [
+        '--yes',
+        '-y',
+        '--list-backups',
+        '--restore',
+        '--permission-mode',
+        '--dangerously-skip-permissions',
+        '--auto-approve',
+        '--help',
+        '-h',
+      ];
       const result = {
         profile: undefined,
         yes: false,
@@ -32,6 +43,7 @@ describe('Persist Command', () => {
         dangerouslySkipPermissions: false,
         parseError: undefined,
       };
+      const unknownFlags = [];
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
         if (arg === '--yes' || arg === '-y') {
@@ -72,8 +84,32 @@ describe('Persist Command', () => {
           result.dangerouslySkipPermissions = true;
         } else if (!arg.startsWith('-') && !result.profile) {
           result.profile = arg;
+        } else if (arg.startsWith('-')) {
+          const known = knownFlags.some((flag) => arg === flag || arg.startsWith(`${flag}=`));
+          if (!known) {
+            unknownFlags.push(arg);
+          }
         }
       }
+
+      if (!result.parseError && unknownFlags.length > 0) {
+        const unknownList = unknownFlags.map((flag) => `"${flag}"`).join(', ');
+        result.parseError = `Unknown option(s): ${unknownList}. Run 'ccs persist --help' for usage.`;
+      }
+
+      if (!result.parseError && result.listBackups && result.restore) {
+        result.parseError = '--list-backups cannot be used with --restore';
+      }
+
+      if (
+        !result.parseError &&
+        (result.listBackups || result.restore) &&
+        (result.permissionMode || result.dangerouslySkipPermissions)
+      ) {
+        result.parseError =
+          'Permission flags are not valid with backup operations. Use them only with ccs persist <profile>.';
+      }
+
       return result;
     }
 
@@ -120,10 +156,9 @@ describe('Persist Command', () => {
       assert.strictEqual(result.yes, false);
     });
 
-    it('ignores unknown flags', () => {
+    it('rejects unknown flags with a clear parseError', () => {
       const result = parseArgs(['glm', '--unknown', '--yes']);
-      assert.strictEqual(result.profile, 'glm');
-      assert.strictEqual(result.yes, true);
+      assert.match(result.parseError, /Unknown option\(s\)/);
     });
 
     it('takes only first positional as profile', () => {
@@ -177,6 +212,16 @@ describe('Persist Command', () => {
       assert.match(result.parseError, /Invalid --permission-mode/);
     });
 
+    it('sets parseError for missing --permission-mode value', () => {
+      const result = parseArgs(['glm', '--permission-mode']);
+      assert.strictEqual(result.parseError, 'Missing value for --permission-mode');
+    });
+
+    it('sets parseError for empty inline --permission-mode=', () => {
+      const result = parseArgs(['glm', '--permission-mode=']);
+      assert.strictEqual(result.parseError, 'Missing value for --permission-mode');
+    });
+
     it('parses --dangerously-skip-permissions flag', () => {
       const result = parseArgs(['glm', '--dangerously-skip-permissions']);
       assert.strictEqual(result.dangerouslySkipPermissions, true);
@@ -193,24 +238,67 @@ describe('Persist Command', () => {
       assert.strictEqual(resolvePermissionMode(result), 'bypassPermissions');
     });
 
-    it('throws on conflict between dangerous mode and non-bypass permission mode', () => {
-      const parsed = parseArgs(['glm', '--permission-mode', 'acceptEdits', '--auto-approve']);
+    ['acceptEdits', 'plan', 'default'].forEach((mode) => {
+      it(`throws on conflict between dangerous mode and --permission-mode ${mode}`, () => {
+        const parsed = parseArgs(['glm', '--permission-mode', mode, '--auto-approve']);
 
-      assert.throws(
-        () => resolvePermissionMode(parsed),
-        /--dangerously-skip-permissions conflicts with --permission-mode/
-      );
-    });
-
-    it('keeps test permission mode list aligned with source constant', () => {
-      const sourcePath = path.join(__dirname, '../../../src/commands/persist-command.ts');
-      const sourceContent = fs.readFileSync(sourcePath, 'utf8');
-      ['default', 'plan', 'acceptEdits', 'bypassPermissions'].forEach((mode) => {
-        assert(
-          sourceContent.includes(`'${mode}'`),
-          `Expected mode '${mode}' to exist in source constant`
+        assert.throws(
+          () => resolvePermissionMode(parsed),
+          /--dangerously-skip-permissions conflicts with --permission-mode/
         );
       });
+    });
+
+    it('allows dangerous mode with --permission-mode bypassPermissions', () => {
+      const parsed = parseArgs([
+        'glm',
+        '--permission-mode',
+        'bypassPermissions',
+        '--dangerously-skip-permissions',
+      ]);
+      assert.strictEqual(resolvePermissionMode(parsed), 'bypassPermissions');
+    });
+
+    it('sets parseError when --list-backups and --restore are both provided', () => {
+      const parsed = parseArgs(['--list-backups', '--restore']);
+      assert.strictEqual(parsed.parseError, '--list-backups cannot be used with --restore');
+    });
+
+    it('sets parseError when permission flags are used with --restore', () => {
+      const parsed = parseArgs(['--restore', '--auto-approve']);
+      assert.match(parsed.parseError, /Permission flags are not valid with backup operations/);
+    });
+
+    it('sets parseError when permission flags are used with --list-backups', () => {
+      const parsed = parseArgs(['--list-backups', '--permission-mode', 'plan']);
+      assert.match(parsed.parseError, /Permission flags are not valid with backup operations/);
+    });
+
+    it('keeps test permission mode list exactly aligned with source constant', () => {
+      const sourcePath = path.join(__dirname, '../../../src/commands/persist-command.ts');
+      const sourceContent = fs.readFileSync(sourcePath, 'utf8');
+      const match = sourceContent.match(/const VALID_PERMISSION_MODES = \[(.*?)\] as const/s);
+      assert(match, 'Expected VALID_PERMISSION_MODES constant to exist');
+      const sourceModes = [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]).sort();
+      const testModes = ['default', 'plan', 'acceptEdits', 'bypassPermissions'].sort();
+      assert.deepStrictEqual(sourceModes, testModes);
+    });
+
+    it('accepts common option ordering permutations', () => {
+      const cases = [
+        ['glm', '--yes', '--permission-mode', 'plan'],
+        ['--yes', 'glm', '--permission-mode=plan'],
+        ['--permission-mode', 'plan', 'glm', '--yes'],
+        ['--yes', '--permission-mode', 'plan', 'glm'],
+      ];
+
+      for (const input of cases) {
+        const parsed = parseArgs(input);
+        assert.strictEqual(parsed.parseError, undefined, `Expected no parseError for: ${input.join(' ')}`);
+        assert.strictEqual(parsed.profile, 'glm');
+        assert.strictEqual(parsed.yes, true);
+        assert.strictEqual(parsed.permissionMode, 'plan');
+      }
     });
   });
 
@@ -469,7 +557,34 @@ describe('Persist Command', () => {
      * Simulates the logic to detect sensitive keys for masking
      */
     function isSensitiveKey(key) {
-      return key.includes('TOKEN') || key.includes('KEY') || key.includes('SECRET');
+      const sensitiveParts = new Set([
+        'TOKEN',
+        'KEY',
+        'SECRET',
+        'PASSWORD',
+        'PASS',
+        'AUTH',
+        'CREDENTIAL',
+        'PRIVATE',
+        'ACCESS',
+        'REFRESH',
+        'APIKEY',
+      ]);
+      const withCamelCaseBoundaries = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
+      const parts = withCamelCaseBoundaries.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+      if (parts.some((part) => sensitiveParts.has(part))) {
+        return true;
+      }
+      const compact = parts.join('');
+      return (
+        compact.includes('TOKEN') ||
+        compact.includes('APIKEY') ||
+        compact.includes('ACCESSKEY') ||
+        compact.includes('AUTHKEY') ||
+        compact.includes('SECRET') ||
+        compact.includes('PASSWORD') ||
+        compact.includes('CREDENTIAL')
+      );
     }
 
     it('detects TOKEN in key name', () => {
@@ -491,6 +606,24 @@ describe('Persist Command', () => {
       assert.strictEqual(isSensitiveKey('ANTHROPIC_BASE_URL'), false);
       assert.strictEqual(isSensitiveKey('ANTHROPIC_MODEL'), false);
       assert.strictEqual(isSensitiveKey('DISABLE_TELEMETRY'), false);
+    });
+
+    it('detects lowercase and mixed-case sensitive keys', () => {
+      assert.strictEqual(isSensitiveKey('anthropic_auth_token'), true);
+      assert.strictEqual(isSensitiveKey('Api_Key'), true);
+      assert.strictEqual(isSensitiveKey('clientSecret'), true);
+    });
+
+    it('detects additional secret families', () => {
+      assert.strictEqual(isSensitiveKey('DB_PASSWORD'), true);
+      assert.strictEqual(isSensitiveKey('refresh_token_value'), true);
+      assert.strictEqual(isSensitiveKey('private_credential_blob'), true);
+    });
+
+    it('detects camelCase sensitive key variants', () => {
+      assert.strictEqual(isSensitiveKey('accessKeyId'), true);
+      assert.strictEqual(isSensitiveKey('authTokenValue'), true);
+      assert.strictEqual(isSensitiveKey('apiKeyValue'), true);
     });
   });
 
