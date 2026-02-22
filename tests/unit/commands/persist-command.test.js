@@ -10,6 +10,8 @@
  */
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 
 describe('Persist Command', () => {
   // =========================================================================
@@ -73,6 +75,20 @@ describe('Persist Command', () => {
         }
       }
       return result;
+    }
+
+    function resolvePermissionMode(parsedArgs) {
+      if (!parsedArgs.dangerouslySkipPermissions) {
+        return parsedArgs.permissionMode;
+      }
+
+      if (parsedArgs.permissionMode && parsedArgs.permissionMode !== 'bypassPermissions') {
+        throw new Error(
+          '--dangerously-skip-permissions conflicts with --permission-mode. Use bypassPermissions or remove one flag.'
+        );
+      }
+
+      return 'bypassPermissions';
     }
 
     it('parses profile name as first positional argument', () => {
@@ -169,6 +185,32 @@ describe('Persist Command', () => {
     it('parses --auto-approve as alias flag', () => {
       const result = parseArgs(['glm', '--auto-approve']);
       assert.strictEqual(result.dangerouslySkipPermissions, true);
+    });
+
+    it('handles both dangerous alias flags together', () => {
+      const result = parseArgs(['glm', '--dangerously-skip-permissions', '--auto-approve']);
+      assert.strictEqual(result.dangerouslySkipPermissions, true);
+      assert.strictEqual(resolvePermissionMode(result), 'bypassPermissions');
+    });
+
+    it('throws on conflict between dangerous mode and non-bypass permission mode', () => {
+      const parsed = parseArgs(['glm', '--permission-mode', 'acceptEdits', '--auto-approve']);
+
+      assert.throws(
+        () => resolvePermissionMode(parsed),
+        /--dangerously-skip-permissions conflicts with --permission-mode/
+      );
+    });
+
+    it('keeps test permission mode list aligned with source constant', () => {
+      const sourcePath = path.join(__dirname, '../../../src/commands/persist-command.ts');
+      const sourceContent = fs.readFileSync(sourcePath, 'utf8');
+      ['default', 'plan', 'acceptEdits', 'bypassPermissions'].forEach((mode) => {
+        assert(
+          sourceContent.includes(`'${mode}'`),
+          `Expected mode '${mode}' to exist in source constant`
+        );
+      });
     });
   });
 
@@ -479,7 +521,7 @@ describe('Persist Command', () => {
   describe('Error Messages', () => {
     it('account profile error message mentions CLAUDE_CONFIG_DIR', () => {
       const errorMessage =
-        "Account profiles use CLAUDE_CONFIG_DIR isolation, not env vars.\n" +
+        'Account profiles use CLAUDE_CONFIG_DIR isolation, not env vars.\n' +
         "Use 'ccs profileName' to run with this profile instead.";
       assert(errorMessage.includes('CLAUDE_CONFIG_DIR'));
       assert(errorMessage.includes('ccs profileName'));
@@ -567,30 +609,21 @@ describe('Persist Command', () => {
   // =========================================================================
   describe('Backup Restore Logic', () => {
     it('selects first backup when restore=true (latest)', () => {
-      const backups = [
-        { timestamp: '20260110_205324' },
-        { timestamp: '20260110_100000' },
-      ];
+      const backups = [{ timestamp: '20260110_205324' }, { timestamp: '20260110_100000' }];
       const restore = true;
       const selected = restore === true ? backups[0] : backups.find((b) => b.timestamp === restore);
       assert.strictEqual(selected.timestamp, '20260110_205324');
     });
 
     it('selects specific backup when restore is a timestamp', () => {
-      const backups = [
-        { timestamp: '20260110_205324' },
-        { timestamp: '20260110_100000' },
-      ];
+      const backups = [{ timestamp: '20260110_205324' }, { timestamp: '20260110_100000' }];
       const restore = '20260110_100000';
       const selected = restore === true ? backups[0] : backups.find((b) => b.timestamp === restore);
       assert.strictEqual(selected.timestamp, '20260110_100000');
     });
 
     it('returns undefined when timestamp not found', () => {
-      const backups = [
-        { timestamp: '20260110_205324' },
-        { timestamp: '20260110_100000' },
-      ];
+      const backups = [{ timestamp: '20260110_205324' }, { timestamp: '20260110_100000' }];
       const restore = '20260101_000000';
       const selected = restore === true ? backups[0] : backups.find((b) => b.timestamp === restore);
       assert.strictEqual(selected, undefined);

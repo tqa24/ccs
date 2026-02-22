@@ -545,16 +545,9 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
   }
   await initUI();
   if (parsedArgs.parseError) {
-    console.log(fail(parsedArgs.parseError));
-    process.exit(1);
+    throw new Error(parsedArgs.parseError);
   }
-  let resolvedPermissionMode: PermissionMode | undefined;
-  try {
-    resolvedPermissionMode = resolvePermissionMode(parsedArgs);
-  } catch (error) {
-    console.log(fail((error as Error).message));
-    process.exit(1);
-  }
+  const resolvedPermissionMode = resolvePermissionMode(parsedArgs);
   if (!parsedArgs.profile) {
     console.log(fail('Profile name is required'));
     console.log('');
