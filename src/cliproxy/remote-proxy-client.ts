@@ -196,8 +196,8 @@ function createHttpsAgent(allowSelfSigned: boolean): https.Agent | undefined {
 /**
  * Check health of remote CLIProxyAPI instance
  *
- * Uses /v1/models endpoint for health check since CLIProxyAPI doesn't expose /health.
- * This endpoint is always available and returns 200 when the server is operational.
+ * Uses root endpoint (/) for health check since CLIProxyAPI doesn't expose /health.
+ * Root is cheap and avoids false negatives from slower model-list endpoints.
  *
  * @param config Remote proxy client configuration
  * @returns RemoteProxyStatus with reachability and latency
@@ -217,14 +217,13 @@ export async function checkRemoteProxy(
     };
   }
 
-  // Use /v1/models as health check - CLIProxyAPI doesn't have /health endpoint
-  const url = buildProxyUrl(host, port, protocol, '/v1/models');
+  // Use root endpoint for liveness check - cheap and available across deployments
+  const url = buildProxyUrl(host, port, protocol, '/');
   const startTime = Date.now();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
-
     // Build request options
     const headers: Record<string, string> = {
       Accept: 'application/json',
@@ -245,8 +244,19 @@ export async function checkRemoteProxy(
       // Use native https module for self-signed cert support
       response = await new Promise<Response>((resolve, reject) => {
         const agent = createHttpsAgent(true);
+        let settled = false;
+
+        const settle = (callback: () => void) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(reqTimeout);
+          callback();
+        };
+
         const reqTimeout = setTimeout(() => {
-          reject(new Error('Request timeout'));
+          const timeoutError = new Error('Request timeout');
+          req.destroy(timeoutError);
+          settle(() => reject(timeoutError));
         }, timeout);
 
         const req = https.request(
@@ -258,28 +268,28 @@ export async function checkRemoteProxy(
             timeout,
           },
           (res) => {
-            clearTimeout(reqTimeout);
-            let data = '';
-            res.on('data', (chunk) => (data += chunk));
-            res.on('end', () => {
+            // Health check only needs response headers; don't wait for full body.
+            // This avoids timeout false negatives when servers stream slower payloads.
+            res.resume();
+            settle(() =>
               resolve(
-                new Response(data, {
+                new Response(null, {
                   status: res.statusCode || 500,
-                  statusText: res.statusMessage,
+                  statusText: res.statusMessage ?? '',
                 })
-              );
-            });
+              )
+            );
           }
         );
 
         req.on('error', (err) => {
-          clearTimeout(reqTimeout);
-          reject(err);
+          settle(() => reject(err));
         });
 
         req.on('timeout', () => {
-          req.destroy();
-          reject(new Error('Request timeout'));
+          const timeoutError = new Error('Request timeout');
+          req.destroy(timeoutError);
+          settle(() => reject(timeoutError));
         });
 
         req.end();
@@ -291,8 +301,6 @@ export async function checkRemoteProxy(
         headers,
       });
     }
-
-    clearTimeout(timeoutId);
 
     const latencyMs = Date.now() - startTime;
 
@@ -328,6 +336,8 @@ export async function checkRemoteProxy(
       error: getErrorMessage(errorCode, err.message),
       errorCode,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
