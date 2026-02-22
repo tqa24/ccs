@@ -29,12 +29,49 @@ interface PersistCommandArgs {
   yes?: boolean;
   listBackups?: boolean;
   restore?: string | boolean;
+  permissionMode?: PermissionMode;
+  dangerouslySkipPermissions?: boolean;
+  parseError?: string;
 }
 
 interface ResolvedEnv {
   env: Record<string, string>;
   profileType: string;
   warning?: string;
+}
+
+const PERSIST_KNOWN_FLAGS = [
+  '--yes',
+  '-y',
+  '--list-backups',
+  '--restore',
+  '--permission-mode',
+  '--dangerously-skip-permissions',
+  '--auto-approve',
+  '--help',
+  '-h',
+] as const;
+
+const VALID_PERMISSION_MODES = ['default', 'plan', 'acceptEdits', 'bypassPermissions'] as const;
+
+type PermissionMode = (typeof VALID_PERMISSION_MODES)[number];
+
+function isPermissionMode(value: string): value is PermissionMode {
+  return VALID_PERMISSION_MODES.includes(value as PermissionMode);
+}
+
+function resolvePermissionMode(parsedArgs: PersistCommandArgs): PermissionMode | undefined {
+  if (!parsedArgs.dangerouslySkipPermissions) {
+    return parsedArgs.permissionMode;
+  }
+
+  if (parsedArgs.permissionMode && parsedArgs.permissionMode !== 'bypassPermissions') {
+    throw new Error(
+      '--dangerously-skip-permissions conflicts with --permission-mode. Use bypassPermissions or remove one flag.'
+    );
+  }
+
+  return 'bypassPermissions';
 }
 
 /** Parse command line arguments */
@@ -49,7 +86,27 @@ function parseArgs(args: string[]): PersistCommandArgs {
     result.restore = restoreOption.missingValue ? true : restoreOption.value || true;
   }
 
-  for (const arg of restoreOption.remainingArgs) {
+  const permissionModeOption = extractOption(restoreOption.remainingArgs, ['--permission-mode'], {
+    knownFlags: PERSIST_KNOWN_FLAGS,
+  });
+  if (permissionModeOption.found) {
+    if (permissionModeOption.missingValue) {
+      result.parseError = 'Missing value for --permission-mode';
+    } else if (permissionModeOption.value) {
+      if (!isPermissionMode(permissionModeOption.value)) {
+        result.parseError = `Invalid --permission-mode "${permissionModeOption.value}". Valid modes: ${VALID_PERMISSION_MODES.join(', ')}`;
+      } else {
+        result.permissionMode = permissionModeOption.value;
+      }
+    }
+  }
+
+  result.dangerouslySkipPermissions = hasAnyFlag(permissionModeOption.remainingArgs, [
+    '--dangerously-skip-permissions',
+    '--auto-approve',
+  ]);
+
+  for (const arg of permissionModeOption.remainingArgs) {
     if (!arg.startsWith('-')) {
       result.profile = arg;
       break;
@@ -415,6 +472,13 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Options'));
   console.log(`  ${color('--yes, -y', 'command')}         Skip confirmation prompts (auto-backup)`);
+  console.log(
+    `  ${color('--permission-mode <mode>', 'command')}  Set default permission mode in settings.json`
+  );
+  console.log(
+    `  ${color('--dangerously-skip-permissions', 'command')}  Persist auto-approve (bypassPermissions)`
+  );
+  console.log(`  ${color('--auto-approve', 'command')}  Alias for --dangerously-skip-permissions`);
   console.log(`  ${color('--help, -h', 'command')}        Show this help message`);
   console.log('');
   console.log(subheader('Backup Management'));
@@ -436,6 +500,12 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(`  ${dim('# Persist with auto-confirmation')}`);
   console.log(`  ${color('ccs persist gemini --yes', 'command')}`);
+  console.log('');
+  console.log(`  ${dim('# Persist with default permission mode')}`);
+  console.log(`  ${color('ccs persist glm --permission-mode acceptEdits', 'command')}`);
+  console.log('');
+  console.log(`  ${dim('# Persist with auto-approve enabled')}`);
+  console.log(`  ${color('ccs persist codex --dangerously-skip-permissions', 'command')}`);
   console.log('');
   console.log(`  ${dim('# List all backups')}`);
   console.log(`  ${color('ccs persist --list-backups', 'command')}`);
@@ -474,6 +544,17 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     return;
   }
   await initUI();
+  if (parsedArgs.parseError) {
+    console.log(fail(parsedArgs.parseError));
+    process.exit(1);
+  }
+  let resolvedPermissionMode: PermissionMode | undefined;
+  try {
+    resolvedPermissionMode = resolvePermissionMode(parsedArgs);
+  } catch (error) {
+    console.log(fail((error as Error).message));
+    process.exit(1);
+  }
   if (!parsedArgs.profile) {
     console.log(fail('Profile name is required'));
     console.log('');
@@ -529,6 +610,13 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     console.log(`  ${color(paddedKey, 'command')} = ${displayValue}`);
   }
   console.log('');
+  if (resolvedPermissionMode) {
+    console.log(`Default permission mode: ${color(resolvedPermissionMode, 'command')}`);
+    if (resolvedPermissionMode === 'bypassPermissions') {
+      console.log(warn('Auto-approve enabled: Claude will skip permission prompts by default.'));
+    }
+    console.log('');
+  }
   // Show warning if applicable
   if (resolved.warning) {
     console.log(warn(resolved.warning));
@@ -582,13 +670,30 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
       existingEnv = rawEnv as Record<string, string>;
     }
   }
-  const mergedSettings = {
+  const mergedSettings: Record<string, unknown> = {
     ...existingSettings,
     env: {
       ...existingEnv,
       ...resolved.env,
     },
   };
+  if (resolvedPermissionMode) {
+    const rawPermissions = existingSettings.permissions;
+    let existingPermissions: Record<string, unknown> = {};
+    if (rawPermissions !== undefined && rawPermissions !== null) {
+      if (typeof rawPermissions !== 'object' || Array.isArray(rawPermissions)) {
+        console.log(
+          warn('Existing permissions in settings.json is not an object - it will be replaced')
+        );
+      } else {
+        existingPermissions = rawPermissions as Record<string, unknown>;
+      }
+    }
+    mergedSettings.permissions = {
+      ...existingPermissions,
+      defaultMode: resolvedPermissionMode,
+    };
+  }
   // Write merged settings
   try {
     writeClaudeSettings(mergedSettings);

@@ -20,11 +20,15 @@ describe('Persist Command', () => {
      * Simulates the argument parsing logic from persist-command.ts
      */
     function parseArgs(args) {
+      const validPermissionModes = ['default', 'plan', 'acceptEdits', 'bypassPermissions'];
       const result = {
         profile: undefined,
         yes: false,
         listBackups: false,
         restore: undefined,
+        permissionMode: undefined,
+        dangerouslySkipPermissions: false,
+        parseError: undefined,
       };
       for (let i = 0; i < args.length; i++) {
         const arg = args[i];
@@ -43,6 +47,27 @@ describe('Persist Command', () => {
           } else {
             result.restore = true; // Use latest
           }
+        } else if (arg === '--permission-mode') {
+          const nextArg = args[i + 1];
+          if (!nextArg || nextArg.startsWith('-')) {
+            result.parseError = 'Missing value for --permission-mode';
+          } else if (!validPermissionModes.includes(nextArg)) {
+            result.parseError = `Invalid --permission-mode "${nextArg}". Valid modes: ${validPermissionModes.join(', ')}`;
+          } else {
+            result.permissionMode = nextArg;
+            i++; // Skip next arg
+          }
+        } else if (arg.startsWith('--permission-mode=')) {
+          const mode = arg.split('=').slice(1).join('=');
+          if (!mode.trim()) {
+            result.parseError = 'Missing value for --permission-mode';
+          } else if (!validPermissionModes.includes(mode)) {
+            result.parseError = `Invalid --permission-mode "${mode}". Valid modes: ${validPermissionModes.join(', ')}`;
+          } else {
+            result.permissionMode = mode;
+          }
+        } else if (arg === '--dangerously-skip-permissions' || arg === '--auto-approve') {
+          result.dangerouslySkipPermissions = true;
         } else if (!arg.startsWith('-') && !result.profile) {
           result.profile = arg;
         }
@@ -117,6 +142,34 @@ describe('Persist Command', () => {
       assert.strictEqual(result.restore, '20260110_205324');
       assert.strictEqual(result.yes, true);
     });
+
+    it('parses --permission-mode with valid mode', () => {
+      const result = parseArgs(['glm', '--permission-mode', 'acceptEdits']);
+      assert.strictEqual(result.profile, 'glm');
+      assert.strictEqual(result.permissionMode, 'acceptEdits');
+      assert.strictEqual(result.parseError, undefined);
+    });
+
+    it('parses --permission-mode=value syntax', () => {
+      const result = parseArgs(['glm', '--permission-mode=bypassPermissions']);
+      assert.strictEqual(result.permissionMode, 'bypassPermissions');
+      assert.strictEqual(result.parseError, undefined);
+    });
+
+    it('sets parseError for invalid --permission-mode', () => {
+      const result = parseArgs(['glm', '--permission-mode', 'invalid']);
+      assert.match(result.parseError, /Invalid --permission-mode/);
+    });
+
+    it('parses --dangerously-skip-permissions flag', () => {
+      const result = parseArgs(['glm', '--dangerously-skip-permissions']);
+      assert.strictEqual(result.dangerouslySkipPermissions, true);
+    });
+
+    it('parses --auto-approve as alias flag', () => {
+      const result = parseArgs(['glm', '--auto-approve']);
+      assert.strictEqual(result.dangerouslySkipPermissions, true);
+    });
   });
 
   // =========================================================================
@@ -170,15 +223,28 @@ describe('Persist Command', () => {
     /**
      * Simulates the merge logic from persist-command.ts
      */
-    function mergeSettings(existing, newEnv) {
+    function mergeSettings(existing, newEnv, permissionMode) {
       const existingEnv = existing.env || {};
-      return {
+      const merged = {
         ...existing,
         env: {
           ...existingEnv,
           ...newEnv,
         },
       };
+
+      if (permissionMode) {
+        const existingPermissions =
+          existing.permissions && typeof existing.permissions === 'object'
+            ? existing.permissions
+            : {};
+        merged.permissions = {
+          ...existingPermissions,
+          defaultMode: permissionMode,
+        };
+      }
+
+      return merged;
     }
 
     it('merges env vars into empty settings', () => {
@@ -257,6 +323,30 @@ describe('Persist Command', () => {
       assert.strictEqual(result.env.OLD_VAR, 'old');
       assert.strictEqual(result.env.ANTHROPIC_BASE_URL, 'http://test.com');
       assert.strictEqual(result.env.ANTHROPIC_MODEL, 'test');
+    });
+
+    it('sets permissions.defaultMode when permission mode is provided', () => {
+      const existing = {
+        hooks: { PreToolUse: [] },
+      };
+      const result = mergeSettings(existing, { ANTHROPIC_MODEL: 'test' }, 'acceptEdits');
+
+      assert.strictEqual(result.permissions.defaultMode, 'acceptEdits');
+      assert.deepStrictEqual(result.hooks, existing.hooks);
+    });
+
+    it('preserves existing permissions allow/deny when setting defaultMode', () => {
+      const existing = {
+        permissions: {
+          allow: ['Bash(ls:*)'],
+          deny: ['Bash(rm:*)'],
+        },
+      };
+      const result = mergeSettings(existing, { ANTHROPIC_MODEL: 'test' }, 'bypassPermissions');
+
+      assert.deepStrictEqual(result.permissions.allow, ['Bash(ls:*)']);
+      assert.deepStrictEqual(result.permissions.deny, ['Bash(rm:*)']);
+      assert.strictEqual(result.permissions.defaultMode, 'bypassPermissions');
     });
   });
 
