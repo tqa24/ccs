@@ -1,3 +1,36 @@
+## [7.48.0](https://github.com/kaitranntt/ccs/compare/v7.47.0...v7.48.0) (2026-02-22)
+
+### Features
+
+* **cliproxy:** add Claude quota windows and account failover ([2385d90](https://github.com/kaitranntt/ccs/commit/2385d9028ae37d00200516c9728cb29b9c45fd21))
+
+### Bug Fixes
+
+* **cliproxy:** add gemini 3.1 preview alias compatibility ([653f809](https://github.com/kaitranntt/ccs/commit/653f8092aea7e9b0d0e3f7ca7d6fd2a42f87e4a5))
+* **cliproxy:** close remaining quota edge-case gaps ([8c790f4](https://github.com/kaitranntt/ccs/commit/8c790f41ffba9a09467899b8b641dcbe2b692ae3))
+* **cliproxy:** harden antigravity alias generation ([63619cb](https://github.com/kaitranntt/ccs/commit/63619cb9dc7b4eb35b4904322b5fe02d36278638))
+* **cliproxy:** harden quota guards and review follow-ups ([ca58cb5](https://github.com/kaitranntt/ccs/commit/ca58cb5a088d0f4e714d0936d5b339de8f5ad053))
+* **cliproxy:** keep canonical codex model ids in settings ([a81176d](https://github.com/kaitranntt/ccs/commit/a81176da79568189a686f748d3f76b2c3e1a4240))
+* **cliproxy:** keep remote-proxy client under maintainability limit ([88be99f](https://github.com/kaitranntt/ccs/commit/88be99f8a071c8f5786800a958218948286cbba0))
+* **cliproxy:** normalize codex effort aliases without reasoning proxy ([742b5ed](https://github.com/kaitranntt/ccs/commit/742b5ed5803dc7937547fc5cf78c8b23c6b3d10f))
+* **cliproxy:** normalize provider-aware Claude model IDs ([6429781](https://github.com/kaitranntt/ccs/commit/6429781e8fc7ec5d72aedb7b2409f26f0c739e00))
+* **cliproxy:** prevent false remote timeout on reachable proxy ([34292ca](https://github.com/kaitranntt/ccs/commit/34292ca7f8d1cb51b7aaa5a59383e8ff2a381bd4))
+* **cliproxy:** split claude quota fetcher for maintainability gate ([9371a72](https://github.com/kaitranntt/ccs/commit/9371a72c1638d72f2a3e1fcb3fe9416c79f7cd1a))
+* **core:** resolve edge cases and hardcoded drift ([343ec95](https://github.com/kaitranntt/ccs/commit/343ec959fc8ea26c3e2b75d88613627cdad3b223))
+* **persist:** add auto-approve permission flags ([e3255e5](https://github.com/kaitranntt/ccs/commit/e3255e5615df121831f626300510c934518d2cca))
+* **persist:** harden persist restore safety and edge cases ([29cceb3](https://github.com/kaitranntt/ccs/commit/29cceb3a881600d70511bcc6d11b63f5b809f04b))
+* **persist:** resolve CI gate and review test gaps ([61bcd4d](https://github.com/kaitranntt/ccs/commit/61bcd4df5e343a34c3089c939ee23ce9a815c029))
+* **refactor:** address PR review follow-up findings ([6074fcb](https://github.com/kaitranntt/ccs/commit/6074fcb0b628c801b3a579c2673f79e829270dc1))
+* **types:** use type-only import for composite tier config ([af6aa2d](https://github.com/kaitranntt/ccs/commit/af6aa2d7b2b40f144b7e53b3f69a63e92cbb10c6))
+
+### Documentation
+
+* **cliproxy:** add normalizer API usage examples ([187c6f7](https://github.com/kaitranntt/ccs/commit/187c6f7f130d6f425dfcdd00c1a760b63c83afb4))
+
+### Code Refactoring
+
+* **core:** centralize claude paths and command parsing ([8d2ec86](https://github.com/kaitranntt/ccs/commit/8d2ec861551a68d30442a2e548e08578d511cb49))
+
 ## [7.47.0](https://github.com/kaitranntt/ccs/compare/v7.46.0...v7.47.0) (2026-02-20)
 
 ### Features
