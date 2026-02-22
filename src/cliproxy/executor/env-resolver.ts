@@ -24,7 +24,7 @@ import { stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { CodexReasoningProxy } from '../codex-reasoning-proxy';
 import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
-import { normalizeModelIdForProvider } from '../model-id-normalizer';
+import { MODEL_ENV_VAR_KEYS, normalizeModelIdForProvider } from '../model-id-normalizer';
 
 export interface RemoteProxyConfig {
   host: string;
@@ -59,6 +59,38 @@ export interface ProxyChainConfig {
   };
   /** Composite variant: which tier is the default */
   compositeDefaultTier?: 'opus' | 'sonnet' | 'haiku';
+}
+
+const CODEX_EFFORT_SUFFIX_REGEX = /^(.*)-(xhigh|high|medium)$/i;
+const EXTENDED_CONTEXT_SUFFIX_REGEX = /\[1m\]$/i;
+
+function normalizeCodexModelForDirectUpstream(model: string): string {
+  const withoutExtendedContext = model.trim().replace(EXTENDED_CONTEXT_SUFFIX_REGEX, '').trim();
+  if (!withoutExtendedContext) return withoutExtendedContext;
+
+  const effortMatch = withoutExtendedContext.match(CODEX_EFFORT_SUFFIX_REGEX);
+  if (!effortMatch?.[1] || !effortMatch[2]) {
+    return withoutExtendedContext;
+  }
+
+  return `${effortMatch[1].trim()}(${effortMatch[2].toLowerCase()})`;
+}
+
+function normalizeCodexEnvForDirectUpstream(envVars: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  let nextEnv: NodeJS.ProcessEnv | null = null;
+
+  for (const key of MODEL_ENV_VAR_KEYS) {
+    const value = envVars[key];
+    if (typeof value !== 'string' || value.trim().length === 0) continue;
+
+    const normalizedValue = normalizeCodexModelForDirectUpstream(value);
+    if (normalizedValue === value) continue;
+
+    if (!nextEnv) nextEnv = { ...envVars };
+    nextEnv[key] = normalizedValue;
+  }
+
+  return nextEnv ?? envVars;
 }
 
 /**
@@ -189,6 +221,14 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
   // Apply extended context suffix for 1M token context window
   // Auto-enabled for Gemini, opt-in for Claude (--1m flag)
   applyExtendedContextConfig(envVars, provider, extendedContextOverride);
+
+  // Fallback compatibility for Codex:
+  // CLIProxyAPI provider lookup recognizes model(level) suffix form, while CCS stores codex
+  // effort aliases as model-level (e.g., gpt-5.3-codex-high). If codex reasoning proxy is
+  // unavailable, normalize to model(level) to avoid "unknown provider for model ..." failures.
+  if (provider === 'codex' && !isComposite && !codexReasoningPort) {
+    envVars = normalizeCodexEnvForDirectUpstream(envVars);
+  }
 
   // Determine the final ANTHROPIC_BASE_URL based on active proxies
   // Chain order: Claude CLI → [CodexReasoningProxy] → [ToolSanitizationProxy] → CLIProxy
