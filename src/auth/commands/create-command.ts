@@ -42,7 +42,7 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
   try {
     // Create instance directory
     console.log(info(`Creating profile: ${profileName}`));
-    const instancePath = ctx.instanceMgr.ensureInstance(profileName);
+    const instancePath = await ctx.instanceMgr.ensureInstance(profileName);
 
     // Create/update profile entry based on config mode
     if (isUnifiedMode()) {

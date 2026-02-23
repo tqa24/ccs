@@ -74,13 +74,13 @@ jobs:
           fi
           node scripts/send-discord-release.cjs production "$DISCORD_WEBHOOK_URL"
 
-      - name: Cleanup stale labels on released issues
+      - name: Cleanup labels and close released issues
         if: success() && steps.release.outputs.released == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # semantic-release already adds "released" label via .releaserc.cjs
-          # This step removes transitional labels from issues now in stable
+          # This step removes transitional labels and closes issues now in stable.
 
           # Find issues with both "released" and "released-dev" labels
           ISSUES=$(gh issue list --label "released" --label "released-dev" --state all --json number --jq '.[].number' 2>/dev/null || echo "")
@@ -96,4 +96,14 @@ jobs:
           for NUM in $PENDING; do
             echo "Removing pending-release from issue #$NUM"
             gh issue edit "$NUM" --remove-label "pending-release" --repo "${{ github.repository }}" 2>/dev/null || true
+          done
+
+          # Close open issues that are marked as released
+          OPEN_RELEASED=$(gh issue list --label "released" --state open --json number --jq '.[].number' 2>/dev/null || echo "")
+
+          for NUM in $OPEN_RELEASED; do
+            echo "Closing released issue #$NUM"
+            gh issue close "$NUM" \
+              --comment "[bot] Closing issue because this fix/feature is now in stable release (@latest)." \
+              --repo "${{ github.repository }}" || true
           done

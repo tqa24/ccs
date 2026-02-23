@@ -202,6 +202,98 @@ class SharedManager {
   }
 
   /**
+   * Ensure all project memory directories for an instance are shared.
+   *
+   * Source layout (isolated):
+   *   ~/.ccs/instances/<profile>/projects/<project>/memory/
+   *
+   * Shared layout (canonical):
+   *   ~/.ccs/shared/memory/<project>/
+   */
+  async syncProjectMemories(instancePath: string): Promise<void> {
+    const projectsDir = path.join(instancePath, 'projects');
+    if (!(await this.pathExists(projectsDir))) {
+      return;
+    }
+
+    await this.ensureDirectory(this.sharedDir);
+
+    const sharedMemoryRoot = path.join(this.sharedDir, 'memory');
+    await this.ensureDirectory(sharedMemoryRoot);
+
+    let projectEntries: fs.Dirent[] = [];
+    try {
+      projectEntries = await fs.promises.readdir(projectsDir, { withFileTypes: true });
+    } catch (_err) {
+      return;
+    }
+
+    const projects = projectEntries.filter((entry) => entry.isDirectory());
+    if (projects.length === 0) {
+      return;
+    }
+
+    let migrated = 0;
+    let merged = 0;
+    let linked = 0;
+    const instanceName = path.basename(instancePath);
+
+    for (const project of projects) {
+      const projectDir = path.join(projectsDir, project.name);
+      const projectMemoryPath = path.join(projectDir, 'memory');
+      const sharedProjectMemoryPath = path.join(sharedMemoryRoot, project.name);
+
+      const projectMemoryStats = await this.getLstat(projectMemoryPath);
+      if (!projectMemoryStats) {
+        if (await this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+          linked++;
+        }
+        continue;
+      }
+
+      if (projectMemoryStats.isSymbolicLink()) {
+        if (await this.isSymlinkTarget(projectMemoryPath, sharedProjectMemoryPath)) {
+          continue;
+        }
+
+        await fs.promises.unlink(projectMemoryPath);
+        if (await this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+          linked++;
+        }
+        continue;
+      }
+
+      if (!projectMemoryStats.isDirectory()) {
+        continue;
+      }
+
+      if (!(await this.pathExists(sharedProjectMemoryPath))) {
+        await this.moveDirectory(projectMemoryPath, sharedProjectMemoryPath);
+        migrated++;
+      } else {
+        merged += await this.mergeDirectoryWithConflictCopies(
+          projectMemoryPath,
+          sharedProjectMemoryPath,
+          instanceName
+        );
+        await fs.promises.rm(projectMemoryPath, { recursive: true, force: true });
+      }
+
+      if (await this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+        linked++;
+      }
+    }
+
+    if (migrated > 0 || merged > 0 || linked > 0) {
+      console.log(
+        ok(
+          `Synced shared project memory: ${migrated} migrated, ${merged} merged conflict(s), ${linked} linked`
+        )
+      );
+    }
+  }
+
+  /**
    * Normalize plugin registry paths to use canonical ~/.claude/ paths
    * instead of instance-specific ~/.ccs/instances/<name>/ paths.
    *
@@ -418,6 +510,190 @@ class SharedManager {
     }
 
     console.log(ok(`Migrated ${migrated} instance(s), skipped ${skipped}`));
+  }
+
+  /**
+   * Ensure memory path is linked to shared memory root.
+   * Returns true when a link/copy was created or updated.
+   */
+  private async ensureProjectMemoryLink(linkPath: string, targetPath: string): Promise<boolean> {
+    await this.ensureDirectory(targetPath);
+
+    const linkStats = await this.getLstat(linkPath);
+    if (linkStats) {
+      if (linkStats.isSymbolicLink() && (await this.isSymlinkTarget(linkPath, targetPath))) {
+        return false;
+      }
+
+      if (linkStats.isDirectory()) {
+        await fs.promises.rm(linkPath, { recursive: true, force: true });
+      } else {
+        await fs.promises.unlink(linkPath);
+      }
+    }
+
+    const symlinkType: 'dir' | 'junction' = process.platform === 'win32' ? 'junction' : 'dir';
+    const linkTarget = process.platform === 'win32' ? path.resolve(targetPath) : targetPath;
+
+    try {
+      await fs.promises.symlink(linkTarget, linkPath, symlinkType);
+      return true;
+    } catch (_err) {
+      if (process.platform === 'win32') {
+        this.copyDirectoryFallback(targetPath, linkPath);
+        console.log(
+          warn(`Symlink failed for project memory, copied instead (enable Developer Mode)`)
+        );
+        return true;
+      }
+      throw _err;
+    }
+  }
+
+  /**
+   * Check whether symlink points to expected target.
+   */
+  private async isSymlinkTarget(linkPath: string, expectedTarget: string): Promise<boolean> {
+    try {
+      const stats = await fs.promises.lstat(linkPath);
+      if (!stats.isSymbolicLink()) {
+        return false;
+      }
+
+      const currentTarget = await fs.promises.readlink(linkPath);
+      const resolvedCurrentTarget = path.resolve(path.dirname(linkPath), currentTarget);
+      const resolvedExpectedTarget = path.resolve(expectedTarget);
+      return resolvedCurrentTarget === resolvedExpectedTarget;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  /**
+   * Move directory, with cross-device fallback.
+   */
+  private async moveDirectory(src: string, dest: string): Promise<void> {
+    try {
+      await fs.promises.rename(src, dest);
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code !== 'EXDEV') {
+        throw err;
+      }
+
+      await fs.promises.cp(src, dest, { recursive: true });
+      await fs.promises.rm(src, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Merge source into target. On file conflicts, keep target and copy source
+   * as "<name>.migrated-from-<instance>[-N]" to avoid data loss.
+   */
+  private async mergeDirectoryWithConflictCopies(
+    sourceDir: string,
+    targetDir: string,
+    instanceName: string
+  ): Promise<number> {
+    await this.ensureDirectory(targetDir);
+
+    let conflicts = 0;
+    const entries = await fs.promises.readdir(sourceDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const sourcePath = path.join(sourceDir, entry.name);
+      const targetPath = path.join(targetDir, entry.name);
+
+      if (entry.isDirectory()) {
+        conflicts += await this.mergeDirectoryWithConflictCopies(
+          sourcePath,
+          targetPath,
+          instanceName
+        );
+        continue;
+      }
+
+      if (entry.isFile()) {
+        if (!(await this.pathExists(targetPath))) {
+          await fs.promises.copyFile(sourcePath, targetPath);
+          continue;
+        }
+
+        if (await this.fileContentsEqual(sourcePath, targetPath)) {
+          continue;
+        }
+
+        const conflictPath = await this.getConflictCopyPath(targetPath, instanceName);
+        await fs.promises.copyFile(sourcePath, conflictPath);
+        conflicts++;
+      }
+    }
+
+    return conflicts;
+  }
+
+  /**
+   * Compare two files byte-for-byte.
+   */
+  private async fileContentsEqual(fileA: string, fileB: string): Promise<boolean> {
+    try {
+      const [statA, statB] = await Promise.all([fs.promises.stat(fileA), fs.promises.stat(fileB)]);
+      if (statA.size !== statB.size) {
+        return false;
+      }
+
+      const [contentA, contentB] = await Promise.all([
+        fs.promises.readFile(fileA),
+        fs.promises.readFile(fileB),
+      ]);
+      return contentA.equals(contentB);
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  /**
+   * Build a non-destructive conflict copy path.
+   */
+  private async getConflictCopyPath(
+    existingTargetPath: string,
+    instanceName: string
+  ): Promise<string> {
+    const safeInstanceName = instanceName.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+    const baseSuffix = `.migrated-from-${safeInstanceName}`;
+
+    let candidate = `${existingTargetPath}${baseSuffix}`;
+    let sequence = 1;
+    while (await this.pathExists(candidate)) {
+      candidate = `${existingTargetPath}${baseSuffix}-${sequence}`;
+      sequence++;
+    }
+
+    return candidate;
+  }
+
+  private async pathExists(targetPath: string): Promise<boolean> {
+    try {
+      await fs.promises.access(targetPath);
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  private async ensureDirectory(targetPath: string): Promise<void> {
+    await fs.promises.mkdir(targetPath, { recursive: true, mode: 0o700 });
+  }
+
+  private async getLstat(targetPath: string): Promise<fs.Stats | null> {
+    try {
+      return await fs.promises.lstat(targetPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null;
+      }
+      throw err;
+    }
   }
 
   /**
