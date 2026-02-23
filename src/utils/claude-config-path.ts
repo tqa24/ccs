@@ -5,7 +5,7 @@ import * as path from 'path';
  * Resolve Claude config directory with test/dev overrides.
  * Precedence:
  * 1. CLAUDE_CONFIG_DIR (explicit override)
- * 2. CCS_HOME compatibility path (<dirname(CCS_HOME)>/.claude)
+ * 2. CCS_HOME compatibility path (<CCS_HOME>/.claude)
  * 3. ~/.claude (default)
  */
 export function getClaudeConfigDir(): string {
@@ -14,7 +14,7 @@ export function getClaudeConfigDir(): string {
   }
 
   if (process.env.CCS_HOME) {
-    return path.join(path.dirname(path.resolve(process.env.CCS_HOME)), '.claude');
+    return path.join(path.resolve(process.env.CCS_HOME), '.claude');
   }
 
   return path.join(os.homedir(), '.claude');

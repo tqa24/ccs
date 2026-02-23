@@ -69,36 +69,76 @@ function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
   }
 
   const items: SharedItem[] = [];
+  const sharedDirRoot = safeRealPath(sharedDir) ?? path.resolve(sharedDir);
+  const allowedSkillAgentRoots = new Set<string>([
+    sharedDirRoot,
+    ...[
+      path.join(getClaudeConfigDir(), type),
+      path.join(ccsDir, '.claude', type),
+      path.join(ccsDir, 'shared', type),
+    ]
+      .map((dirPath) => safeRealPath(dirPath))
+      .filter((dirPath): dirPath is string => typeof dirPath === 'string'),
+  ]);
 
   try {
     const entries = fs.readdirSync(sharedDir, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (entry.isDirectory()) {
-        // Skill/Agent: look for SKILL.md for skills, prompt.md for agents
-        const markdownFile = type === 'skills' ? 'SKILL.md' : 'prompt.md';
-        const promptPath = path.join(sharedDir, entry.name, markdownFile);
-        if (fs.existsSync(promptPath)) {
-          const content = fs.readFileSync(promptPath, 'utf8');
-          const description = extractDescription(content);
+      try {
+        const entryPath = path.join(sharedDir, entry.name);
+
+        if (type === 'commands') {
+          if (!entry.name.endsWith('.md')) {
+            continue;
+          }
+          if (!entry.isFile() && !entry.isSymbolicLink()) {
+            continue;
+          }
+
+          const commandPath = safeRealPath(entryPath);
+          if (!commandPath || !isPathWithin(commandPath, sharedDirRoot)) {
+            continue;
+          }
+
+          const description = readMarkdownDescription(commandPath, sharedDirRoot);
+          if (!description) {
+            continue;
+          }
+
           items.push({
-            name: entry.name,
+            name: entry.name.replace('.md', ''),
             description,
-            path: path.join(sharedDir, entry.name),
-            type: type === 'commands' ? 'command' : (type.slice(0, -1) as 'skill' | 'agent'),
+            path: entryPath,
+            type: 'command',
           });
+          continue;
         }
-      } else if (entry.name.endsWith('.md')) {
-        // Command: .md file
-        const filePath = path.join(sharedDir, entry.name);
-        const content = fs.readFileSync(filePath, 'utf8');
-        const description = extractDescription(content);
+
+        // Skills/agents are directory-based and may be symlinked directories.
+        if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+          continue;
+        }
+
+        const entryRoot = safeRealPath(entryPath);
+        if (!entryRoot || !isPathWithinAny(entryRoot, allowedSkillAgentRoots)) {
+          continue;
+        }
+
+        const markdownFile = type === 'skills' ? 'SKILL.md' : 'prompt.md';
+        const description = readMarkdownDescription(path.join(entryRoot, markdownFile), entryRoot);
+        if (!description) {
+          continue;
+        }
+
         items.push({
-          name: entry.name.replace('.md', ''),
+          name: entry.name,
           description,
-          path: filePath,
-          type: 'command',
+          path: entryPath,
+          type: type === 'skills' ? 'skill' : 'agent',
         });
+      } catch {
+        // Fail soft per entry so one bad item does not hide valid results.
       }
     }
   } catch {
@@ -118,6 +158,53 @@ function extractDescription(content: string): string {
     }
   }
   return 'No description';
+}
+
+function readMarkdownDescription(markdownPath: string, allowedRoot: string): string | null {
+  try {
+    const resolvedMarkdownPath = safeRealPath(markdownPath);
+    if (!resolvedMarkdownPath || !isPathWithin(resolvedMarkdownPath, allowedRoot)) {
+      return null;
+    }
+
+    const stats = fs.statSync(resolvedMarkdownPath);
+    if (!stats.isFile()) {
+      return null;
+    }
+    const content = fs.readFileSync(resolvedMarkdownPath, 'utf8');
+    return extractDescription(content);
+  } catch {
+    return null;
+  }
+}
+
+function safeRealPath(targetPath: string): string | null {
+  try {
+    return fs.realpathSync(targetPath);
+  } catch {
+    return null;
+  }
+}
+
+function isPathWithin(candidatePath: string, basePath: string): boolean {
+  const normalizedCandidate = normalizeForPathComparison(candidatePath);
+  const normalizedBase = normalizeForPathComparison(basePath);
+  const relative = path.relative(normalizedBase, normalizedCandidate);
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function isPathWithinAny(candidatePath: string, basePaths: Set<string>): boolean {
+  for (const basePath of basePaths) {
+    if (isPathWithin(candidatePath, basePath)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function normalizeForPathComparison(targetPath: string): string {
+  const normalized = path.resolve(targetPath);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function checkSymlinkStatus(): { valid: boolean; message: string } {
@@ -140,7 +227,7 @@ function checkSymlinkStatus(): { valid: boolean; message: string } {
         const stats = fs.lstatSync(linkPath);
         if (stats.isSymbolicLink()) {
           const target = fs.readlinkSync(linkPath);
-          // Check if it points to ~/.claude/{linkType}
+          // Check if it points to Claude config dir.
           const expectedTarget = path.join(getClaudeConfigDir(), linkType);
           if (path.resolve(path.dirname(linkPath), target) === path.resolve(expectedTarget)) {
             validLinks++;
