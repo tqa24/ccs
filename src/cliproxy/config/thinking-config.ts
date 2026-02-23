@@ -124,6 +124,15 @@ export function getThinkingValueForTier(
   if (providerOverride) {
     return providerOverride;
   }
+
+  // Codex effort aliases historically defaulted to xhigh/high/medium per tier.
+  // Preserve this behavior when settings are canonicalized (suffix-stripped).
+  if (provider === 'codex') {
+    if (tier === 'opus') return 'xhigh';
+    if (tier === 'sonnet') return 'high';
+    return 'medium';
+  }
+
   // Fall back to global tier default (with null guard, uses centralized defaults)
   return thinkingConfig.tier_defaults?.[tier] ?? DEFAULT_THINKING_TIER_DEFAULTS[tier];
 }

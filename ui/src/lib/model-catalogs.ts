@@ -140,10 +140,10 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         name: 'GPT-5.3 Codex',
         description: 'Supports up to xhigh effort',
         presetMapping: {
-          default: 'gpt-5.3-codex-xhigh',
-          opus: 'gpt-5.3-codex-xhigh',
-          sonnet: 'gpt-5.3-codex-high',
-          haiku: 'gpt-5-mini-medium',
+          default: 'gpt-5.3-codex',
+          opus: 'gpt-5.3-codex',
+          sonnet: 'gpt-5.3-codex',
+          haiku: 'gpt-5-mini',
         },
       },
       {
@@ -151,10 +151,10 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         name: 'GPT-5.2 Codex',
         description: 'Previous stable Codex model',
         presetMapping: {
-          default: 'gpt-5.2-codex-xhigh',
-          opus: 'gpt-5.2-codex-xhigh',
-          sonnet: 'gpt-5.2-codex-high',
-          haiku: 'gpt-5-mini-medium',
+          default: 'gpt-5.2-codex',
+          opus: 'gpt-5.2-codex',
+          sonnet: 'gpt-5.2-codex',
+          haiku: 'gpt-5-mini',
         },
       },
       {
@@ -162,10 +162,10 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         name: 'GPT-5 Mini',
         description: 'Fast, capped at high effort (no xhigh)',
         presetMapping: {
-          default: 'gpt-5-mini-medium',
-          opus: 'gpt-5.3-codex-xhigh',
-          sonnet: 'gpt-5-mini-high',
-          haiku: 'gpt-5-mini-medium',
+          default: 'gpt-5-mini',
+          opus: 'gpt-5.3-codex',
+          sonnet: 'gpt-5-mini',
+          haiku: 'gpt-5-mini',
         },
       },
       {
@@ -174,9 +174,9 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
         description: 'Legacy most capable Codex model',
         presetMapping: {
           default: 'gpt-5.1-codex-max',
-          opus: 'gpt-5.1-codex-max-high',
+          opus: 'gpt-5.1-codex-max',
           sonnet: 'gpt-5.1-codex-max',
-          haiku: 'gpt-5.1-codex-mini-high',
+          haiku: 'gpt-5.1-codex-mini',
         },
       },
       {

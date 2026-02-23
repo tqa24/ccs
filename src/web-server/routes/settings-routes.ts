@@ -22,6 +22,14 @@ import { deduplicateCcsHooks } from '../../utils/websearch/hook-utils';
 import type { Settings } from '../../types/config';
 
 const router = Router();
+const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+const MODEL_ENV_KEYS = [
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+] as const;
+const PRESET_MODEL_KEYS = ['default', 'opus', 'sonnet', 'haiku'] as const;
 
 /**
  * Helper: Resolve settings path for profile or variant
@@ -40,6 +48,59 @@ function resolveSettingsPath(profileOrVariant: string): string {
 
   // Regular profile settings
   return path.join(ccsDir, `${profileOrVariant}.settings.json`);
+}
+
+function isCodexProfile(profileOrVariant: string): boolean {
+  if (profileOrVariant.toLowerCase() === 'codex') return true;
+  const variants = listVariants();
+  return variants[profileOrVariant]?.provider === 'codex';
+}
+
+function stripCodexEffortSuffix(modelId: string): string {
+  return modelId.replace(CODEX_EFFORT_SUFFIX_REGEX, '');
+}
+
+function canonicalizeCodexSettings(profileOrVariant: string, settings: Settings): Settings {
+  if (!isCodexProfile(profileOrVariant)) return settings;
+
+  let changed = false;
+  const next: Settings = { ...settings };
+
+  if (settings.env && typeof settings.env === 'object') {
+    const env = { ...settings.env };
+    for (const key of MODEL_ENV_KEYS) {
+      const value = env[key];
+      if (typeof value !== 'string') continue;
+      const canonical = stripCodexEffortSuffix(value);
+      if (canonical !== value) {
+        env[key] = canonical;
+        changed = true;
+      }
+    }
+    next.env = env;
+  }
+
+  if (Array.isArray(settings.presets)) {
+    const normalizedPresets = settings.presets.map((preset) => {
+      const normalizedPreset = { ...preset };
+      let presetChanged = false;
+
+      for (const key of PRESET_MODEL_KEYS) {
+        const value = normalizedPreset[key];
+        const canonical = stripCodexEffortSuffix(value);
+        if (canonical !== value) {
+          normalizedPreset[key] = canonical;
+          presetChanged = true;
+        }
+      }
+
+      if (presetChanged) changed = true;
+      return normalizedPreset;
+    });
+    next.presets = normalizedPresets;
+  }
+
+  return changed ? next : settings;
 }
 
 /**
@@ -73,7 +134,7 @@ router.get('/:profile', (req: Request, res: Response): void => {
     }
 
     const stat = fs.statSync(settingsPath);
-    const settings = loadSettings(settingsPath);
+    const settings = canonicalizeCodexSettings(profile, loadSettings(settingsPath));
     const masked = maskApiKeys(settings);
 
     res.json({
@@ -101,7 +162,7 @@ router.get('/:profile/raw', (req: Request, res: Response): void => {
     }
 
     const stat = fs.statSync(settingsPath);
-    const settings = loadSettings(settingsPath);
+    const settings = canonicalizeCodexSettings(profile, loadSettings(settingsPath));
 
     res.json({
       profile,
@@ -137,14 +198,16 @@ router.put('/:profile', (req: Request, res: Response): void => {
       return;
     }
 
+    const normalizedSettings = canonicalizeCodexSettings(profile, settings as Settings);
+
     // Deduplicate CCS hooks to prevent accumulation (fixes #450)
     // This handles cases where duplicate hooks were added by previous versions
-    deduplicateCcsHooks(settings as Record<string, unknown>);
+    deduplicateCcsHooks(normalizedSettings as Record<string, unknown>);
 
     const ccsDir = getCcsDir();
 
     // Check for missing required fields (warning, not blocking - runtime fills defaults)
-    const missingFields = checkRequiredEnvVars(settings);
+    const missingFields = checkRequiredEnvVars(normalizedSettings);
     const settingsPath = resolveSettingsPath(profile);
 
     const fileExists = fs.existsSync(settingsPath);
@@ -163,7 +226,7 @@ router.put('/:profile', (req: Request, res: Response): void => {
 
     // Create backup only if file exists AND content actually changed
     let backupPath: string | undefined;
-    const newContent = JSON.stringify(settings, null, 2) + '\n';
+    const newContent = JSON.stringify(normalizedSettings, null, 2) + '\n';
     if (fileExists) {
       const existingContent = fs.readFileSync(settingsPath, 'utf8');
       // Only create backup if content differs
@@ -220,7 +283,7 @@ router.get('/:profile/presets', (req: Request, res: Response): void => {
       return;
     }
 
-    const settings = loadSettings(settingsPath);
+    const settings = canonicalizeCodexSettings(profile, loadSettings(settingsPath));
     res.json({ presets: settings.presets || [] });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
@@ -257,12 +320,20 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
       return;
     }
 
+    const normalizePresetModel = (modelId: string): string =>
+      isCodexProfile(profile) ? stripCodexEffortSuffix(modelId) : modelId;
+
+    const normalizedDefaultModel = normalizePresetModel(defaultModel);
+    const normalizedOpusModel = normalizePresetModel(opus || defaultModel);
+    const normalizedSonnetModel = normalizePresetModel(sonnet || defaultModel);
+    const normalizedHaikuModel = normalizePresetModel(haiku || defaultModel);
+
     const preset = {
       name,
-      default: defaultModel,
-      opus: opus || defaultModel,
-      sonnet: sonnet || defaultModel,
-      haiku: haiku || defaultModel,
+      default: normalizedDefaultModel,
+      opus: normalizedOpusModel,
+      sonnet: normalizedSonnetModel,
+      haiku: normalizedHaikuModel,
     };
 
     settings.presets.push(preset);
