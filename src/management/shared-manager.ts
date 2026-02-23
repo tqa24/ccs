@@ -202,6 +202,99 @@ class SharedManager {
   }
 
   /**
+   * Ensure all project memory directories for an instance are shared.
+   *
+   * Source layout (isolated):
+   *   ~/.ccs/instances/<profile>/projects/<project>/memory/
+   *
+   * Shared layout (canonical):
+   *   ~/.ccs/shared/memory/<project>/
+   */
+  syncProjectMemories(instancePath: string): void {
+    const projectsDir = path.join(instancePath, 'projects');
+    if (!fs.existsSync(projectsDir)) {
+      return;
+    }
+
+    if (!fs.existsSync(this.sharedDir)) {
+      fs.mkdirSync(this.sharedDir, { recursive: true, mode: 0o700 });
+    }
+
+    const sharedMemoryRoot = path.join(this.sharedDir, 'memory');
+    if (!fs.existsSync(sharedMemoryRoot)) {
+      fs.mkdirSync(sharedMemoryRoot, { recursive: true, mode: 0o700 });
+    }
+
+    const projects = fs.readdirSync(projectsDir, { withFileTypes: true }).filter((entry) => {
+      return entry.isDirectory();
+    });
+
+    if (projects.length === 0) {
+      return;
+    }
+
+    let migrated = 0;
+    let merged = 0;
+    let linked = 0;
+    const instanceName = path.basename(instancePath);
+
+    for (const project of projects) {
+      const projectDir = path.join(projectsDir, project.name);
+      const projectMemoryPath = path.join(projectDir, 'memory');
+      const sharedProjectMemoryPath = path.join(sharedMemoryRoot, project.name);
+
+      if (!fs.existsSync(projectMemoryPath)) {
+        if (this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+          linked++;
+        }
+        continue;
+      }
+
+      const projectMemoryStats = fs.lstatSync(projectMemoryPath);
+
+      if (projectMemoryStats.isSymbolicLink()) {
+        if (this.isSymlinkTarget(projectMemoryPath, sharedProjectMemoryPath)) {
+          continue;
+        }
+
+        fs.unlinkSync(projectMemoryPath);
+        if (this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+          linked++;
+        }
+        continue;
+      }
+
+      if (!projectMemoryStats.isDirectory()) {
+        continue;
+      }
+
+      if (!fs.existsSync(sharedProjectMemoryPath)) {
+        this.moveDirectory(projectMemoryPath, sharedProjectMemoryPath);
+        migrated++;
+      } else {
+        merged += this.mergeDirectoryWithConflictCopies(
+          projectMemoryPath,
+          sharedProjectMemoryPath,
+          instanceName
+        );
+        fs.rmSync(projectMemoryPath, { recursive: true, force: true });
+      }
+
+      if (this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+        linked++;
+      }
+    }
+
+    if (migrated > 0 || merged > 0 || linked > 0) {
+      console.log(
+        ok(
+          `Synced shared project memory: ${migrated} migrated, ${merged} merged conflict(s), ${linked} linked`
+        )
+      );
+    }
+  }
+
+  /**
    * Normalize plugin registry paths to use canonical ~/.claude/ paths
    * instead of instance-specific ~/.ccs/instances/<name>/ paths.
    *
@@ -418,6 +511,162 @@ class SharedManager {
     }
 
     console.log(ok(`Migrated ${migrated} instance(s), skipped ${skipped}`));
+  }
+
+  /**
+   * Ensure memory path is linked to shared memory root.
+   * Returns true when a link/copy was created or updated.
+   */
+  private ensureProjectMemoryLink(linkPath: string, targetPath: string): boolean {
+    if (!fs.existsSync(targetPath)) {
+      fs.mkdirSync(targetPath, { recursive: true, mode: 0o700 });
+    }
+
+    if (fs.existsSync(linkPath)) {
+      const stats = fs.lstatSync(linkPath);
+      if (stats.isSymbolicLink() && this.isSymlinkTarget(linkPath, targetPath)) {
+        return false;
+      }
+
+      if (stats.isDirectory()) {
+        fs.rmSync(linkPath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(linkPath);
+      }
+    }
+
+    const symlinkType: 'dir' | 'junction' = process.platform === 'win32' ? 'junction' : 'dir';
+    const linkTarget = process.platform === 'win32' ? path.resolve(targetPath) : targetPath;
+
+    try {
+      fs.symlinkSync(linkTarget, linkPath, symlinkType);
+      return true;
+    } catch (_err) {
+      if (process.platform === 'win32') {
+        this.copyDirectoryFallback(targetPath, linkPath);
+        console.log(
+          warn(`Symlink failed for project memory, copied instead (enable Developer Mode)`)
+        );
+        return true;
+      }
+      throw _err;
+    }
+  }
+
+  /**
+   * Check whether symlink points to expected target.
+   */
+  private isSymlinkTarget(linkPath: string, expectedTarget: string): boolean {
+    try {
+      const stats = fs.lstatSync(linkPath);
+      if (!stats.isSymbolicLink()) {
+        return false;
+      }
+
+      const currentTarget = fs.readlinkSync(linkPath);
+      const resolvedCurrentTarget = path.resolve(path.dirname(linkPath), currentTarget);
+      const resolvedExpectedTarget = path.resolve(expectedTarget);
+      return resolvedCurrentTarget === resolvedExpectedTarget;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  /**
+   * Move directory, with cross-device fallback.
+   */
+  private moveDirectory(src: string, dest: string): void {
+    try {
+      fs.renameSync(src, dest);
+    } catch (err) {
+      const error = err as NodeJS.ErrnoException;
+      if (error.code !== 'EXDEV') {
+        throw err;
+      }
+
+      fs.cpSync(src, dest, { recursive: true });
+      fs.rmSync(src, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Merge source into target. On file conflicts, keep target and copy source
+   * as "<name>.migrated-from-<instance>[-N]" to avoid data loss.
+   */
+  private mergeDirectoryWithConflictCopies(
+    sourceDir: string,
+    targetDir: string,
+    instanceName: string
+  ): number {
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
+    }
+
+    let conflicts = 0;
+    const entries = fs.readdirSync(sourceDir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const sourcePath = path.join(sourceDir, entry.name);
+      const targetPath = path.join(targetDir, entry.name);
+
+      if (entry.isDirectory()) {
+        conflicts += this.mergeDirectoryWithConflictCopies(sourcePath, targetPath, instanceName);
+        continue;
+      }
+
+      if (entry.isFile()) {
+        if (!fs.existsSync(targetPath)) {
+          fs.copyFileSync(sourcePath, targetPath);
+          continue;
+        }
+
+        if (this.fileContentsEqual(sourcePath, targetPath)) {
+          continue;
+        }
+
+        const conflictPath = this.getConflictCopyPath(targetPath, instanceName);
+        fs.copyFileSync(sourcePath, conflictPath);
+        conflicts++;
+      }
+    }
+
+    return conflicts;
+  }
+
+  /**
+   * Compare two files byte-for-byte.
+   */
+  private fileContentsEqual(fileA: string, fileB: string): boolean {
+    try {
+      const statA = fs.statSync(fileA);
+      const statB = fs.statSync(fileB);
+      if (statA.size !== statB.size) {
+        return false;
+      }
+
+      const contentA = fs.readFileSync(fileA);
+      const contentB = fs.readFileSync(fileB);
+      return contentA.equals(contentB);
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  /**
+   * Build a non-destructive conflict copy path.
+   */
+  private getConflictCopyPath(existingTargetPath: string, instanceName: string): string {
+    const safeInstanceName = instanceName.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+    const baseSuffix = `.migrated-from-${safeInstanceName}`;
+
+    let candidate = `${existingTargetPath}${baseSuffix}`;
+    let sequence = 1;
+    while (fs.existsSync(candidate)) {
+      candidate = `${existingTargetPath}${baseSuffix}-${sequence}`;
+      sequence++;
+    }
+
+    return candidate;
   }
 
   /**

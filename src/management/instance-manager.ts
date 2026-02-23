@@ -37,6 +37,9 @@ class InstanceManager {
     // Validate structure (auto-fix missing dirs)
     this.validateInstance(instancePath);
 
+    // Keep project memory shared across instances.
+    this.sharedManager.syncProjectMemories(instancePath);
+
     return instancePath;
   }
 
