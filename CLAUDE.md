@@ -51,7 +51,7 @@ CLI wrapper for instant switching between multiple provider accounts and alterna
 
 ## Quality Gates (MANDATORY)
 
-Quality gates MUST pass before committing. **Both projects have identical workflow.**
+Quality gates MUST pass before pushing. **Both projects have identical workflow.**
 
 ### Pre-Commit Sequence (FOLLOW THIS ORDER)
 
@@ -59,7 +59,8 @@ Quality gates MUST pass before committing. **Both projects have identical workfl
 # Main project (from repo root)
 bun run format              # Step 1: Fix formatting
 bun run lint:fix            # Step 2: Fix lint issues
-bun run validate            # Step 3: Final check (must pass)
+bun run validate            # Step 3: Full test gate (must pass)
+bun run validate:ci-parity  # Step 4: CI parity gate (build + validate + base branch check)
 
 # UI project (if UI changed)
 cd ui
@@ -105,7 +106,8 @@ bun run validate            # Step 3: Final check (must pass)
 
 - `prepublishOnly` / `prepack` runs `build:all` + `validate` + `sync-version.js`
 - CI/CD runs `bun run validate` on every PR
-- husky pre-commit hooks enforce conventional commits
+- husky `pre-commit` runs quick lint/type/format checks
+- husky `pre-push` runs `bun run validate:ci-parity` to block CI drift before push
 
 ## Critical Constraints (NEVER VIOLATE)
 
@@ -355,6 +357,7 @@ rm -rf ~/.ccs             # Clean environment
 **Quality (BLOCKERS):**
 - [ ] `bun run format` — formatting fixed
 - [ ] `bun run validate` — all checks pass
+- [ ] `bun run validate:ci-parity` — CI parity passed (also enforced by pre-push hook)
 - [ ] `cd ui && bun run format && bun run validate` — if UI changed
 
 **Code:**

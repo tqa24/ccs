@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT_DIR"
+
+if [[ "${CCS_SKIP_PREPUSH_GATE:-}" == "1" ]]; then
+  echo "[i] Skipping pre-push CI parity gate (CCS_SKIP_PREPUSH_GATE=1)."
+  exit 0
+fi
+
+if [[ ! -f AGENTS.md ]]; then
+  echo "[X] Missing AGENTS.md in this worktree."
+  echo "    Ensure you are in a valid CCS repository/worktree before pushing."
+  exit 1
+fi
+
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+if [[ -z "$CURRENT_BRANCH" || "$CURRENT_BRANCH" == "HEAD" ]]; then
+  echo "[i] Detached HEAD detected. Skipping pre-push CI parity gate."
+  exit 0
+fi
+
+BASE_BRANCH="${CCS_PR_BASE:-}"
+if [[ -z "$BASE_BRANCH" ]]; then
+  if [[ "$CURRENT_BRANCH" == "main" || "$CURRENT_BRANCH" =~ ^hotfix/ || "$CURRENT_BRANCH" =~ ^kai/hotfix- ]]; then
+    BASE_BRANCH="main"
+  else
+    BASE_BRANCH="dev"
+  fi
+fi
+
+echo "[i] Pre-push CI parity gate"
+echo "    branch: $CURRENT_BRANCH"
+echo "    base:   $BASE_BRANCH"
+
+git fetch origin "$BASE_BRANCH" --quiet || true
+if git show-ref --verify --quiet "refs/remotes/origin/$BASE_BRANCH"; then
+  if ! git merge-base --is-ancestor "origin/$BASE_BRANCH" HEAD; then
+    echo "[X] Branch '$CURRENT_BRANCH' is behind origin/$BASE_BRANCH."
+    echo "    Rebase or merge before pushing:"
+    echo "    git pull --rebase origin $BASE_BRANCH"
+    exit 1
+  fi
+fi
+
+echo "[i] Running CI-equivalent local checks..."
+bun run build:all
+bun run validate
+
+echo "[OK] CI parity gate passed."

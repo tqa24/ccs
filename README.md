@@ -241,6 +241,16 @@ ccs update --force      # Force reinstall
 ccs update --beta       # Install dev channel
 ```
 
+### CI Parity Gate (for contributors)
+
+Before opening or updating a PR, run:
+
+```bash
+bun run validate:ci-parity
+```
+
+This mirrors CI behavior (build + validate + base-branch freshness check) and is also enforced by the local `pre-push` hook.
+
 ### Sync Shared Items
 
 ```bash
