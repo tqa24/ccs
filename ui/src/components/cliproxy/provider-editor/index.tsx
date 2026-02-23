@@ -105,7 +105,16 @@ export function ProviderEditor({
     missingRequiredFields,
   } = useProviderEditor(provider);
 
-  const accounts = authStatus.accounts || [];
+  // Defensive normalization: remote/legacy payloads may omit account.provider.
+  // Fallback to current editor provider to avoid runtime crashes in account UI.
+  const accounts = useMemo(
+    () =>
+      (authStatus.accounts || []).map((account) => ({
+        ...account,
+        provider: account.provider || baseProvider || provider,
+      })),
+    [authStatus.accounts, baseProvider, provider]
+  );
 
   // Fetch effective API key for presets (uses configured value, not hardcoded)
   const { data: authTokens } = useQuery<{ apiKey: { value: string } }>({

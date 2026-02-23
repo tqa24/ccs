@@ -30,6 +30,7 @@ interface RemoteAuthFile {
 export interface RemoteAccountInfo {
   id: string;
   email: string;
+  provider: CLIProxyProvider;
   isDefault: boolean;
   status: 'active' | 'disabled' | 'unavailable';
 }
@@ -124,6 +125,8 @@ function transformRemoteAuthFiles(files: RemoteAuthFile[]): RemoteAuthStatus[] {
     const accounts: RemoteAccountInfo[] = providerFiles.map((f, idx) => ({
       id: f.id,
       email: f.email || f.name || 'Unknown',
+      // Keep provider on each account so UI account rendering can infer capabilities safely.
+      provider,
       isDefault: idx === 0,
       status: f.status,
     }));
