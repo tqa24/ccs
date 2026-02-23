@@ -28,13 +28,9 @@ const os = require('os');
 describe('Version Comparison Implementation (Phase 4)', () => {
   let updateCheckerModule;
 
-  // Build the project before running tests
-  const { execSync } = require('child_process');
-  try {
-    execSync('bun run build', { cwd: path.resolve(__dirname, '../../..'), stdio: 'pipe' });
-  } catch (error) {
-    console.warn('Build failed, tests may not work:', error.message);
-  }
+  // Dist artifacts are built by the pipeline before tests run.
+  // Avoid rebuilding inside test files because `bun run build` wipes `dist/`
+  // and can race with parallel npm/integration tests.
 
   // Import the built modules
   updateCheckerModule = require('../../../dist/utils/update-checker.js');

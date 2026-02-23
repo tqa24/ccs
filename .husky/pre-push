@@ -1,0 +1,3 @@
+# Enforce CI parity before pushing to remote.
+# Override in emergencies only: CCS_SKIP_PREPUSH_GATE=1 git push --no-verify
+bun run validate:ci-parity

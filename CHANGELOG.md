@@ -1,3 +1,9 @@
+## [7.48.1](https://github.com/kaitranntt/ccs/compare/v7.48.0...v7.48.1) (2026-02-23)
+
+### Bug Fixes
+
+* **ci:** enforce parity gate and stabilize test execution ([0aed60f](https://github.com/kaitranntt/ccs/commit/0aed60febb1752fab3b3f765fc2233f013af971f))
+
 ## [7.48.0](https://github.com/kaitranntt/ccs/compare/v7.47.0...v7.48.0) (2026-02-22)
 
 ### Features
