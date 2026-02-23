@@ -7,6 +7,7 @@ import type {
   ModelQuota,
   QuotaResult,
   CodexQuotaResult,
+  ClaudeQuotaResult,
   GeminiCliQuotaResult,
   GhcpQuotaResult,
 } from '@/lib/api-client';
@@ -203,14 +204,41 @@ export function useCliproxyErrorLogContent(name: string | null) {
 }
 
 // Re-export for consumers
-export type { ModelQuota, QuotaResult, CodexQuotaResult, GeminiCliQuotaResult, GhcpQuotaResult };
+export type {
+  ModelQuota,
+  QuotaResult,
+  CodexQuotaResult,
+  ClaudeQuotaResult,
+  GeminiCliQuotaResult,
+  GhcpQuotaResult,
+};
 
 /** Providers with quota API support */
-export const QUOTA_SUPPORTED_PROVIDERS = ['agy', 'codex', 'gemini', 'ghcp'] as const;
+export const QUOTA_SUPPORTED_PROVIDERS = ['agy', 'codex', 'claude', 'gemini', 'ghcp'] as const;
 export type QuotaSupportedProvider = (typeof QUOTA_SUPPORTED_PROVIDERS)[number];
+const QUOTA_PROVIDER_ALIAS_MAP: Readonly<Record<string, QuotaSupportedProvider>> = {
+  antigravity: 'agy',
+  anthropic: 'claude',
+  'gemini-cli': 'gemini',
+  copilot: 'ghcp',
+  'github-copilot': 'ghcp',
+};
+
+function normalizeQuotaProvider(provider: string): QuotaSupportedProvider | null {
+  const normalized = provider.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if ((QUOTA_SUPPORTED_PROVIDERS as readonly string[]).includes(normalized)) {
+    return normalized as QuotaSupportedProvider;
+  }
+
+  return QUOTA_PROVIDER_ALIAS_MAP[normalized] ?? null;
+}
 
 /**
- * Fetch account quota from API (Antigravity only)
+ * Fetch account quota from generic API route
  */
 async function fetchAccountQuota(provider: string, accountId: string): Promise<QuotaResult> {
   const response = await fetch(`/api/cliproxy/quota/${provider}/${encodeURIComponent(accountId)}`);
@@ -234,6 +262,24 @@ async function fetchCodexQuotaApi(accountId: string): Promise<CodexQuotaResult> 
   const response = await fetch(`/api/cliproxy/quota/codex/${encodeURIComponent(accountId)}`);
   if (!response.ok) {
     let message = 'Failed to fetch Codex quota';
+    try {
+      const error = await response.json();
+      message = error.message || message;
+    } catch {
+      // Use default message if response isn't JSON
+    }
+    throw new Error(message);
+  }
+  return response.json();
+}
+
+/**
+ * Fetch Claude quota from API
+ */
+async function fetchClaudeQuotaApi(accountId: string): Promise<ClaudeQuotaResult> {
+  const response = await fetch(`/api/cliproxy/quota/claude/${encodeURIComponent(accountId)}`);
+  if (!response.ok) {
+    let message = 'Failed to fetch Claude quota';
     try {
       const error = await response.json();
       message = error.message || message;
@@ -291,9 +337,16 @@ async function fetchQuotaByProvider(
   provider: string,
   accountId: string
 ): Promise<UnifiedQuotaResult> {
-  switch (provider) {
+  const canonicalProvider = normalizeQuotaProvider(provider);
+  if (!canonicalProvider) {
+    return fetchAccountQuota(provider, accountId);
+  }
+
+  switch (canonicalProvider) {
     case 'codex':
       return fetchCodexQuotaApi(accountId);
+    case 'claude':
+      return fetchClaudeQuotaApi(accountId);
     case 'gemini':
       return fetchGeminiQuotaApi(accountId);
     case 'ghcp':
@@ -305,16 +358,15 @@ async function fetchQuotaByProvider(
 
 /**
  * Hook to get account quota
- * Supports agy, codex, gemini, and ghcp providers
+ * Supports agy, codex, claude, gemini, and ghcp providers
  */
 export function useAccountQuota(provider: string, accountId: string, enabled = true) {
+  const canonicalProvider = normalizeQuotaProvider(provider);
+
   return useQuery({
-    queryKey: ['account-quota', provider, accountId],
-    queryFn: () => fetchQuotaByProvider(provider, accountId),
-    enabled:
-      enabled &&
-      QUOTA_SUPPORTED_PROVIDERS.includes(provider as QuotaSupportedProvider) &&
-      !!accountId,
+    queryKey: ['account-quota', canonicalProvider ?? provider, accountId],
+    queryFn: () => fetchQuotaByProvider(canonicalProvider ?? provider, accountId),
+    enabled: enabled && !!canonicalProvider && !!accountId,
     staleTime: 60000, // Match refetchInterval to prevent early refetching
     refetchInterval: 60000, // Refresh every 1 minute
     refetchOnWindowFocus: false, // Don't refetch on tab switch

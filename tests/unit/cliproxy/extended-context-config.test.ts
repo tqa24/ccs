@@ -144,6 +144,14 @@ describe('applyExtendedContextConfig', () => {
     expect(env.ANTHROPIC_MODEL).toBe('gemini-2.5-pro(high)[1m]');
   });
 
+  it('handles model IDs that already include both thinking and [1m] suffixes', () => {
+    const env: NodeJS.ProcessEnv = {
+      ANTHROPIC_MODEL: 'gemini-2.5-pro(high)[1m]',
+    };
+    applyExtendedContextConfig(env, 'gemini', undefined);
+    expect(env.ANTHROPIC_MODEL).toBe('gemini-2.5-pro(high)[1m]');
+  });
+
   it('handles empty env vars gracefully', () => {
     const env: NodeJS.ProcessEnv = {};
     applyExtendedContextConfig(env, 'gemini', undefined);
@@ -164,8 +172,12 @@ describe('applyExtendedContextConfig', () => {
   it('strips [1m] suffix when --no-1m is explicit even if model has it', () => {
     const env: NodeJS.ProcessEnv = {
       ANTHROPIC_MODEL: 'gemini-2.5-pro[1m]',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-3-pro-preview[1m]',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'gemini-2.5-pro[1m]',
     };
     applyExtendedContextConfig(env, 'gemini', false);
     expect(env.ANTHROPIC_MODEL).toBe('gemini-2.5-pro');
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gemini-3-pro-preview');
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gemini-2.5-pro');
   });
 });

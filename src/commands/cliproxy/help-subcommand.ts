@@ -11,6 +11,7 @@ import {
   getFallbackVersion,
   BACKEND_CONFIG,
 } from '../../cliproxy/platform-detector';
+import { QUOTA_PROVIDER_HELP_TEXT } from '../../cliproxy/provider-capabilities';
 
 export async function showHelp(): Promise<void> {
   await initUI();
@@ -54,8 +55,8 @@ export async function showHelp(): Promise<void> {
         ['default <account>', 'Set default account for rotation'],
         ['pause <account>', 'Pause account (skip in rotation)'],
         ['resume <account>', 'Resume paused account'],
-        ['quota', 'Show quota status for all providers (Codex includes 5h + weekly reset)'],
-        ['quota --provider <name>', 'Filter by provider (agy|codex|gemini|ghcp)'],
+        ['quota', 'Show quota status for all providers (Codex/Claude include 5h + weekly reset)'],
+        ['quota --provider <name>', `Filter by provider (${QUOTA_PROVIDER_HELP_TEXT})`],
       ],
     ],
     [

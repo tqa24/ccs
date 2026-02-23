@@ -15,6 +15,7 @@ import {
   getProviderMinQuota,
   getProviderResetTime,
   isAgyQuotaResult,
+  isClaudeQuotaResult,
   isCodexQuotaResult,
   isGeminiQuotaResult,
   isGhcpQuotaResult,
@@ -22,6 +23,7 @@ import {
 import type {
   CodexQuotaWindow,
   CodexQuotaResult,
+  ClaudeQuotaResult,
   GeminiCliBucket,
   GeminiCliQuotaResult,
   GhcpQuotaResult,
@@ -999,6 +1001,56 @@ describe('isCodexQuotaResult', () => {
       lastUpdated: Date.now(),
     };
     expect(isCodexQuotaResult(quota)).toBe(true);
+  });
+});
+
+describe('isClaudeQuotaResult', () => {
+  it('returns true for valid Claude quota result', () => {
+    const quota: ClaudeQuotaResult = {
+      success: true,
+      windows: [
+        {
+          rateLimitType: 'five_hour',
+          label: 'Session limit',
+          status: 'allowed',
+          utilization: 0.5,
+          usedPercent: 50,
+          remainingPercent: 50,
+          resetAt: '2026-01-30T12:00:00Z',
+        },
+      ],
+      coreUsage: {
+        fiveHour: {
+          rateLimitType: 'five_hour',
+          label: 'Session limit',
+          remainingPercent: 50,
+          resetAt: '2026-01-30T12:00:00Z',
+          status: 'allowed',
+        },
+        weekly: null,
+      },
+      lastUpdated: Date.now(),
+    };
+    expect(isClaudeQuotaResult(quota)).toBe(true);
+  });
+
+  it('returns false for Codex quota result', () => {
+    const quota: CodexQuotaResult = {
+      success: true,
+      windows: [],
+      planType: 'free',
+      lastUpdated: Date.now(),
+    };
+    expect(isClaudeQuotaResult(quota as unknown as ClaudeQuotaResult)).toBe(false);
+  });
+
+  it('returns false when Claude windows are malformed', () => {
+    const malformed = {
+      success: true,
+      windows: [{ rateLimitType: 'five_hour', label: 'Session limit' }],
+      lastUpdated: Date.now(),
+    };
+    expect(isClaudeQuotaResult(malformed as unknown as ClaudeQuotaResult)).toBe(false);
   });
 });
 

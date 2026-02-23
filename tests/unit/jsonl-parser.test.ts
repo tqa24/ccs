@@ -167,6 +167,28 @@ describe('parseUsageEntry', () => {
     expect(result).not.toBeNull();
     expect(result!.target).toBeUndefined();
   });
+
+  test('coerces token fields to non-negative numbers', () => {
+    const withInvalidUsage = JSON.stringify({
+      ...JSON.parse(VALID_ASSISTANT_ENTRY),
+      message: {
+        model: 'claude-sonnet-4-5',
+        usage: {
+          input_tokens: '1500',
+          output_tokens: -10,
+          cache_creation_input_tokens: 'bad',
+          cache_read_input_tokens: null,
+        },
+      },
+    });
+
+    const result = parseUsageEntry(withInvalidUsage, '/test');
+    expect(result).not.toBeNull();
+    expect(result!.inputTokens).toBe(1500);
+    expect(result!.outputTokens).toBe(0);
+    expect(result!.cacheCreationTokens).toBe(0);
+    expect(result!.cacheReadTokens).toBe(0);
+  });
 });
 
 // ============================================================================
@@ -215,6 +237,14 @@ describe('parseJsonlFile', () => {
   test('returns empty array for non-existent file', async () => {
     const entries = await parseJsonlFile('/nonexistent/file.jsonl', '/test');
     expect(entries.length).toBe(0);
+  });
+
+  test('returns empty array when stream cannot be opened', async () => {
+    const directoryPath = path.join(tempDir, 'not-a-file');
+    fs.mkdirSync(directoryPath);
+
+    const entries = await parseJsonlFile(directoryPath, '/test');
+    expect(entries).toEqual([]);
   });
 
   test('handles file with blank lines', async () => {
@@ -279,6 +309,17 @@ describe('parseProjectDirectory', () => {
       existsSyncSpy.mockRestore();
       readdirSpy.mockRestore();
     }
+  });
+
+  test('sanitizes derived projectPath from dashed directory names', async () => {
+    const projectDir = path.join(tempDir, '-..-etc-passwd');
+    fs.mkdirSync(projectDir);
+    fs.writeFileSync(path.join(projectDir, 'session.jsonl'), VALID_ASSISTANT_ENTRY);
+
+    const entries = await parseProjectDirectory(projectDir);
+
+    expect(entries.length).toBe(1);
+    expect(entries[0].projectPath).toBe('/etc/passwd');
   });
 });
 
@@ -395,6 +436,33 @@ describe('scanProjectsDirectory', () => {
     expect(entries[0].sessionId).toBe('new');
   });
 
+  test('skips entries with invalid timestamps when minDate filtering is enabled', async () => {
+    const project = path.join(tempDir, '-test-invalid-timestamp');
+    fs.mkdirSync(project);
+
+    const invalidTimestampEntry = JSON.stringify({
+      type: 'assistant',
+      sessionId: 'invalid-time',
+      timestamp: 'not-a-date',
+      message: { model: 'claude-sonnet-4-5', usage: { input_tokens: 100, output_tokens: 50 } },
+    });
+    const validEntry = JSON.stringify({
+      type: 'assistant',
+      sessionId: 'valid-time',
+      timestamp: '2025-12-09T00:00:00.000Z',
+      message: { model: 'claude-sonnet-4-5', usage: { input_tokens: 200, output_tokens: 100 } },
+    });
+    fs.writeFileSync(path.join(project, 'session.jsonl'), [invalidTimestampEntry, validEntry].join('\n'));
+
+    const entries = await scanProjectsDirectory({
+      projectsDir: tempDir,
+      minDate: new Date('2025-01-01'),
+    });
+
+    expect(entries.length).toBe(1);
+    expect(entries[0].sessionId).toBe('valid-time');
+  });
+
   test('returns empty array for empty directory', async () => {
     const entries = await scanProjectsDirectory({ projectsDir: tempDir });
     expect(entries.length).toBe(0);
@@ -415,6 +483,41 @@ describe('scanProjectsDirectory', () => {
     });
 
     expect(entries.length).toBe(5);
+  });
+
+  test('falls back to default concurrency when invalid concurrency is provided', async () => {
+    for (let i = 0; i < 3; i++) {
+      const project = path.join(tempDir, `-invalid-concurrency-${i}`);
+      fs.mkdirSync(project);
+      fs.writeFileSync(path.join(project, 'session.jsonl'), VALID_ASSISTANT_ENTRY);
+    }
+
+    const zeroEntries = await scanProjectsDirectory({
+      projectsDir: tempDir,
+      concurrency: 0,
+    });
+    expect(zeroEntries.length).toBe(3);
+
+    const negativeEntries = await scanProjectsDirectory({
+      projectsDir: tempDir,
+      concurrency: -5,
+    });
+    expect(negativeEntries.length).toBe(3);
+  });
+
+  test('caps very high concurrency values to a safe maximum', async () => {
+    for (let i = 0; i < 4; i++) {
+      const project = path.join(tempDir, `-capped-concurrency-${i}`);
+      fs.mkdirSync(project);
+      fs.writeFileSync(path.join(project, 'session.jsonl'), VALID_ASSISTANT_ENTRY);
+    }
+
+    const entries = await scanProjectsDirectory({
+      projectsDir: tempDir,
+      concurrency: 9999,
+    });
+
+    expect(entries.length).toBe(4);
   });
 });
 

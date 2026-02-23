@@ -13,8 +13,12 @@ interface EnvSettings {
   ANTHROPIC_DEFAULT_HAIKU_MODEL: string;
 }
 
-function writeCodexSettings(settingsPath: string, env: EnvSettings): void {
-  fs.writeFileSync(settingsPath, JSON.stringify({ env }, null, 2));
+function writeSettings(
+  settingsPath: string,
+  env: EnvSettings,
+  extras?: Record<string, unknown>
+): void {
+  fs.writeFileSync(settingsPath, JSON.stringify({ env, ...(extras || {}) }, null, 2));
 }
 
 describe('getEffectiveEnvVars local provider URL normalization', () => {
@@ -31,7 +35,7 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
   });
 
   it('rewrites local root URL to provider endpoint', () => {
-    writeCodexSettings(settingsPath, {
+    writeSettings(settingsPath, {
       ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317',
       ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
       ANTHROPIC_MODEL: 'gpt-5.3-codex-xhigh',
@@ -42,10 +46,22 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
 
     const env = getEffectiveEnvVars('codex', 8317, settingsPath);
     expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/codex');
+    expect(env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex');
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex');
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex');
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5-mini');
+
+    const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      env: Record<string, string>;
+    };
+    expect(persisted.env.ANTHROPIC_MODEL).toBe('gpt-5.3-codex');
+    expect(persisted.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('gpt-5.3-codex');
+    expect(persisted.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('gpt-5.3-codex');
+    expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5-mini');
   });
 
   it('rewrites wrong local provider path to the requested provider', () => {
-    writeCodexSettings(settingsPath, {
+    writeSettings(settingsPath, {
       ANTHROPIC_BASE_URL: 'http://localhost:8317/api/provider/my-codex-variant?debug=1',
       ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
       ANTHROPIC_MODEL: 'gpt-5.3-codex-xhigh',
@@ -59,7 +75,7 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
   });
 
   it('does not rewrite localhost URLs targeting non-cliproxy ports', () => {
-    writeCodexSettings(settingsPath, {
+    writeSettings(settingsPath, {
       ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
       ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
       ANTHROPIC_MODEL: 'gpt-5.3-codex-xhigh',
@@ -70,5 +86,57 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
 
     const env = getEffectiveEnvVars('codex', 8317, settingsPath);
     expect(env.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:11434');
+  });
+
+  it('normalizes dotted Claude major.minor IDs for agy provider settings', () => {
+    writeSettings(settingsPath, {
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+      ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+      ANTHROPIC_MODEL: 'claude-sonnet-4.6-thinking',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4.6-thinking',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4.6-thinking',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4.5',
+    });
+
+    const env = getEffectiveEnvVars('agy', 8317, settingsPath);
+    expect(env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6-thinking');
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6-thinking');
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-haiku-4-5');
+  });
+
+  it('migrates codex preset model mappings to canonical IDs', () => {
+    writeSettings(
+      settingsPath,
+      {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/codex',
+        ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+        ANTHROPIC_MODEL: 'gpt-5.3-codex-xhigh',
+        ANTHROPIC_DEFAULT_OPUS_MODEL: 'gpt-5.3-codex-xhigh',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'gpt-5.3-codex-high',
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'gpt-5-mini-medium',
+      },
+      {
+        presets: [
+          {
+            name: 'legacy-codex',
+            default: 'gpt-5.3-codex-xhigh',
+            opus: 'gpt-5.3-codex-xhigh',
+            sonnet: 'gpt-5.3-codex-high',
+            haiku: 'gpt-5-mini-medium',
+          },
+        ],
+      }
+    );
+
+    getEffectiveEnvVars('codex', 8317, settingsPath);
+
+    const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      presets: Array<Record<string, string>>;
+    };
+    expect(persisted.presets[0]?.default).toBe('gpt-5.3-codex');
+    expect(persisted.presets[0]?.opus).toBe('gpt-5.3-codex');
+    expect(persisted.presets[0]?.sonnet).toBe('gpt-5.3-codex');
+    expect(persisted.presets[0]?.haiku).toBe('gpt-5-mini');
   });
 });

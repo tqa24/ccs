@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as lockfile from 'proper-lockfile';
 import { initUI, header, subheader, color, dim, ok, fail, warn, info } from '../utils/ui';
 import { InteractivePrompt } from '../utils/prompt';
 import ProfileDetector, {
@@ -21,12 +22,17 @@ import ProfileDetector, {
 import { getEffectiveEnvVars, CLIPROXY_DEFAULT_PORT } from '../cliproxy/config-generator';
 import { generateCopilotEnv } from '../copilot/copilot-executor';
 import { expandPath } from '../utils/helpers';
+import { getClaudeConfigDir, getClaudeSettingsPath } from '../utils/claude-config-path';
+import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface PersistCommandArgs {
   profile?: string;
   yes?: boolean;
   listBackups?: boolean;
   restore?: string | boolean;
+  permissionMode?: PermissionMode;
+  dangerouslySkipPermissions?: boolean;
+  parseError?: string;
 }
 
 interface ResolvedEnv {
@@ -35,103 +41,322 @@ interface ResolvedEnv {
   warning?: string;
 }
 
+const PERSIST_KNOWN_FLAGS = [
+  '--yes',
+  '-y',
+  '--list-backups',
+  '--restore',
+  '--permission-mode',
+  '--dangerously-skip-permissions',
+  '--auto-approve',
+  '--help',
+  '-h',
+] as const;
+
+const VALID_PERMISSION_MODES = ['default', 'plan', 'acceptEdits', 'bypassPermissions'] as const;
+const PERSIST_LOCK_STALE_MS = 10000;
+const PERSIST_LOCK_RETRIES = 5;
+const PERSIST_LOCK_RETRY_MIN_MS = 100;
+const PERSIST_LOCK_RETRY_MAX_MS = 500;
+
+type PermissionMode = (typeof VALID_PERMISSION_MODES)[number];
+
+function isPermissionMode(value: string): value is PermissionMode {
+  return VALID_PERMISSION_MODES.includes(value as PermissionMode);
+}
+
+function isKnownPersistFlagToken(token: string): boolean {
+  return PERSIST_KNOWN_FLAGS.some((flag) => token === flag || token.startsWith(`${flag}=`));
+}
+
+function resolvePermissionMode(parsedArgs: PersistCommandArgs): PermissionMode | undefined {
+  if (!parsedArgs.dangerouslySkipPermissions) {
+    return parsedArgs.permissionMode;
+  }
+
+  if (parsedArgs.permissionMode && parsedArgs.permissionMode !== 'bypassPermissions') {
+    throw new Error(
+      '--dangerously-skip-permissions conflicts with --permission-mode. Use bypassPermissions or remove one flag.'
+    );
+  }
+
+  return 'bypassPermissions';
+}
+
 /** Parse command line arguments */
 function parseArgs(args: string[]): PersistCommandArgs {
-  const result: PersistCommandArgs = {};
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--yes' || arg === '-y') {
-      result.yes = true;
-    } else if (arg === '--help' || arg === '-h') {
-      // Will be handled in main function
-    } else if (arg === '--list-backups') {
-      result.listBackups = true;
-    } else if (arg === '--restore') {
-      // Check if next arg is a timestamp (not a flag)
-      const nextArg = args[i + 1];
-      if (nextArg && !nextArg.startsWith('-')) {
-        result.restore = nextArg;
-        i++; // Skip next arg
+  const result: PersistCommandArgs = {
+    yes: hasAnyFlag(args, ['--yes', '-y']),
+    listBackups: hasAnyFlag(args, ['--list-backups']),
+  };
+
+  const restoreOption = extractOption(args, ['--restore']);
+  if (restoreOption.found) {
+    result.restore = restoreOption.missingValue ? true : restoreOption.value || true;
+  }
+
+  const permissionModeOption = extractOption(restoreOption.remainingArgs, ['--permission-mode'], {
+    knownFlags: PERSIST_KNOWN_FLAGS,
+  });
+  if (permissionModeOption.found) {
+    if (permissionModeOption.missingValue) {
+      result.parseError = 'Missing value for --permission-mode';
+    } else if (permissionModeOption.value) {
+      if (!isPermissionMode(permissionModeOption.value)) {
+        result.parseError = `Invalid --permission-mode "${permissionModeOption.value}". Valid modes: ${VALID_PERMISSION_MODES.join(', ')}`;
       } else {
-        result.restore = true; // Use latest
+        result.permissionMode = permissionModeOption.value;
       }
-    } else if (!arg.startsWith('-') && !result.profile) {
+    }
+  }
+
+  result.dangerouslySkipPermissions = hasAnyFlag(permissionModeOption.remainingArgs, [
+    '--dangerously-skip-permissions',
+    '--auto-approve',
+  ]);
+
+  const unknownFlags = permissionModeOption.remainingArgs.filter(
+    (arg) => arg.startsWith('-') && !isKnownPersistFlagToken(arg)
+  );
+  if (!result.parseError && unknownFlags.length > 0) {
+    const unknownList = unknownFlags.map((flag) => `"${flag}"`).join(', ');
+    result.parseError = `Unknown option(s): ${unknownList}. Run 'ccs persist --help' for usage.`;
+  }
+
+  if (!result.parseError && result.listBackups && result.restore) {
+    result.parseError = '--list-backups cannot be used with --restore';
+  }
+
+  if (
+    !result.parseError &&
+    (result.listBackups || result.restore) &&
+    (result.permissionMode || result.dangerouslySkipPermissions)
+  ) {
+    result.parseError =
+      'Permission flags are not valid with backup operations. Use them only with ccs persist <profile>.';
+  }
+
+  for (const arg of permissionModeOption.remainingArgs) {
+    if (!arg.startsWith('-')) {
       result.profile = arg;
+      break;
     }
   }
   return result;
 }
 
-/** Get Claude settings.json path */
-function getClaudeSettingsPath(): string {
-  return path.join(os.homedir(), '.claude', 'settings.json');
+function formatDisplayPath(filePath: string): string {
+  const defaultClaudeDir = path.join(os.homedir(), '.claude');
+  const claudeDir = getClaudeConfigDir();
+
+  // Keep real path when user overrides Claude directory.
+  if (path.resolve(claudeDir) !== path.resolve(defaultClaudeDir)) {
+    return filePath;
+  }
+
+  if (filePath === claudeDir) {
+    return '~/.claude';
+  }
+
+  const claudePrefix = `${claudeDir}${path.sep}`;
+  if (filePath.startsWith(claudePrefix)) {
+    return filePath.replace(claudePrefix, '~/.claude/');
+  }
+
+  return filePath;
 }
 
-/** Read existing Claude settings.json with validation */
-function readClaudeSettings(): Record<string, unknown> {
-  const settingsPath = getClaudeSettingsPath();
+function getClaudeSettingsDisplayPath(): string {
+  return formatDisplayPath(getClaudeSettingsPath());
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
   try {
-    const content = fs.readFileSync(settingsPath, 'utf8');
-    // Handle empty file (0 bytes)
-    if (!content.trim()) {
-      return {};
-    }
-    const parsed: unknown = JSON.parse(content);
-    // Validate parsed value is a plain object (not array, null, or primitive)
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      throw new Error('settings.json must contain a JSON object, not an array or primitive');
-    }
-    return parsed as Record<string, unknown>;
-  } catch (error) {
-    const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError.code === 'ENOENT') {
-      return {};
-    }
-    throw new Error(`Failed to parse settings.json: ${(error as Error).message}`);
+    await fs.promises.access(filePath, fs.constants.F_OK);
+    return true;
+  } catch {
+    return false;
   }
 }
 
-/**
- * Write settings back to settings.json
- * Note: mode 0o600 only applies when creating a new file.
- * Existing file permissions are preserved (acceptable behavior).
- */
-function writeClaudeSettings(settings: Record<string, unknown>): void {
-  const settingsPath = getClaudeSettingsPath();
-  // Security: Reject symlinks to prevent writing to unexpected locations
-  if (isSymlink(settingsPath)) {
-    throw new Error('settings.json is a symlink - refusing to write for security');
-  }
-  const dir = path.dirname(settingsPath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 });
-}
-
-/** Maximum number of backups to keep (oldest are deleted) */
-const MAX_BACKUPS = 10;
-
-/** Check if path is a symlink (security check) */
-function isSymlink(filePath: string): boolean {
+async function isSymlinkAsync(filePath: string): Promise<boolean> {
   try {
-    const stats = fs.lstatSync(filePath);
+    const stats = await fs.promises.lstat(filePath);
     return stats.isSymbolicLink();
   } catch {
     return false;
   }
 }
 
-/** Create backup of settings.json with proper permissions and rotation */
-function createBackup(): string {
+function getNoFollowFlag(): number {
+  const candidate = (fs.constants as Record<string, number>)['O_NOFOLLOW'];
+  if (process.platform !== 'win32' && typeof candidate === 'number') {
+    return candidate;
+  }
+  return 0;
+}
+
+function createSymlinkReadError(filePath: string): NodeJS.ErrnoException {
+  const error = new Error(
+    `Refusing to read symlinked file for security: ${formatDisplayPath(filePath)}`
+  ) as NodeJS.ErrnoException;
+  error.code = 'ELOOP';
+  return error;
+}
+
+async function readFileUtf8NoFollow(filePath: string): Promise<string> {
+  if (await isSymlinkAsync(filePath)) {
+    throw createSymlinkReadError(filePath);
+  }
+
+  const noFollowFlag = getNoFollowFlag();
+  const flags = fs.constants.O_RDONLY | noFollowFlag;
+  const handle = await fs.promises.open(filePath, flags);
+  try {
+    // Best-effort fallback for platforms without O_NOFOLLOW (notably Windows).
+    // Re-check symlink status after open to reduce check-then-use windows.
+    if (noFollowFlag === 0 && (await isSymlinkAsync(filePath))) {
+      throw createSymlinkReadError(filePath);
+    }
+
+    const stats = await handle.stat();
+    if (!stats.isFile()) {
+      throw new Error('Path is not a regular file');
+    }
+
+    if (noFollowFlag === 0) {
+      const latestStats = await fs.promises.stat(filePath);
+      if (latestStats.dev !== stats.dev || latestStats.ino !== stats.ino) {
+        throw new Error('Path changed during secure read');
+      }
+    }
+
+    return await handle.readFile({ encoding: 'utf8' });
+  } finally {
+    await handle.close();
+  }
+}
+
+function parseSettingsObject(content: string, sourceLabel: string): Record<string, unknown> {
+  if (!content.trim()) {
+    return {};
+  }
+  const parsed: unknown = JSON.parse(content);
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`${sourceLabel} must contain a JSON object, not an array or primitive`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+async function withPersistSettingsLock<T>(operation: () => Promise<T>): Promise<T> {
   const settingsPath = getClaudeSettingsPath();
-  if (!fs.existsSync(settingsPath)) {
+  const settingsDir = path.dirname(settingsPath);
+  await fs.promises.mkdir(settingsDir, { recursive: true });
+
+  let release: (() => Promise<void>) | undefined;
+  try {
+    release = await lockfile.lock(settingsDir, {
+      stale: PERSIST_LOCK_STALE_MS,
+      retries: {
+        retries: PERSIST_LOCK_RETRIES,
+        minTimeout: PERSIST_LOCK_RETRY_MIN_MS,
+        maxTimeout: PERSIST_LOCK_RETRY_MAX_MS,
+      },
+      realpath: false,
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to lock Claude settings directory (${formatDisplayPath(settingsDir)}): ${(error as Error).message}`
+    );
+  }
+
+  try {
+    return await operation();
+  } finally {
+    if (release) {
+      try {
+        await release();
+      } catch {
+        // Best-effort release.
+      }
+    }
+  }
+}
+
+/** Read existing Claude settings.json with validation */
+async function readClaudeSettings(): Promise<Record<string, unknown>> {
+  const settingsPath = getClaudeSettingsPath();
+  try {
+    const content = await readFileUtf8NoFollow(settingsPath);
+    return parseSettingsObject(content, 'settings.json');
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'ENOENT') {
+      return {};
+    }
+    if (nodeError.code === 'ELOOP') {
+      throw new Error('settings.json is a symlink - refusing to read for security');
+    }
+    throw new Error(`Failed to parse settings.json: ${(error as Error).message}`);
+  }
+}
+
+/** Write settings back to settings.json with atomic replace semantics. */
+async function writeClaudeSettings(settings: Record<string, unknown>): Promise<void> {
+  const settingsPath = getClaudeSettingsPath();
+  if (await isSymlinkAsync(settingsPath)) {
+    throw new Error('settings.json is a symlink - refusing to write for security');
+  }
+
+  const settingsDir = path.dirname(settingsPath);
+  await fs.promises.mkdir(settingsDir, { recursive: true });
+
+  const nonce = `${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const tmpPath = path.join(settingsDir, `settings.json.tmp-${nonce}`);
+  const flags =
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | getNoFollowFlag();
+
+  let handle: fs.promises.FileHandle | undefined;
+  try {
+    handle = await fs.promises.open(tmpPath, flags, 0o600);
+    await handle.writeFile(JSON.stringify(settings, null, 2) + '\n', { encoding: 'utf8' });
+    await handle.sync();
+  } finally {
+    if (handle) {
+      await handle.close();
+    }
+  }
+
+  try {
+    await fs.promises.rename(tmpPath, settingsPath);
+  } catch (error) {
+    try {
+      await fs.promises.unlink(tmpPath);
+    } catch {
+      // Best-effort cleanup.
+    }
+    throw error;
+  }
+
+  try {
+    await fs.promises.chmod(settingsPath, 0o600);
+  } catch {
+    // Best-effort permission hardening.
+  }
+}
+
+/** Maximum number of backups to keep (oldest are deleted) */
+const MAX_BACKUPS = 10;
+
+/** Create backup of settings.json with proper permissions and rotation */
+async function createBackup(): Promise<string> {
+  const settingsPath = getClaudeSettingsPath();
+  if (!(await pathExists(settingsPath))) {
     throw new Error('No settings.json to backup');
   }
-  // Security: Reject symlinks to prevent writing to unexpected locations
-  if (isSymlink(settingsPath)) {
-    throw new Error('settings.json is a symlink - refusing to backup for security');
-  }
+
+  const settingsContent = await readFileUtf8NoFollow(settingsPath);
+
   const now = new Date();
   const timestamp =
     now.getFullYear().toString() +
@@ -142,9 +367,27 @@ function createBackup(): string {
     now.getMinutes().toString().padStart(2, '0') +
     now.getSeconds().toString().padStart(2, '0');
   const backupPath = `${settingsPath}.backup.${timestamp}`;
-  fs.copyFileSync(settingsPath, backupPath);
-  // Security: Set restrictive permissions on backup (contains API keys)
-  fs.chmodSync(backupPath, 0o600);
+
+  const flags =
+    fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | getNoFollowFlag();
+
+  let handle: fs.promises.FileHandle | undefined;
+  try {
+    handle = await fs.promises.open(backupPath, flags, 0o600);
+    await handle.writeFile(settingsContent, { encoding: 'utf8' });
+    await handle.sync();
+  } finally {
+    if (handle) {
+      await handle.close();
+    }
+  }
+
+  try {
+    await fs.promises.chmod(backupPath, 0o600);
+  } catch {
+    // Best-effort permission hardening.
+  }
+
   // Cleanup: Rotate old backups (keep only MAX_BACKUPS)
   cleanupOldBackups();
   return backupPath;
@@ -158,8 +401,12 @@ function cleanupOldBackups(): void {
     for (const backup of toDelete) {
       try {
         fs.unlinkSync(backup.path);
-      } catch {
-        // Ignore deletion errors (file may be locked or already deleted)
+      } catch (error) {
+        console.log(
+          warn(
+            `Failed to delete old backup ${formatDisplayPath(backup.path)}: ${(error as Error).message}`
+          )
+        );
       }
     }
   }
@@ -169,6 +416,25 @@ interface BackupFile {
   path: string;
   timestamp: string;
   date: Date;
+}
+
+function parseBackupTimestamp(timestamp: string): Date | null {
+  const year = parseInt(timestamp.slice(0, 4), 10);
+  const month = parseInt(timestamp.slice(4, 6), 10);
+  const day = parseInt(timestamp.slice(6, 8), 10);
+  const hour = parseInt(timestamp.slice(9, 11), 10);
+  const minute = parseInt(timestamp.slice(11, 13), 10);
+  const second = parseInt(timestamp.slice(13, 15), 10);
+  const date = new Date(year, month - 1, day, hour, minute, second);
+
+  if (date.getFullYear() !== year) return null;
+  if (date.getMonth() !== month - 1) return null;
+  if (date.getDate() !== day) return null;
+  if (date.getHours() !== hour) return null;
+  if (date.getMinutes() !== minute) return null;
+  if (date.getSeconds() !== second) return null;
+
+  return date;
 }
 
 /** Get all backup files sorted by date (newest first) */
@@ -186,17 +452,12 @@ function getBackupFiles(): BackupFile[] {
       const match = f.match(backupPattern);
       if (!match) return null;
       const timestamp = match[1];
-      // Parse YYYYMMDD_HHMMSS
-      const year = parseInt(timestamp.slice(0, 4));
-      const month = parseInt(timestamp.slice(4, 6)) - 1;
-      const day = parseInt(timestamp.slice(6, 8));
-      const hour = parseInt(timestamp.slice(9, 11));
-      const min = parseInt(timestamp.slice(11, 13));
-      const sec = parseInt(timestamp.slice(13, 15));
+      const date = parseBackupTimestamp(timestamp);
+      if (!date) return null;
       return {
         path: path.join(dir, f),
         timestamp,
-        date: new Date(year, month, day, hour, min, sec),
+        date,
       };
     })
     .filter((f): f is BackupFile => f !== null)
@@ -210,6 +471,46 @@ function maskApiKey(key: string): string {
     return '****';
   }
   return `${key.slice(0, 4)}...${key.slice(-4)}`;
+}
+
+const SENSITIVE_ENV_PARTS = new Set([
+  'TOKEN',
+  'KEY',
+  'SECRET',
+  'PASSWORD',
+  'PASS',
+  'AUTH',
+  'CREDENTIAL',
+  'PRIVATE',
+  'ACCESS',
+  'REFRESH',
+  'APIKEY',
+]);
+
+function splitSensitiveKeyParts(key: string): string[] {
+  const withCamelCaseBoundaries = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2');
+  return withCamelCaseBoundaries
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .filter(Boolean);
+}
+
+function isSensitiveEnvKey(key: string): boolean {
+  const parts = splitSensitiveKeyParts(key);
+  if (parts.some((part) => SENSITIVE_ENV_PARTS.has(part))) {
+    return true;
+  }
+
+  const compact = parts.join('');
+  return (
+    compact.includes('TOKEN') ||
+    compact.includes('APIKEY') ||
+    compact.includes('ACCESSKEY') ||
+    compact.includes('AUTHKEY') ||
+    compact.includes('SECRET') ||
+    compact.includes('PASSWORD') ||
+    compact.includes('CREDENTIAL')
+  );
 }
 
 /** Resolve env vars for a profile */
@@ -324,7 +625,7 @@ async function handleRestore(timestamp: string | boolean, yes: boolean): Promise
   console.log(`Backup: ${color(backup.timestamp, 'command')}`);
   console.log(`Date:   ${backup.date.toLocaleString()}`);
   console.log('');
-  console.log(warn('This will replace ~/.claude/settings.json'));
+  console.log(warn(`This will replace ${getClaudeSettingsDisplayPath()}`));
   console.log('');
   if (!yes) {
     const proceed = await InteractivePrompt.confirm('Proceed with restore?', { default: false });
@@ -333,31 +634,60 @@ async function handleRestore(timestamp: string | boolean, yes: boolean): Promise
       process.exit(0);
     }
   }
-  // Validate backup JSON integrity before restore
+
+  let parsedBackupSettings: Record<string, unknown>;
   try {
-    const backupContent = fs.readFileSync(backup.path, 'utf8');
-    const parsed: unknown = JSON.parse(backupContent);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      console.log(fail('Backup file is corrupted: not a valid JSON object'));
+    const backupContent = await readFileUtf8NoFollow(backup.path);
+    parsedBackupSettings = parseSettingsObject(backupContent, 'Backup file');
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === 'ENOENT') {
+      console.log(fail('Backup was deleted during restore'));
       process.exit(1);
     }
-  } catch (error) {
+    if (nodeError.code === 'ELOOP') {
+      console.log(fail('Backup file is a symlink - refusing to restore for security'));
+      process.exit(1);
+    }
     console.log(fail(`Backup file is corrupted: ${(error as Error).message}`));
     process.exit(1);
   }
-  // Security: Reject symlink backup files
-  if (isSymlink(backup.path)) {
-    console.log(fail('Backup file is a symlink - refusing to restore for security'));
+
+  try {
+    await withPersistSettingsLock(async () => {
+      const settingsPath = getClaudeSettingsPath();
+      if (await isSymlinkAsync(settingsPath)) {
+        throw new Error('settings.json is a symlink - refusing to restore for security');
+      }
+
+      let rollbackBackupPath: string | null = null;
+      if (await pathExists(settingsPath)) {
+        rollbackBackupPath = await createBackup();
+      }
+
+      try {
+        await writeClaudeSettings(parsedBackupSettings);
+      } catch (error) {
+        const writeError = error as Error;
+        if (rollbackBackupPath) {
+          try {
+            const rollbackContent = await readFileUtf8NoFollow(rollbackBackupPath);
+            const rollbackSettings = parseSettingsObject(rollbackContent, 'Rollback backup');
+            await writeClaudeSettings(rollbackSettings);
+          } catch (rollbackError) {
+            throw new Error(
+              `Restore failed: ${writeError.message}. Rollback also failed: ${(rollbackError as Error).message}. Manual recovery backup: ${formatDisplayPath(rollbackBackupPath)}`
+            );
+          }
+        }
+        throw new Error(`Restore failed: ${writeError.message}`);
+      }
+    });
+  } catch (error) {
+    console.log(fail((error as Error).message));
     process.exit(1);
   }
-  // Copy backup over settings.json
-  const settingsPath = getClaudeSettingsPath();
-  // Security: Reject symlink target
-  if (isSymlink(settingsPath)) {
-    console.log(fail('settings.json is a symlink - refusing to restore for security'));
-    process.exit(1);
-  }
-  fs.copyFileSync(backup.path, settingsPath);
+
   console.log(ok(`Restored from backup: ${backup.timestamp}`));
 }
 
@@ -373,13 +703,20 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(subheader('Description'));
   console.log("  Writes a profile's environment variables directly to");
-  console.log('  ~/.claude/settings.json for native Claude Code usage.');
+  console.log(`  ${getClaudeSettingsDisplayPath()} for native Claude Code usage.`);
   console.log('');
   console.log('  This allows Claude Code to use the profile without CCS,');
   console.log('  enabling compatibility with IDEs and extensions.');
   console.log('');
   console.log(subheader('Options'));
   console.log(`  ${color('--yes, -y', 'command')}         Skip confirmation prompts (auto-backup)`);
+  console.log(
+    `  ${color('--permission-mode <mode>', 'command')}  Set default permission mode in settings.json`
+  );
+  console.log(
+    `  ${color('--dangerously-skip-permissions', 'command')}  Persist auto-approve (bypassPermissions)`
+  );
+  console.log(`  ${color('--auto-approve', 'command')}  Alias for --dangerously-skip-permissions`);
   console.log(`  ${color('--help, -h', 'command')}        Show this help message`);
   console.log('');
   console.log(subheader('Backup Management'));
@@ -402,6 +739,12 @@ async function showHelp(): Promise<void> {
   console.log(`  ${dim('# Persist with auto-confirmation')}`);
   console.log(`  ${color('ccs persist gemini --yes', 'command')}`);
   console.log('');
+  console.log(`  ${dim('# Persist with default permission mode')}`);
+  console.log(`  ${color('ccs persist glm --permission-mode acceptEdits', 'command')}`);
+  console.log('');
+  console.log(`  ${dim('# Persist with auto-approve enabled')}`);
+  console.log(`  ${color('ccs persist codex --dangerously-skip-permissions', 'command')}`);
+  console.log('');
   console.log(`  ${dim('# List all backups')}`);
   console.log(`  ${color('ccs persist --list-backups', 'command')}`);
   console.log('');
@@ -414,7 +757,9 @@ async function showHelp(): Promise<void> {
   console.log(subheader('Notes'));
   console.log('  [i] CLIProxy profiles require the proxy to be running.');
   console.log('  [i] Copilot profiles require copilot-api daemon.');
-  console.log('  [i] Backups are saved as ~/.claude/settings.json.backup.YYYYMMDD_HHMMSS');
+  console.log(
+    `  [i] Backups are saved as ${getClaudeSettingsDisplayPath()}.backup.YYYYMMDD_HHMMSS`
+  );
   console.log('');
 }
 
@@ -426,6 +771,9 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     return;
   }
   const parsedArgs = parseArgs(args);
+  if (parsedArgs.parseError) {
+    throw new Error(parsedArgs.parseError);
+  }
   // Handle --list-backups
   if (parsedArgs.listBackups) {
     await handleListBackups();
@@ -437,6 +785,7 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
     return;
   }
   await initUI();
+  const resolvedPermissionMode = resolvePermissionMode(parsedArgs);
   if (!parsedArgs.profile) {
     console.log(fail('Profile name is required'));
     console.log('');
@@ -474,7 +823,7 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
   console.log('');
   console.log(`Profile type: ${color(resolved.profileType, 'command')}`);
   console.log('');
-  console.log('The following env vars will be written to ~/.claude/settings.json:');
+  console.log(`The following env vars will be written to ${getClaudeSettingsDisplayPath()}:`);
   console.log('');
   // Display env vars (mask sensitive values)
   const envKeys = Object.keys(resolved.env);
@@ -485,44 +834,39 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
   const maxKeyLen = Math.max(...envKeys.map((k) => k.length));
   for (const [key, value] of Object.entries(resolved.env)) {
     const paddedKey = key.padEnd(maxKeyLen + 2);
-    const displayValue =
-      key.includes('TOKEN') || key.includes('KEY') || key.includes('SECRET')
-        ? maskApiKey(value)
-        : value;
+    const displayValue = isSensitiveEnvKey(key) ? maskApiKey(value) : value;
     console.log(`  ${color(paddedKey, 'command')} = ${displayValue}`);
   }
   console.log('');
+  if (resolvedPermissionMode) {
+    console.log(`Default permission mode: ${color(resolvedPermissionMode, 'command')}`);
+    if (resolvedPermissionMode === 'bypassPermissions') {
+      console.log(warn('Auto-approve enabled: Claude will skip permission prompts by default.'));
+    }
+    console.log('');
+  }
   // Show warning if applicable
   if (resolved.warning) {
     console.log(warn(resolved.warning));
     console.log('');
   }
   // Warning about modification
-  console.log(warn('This will modify ~/.claude/settings.json'));
+  console.log(warn(`This will modify ${getClaudeSettingsDisplayPath()}`));
   console.log(dim('    Existing hooks and other settings will be preserved.'));
   console.log('');
   // Check if settings.json exists for backup
   const settingsPath = getClaudeSettingsPath();
   const settingsExist = fs.existsSync(settingsPath);
+  let createBackupFlag = false;
   // Track backup path for error recovery guidance
   let createdBackupPath: string | null = null;
   // Backup prompt (unless --yes)
   if (settingsExist) {
-    let createBackupFlag: boolean = parsedArgs.yes === true; // Auto-backup with --yes
+    createBackupFlag = parsedArgs.yes === true; // Auto-backup with --yes
     if (!parsedArgs.yes) {
       createBackupFlag = await InteractivePrompt.confirm('Create backup before modifying?', {
         default: true,
       });
-    }
-    if (createBackupFlag) {
-      try {
-        createdBackupPath = createBackup();
-        console.log(ok(`Backup created: ${createdBackupPath.replace(os.homedir(), '~')}`));
-        console.log('');
-      } catch (error) {
-        console.log(fail(`Failed to create backup: ${(error as Error).message}`));
-        process.exit(1);
-      }
     }
   }
   // Proceed confirmation (unless --yes)
@@ -533,40 +877,82 @@ export async function handlePersistCommand(args: string[]): Promise<void> {
       process.exit(0);
     }
   }
-  // Read existing settings and merge
-  const existingSettings = readClaudeSettings();
-  // Validate existing env is an object (not array/primitive)
-  const rawEnv = existingSettings.env;
-  let existingEnv: Record<string, string> = {};
-  if (rawEnv !== undefined && rawEnv !== null) {
-    if (typeof rawEnv !== 'object' || Array.isArray(rawEnv)) {
-      console.log(warn('Existing env in settings.json is not an object - it will be replaced'));
-    } else {
-      existingEnv = rawEnv as Record<string, string>;
-    }
-  }
-  const mergedSettings = {
-    ...existingSettings,
-    env: {
-      ...existingEnv,
-      ...resolved.env,
-    },
-  };
-  // Write merged settings
   try {
-    writeClaudeSettings(mergedSettings);
+    await withPersistSettingsLock(async () => {
+      if (createBackupFlag && (await pathExists(settingsPath))) {
+        try {
+          createdBackupPath = await createBackup();
+          console.log(ok(`Backup created: ${formatDisplayPath(createdBackupPath)}`));
+          console.log('');
+        } catch (error) {
+          throw new Error(`Failed to create backup: ${(error as Error).message}`);
+        }
+      }
+
+      // Read existing settings and merge
+      const existingSettings = await readClaudeSettings();
+      // Validate existing env is an object (not array/primitive)
+      const rawEnv = existingSettings.env;
+      let existingEnv: Record<string, string> = {};
+      if (rawEnv !== undefined) {
+        if (rawEnv === null) {
+          console.log(warn('Existing env in settings.json is null - it will be replaced'));
+        } else if (typeof rawEnv !== 'object' || Array.isArray(rawEnv)) {
+          console.log(warn('Existing env in settings.json is not an object - it will be replaced'));
+        } else {
+          existingEnv = rawEnv as Record<string, string>;
+        }
+      }
+
+      const mergedSettings: Record<string, unknown> = {
+        ...existingSettings,
+        env: {
+          ...existingEnv,
+          ...resolved.env,
+        },
+      };
+
+      if (resolvedPermissionMode) {
+        const rawPermissions = existingSettings.permissions;
+        let existingPermissions: Record<string, unknown> = {};
+        if (rawPermissions !== undefined) {
+          if (rawPermissions === null) {
+            console.log(
+              warn('Existing permissions in settings.json is null - it will be replaced')
+            );
+          } else if (typeof rawPermissions !== 'object' || Array.isArray(rawPermissions)) {
+            console.log(
+              warn('Existing permissions in settings.json is not an object - it will be replaced')
+            );
+          } else {
+            existingPermissions = rawPermissions as Record<string, unknown>;
+          }
+        }
+        mergedSettings.permissions = {
+          ...existingPermissions,
+          defaultMode: resolvedPermissionMode,
+        };
+      }
+
+      await writeClaudeSettings(mergedSettings);
+    });
   } catch (error) {
-    console.log(fail(`Failed to write settings: ${(error as Error).message}`));
+    const message = (error as Error).message;
+    if (message.startsWith('Failed to create backup:')) {
+      console.log(fail(message));
+    } else {
+      console.log(fail(`Failed to write settings: ${message}`));
+    }
     if (createdBackupPath) {
       console.log('');
       console.log(info(`A backup was created before this error:`));
-      console.log(`    ${createdBackupPath.replace(os.homedir(), '~')}`);
+      console.log(`    ${formatDisplayPath(createdBackupPath)}`);
       console.log(dim('    To restore: ccs persist --restore'));
     }
     process.exit(1);
   }
   console.log('');
-  console.log(ok(`Profile '${parsedArgs.profile}' written to ~/.claude/settings.json`));
+  console.log(ok(`Profile '${parsedArgs.profile}' written to ${getClaudeSettingsDisplayPath()}`));
   console.log('');
   console.log(info('Claude Code will now use this profile by default.'));
   console.log(dim('    To revert, restore the backup or edit settings.json manually.'));

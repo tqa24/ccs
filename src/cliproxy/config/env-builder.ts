@@ -19,24 +19,28 @@ import {
   CLIPROXY_DEFAULT_PORT,
 } from './port-manager';
 import { getProviderSettingsPath } from './path-resolver';
+import {
+  MODEL_ENV_VAR_KEYS,
+  normalizeModelEnvVarsForProvider,
+  normalizeModelIdForProvider,
+} from '../model-id-normalizer';
 
 /** Settings file structure for user overrides */
 interface ProviderSettings {
   env: NodeJS.ProcessEnv;
+  presets?: Array<Record<string, unknown>>;
 }
 
 /** Model name prefix that was deprecated in CLIProxyAPI registry */
 const DEPRECATED_MODEL_PREFIX = 'gemini-claude-';
 /** Replacement prefix matching actual upstream model names */
 const UPSTREAM_MODEL_PREFIX = 'claude-';
+const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+const PRESET_MODEL_KEYS = ['default', 'opus', 'sonnet', 'haiku'] as const;
 
-/** Env vars that contain model names and may need migration */
-const MODEL_ENV_KEYS = [
-  'ANTHROPIC_MODEL',
-  'ANTHROPIC_DEFAULT_OPUS_MODEL',
-  'ANTHROPIC_DEFAULT_SONNET_MODEL',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-];
+function stripCodexEffortSuffix(modelId: string): string {
+  return modelId.replace(CODEX_EFFORT_SUFFIX_REGEX, '');
+}
 
 /**
  * Migrate deprecated gemini-claude-* model names to upstream claude-* names in a settings file.
@@ -49,7 +53,7 @@ function migrateDeprecatedModelNames(settingsPath: string, settings: ProviderSet
   if (!settings.env || typeof settings.env !== 'object') return false;
 
   let migrated = false;
-  for (const key of MODEL_ENV_KEYS) {
+  for (const key of MODEL_ENV_VAR_KEYS) {
     const value = settings.env[key];
     if (typeof value !== 'string') continue;
 
@@ -57,6 +61,58 @@ function migrateDeprecatedModelNames(settingsPath: string, settings: ProviderSet
     if (value.toLowerCase().startsWith(DEPRECATED_MODEL_PREFIX)) {
       settings.env[key] = UPSTREAM_MODEL_PREFIX + value.slice(DEPRECATED_MODEL_PREFIX.length);
       migrated = true;
+    }
+  }
+
+  if (migrated) {
+    try {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 });
+    } catch {
+      // Best-effort migration — don't block startup if write fails
+    }
+  }
+
+  return migrated;
+}
+
+/**
+ * Migrate codex effort-suffixed model IDs in settings to canonical IDs.
+ * Example: gpt-5.3-codex-xhigh -> gpt-5.3-codex
+ */
+function migrateCodexEffortSuffixes(
+  settingsPath: string,
+  provider: CLIProxyProvider,
+  settings: ProviderSettings
+): boolean {
+  if (provider !== 'codex') return false;
+  if (!settings.env || typeof settings.env !== 'object') return false;
+
+  let migrated = false;
+
+  for (const key of MODEL_ENV_VAR_KEYS) {
+    const value = settings.env[key];
+    if (typeof value !== 'string') continue;
+    const canonical = stripCodexEffortSuffix(value);
+    if (canonical !== value) {
+      settings.env[key] = canonical;
+      migrated = true;
+    }
+  }
+
+  if (Array.isArray(settings.presets)) {
+    for (const preset of settings.presets) {
+      if (!preset || typeof preset !== 'object') continue;
+      const presetRecord = preset as Record<string, unknown>;
+
+      for (const key of PRESET_MODEL_KEYS) {
+        const value = presetRecord[key];
+        if (typeof value !== 'string') continue;
+        const canonical = stripCodexEffortSuffix(value);
+        if (canonical !== value) {
+          presetRecord[key] = canonical;
+          migrated = true;
+        }
+      }
     }
   }
 
@@ -124,10 +180,12 @@ export function getClaudeEnvVars(
   } = baseEnvVars;
 
   // Merge core env vars with additional env vars from base config
-  return {
+  const mergedEnv = {
     ...coreEnvVars,
     ...additionalEnvVars, // Includes ANTHROPIC_MAX_TOKENS, etc.
   };
+
+  return normalizeModelEnvVarsForProvider(mergedEnv, provider);
 }
 
 /**
@@ -174,7 +232,7 @@ function ensureRequiredEnvVars(
     );
   }
 
-  return result;
+  return normalizeModelEnvVarsForProvider(result, provider);
 }
 
 /** Localhost hostnames used for local CLIProxy endpoints */
@@ -286,6 +344,8 @@ export function getEffectiveEnvVars(
         if (settings.env && typeof settings.env === 'object') {
           // Migrate deprecated gemini-claude-* model names if present
           migrateDeprecatedModelNames(expandedPath, settings);
+          // Migrate codex effort suffixes to canonical IDs if present
+          migrateCodexEffortSuffixes(expandedPath, provider, settings);
           // Custom variant settings found - merge with global env
           envVars = { ...globalEnv, ...settings.env };
           // Ensure required vars are present (fall back to defaults if missing)
@@ -317,6 +377,8 @@ export function getEffectiveEnvVars(
       if (settings.env && typeof settings.env === 'object') {
         // Migrate deprecated gemini-claude-* model names if present
         migrateDeprecatedModelNames(settingsPath, settings);
+        // Migrate codex effort suffixes to canonical IDs if present
+        migrateCodexEffortSuffixes(settingsPath, provider, settings);
         // User override found - merge with global env
         envVars = { ...globalEnv, ...settings.env };
         // Ensure required vars are present (fall back to defaults if missing)
@@ -404,6 +466,7 @@ export function getRemoteEnvVars(
         const settings: ProviderSettings = JSON.parse(content);
         if (settings.env && typeof settings.env === 'object') {
           migrateDeprecatedModelNames(expandedPath, settings);
+          migrateCodexEffortSuffixes(expandedPath, provider, settings);
           userEnvVars = settings.env as Record<string, string>;
         }
       } catch {
@@ -422,6 +485,7 @@ export function getRemoteEnvVars(
         const settings: ProviderSettings = JSON.parse(content);
         if (settings.env && typeof settings.env === 'object') {
           migrateDeprecatedModelNames(settingsPath, settings);
+          migrateCodexEffortSuffixes(settingsPath, provider, settings);
           userEnvVars = settings.env as Record<string, string>;
         }
       } catch {
@@ -458,7 +522,7 @@ export function getRemoteEnvVars(
     ANTHROPIC_AUTH_TOKEN: remoteConfig.authToken || getEffectiveApiKey(),
   };
 
-  return env;
+  return normalizeModelEnvVarsForProvider(env, provider) as Record<string, string>;
 }
 
 /** Remote config for composite variant (passed from env-resolver) */
@@ -519,10 +583,19 @@ export function getCompositeEnvVars(
   const validPort = validatePort(port);
 
   // Defensive: handle missing tiers gracefully
-  const opusModel = tiers.opus?.model;
-  const sonnetModel = tiers.sonnet?.model;
-  const haikuModel = tiers.haiku?.model;
-  const defaultModel = tiers[defaultTier]?.model;
+  const opusModel = tiers.opus?.model
+    ? normalizeModelIdForProvider(tiers.opus.model, tiers.opus.provider)
+    : undefined;
+  const sonnetModel = tiers.sonnet?.model
+    ? normalizeModelIdForProvider(tiers.sonnet.model, tiers.sonnet.provider)
+    : undefined;
+  const haikuModel = tiers.haiku?.model
+    ? normalizeModelIdForProvider(tiers.haiku.model, tiers.haiku.provider)
+    : undefined;
+  const defaultTierModel = tiers[defaultTier];
+  const defaultModel = defaultTierModel?.model
+    ? normalizeModelIdForProvider(defaultTierModel.model, defaultTierModel.provider)
+    : undefined;
 
   // If default tier is missing, we cannot proceed meaningfully
   if (!defaultModel) {

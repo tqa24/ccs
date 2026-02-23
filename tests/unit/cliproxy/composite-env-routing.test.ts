@@ -71,4 +71,25 @@ describe('buildClaudeEnvironment - composite remote routing', () => {
     // Gemini thinking overrides may be normalized to numeric budgets, and [1m] may be auto-appended.
     expect(env.ANTHROPIC_MODEL).toMatch(/\([^)]+\)(\[1m\])?$/);
   });
+
+  it('normalizes dotted Claude model IDs for antigravity tiers in composite mode', () => {
+    const env = buildClaudeEnvironment({
+      provider: 'agy',
+      useRemoteProxy: false,
+      localPort: 8318,
+      verbose: false,
+      isComposite: true,
+      compositeTiers: {
+        opus: { provider: 'agy', model: 'claude-opus-4.6-thinking' },
+        sonnet: { provider: 'gemini', model: 'gemini-2.5-pro' },
+        haiku: { provider: 'codex', model: 'gpt-5.1-codex-mini' },
+      },
+      compositeDefaultTier: 'opus',
+    });
+
+    expect(env.ANTHROPIC_MODEL).toMatch(/^claude-opus-4-6-thinking(\([^)]+\))?$/);
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toMatch(/^claude-opus-4-6-thinking(\([^)]+\))?$/);
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toMatch(/^gemini-2.5-pro(\([^)]+\))?$/);
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('gpt-5.1-codex-mini');
+  });
 });

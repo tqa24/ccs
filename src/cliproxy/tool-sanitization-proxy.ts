@@ -18,6 +18,7 @@ import * as os from 'os';
 import { URL } from 'url';
 import { ToolNameMapper, type Tool, type ContentBlock } from './tool-name-mapper';
 import { sanitizeToolSchemas } from './schema-sanitizer';
+import { extractProviderFromPathname, normalizeModelIdForRouting } from './model-id-normalizer';
 import { getCcsDir } from '../utils/config-manager';
 
 export interface ToolSanitizationProxyConfig {
@@ -206,12 +207,25 @@ export class ToolSanitizationProxy {
       // Create mapper for this request
       const mapper = new ToolNameMapper();
 
-      // Sanitize tools if present
+      // Normalize dotted Claude model IDs for provider-compatible routing.
       let modifiedBody = parsed;
-      if (isRecord(parsed) && Array.isArray(parsed.tools)) {
+      if (isRecord(modifiedBody) && typeof modifiedBody.model === 'string') {
+        const providerFromPath = extractProviderFromPathname(fullUpstreamUrl.pathname);
+        const normalizedModel = normalizeModelIdForRouting(modifiedBody.model, providerFromPath);
+        if (normalizedModel !== modifiedBody.model) {
+          this.writeLog(
+            'warn',
+            `[tool-sanitization-proxy] Model normalized for provider routing (${providerFromPath ?? 'root'}): "${modifiedBody.model}" → "${normalizedModel}"`
+          );
+          modifiedBody = { ...modifiedBody, model: normalizedModel };
+        }
+      }
+
+      // Sanitize tools if present
+      if (isRecord(modifiedBody) && Array.isArray(modifiedBody.tools)) {
         // Step 1: Sanitize input_schema properties (remove non-standard JSON Schema properties)
         const schemaResult = sanitizeToolSchemas(
-          parsed.tools as Array<{ name: string; input_schema?: Record<string, unknown> }>
+          modifiedBody.tools as Array<{ name: string; input_schema?: Record<string, unknown> }>
         );
 
         if (schemaResult.totalRemoved > 0) {
@@ -228,7 +242,7 @@ export class ToolSanitizationProxy {
 
         // Step 2: Sanitize tool names (truncate to 64 chars for Gemini)
         const sanitizedTools = mapper.registerTools(schemaResult.tools as Tool[]);
-        modifiedBody = { ...parsed, tools: sanitizedTools };
+        modifiedBody = { ...modifiedBody, tools: sanitizedTools };
 
         // Log sanitization warnings
         if (mapper.hasChanges()) {
@@ -252,7 +266,7 @@ export class ToolSanitizationProxy {
       }
 
       // Check if streaming is requested
-      const isStreaming = isRecord(parsed) && parsed.stream === true;
+      const isStreaming = isRecord(modifiedBody) && modifiedBody.stream === true;
 
       if (isStreaming) {
         await this.forwardJsonStreaming(req, res, fullUpstreamUrl, modifiedBody, mapper);
