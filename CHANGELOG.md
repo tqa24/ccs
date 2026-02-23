@@ -1,3 +1,20 @@
+## [7.49.0](https://github.com/kaitranntt/ccs/compare/v7.48.1...v7.49.0) (2026-02-23)
+
+### Features
+
+* **memory:** share project memory across account instances ([e2623e6](https://github.com/kaitranntt/ccs/commit/e2623e632c057dc88f7ee1061864b44efbe2e03a))
+
+### Bug Fixes
+
+* **ci:** auto-close released issues in stable release workflow ([b6f2d5d](https://github.com/kaitranntt/ccs/commit/b6f2d5d249dde80a3288a79e9dc783756296e79c))
+* **codex:** canonicalize dashboard presets and migrate suffixed settings ([be96b84](https://github.com/kaitranntt/ccs/commit/be96b84e613ac4be217ea05c8090318df1114469))
+* **codex:** preserve codex tier efforts in auto thinking ([db80f85](https://github.com/kaitranntt/ccs/commit/db80f85e38abe7ace0c25b774cdf65ed4913b8df))
+* **codex:** validate tier thinking values before suffixing ([57e14cf](https://github.com/kaitranntt/ccs/commit/57e14cf3a69e5106a0a29ffda77f8aa134aa435d))
+* **memory:** use async fs APIs to satisfy maintainability gate ([c6c44d0](https://github.com/kaitranntt/ccs/commit/c6c44d03411a85034ab452ac8fc82b35b50c3c27))
+* resolve package.json version conflict from main merge ([6840523](https://github.com/kaitranntt/ccs/commit/68405239cdc848b934a185139226cd286f43ea9d))
+* **web-server:** detect symlinked shared entries ([e3dbc67](https://github.com/kaitranntt/ccs/commit/e3dbc6763436e97b6ae2ec6687174fb6c6904dc7))
+* **web-server:** harden shared route symlink scanning ([498b66d](https://github.com/kaitranntt/ccs/commit/498b66d9cceaf34a36e81403fa15b73093eda2c9))
+
 ## [7.48.1](https://github.com/kaitranntt/ccs/compare/v7.48.0...v7.48.1) (2026-02-23)
 
 ### Bug Fixes
