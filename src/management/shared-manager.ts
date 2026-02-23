@@ -210,25 +210,25 @@ class SharedManager {
    * Shared layout (canonical):
    *   ~/.ccs/shared/memory/<project>/
    */
-  syncProjectMemories(instancePath: string): void {
+  async syncProjectMemories(instancePath: string): Promise<void> {
     const projectsDir = path.join(instancePath, 'projects');
-    if (!fs.existsSync(projectsDir)) {
+    if (!(await this.pathExists(projectsDir))) {
       return;
     }
 
-    if (!fs.existsSync(this.sharedDir)) {
-      fs.mkdirSync(this.sharedDir, { recursive: true, mode: 0o700 });
-    }
+    await this.ensureDirectory(this.sharedDir);
 
     const sharedMemoryRoot = path.join(this.sharedDir, 'memory');
-    if (!fs.existsSync(sharedMemoryRoot)) {
-      fs.mkdirSync(sharedMemoryRoot, { recursive: true, mode: 0o700 });
+    await this.ensureDirectory(sharedMemoryRoot);
+
+    let projectEntries: fs.Dirent[] = [];
+    try {
+      projectEntries = await fs.promises.readdir(projectsDir, { withFileTypes: true });
+    } catch (_err) {
+      return;
     }
 
-    const projects = fs.readdirSync(projectsDir, { withFileTypes: true }).filter((entry) => {
-      return entry.isDirectory();
-    });
-
+    const projects = projectEntries.filter((entry) => entry.isDirectory());
     if (projects.length === 0) {
       return;
     }
@@ -243,22 +243,21 @@ class SharedManager {
       const projectMemoryPath = path.join(projectDir, 'memory');
       const sharedProjectMemoryPath = path.join(sharedMemoryRoot, project.name);
 
-      if (!fs.existsSync(projectMemoryPath)) {
-        if (this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+      const projectMemoryStats = await this.getLstat(projectMemoryPath);
+      if (!projectMemoryStats) {
+        if (await this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
           linked++;
         }
         continue;
       }
 
-      const projectMemoryStats = fs.lstatSync(projectMemoryPath);
-
       if (projectMemoryStats.isSymbolicLink()) {
-        if (this.isSymlinkTarget(projectMemoryPath, sharedProjectMemoryPath)) {
+        if (await this.isSymlinkTarget(projectMemoryPath, sharedProjectMemoryPath)) {
           continue;
         }
 
-        fs.unlinkSync(projectMemoryPath);
-        if (this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+        await fs.promises.unlink(projectMemoryPath);
+        if (await this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
           linked++;
         }
         continue;
@@ -268,19 +267,19 @@ class SharedManager {
         continue;
       }
 
-      if (!fs.existsSync(sharedProjectMemoryPath)) {
-        this.moveDirectory(projectMemoryPath, sharedProjectMemoryPath);
+      if (!(await this.pathExists(sharedProjectMemoryPath))) {
+        await this.moveDirectory(projectMemoryPath, sharedProjectMemoryPath);
         migrated++;
       } else {
-        merged += this.mergeDirectoryWithConflictCopies(
+        merged += await this.mergeDirectoryWithConflictCopies(
           projectMemoryPath,
           sharedProjectMemoryPath,
           instanceName
         );
-        fs.rmSync(projectMemoryPath, { recursive: true, force: true });
+        await fs.promises.rm(projectMemoryPath, { recursive: true, force: true });
       }
 
-      if (this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
+      if (await this.ensureProjectMemoryLink(projectMemoryPath, sharedProjectMemoryPath)) {
         linked++;
       }
     }
@@ -517,21 +516,19 @@ class SharedManager {
    * Ensure memory path is linked to shared memory root.
    * Returns true when a link/copy was created or updated.
    */
-  private ensureProjectMemoryLink(linkPath: string, targetPath: string): boolean {
-    if (!fs.existsSync(targetPath)) {
-      fs.mkdirSync(targetPath, { recursive: true, mode: 0o700 });
-    }
+  private async ensureProjectMemoryLink(linkPath: string, targetPath: string): Promise<boolean> {
+    await this.ensureDirectory(targetPath);
 
-    if (fs.existsSync(linkPath)) {
-      const stats = fs.lstatSync(linkPath);
-      if (stats.isSymbolicLink() && this.isSymlinkTarget(linkPath, targetPath)) {
+    const linkStats = await this.getLstat(linkPath);
+    if (linkStats) {
+      if (linkStats.isSymbolicLink() && (await this.isSymlinkTarget(linkPath, targetPath))) {
         return false;
       }
 
-      if (stats.isDirectory()) {
-        fs.rmSync(linkPath, { recursive: true, force: true });
+      if (linkStats.isDirectory()) {
+        await fs.promises.rm(linkPath, { recursive: true, force: true });
       } else {
-        fs.unlinkSync(linkPath);
+        await fs.promises.unlink(linkPath);
       }
     }
 
@@ -539,7 +536,7 @@ class SharedManager {
     const linkTarget = process.platform === 'win32' ? path.resolve(targetPath) : targetPath;
 
     try {
-      fs.symlinkSync(linkTarget, linkPath, symlinkType);
+      await fs.promises.symlink(linkTarget, linkPath, symlinkType);
       return true;
     } catch (_err) {
       if (process.platform === 'win32') {
@@ -556,14 +553,14 @@ class SharedManager {
   /**
    * Check whether symlink points to expected target.
    */
-  private isSymlinkTarget(linkPath: string, expectedTarget: string): boolean {
+  private async isSymlinkTarget(linkPath: string, expectedTarget: string): Promise<boolean> {
     try {
-      const stats = fs.lstatSync(linkPath);
+      const stats = await fs.promises.lstat(linkPath);
       if (!stats.isSymbolicLink()) {
         return false;
       }
 
-      const currentTarget = fs.readlinkSync(linkPath);
+      const currentTarget = await fs.promises.readlink(linkPath);
       const resolvedCurrentTarget = path.resolve(path.dirname(linkPath), currentTarget);
       const resolvedExpectedTarget = path.resolve(expectedTarget);
       return resolvedCurrentTarget === resolvedExpectedTarget;
@@ -575,17 +572,17 @@ class SharedManager {
   /**
    * Move directory, with cross-device fallback.
    */
-  private moveDirectory(src: string, dest: string): void {
+  private async moveDirectory(src: string, dest: string): Promise<void> {
     try {
-      fs.renameSync(src, dest);
+      await fs.promises.rename(src, dest);
     } catch (err) {
       const error = err as NodeJS.ErrnoException;
       if (error.code !== 'EXDEV') {
         throw err;
       }
 
-      fs.cpSync(src, dest, { recursive: true });
-      fs.rmSync(src, { recursive: true, force: true });
+      await fs.promises.cp(src, dest, { recursive: true });
+      await fs.promises.rm(src, { recursive: true, force: true });
     }
   }
 
@@ -593,39 +590,41 @@ class SharedManager {
    * Merge source into target. On file conflicts, keep target and copy source
    * as "<name>.migrated-from-<instance>[-N]" to avoid data loss.
    */
-  private mergeDirectoryWithConflictCopies(
+  private async mergeDirectoryWithConflictCopies(
     sourceDir: string,
     targetDir: string,
     instanceName: string
-  ): number {
-    if (!fs.existsSync(targetDir)) {
-      fs.mkdirSync(targetDir, { recursive: true, mode: 0o700 });
-    }
+  ): Promise<number> {
+    await this.ensureDirectory(targetDir);
 
     let conflicts = 0;
-    const entries = fs.readdirSync(sourceDir, { withFileTypes: true });
+    const entries = await fs.promises.readdir(sourceDir, { withFileTypes: true });
 
     for (const entry of entries) {
       const sourcePath = path.join(sourceDir, entry.name);
       const targetPath = path.join(targetDir, entry.name);
 
       if (entry.isDirectory()) {
-        conflicts += this.mergeDirectoryWithConflictCopies(sourcePath, targetPath, instanceName);
+        conflicts += await this.mergeDirectoryWithConflictCopies(
+          sourcePath,
+          targetPath,
+          instanceName
+        );
         continue;
       }
 
       if (entry.isFile()) {
-        if (!fs.existsSync(targetPath)) {
-          fs.copyFileSync(sourcePath, targetPath);
+        if (!(await this.pathExists(targetPath))) {
+          await fs.promises.copyFile(sourcePath, targetPath);
           continue;
         }
 
-        if (this.fileContentsEqual(sourcePath, targetPath)) {
+        if (await this.fileContentsEqual(sourcePath, targetPath)) {
           continue;
         }
 
-        const conflictPath = this.getConflictCopyPath(targetPath, instanceName);
-        fs.copyFileSync(sourcePath, conflictPath);
+        const conflictPath = await this.getConflictCopyPath(targetPath, instanceName);
+        await fs.promises.copyFile(sourcePath, conflictPath);
         conflicts++;
       }
     }
@@ -636,16 +635,17 @@ class SharedManager {
   /**
    * Compare two files byte-for-byte.
    */
-  private fileContentsEqual(fileA: string, fileB: string): boolean {
+  private async fileContentsEqual(fileA: string, fileB: string): Promise<boolean> {
     try {
-      const statA = fs.statSync(fileA);
-      const statB = fs.statSync(fileB);
+      const [statA, statB] = await Promise.all([fs.promises.stat(fileA), fs.promises.stat(fileB)]);
       if (statA.size !== statB.size) {
         return false;
       }
 
-      const contentA = fs.readFileSync(fileA);
-      const contentB = fs.readFileSync(fileB);
+      const [contentA, contentB] = await Promise.all([
+        fs.promises.readFile(fileA),
+        fs.promises.readFile(fileB),
+      ]);
       return contentA.equals(contentB);
     } catch (_err) {
       return false;
@@ -655,18 +655,45 @@ class SharedManager {
   /**
    * Build a non-destructive conflict copy path.
    */
-  private getConflictCopyPath(existingTargetPath: string, instanceName: string): string {
+  private async getConflictCopyPath(
+    existingTargetPath: string,
+    instanceName: string
+  ): Promise<string> {
     const safeInstanceName = instanceName.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
     const baseSuffix = `.migrated-from-${safeInstanceName}`;
 
     let candidate = `${existingTargetPath}${baseSuffix}`;
     let sequence = 1;
-    while (fs.existsSync(candidate)) {
+    while (await this.pathExists(candidate)) {
       candidate = `${existingTargetPath}${baseSuffix}-${sequence}`;
       sequence++;
     }
 
     return candidate;
+  }
+
+  private async pathExists(targetPath: string): Promise<boolean> {
+    try {
+      await fs.promises.access(targetPath);
+      return true;
+    } catch (_err) {
+      return false;
+    }
+  }
+
+  private async ensureDirectory(targetPath: string): Promise<void> {
+    await fs.promises.mkdir(targetPath, { recursive: true, mode: 0o700 });
+  }
+
+  private async getLstat(targetPath: string): Promise<fs.Stats | null> {
+    try {
+      return await fs.promises.lstat(targetPath);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        return null;
+      }
+      throw err;
+    }
   }
 
   /**

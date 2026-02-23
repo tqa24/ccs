@@ -26,7 +26,7 @@ class InstanceManager {
   /**
    * Ensure instance exists for profile (lazy init only)
    */
-  ensureInstance(profileName: string): string {
+  async ensureInstance(profileName: string): Promise<string> {
     const instancePath = this.getInstancePath(profileName);
 
     // Lazy initialization
@@ -38,7 +38,7 @@ class InstanceManager {
     this.validateInstance(instancePath);
 
     // Keep project memory shared across instances.
-    this.sharedManager.syncProjectMemories(instancePath);
+    await this.sharedManager.syncProjectMemories(instancePath);
 
     return instancePath;
   }

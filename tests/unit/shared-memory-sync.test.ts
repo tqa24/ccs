@@ -45,7 +45,7 @@ describe('SharedManager project memory sync', () => {
     }
   });
 
-  it('migrates existing project memory and replaces it with a shared symlink', () => {
+  it('migrates existing project memory and replaces it with a shared symlink', async () => {
     const ccsDir = getTestCcsDir();
     const instancePath = path.join(ccsDir, 'instances', 'work');
     const projectName = '-tmp-my-project';
@@ -54,7 +54,7 @@ describe('SharedManager project memory sync', () => {
     fs.writeFileSync(path.join(projectMemoryPath, 'MEMORY.md'), 'instance knowledge', 'utf8');
 
     const manager = new SharedManager();
-    manager.syncProjectMemories(instancePath);
+    await manager.syncProjectMemories(instancePath);
 
     const sharedMemoryFile = path.join(ccsDir, 'shared', 'memory', projectName, 'MEMORY.md');
     expect(fs.existsSync(sharedMemoryFile)).toBe(true);
@@ -67,7 +67,7 @@ describe('SharedManager project memory sync', () => {
     expect(resolvedTarget).toBe(path.join(ccsDir, 'shared', 'memory', projectName));
   });
 
-  it('preserves canonical memory and writes conflict copy when contents differ', () => {
+  it('preserves canonical memory and writes conflict copy when contents differ', async () => {
     const ccsDir = getTestCcsDir();
     const instancePath = path.join(ccsDir, 'instances', 'work');
     const projectName = '-tmp-shared-project';
@@ -80,7 +80,7 @@ describe('SharedManager project memory sync', () => {
     fs.writeFileSync(path.join(sharedProjectMemoryPath, 'MEMORY.md'), 'shared memory', 'utf8');
 
     const manager = new SharedManager();
-    manager.syncProjectMemories(instancePath);
+    await manager.syncProjectMemories(instancePath);
 
     const canonicalFile = path.join(sharedProjectMemoryPath, 'MEMORY.md');
     expect(fs.readFileSync(canonicalFile, 'utf8')).toBe('shared memory');
@@ -93,7 +93,7 @@ describe('SharedManager project memory sync', () => {
     expect(linkStats.isSymbolicLink()).toBe(true);
   });
 
-  it('creates shared memory link for projects that do not have memory directory yet', () => {
+  it('creates shared memory link for projects that do not have memory directory yet', async () => {
     const ccsDir = getTestCcsDir();
     const instancePath = path.join(ccsDir, 'instances', 'work');
     const projectName = '-tmp-new-project';
@@ -102,7 +102,7 @@ describe('SharedManager project memory sync', () => {
     fs.mkdirSync(projectPath, { recursive: true });
 
     const manager = new SharedManager();
-    manager.syncProjectMemories(instancePath);
+    await manager.syncProjectMemories(instancePath);
 
     const linkStats = fs.lstatSync(projectMemoryPath);
     expect(linkStats.isSymbolicLink()).toBe(true);
