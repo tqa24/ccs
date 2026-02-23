@@ -884,7 +884,7 @@ async function main(): Promise<void> {
       const instanceMgr = new InstanceManager();
 
       // Ensure instance exists (lazy init if needed)
-      const instancePath = instanceMgr.ensureInstance(profileInfo.name);
+      const instancePath = await instanceMgr.ensureInstance(profileInfo.name);
 
       // Update last_used timestamp (check unified config first, fallback to legacy)
       if (registry.hasAccountUnified(profileInfo.name)) {
