@@ -74,23 +74,25 @@ function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
     const entries = fs.readdirSync(sharedDir, { withFileTypes: true });
 
     for (const entry of entries) {
-      if (entry.isDirectory()) {
-        // Skill/Agent: look for SKILL.md for skills, prompt.md for agents
+      const entryPath = path.join(sharedDir, entry.name);
+
+      // Skills/Agents are directory-based and may be symlinked directories
+      if (type !== 'commands' && (entry.isDirectory() || entry.isSymbolicLink())) {
         const markdownFile = type === 'skills' ? 'SKILL.md' : 'prompt.md';
-        const promptPath = path.join(sharedDir, entry.name, markdownFile);
+        const promptPath = path.join(entryPath, markdownFile);
         if (fs.existsSync(promptPath)) {
           const content = fs.readFileSync(promptPath, 'utf8');
           const description = extractDescription(content);
           items.push({
             name: entry.name,
             description,
-            path: path.join(sharedDir, entry.name),
-            type: type === 'commands' ? 'command' : (type.slice(0, -1) as 'skill' | 'agent'),
+            path: entryPath,
+            type: type === 'skills' ? 'skill' : 'agent',
           });
         }
-      } else if (entry.name.endsWith('.md')) {
-        // Command: .md file
-        const filePath = path.join(sharedDir, entry.name);
+      } else if (type === 'commands' && entry.name.endsWith('.md')) {
+        // Commands are markdown files
+        const filePath = entryPath;
         const content = fs.readFileSync(filePath, 'utf8');
         const description = extractDescription(content);
         items.push({
