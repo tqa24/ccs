@@ -1,3 +1,10 @@
+## [7.49.1](https://github.com/kaitranntt/ccs/compare/v7.49.0...v7.49.1) (2026-02-24)
+
+### Bug Fixes
+
+* **cliproxy:** prevent blank page in remote mode ([4eb2be7](https://github.com/kaitranntt/ccs/commit/4eb2be79fcf8c8e04007cc33a83c2e693fb0072f))
+* **cliproxy:** strengthen account safety warning and redesign alert UI ([00495b6](https://github.com/kaitranntt/ccs/commit/00495b667533a4a1fbb3560a3391c2547bc228f9))
+
 ## [7.49.0](https://github.com/kaitranntt/ccs/compare/v7.48.1...v7.49.0) (2026-02-23)
 
 ### Features
