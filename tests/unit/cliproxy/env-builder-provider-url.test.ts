@@ -2,7 +2,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { getEffectiveEnvVars } from '../../../src/cliproxy/config/env-builder';
+import {
+  ensureProviderSettings,
+  getEffectiveEnvVars,
+} from '../../../src/cliproxy/config/env-builder';
 
 interface EnvSettings {
   ANTHROPIC_BASE_URL: string;
@@ -24,13 +27,16 @@ function writeSettings(
 describe('getEffectiveEnvVars local provider URL normalization', () => {
   let tempHome: string;
   let settingsPath: string;
+  let originalCcsHome: string | undefined;
 
   beforeEach(() => {
+    originalCcsHome = process.env.CCS_HOME;
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-env-url-'));
     settingsPath = path.join(tempHome, 'codex.settings.json');
   });
 
   afterEach(() => {
+    process.env.CCS_HOME = originalCcsHome;
     fs.rmSync(tempHome, { recursive: true, force: true });
   });
 
@@ -138,5 +144,55 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
     expect(persisted.presets[0]?.opus).toBe('gpt-5.3-codex');
     expect(persisted.presets[0]?.sonnet).toBe('gpt-5.3-codex');
     expect(persisted.presets[0]?.haiku).toBe('gpt-5-mini');
+  });
+
+  it('repairs existing provider settings files that are missing env keys', () => {
+    process.env.CCS_HOME = tempHome;
+    const agySettingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
+    fs.mkdirSync(path.dirname(agySettingsPath), { recursive: true });
+    fs.writeFileSync(
+      agySettingsPath,
+      JSON.stringify(
+        {
+          hooks: {
+            PreToolUse: [{ matcher: 'WebSearch', hooks: [] }],
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    ensureProviderSettings('agy');
+
+    const repaired = JSON.parse(fs.readFileSync(agySettingsPath, 'utf-8')) as {
+      env?: Record<string, string>;
+      hooks?: Record<string, unknown>;
+    };
+    expect(repaired.hooks?.PreToolUse).toBeDefined();
+    expect(repaired.env?.ANTHROPIC_BASE_URL).toBe('http://127.0.0.1:8317/api/provider/agy');
+    expect(repaired.env?.ANTHROPIC_MODEL).toBeDefined();
+    expect(repaired.env?.ANTHROPIC_DEFAULT_OPUS_MODEL).toBeDefined();
+    expect(repaired.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBeDefined();
+    expect(repaired.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBeDefined();
+  });
+
+  it('recovers malformed provider settings files by writing defaults and backup copy', () => {
+    process.env.CCS_HOME = tempHome;
+    const agySettingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
+    fs.mkdirSync(path.dirname(agySettingsPath), { recursive: true });
+    fs.writeFileSync(agySettingsPath, '{"env": {"ANTHROPIC_MODEL": "claude-sonnet-4-6-thinking",}');
+
+    ensureProviderSettings('agy');
+
+    const repaired = JSON.parse(fs.readFileSync(agySettingsPath, 'utf-8')) as {
+      env?: Record<string, string>;
+    };
+    expect(repaired.env?.ANTHROPIC_MODEL).toBeDefined();
+
+    const backups = fs
+      .readdirSync(path.dirname(agySettingsPath))
+      .filter((file) => file.startsWith('agy.settings.json.corrupt-'));
+    expect(backups.length).toBe(1);
   });
 });

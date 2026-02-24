@@ -445,6 +445,8 @@ export interface Account {
   type?: string;
   created: string;
   last_used?: string | null;
+  context_mode?: 'isolated' | 'shared';
+  context_group?: string;
 }
 
 // Unified config types

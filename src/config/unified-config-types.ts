@@ -40,6 +40,10 @@ export interface AccountConfig {
   created: string;
   /** ISO timestamp of last usage, null if never used */
   last_used: string | null;
+  /** Context mode for project workspace data */
+  context_mode?: 'isolated' | 'shared';
+  /** Context-sharing group when context_mode='shared' */
+  context_group?: string;
 }
 
 /**

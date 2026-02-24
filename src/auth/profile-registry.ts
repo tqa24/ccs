@@ -6,6 +6,7 @@ import {
   saveUnifiedConfig,
   isUnifiedMode,
 } from '../config/unified-config-loader';
+import type { AccountConfig } from '../config/unified-config-types';
 import { getCcsDir } from '../utils/config-manager';
 
 /**
@@ -19,6 +20,8 @@ import { getCcsDir } from '../utils/config-manager';
  *   type: 'account',         // Profile type
  *   created: <ISO timestamp>, // Creation time
  *   last_used: <ISO timestamp or null> // Last usage time
+ *   context_mode?: 'isolated' | 'shared' // Workspace context policy
+ *   context_group?: <string> // Shared context group when mode=shared
  * }
  *
  * Removed fields from v2.x:
@@ -37,6 +40,8 @@ interface CreateMetadata {
   type?: string;
   created?: string;
   last_used?: string | null;
+  context_mode?: 'isolated' | 'shared';
+  context_group?: string;
 }
 
 export class ProfileRegistry {
@@ -44,6 +49,30 @@ export class ProfileRegistry {
 
   constructor() {
     this.profilesPath = path.join(getCcsDir(), 'profiles.json');
+  }
+
+  private normalizeLegacyProfileMetadata(metadata: ProfileMetadata): ProfileMetadata {
+    const normalized: ProfileMetadata = { ...metadata };
+
+    if (normalized.context_mode !== 'shared') {
+      delete normalized.context_group;
+    } else if (!normalized.context_group || normalized.context_group.trim().length === 0) {
+      delete normalized.context_group;
+    }
+
+    return normalized;
+  }
+
+  private normalizeUnifiedAccountConfig(account: AccountConfig): AccountConfig {
+    const normalized: AccountConfig = { ...account };
+
+    if (normalized.context_mode !== 'shared') {
+      delete normalized.context_group;
+    } else if (!normalized.context_group || normalized.context_group.trim().length === 0) {
+      delete normalized.context_group;
+    }
+
+    return normalized;
   }
 
   /**
@@ -105,11 +134,13 @@ export class ProfileRegistry {
     }
 
     // v3.0 minimal schema: only essential fields
-    data.profiles[name] = {
+    data.profiles[name] = this.normalizeLegacyProfileMetadata({
       type: metadata.type || 'account',
       created: metadata.created || new Date().toISOString(),
       last_used: metadata.last_used || null,
-    };
+      context_mode: metadata.context_mode,
+      context_group: metadata.context_group,
+    });
 
     // Note: No longer auto-set as default
     // Users must explicitly run: ccs auth default <profile>
@@ -141,10 +172,10 @@ export class ProfileRegistry {
       throw new Error(`Profile not found: ${name}`);
     }
 
-    data.profiles[name] = {
+    data.profiles[name] = this.normalizeLegacyProfileMetadata({
       ...data.profiles[name],
       ...updates,
-    };
+    });
 
     this._write(data);
   }
@@ -242,15 +273,32 @@ export class ProfileRegistry {
   /**
    * Create account in unified config (config.yaml)
    */
-  createAccountUnified(name: string): void {
+  createAccountUnified(name: string, metadata: CreateMetadata = {}): void {
     const config = loadOrCreateUnifiedConfig();
     if (config.accounts[name]) {
       throw new Error(`Account already exists: ${name}`);
     }
-    config.accounts[name] = {
+    config.accounts[name] = this.normalizeUnifiedAccountConfig({
       created: new Date().toISOString(),
       last_used: null,
-    };
+      context_mode: metadata.context_mode,
+      context_group: metadata.context_group,
+    });
+    saveUnifiedConfig(config);
+  }
+
+  /**
+   * Update account metadata in unified config
+   */
+  updateAccountUnified(name: string, updates: Partial<AccountConfig>): void {
+    const config = loadOrCreateUnifiedConfig();
+    if (!config.accounts[name]) {
+      throw new Error(`Account not found: ${name}`);
+    }
+    config.accounts[name] = this.normalizeUnifiedAccountConfig({
+      ...config.accounts[name],
+      ...updates,
+    });
     saveUnifiedConfig(config);
   }
 
@@ -306,7 +354,7 @@ export class ProfileRegistry {
   /**
    * Get all accounts from unified config
    */
-  getAllAccountsUnified(): Record<string, { created: string; last_used: string | null }> {
+  getAllAccountsUnified(): Record<string, AccountConfig> {
     if (!isUnifiedMode()) return {};
     const config = loadOrCreateUnifiedConfig();
     return config.accounts;
@@ -330,6 +378,7 @@ export class ProfileRegistry {
       throw new Error(`Account not found: ${name}`);
     }
     config.accounts[name].last_used = new Date().toISOString();
+    config.accounts[name] = this.normalizeUnifiedAccountConfig(config.accounts[name]);
     saveUnifiedConfig(config);
   }
 
@@ -355,6 +404,8 @@ export class ProfileRegistry {
         type: 'account',
         created: account.created,
         last_used: account.last_used,
+        context_mode: account.context_mode,
+        context_group: account.context_group,
       };
     }
 

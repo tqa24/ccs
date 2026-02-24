@@ -59,10 +59,7 @@ describe('Config Generator', () => {
       assert(!configLine.includes('\\'), 'Should not contain backslashes');
 
       // Verify it's valid YAML format
-      assert.strictEqual(
-        configLine,
-        'auth-dir: "C:/Users/TestUser/.ccs/cliproxy/auth"'
-      );
+      assert.strictEqual(configLine, 'auth-dir: "C:/Users/TestUser/.ccs/cliproxy/auth"');
     });
 
     it('handles multiple consecutive backslashes', () => {
@@ -79,7 +76,10 @@ describe('Config Generator', () => {
       const complexPath = 'D:\\Projects\\ccs-2024\\test\\.ccs\\auth-tokens\\provider.json';
       const normalizedPath = complexPath.replace(/\\/g, '/');
 
-      assert.strictEqual(normalizedPath, 'D:/Projects/ccs-2024/test/.ccs/auth-tokens/provider.json');
+      assert.strictEqual(
+        normalizedPath,
+        'D:/Projects/ccs-2024/test/.ccs/auth-tokens/provider.json'
+      );
       assert(normalizedPath.includes('Projects'), 'Should preserve directory names');
       assert(normalizedPath.includes('auth-tokens'), 'Should preserve hyphens');
       assert(normalizedPath.includes('provider.json'), 'Should preserve filenames');
@@ -348,7 +348,8 @@ auth-dir: "/test"
     });
 
     it('handles tabs in indentation', () => {
-      const configContent = 'api-keys:\n\t- "ccs-internal-managed"\n\t- "user-key-with-tab"\n\nauth-dir: "/test"';
+      const configContent =
+        'api-keys:\n\t- "ccs-internal-managed"\n\t- "user-key-with-tab"\n\nauth-dir: "/test"';
 
       const userKeys = parseUserApiKeys(configContent);
 
@@ -544,11 +545,7 @@ auth-dir: "${cliproxyDir.replace(/\\/g, '/')}/auth"
 
       testPaths.forEach(({ input, expected }) => {
         const normalized = input.replace(/\\/g, '/');
-        assert.strictEqual(
-          normalized,
-          expected,
-          `Should normalize "${input}" to "${expected}"`
-        );
+        assert.strictEqual(normalized, expected, `Should normalize "${input}" to "${expected}"`);
       });
     });
   });
@@ -588,6 +585,7 @@ auth-dir: "${cliproxyDir.replace(/\\/g, '/')}/auth"
 
       // Claude aliases should have fork: true
       assert(config.includes('claude-sonnet-4-5'), 'Should include Claude sonnet model');
+      assert(config.includes('claude-sonnet-4-6'), 'Should include Claude Sonnet 4.6 model');
       assert(config.includes('fork: true'), 'Should include fork: true for Claude aliases');
 
       // Verify fork: true appears after each Claude alias entry
@@ -650,8 +648,14 @@ auth-dir: "${cliproxyDir.replace(/\\/g, '/')}/auth"
       const cliproxyDir = path.join(testDir, '.ccs', 'cliproxy');
       const config = fs.readFileSync(path.join(cliproxyDir, 'config.yaml'), 'utf-8');
 
-      assert(config.includes('alias: gemini-3.1-pro-preview'), 'Should include dotted version alias');
-      assert(config.includes('alias: gemini-3-1-pro-preview'), 'Should include hyphen version alias');
+      assert(
+        config.includes('alias: gemini-3.1-pro-preview'),
+        'Should include dotted version alias'
+      );
+      assert(
+        config.includes('alias: gemini-3-1-pro-preview'),
+        'Should include hyphen version alias'
+      );
       assert(
         config.includes('alias: gemini-3-1-pro-preview-customtools'),
         'Should include hyphen customtools alias'
