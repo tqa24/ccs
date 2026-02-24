@@ -1,3 +1,13 @@
+## [7.50.0](https://github.com/kaitranntt/ccs/compare/v7.49.1...v7.50.0) (2026-02-24)
+
+### Features
+
+* **auth:** add opt-in shared context groups across accounts ([4fed74c](https://github.com/kaitranntt/ccs/commit/4fed74c64b302ea70772894d52c6f3fad1e60c67))
+
+### Bug Fixes
+
+* **cliproxy:** prevent agy model reset and add sonnet 4.6 models ([bebb758](https://github.com/kaitranntt/ccs/commit/bebb7582cf4e168628e171b48954bd1d982a129e))
+
 ## [7.49.1](https://github.com/kaitranntt/ccs/compare/v7.49.0...v7.49.1) (2026-02-24)
 
 ### Bug Fixes
