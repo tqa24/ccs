@@ -38,7 +38,7 @@ const CONTEXT_GROUP_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
  * Normalize context group names so paths and config stay consistent.
  */
 export function normalizeContextGroupName(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
 /**

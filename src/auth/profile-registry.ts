@@ -8,6 +8,7 @@ import {
 } from '../config/unified-config-loader';
 import type { AccountConfig } from '../config/unified-config-types';
 import { getCcsDir } from '../utils/config-manager';
+import { isValidContextGroupName, normalizeContextGroupName } from './account-context';
 
 /**
  * Profile Registry (Simplified)
@@ -51,13 +52,31 @@ export class ProfileRegistry {
     this.profilesPath = path.join(getCcsDir(), 'profiles.json');
   }
 
+  private normalizeContextGroupValue(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const normalized = normalizeContextGroupName(value);
+    if (normalized.length === 0 || !isValidContextGroupName(normalized)) {
+      return undefined;
+    }
+
+    return normalized;
+  }
+
   private normalizeLegacyProfileMetadata(metadata: ProfileMetadata): ProfileMetadata {
     const normalized: ProfileMetadata = { ...metadata };
 
     if (normalized.context_mode !== 'shared') {
       delete normalized.context_group;
-    } else if (!normalized.context_group || normalized.context_group.trim().length === 0) {
-      delete normalized.context_group;
+    } else {
+      const normalizedGroup = this.normalizeContextGroupValue(normalized.context_group);
+      if (normalizedGroup) {
+        normalized.context_group = normalizedGroup;
+      } else {
+        delete normalized.context_group;
+      }
     }
 
     return normalized;
@@ -68,8 +87,13 @@ export class ProfileRegistry {
 
     if (normalized.context_mode !== 'shared') {
       delete normalized.context_group;
-    } else if (!normalized.context_group || normalized.context_group.trim().length === 0) {
-      delete normalized.context_group;
+    } else {
+      const normalizedGroup = this.normalizeContextGroupValue(normalized.context_group);
+      if (normalizedGroup) {
+        normalized.context_group = normalizedGroup;
+      } else {
+        delete normalized.context_group;
+      }
     }
 
     return normalized;

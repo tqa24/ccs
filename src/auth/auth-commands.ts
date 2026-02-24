@@ -14,6 +14,7 @@
 import ProfileRegistry from './profile-registry';
 import { InstanceManager } from '../management/instance-manager';
 import { initUI, header, subheader, color, dim, warn, fail } from '../utils/ui';
+import { MAX_CONTEXT_GROUP_LENGTH } from './account-context';
 import packageJson from '../../package.json';
 
 // Import command handlers from modular structure
@@ -126,6 +127,10 @@ class AuthCommands {
     );
     console.log(
       `  Account profiles stay isolated unless you opt in with ${color('--share-context', 'command')}.`
+    );
+    console.log(`  Shared context groups are normalized (trim + lowercase) and spaces become "-".`);
+    console.log(
+      `  ${color('context_group', 'path')} must be non-empty and <= ${MAX_CONTEXT_GROUP_LENGTH} chars in shared mode.`
     );
     console.log('');
   }

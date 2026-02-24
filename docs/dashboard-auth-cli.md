@@ -1,6 +1,6 @@
 # Dashboard Authentication CLI
 
-Last Updated: 2026-02-04
+Last Updated: 2026-02-24
 
 CLI commands for managing CCS dashboard authentication.
 
@@ -9,6 +9,35 @@ CLI commands for managing CCS dashboard authentication.
 The CCS dashboard (`ccs config`) can be protected with username/password authentication. This is useful when running the dashboard on a network-accessible machine.
 
 Authentication is **disabled by default** for backward compatibility. Use the CLI to configure and enable it.
+
+## Account Context Modes (Related Feature)
+
+Dashboard auth and account context metadata are separate:
+
+- `dashboard_auth`: protects dashboard access with username/password
+- `accounts.<name>.context_mode/context_group`: controls isolated vs shared account context
+
+Account context is isolation-first:
+
+| Mode | Default | Requirement |
+|------|---------|-------------|
+| `isolated` | Yes | No `context_group` required |
+| `shared` | No (opt-in) | Valid non-empty `context_group` |
+
+`context_group` normalization and validation:
+
+- trim + lowercase + collapse internal whitespace to `-`
+- allowed characters: lowercase letters, numbers, `_`, `-`
+- must start with a letter
+- max length: 64
+- shared mode requires non-empty value after normalization
+
+`PUT /api/config` behavior for account context:
+
+- rejects invalid unified payloads
+- rejects explicit `context_mode: shared` with invalid/empty `context_group`
+- normalizes valid shared `context_group` before save
+- rejects `context_group` when mode is not `shared`
 
 ## Commands
 
@@ -161,6 +190,10 @@ export CCS_DASHBOARD_PASSWORD_HASH='$2b$10$...'
 ### Session expired immediately
 
 Check `session_timeout_hours` in config. Default is 24 hours.
+
+### "Invalid ... context_group ..."
+
+This error comes from `PUT /api/config` when an account explicitly sets shared mode with an invalid group. Use a canonical group value (for example: `team-alpha`).
 
 ## See Also
 

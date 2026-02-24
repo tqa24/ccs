@@ -206,24 +206,23 @@ router.delete('/:name', (req: Request, res: Response): void => {
       return;
     }
 
-    // Delete from appropriate config (unified and/or legacy)
-    let deleted = false;
-    if (isUnifiedMode() && registry.hasAccountUnified(name)) {
-      registry.removeAccountUnified(name);
-      deleted = true;
-    }
-    if (registry.hasProfile(name)) {
-      registry.deleteProfile(name);
-      deleted = true;
-    }
+    const existsUnified = isUnifiedMode() && registry.hasAccountUnified(name);
+    const existsLegacy = registry.hasProfile(name);
 
-    if (!deleted) {
+    if (!existsUnified && !existsLegacy) {
       res.status(404).json({ error: `Account not found: ${name}` });
       return;
     }
 
-    // Keep API delete behavior aligned with CLI remove command.
+    // Match CLI remove ordering: delete instance first, metadata second.
     instanceMgr.deleteInstance(name);
+
+    if (existsUnified) {
+      registry.removeAccountUnified(name);
+    }
+    if (existsLegacy) {
+      registry.deleteProfile(name);
+    }
 
     res.json({ success: true, deleted: name });
   } catch (error) {

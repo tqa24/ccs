@@ -40,4 +40,15 @@ describe('account context helpers', () => {
     expect(resolved.mode).toBe('shared');
     expect(resolved.group).toBe('sprint-a');
   });
+
+  it('normalizes whitespace in explicit shared context group names', () => {
+    const result = resolveCreateAccountContext({
+      shareContext: false,
+      contextGroup: ' Team Alpha ',
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.policy.mode).toBe('shared');
+    expect(result.policy.group).toBe('team-alpha');
+  });
 });

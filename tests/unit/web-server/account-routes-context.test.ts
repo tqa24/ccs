@@ -5,11 +5,17 @@ import * as os from 'os';
 import * as path from 'path';
 import type { Server } from 'http';
 import accountRoutes from '../../../src/web-server/routes/account-routes';
+import ProfileRegistry from '../../../src/auth/profile-registry';
+import { InstanceManager } from '../../../src/management/instance-manager';
 
 async function getJson<T>(baseUrl: string, routePath: string): Promise<T> {
   const response = await fetch(`${baseUrl}${routePath}`);
   expect(response.status).toBe(200);
   return (await response.json()) as T;
+}
+
+async function deletePath(baseUrl: string, routePath: string): Promise<Response> {
+  return fetch(`${baseUrl}${routePath}`, { method: 'DELETE' });
 }
 
 describe('web-server account-routes context normalization', () => {
@@ -129,5 +135,42 @@ describe('web-server account-routes context normalization', () => {
     expect(work).toBeTruthy();
     expect(work?.context_mode).toBe('shared');
     expect(work?.context_group).toBe('default');
+  });
+
+  it('does not delete metadata when instance deletion fails', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 8',
+        'accounts:',
+        '  work:',
+        '    created: "2026-02-01T00:00:00.000Z"',
+        '    last_used: null',
+        '    context_mode: shared',
+        '    context_group: sprint-a',
+        'profiles: {}',
+        'cliproxy:',
+        '  oauth_accounts: {}',
+        '  providers: {}',
+        '  variants: {}',
+      ].join('\n'),
+      'utf8'
+    );
+    const registry = new ProfileRegistry();
+
+    const originalDeleteInstance = InstanceManager.prototype.deleteInstance;
+    InstanceManager.prototype.deleteInstance = () => {
+      throw new Error('simulated instance delete failure');
+    };
+
+    try {
+      const response = await deletePath(baseUrl, '/api/accounts/work');
+      expect(response.status).toBe(500);
+      expect(registry.hasAccountUnified('work')).toBe(true);
+    } finally {
+      InstanceManager.prototype.deleteInstance = originalDeleteInstance;
+    }
   });
 });

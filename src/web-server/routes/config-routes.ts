@@ -22,7 +22,7 @@ import { isValidContextGroupName, normalizeContextGroupName } from '../../auth/a
 
 const router = Router();
 
-function validateAccountContextMetadata(config: unknown): string | null {
+function validateAndNormalizeAccountContextMetadata(config: unknown): string | null {
   if (typeof config !== 'object' || config === null) {
     return 'Invalid config payload';
   }
@@ -63,6 +63,15 @@ function validateAccountContextMetadata(config: unknown): string | null {
       if (!isValidContextGroupName(normalizedGroup)) {
         return `Invalid config.accounts.${accountName}.context_group`;
       }
+      account.context_group = normalizedGroup;
+    }
+
+    if (mode === 'shared' && typeof group === 'string' && group.trim().length === 0) {
+      return `Invalid config.accounts.${accountName}.context_group: shared mode requires a non-empty value`;
+    }
+
+    if (mode === 'isolated' && group !== undefined) {
+      delete account.context_group;
     }
   }
 
@@ -130,7 +139,7 @@ router.put('/', (req: Request, res: Response): void => {
     return;
   }
 
-  const accountContextError = validateAccountContextMetadata(config);
+  const accountContextError = validateAndNormalizeAccountContextMetadata(config);
   if (accountContextError) {
     res.status(400).json({ error: accountContextError });
     return;
@@ -150,6 +159,15 @@ router.put('/', (req: Request, res: Response): void => {
 router.post('/migrate', async (req: Request, res: Response): Promise<void> => {
   try {
     const dryRun = req.query.dryRun === 'true';
+    if (!needsMigration()) {
+      res.json({
+        success: true,
+        migratedFiles: [],
+        warnings: [],
+        alreadyMigrated: true,
+      });
+      return;
+    }
     const result = await migrate(dryRun);
     res.json(result);
   } catch (error) {

@@ -20,50 +20,10 @@ import {
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
 import { CommandContext, parseArgs } from './types';
+import { stripAmbientProviderCredentials } from './create-command-env';
 
 function sanitizeProfileNameForInstance(name: string): string {
   return name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
-}
-
-const AMBIENT_PROVIDER_PREFIXES = [
-  'ANTHROPIC_',
-  'OPENAI_',
-  'GOOGLE_',
-  'GEMINI_',
-  'MINIMAX_',
-  'QWEN_',
-  'DEEPSEEK_',
-  'KIMI_',
-  'AZURE_',
-  'OLLAMA_',
-];
-const AMBIENT_PROVIDER_EXACT_KEYS = new Set([
-  'OPENROUTER_API_KEY',
-  'OPENROUTER_KEY',
-  'XAI_API_KEY',
-  'MISTRAL_API_KEY',
-  'COHERE_API_KEY',
-]);
-const AMBIENT_PROVIDER_SUFFIXES = ['_API_KEY', '_AUTH_TOKEN', '_ACCESS_TOKEN', '_SECRET_KEY'];
-
-function stripAmbientProviderCredentials(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const sanitized: NodeJS.ProcessEnv = { ...env };
-
-  for (const envKey of Object.keys(sanitized)) {
-    if (envKey === 'CLAUDE_CONFIG_DIR') {
-      continue;
-    }
-
-    if (
-      AMBIENT_PROVIDER_PREFIXES.some((prefix) => envKey.startsWith(prefix)) ||
-      AMBIENT_PROVIDER_EXACT_KEYS.has(envKey) ||
-      AMBIENT_PROVIDER_SUFFIXES.some((suffix) => envKey.endsWith(suffix))
-    ) {
-      delete sanitized[envKey];
-    }
-  }
-
-  return sanitized;
 }
 
 /**
@@ -74,8 +34,13 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
   const { profileName, force, shareContext, contextGroup, unknownFlags } = parseArgs(args);
 
   if (unknownFlags && unknownFlags.length > 0) {
-    const unknownList = unknownFlags.join(', ');
+    const unknownList = unknownFlags.map((flag) => `"${flag}"`).join(', ');
     console.log(fail(`Unknown option(s): ${unknownList}`));
+    console.log('');
+    console.log(
+      `Usage: ${color('ccs auth create <profile> [--force] [--share-context] [--context-group <name>]', 'command')}`
+    );
+    console.log(`Help:  ${color('ccs auth --help', 'command')}`);
     console.log('');
     exitWithError(`Unknown option(s): ${unknownList}`, ExitCode.PROFILE_ERROR);
   }
@@ -135,15 +100,17 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
   const contextPolicy = resolvedContext.policy;
   const contextMetadata = policyToAccountContextMetadata(contextPolicy);
   const useUnifiedConfig = isUnifiedMode();
-  const createdProfile = useUnifiedConfig ? !existsUnified : !existsLegacy;
-  const previousLegacyProfile: ProfileMetadata | undefined =
-    !useUnifiedConfig && existsLegacy ? ctx.registry.getProfile(profileName) : undefined;
-  const previousUnifiedProfile =
-    useUnifiedConfig && existsUnified
-      ? ctx.registry.getAllAccountsUnified()[profileName]
-      : undefined;
+  const profileExistedBeforeCreate = existsLegacy || existsUnified;
+  const createdUnifiedProfile = useUnifiedConfig && !existsUnified;
+  const createdLegacyProfile = !useUnifiedConfig && !existsLegacy;
+  const previousLegacyProfile: ProfileMetadata | undefined = existsLegacy
+    ? ctx.registry.getProfile(profileName)
+    : undefined;
+  const previousUnifiedProfile = existsUnified
+    ? ctx.registry.getAllAccountsUnified()[profileName]
+    : undefined;
   const previousContextPolicy =
-    !createdProfile && (previousUnifiedProfile || previousLegacyProfile)
+    profileExistedBeforeCreate && (previousUnifiedProfile || previousLegacyProfile)
       ? resolveAccountContextPolicy(previousUnifiedProfile || previousLegacyProfile)
       : undefined;
 
@@ -160,22 +127,21 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
   const rollbackMetadata = (): void => {
     try {
       if (useUnifiedConfig) {
-        if (createdProfile) {
+        if (createdUnifiedProfile) {
           if (ctx.registry.hasAccountUnified(profileName)) {
             ctx.registry.removeAccountUnified(profileName);
           }
         } else if (previousUnifiedProfile) {
           ctx.registry.updateAccountUnified(profileName, previousUnifiedProfile);
         }
-        return;
-      }
-
-      if (createdProfile) {
-        if (ctx.registry.hasProfile(profileName)) {
-          ctx.registry.deleteProfile(profileName);
+      } else {
+        if (createdLegacyProfile) {
+          if (ctx.registry.hasProfile(profileName)) {
+            ctx.registry.deleteProfile(profileName);
+          }
+        } else if (previousLegacyProfile) {
+          ctx.registry.updateProfile(profileName, previousLegacyProfile);
         }
-      } else if (previousLegacyProfile) {
-        ctx.registry.updateProfile(profileName, previousLegacyProfile);
       }
     } catch {
       // Best-effort rollback to avoid leaving stale accounts after failed login.
@@ -190,7 +156,7 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
 
     rollbackMetadata();
 
-    if (createdProfile) {
+    if (!profileExistedBeforeCreate) {
       try {
         ctx.instanceMgr.deleteInstance(profileName);
       } catch {
