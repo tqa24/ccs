@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import SharedManager from './shared-manager';
+import { AccountContextPolicy, DEFAULT_ACCOUNT_CONTEXT_MODE } from '../auth/account-context';
 import { getCcsDir } from '../utils/config-manager';
 
 /**
@@ -26,7 +27,10 @@ class InstanceManager {
   /**
    * Ensure instance exists for profile (lazy init only)
    */
-  async ensureInstance(profileName: string): Promise<string> {
+  async ensureInstance(
+    profileName: string,
+    contextPolicy: AccountContextPolicy = { mode: DEFAULT_ACCOUNT_CONTEXT_MODE }
+  ): Promise<string> {
     const instancePath = this.getInstancePath(profileName);
 
     // Lazy initialization
@@ -37,8 +41,8 @@ class InstanceManager {
     // Validate structure (auto-fix missing dirs)
     this.validateInstance(instancePath);
 
-    // Keep project memory shared across instances.
-    await this.sharedManager.syncProjectMemories(instancePath);
+    // Apply context policy (isolated by default, optional shared group).
+    await this.sharedManager.syncProjectContext(instancePath, contextPolicy);
 
     return instancePath;
   }

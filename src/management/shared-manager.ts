@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 import { ok, info, warn } from '../utils/ui';
+import { AccountContextPolicy, DEFAULT_ACCOUNT_CONTEXT_GROUP } from '../auth/account-context';
 import { getCcsDir } from '../utils/config-manager';
 
 interface SharedItem {
@@ -199,6 +200,102 @@ class SharedManager {
 
     // Normalize plugin registry paths after linking
     this.normalizePluginRegistryPaths();
+  }
+
+  /**
+   * Sync project workspace context based on account policy.
+   *
+   * - isolated (default): each profile keeps its own ./projects directory.
+   * - shared: profile ./projects becomes symlink to shared context group root.
+   */
+  async syncProjectContext(instancePath: string, policy: AccountContextPolicy): Promise<void> {
+    const projectsPath = path.join(instancePath, 'projects');
+    const instanceName = path.basename(instancePath);
+    const mode = policy.mode === 'shared' ? 'shared' : 'isolated';
+
+    if (mode === 'shared') {
+      const contextGroup = policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP;
+      const sharedProjectsPath = path.join(
+        this.sharedDir,
+        'context-groups',
+        contextGroup,
+        'projects'
+      );
+
+      await this.ensureDirectory(sharedProjectsPath);
+      await this.ensureDirectory(path.dirname(projectsPath));
+
+      const currentStats = await this.getLstat(projectsPath);
+      if (!currentStats) {
+        await this.linkDirectoryWithFallback(sharedProjectsPath, projectsPath);
+        return;
+      }
+
+      if (currentStats.isSymbolicLink()) {
+        if (await this.isSymlinkTarget(projectsPath, sharedProjectsPath)) {
+          return;
+        }
+
+        const currentTarget = await this.resolveSymlinkTargetPath(projectsPath);
+        if (
+          currentTarget &&
+          path.resolve(currentTarget) !== path.resolve(sharedProjectsPath) &&
+          (await this.pathExists(currentTarget))
+        ) {
+          await this.mergeDirectoryWithConflictCopies(
+            currentTarget,
+            sharedProjectsPath,
+            instanceName
+          );
+        }
+
+        await fs.promises.unlink(projectsPath);
+        await this.linkDirectoryWithFallback(sharedProjectsPath, projectsPath);
+        return;
+      }
+
+      if (currentStats.isDirectory()) {
+        await this.detachLegacySharedMemoryLinks(projectsPath, instanceName);
+        await this.mergeDirectoryWithConflictCopies(projectsPath, sharedProjectsPath, instanceName);
+        await fs.promises.rm(projectsPath, { recursive: true, force: true });
+        await this.linkDirectoryWithFallback(sharedProjectsPath, projectsPath);
+        return;
+      }
+
+      await fs.promises.rm(projectsPath, { force: true });
+      await this.linkDirectoryWithFallback(sharedProjectsPath, projectsPath);
+      return;
+    }
+
+    const currentStats = await this.getLstat(projectsPath);
+    if (!currentStats) {
+      await this.ensureDirectory(projectsPath);
+      return;
+    }
+
+    if (currentStats.isDirectory()) {
+      await this.detachLegacySharedMemoryLinks(projectsPath, instanceName);
+      return;
+    }
+
+    if (currentStats.isSymbolicLink()) {
+      const currentTarget = await this.resolveSymlinkTargetPath(projectsPath);
+      await fs.promises.unlink(projectsPath);
+      await this.ensureDirectory(projectsPath);
+
+      if (
+        currentTarget &&
+        path.resolve(currentTarget) !== path.resolve(projectsPath) &&
+        (await this.pathExists(currentTarget))
+      ) {
+        await this.mergeDirectoryWithConflictCopies(currentTarget, projectsPath, instanceName);
+      }
+
+      return;
+    }
+
+    await fs.promises.rm(projectsPath, { force: true });
+    await this.ensureDirectory(projectsPath);
   }
 
   /**
@@ -566,6 +663,88 @@ class SharedManager {
       return resolvedCurrentTarget === resolvedExpectedTarget;
     } catch (_err) {
       return false;
+    }
+  }
+
+  /**
+   * Resolve symlink target to absolute path.
+   */
+  private async resolveSymlinkTargetPath(linkPath: string): Promise<string | null> {
+    try {
+      const currentTarget = await fs.promises.readlink(linkPath);
+      return path.resolve(path.dirname(linkPath), currentTarget);
+    } catch (_err) {
+      return null;
+    }
+  }
+
+  /**
+   * Link directory with Windows fallback to recursive copy.
+   */
+  private async linkDirectoryWithFallback(targetPath: string, linkPath: string): Promise<void> {
+    const symlinkType: 'dir' | 'junction' = process.platform === 'win32' ? 'junction' : 'dir';
+    const linkTarget = process.platform === 'win32' ? path.resolve(targetPath) : targetPath;
+
+    try {
+      await fs.promises.symlink(linkTarget, linkPath, symlinkType);
+    } catch (_err) {
+      if (process.platform === 'win32') {
+        this.copyDirectoryFallback(targetPath, linkPath);
+        console.log(
+          warn(`Symlink failed for context projects, copied instead (enable Developer Mode)`)
+        );
+        return;
+      }
+
+      throw _err;
+    }
+  }
+
+  /**
+   * Migrate legacy per-project memory symlinks that point to ~/.ccs/shared/memory.
+   * This preserves data while restoring true profile isolation.
+   */
+  private async detachLegacySharedMemoryLinks(
+    projectsPath: string,
+    instanceName: string
+  ): Promise<void> {
+    const sharedMemoryRoot = path.resolve(path.join(this.sharedDir, 'memory'));
+
+    let projectEntries: fs.Dirent[] = [];
+    try {
+      projectEntries = await fs.promises.readdir(projectsPath, { withFileTypes: true });
+    } catch (_err) {
+      return;
+    }
+
+    for (const entry of projectEntries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+
+      const projectPath = path.join(projectsPath, entry.name);
+      const memoryPath = path.join(projectPath, 'memory');
+      const memoryStats = await this.getLstat(memoryPath);
+
+      if (!memoryStats?.isSymbolicLink()) {
+        continue;
+      }
+
+      const memoryTarget = await this.resolveSymlinkTargetPath(memoryPath);
+      if (!memoryTarget) {
+        continue;
+      }
+
+      if (!path.resolve(memoryTarget).startsWith(sharedMemoryRoot)) {
+        continue;
+      }
+
+      await fs.promises.unlink(memoryPath);
+      await this.ensureDirectory(memoryPath);
+
+      if (await this.pathExists(memoryTarget)) {
+        await this.mergeDirectoryWithConflictCopies(memoryTarget, memoryPath, instanceName);
+      }
     }
   }
 

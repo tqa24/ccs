@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { initUI, header, color, fail, table } from '../../utils/ui';
+import { resolveAccountContextPolicy, formatAccountContextPolicy } from '../account-context';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
 import { CommandContext, ProfileOutput, parseArgs } from './types';
@@ -35,6 +36,7 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
     const defaultProfile = ctx.registry.getDefaultResolved();
     const isDefault = profileName === defaultProfile;
     const instancePath = ctx.instanceMgr.getInstancePath(profileName);
+    const contextPolicy = resolveAccountContextPolicy(profile);
 
     // Count sessions
     let sessionCount = 0;
@@ -56,6 +58,8 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
         is_default: isDefault,
         created: profile.created,
         last_used: profile.last_used || null,
+        context_mode: contextPolicy.mode,
+        context_group: contextPolicy.group || null,
         instance_path: instancePath,
         session_count: sessionCount,
       };
@@ -74,6 +78,7 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
       ['Instance', instancePath],
       ['Created', new Date(profile.created).toLocaleString()],
       ['Last Used', profile.last_used ? new Date(profile.last_used).toLocaleString() : 'Never'],
+      ['Context', formatAccountContextPolicy(contextPolicy)],
       ['Sessions', `${sessionCount}`],
     ];
 

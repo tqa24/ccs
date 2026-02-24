@@ -150,7 +150,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['Run multiple Claude accounts concurrently'],
     [
       ['ccs auth --help', 'Show account management commands'],
-      ['ccs auth create <name>', 'Create new account profile'],
+      ['ccs auth create <name>', 'Create account profile (supports context sharing flags)'],
       ['ccs auth list', 'List all account profiles'],
       ['ccs auth default <name>', 'Set default profile'],
       ['ccs auth reset-default', 'Restore original CCS default'],

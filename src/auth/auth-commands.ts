@@ -79,6 +79,12 @@ class AuthCommands {
     console.log(`  ${dim('# Create & login to work profile')}`);
     console.log(`  ${color('ccs auth create work', 'command')}`);
     console.log('');
+    console.log(`  ${dim('# Create account with shared project context (default group)')}`);
+    console.log(`  ${color('ccs auth create work2 --share-context', 'command')}`);
+    console.log('');
+    console.log(`  ${dim('# Share context only within a specific group')}`);
+    console.log(`  ${color('ccs auth create backup --context-group sprint-a', 'command')}`);
+    console.log('');
     console.log(`  ${dim('# Set work as default')}`);
     console.log(`  ${color('ccs auth default work', 'command')}`);
     console.log('');
@@ -96,6 +102,12 @@ class AuthCommands {
       `  ${color('--force', 'command')}                   Allow overwriting existing profile (create)`
     );
     console.log(
+      `  ${color('--share-context', 'command')}           Share project workspace context across accounts`
+    );
+    console.log(
+      `  ${color('--context-group <name>', 'command')}    Share context only within a named group`
+    );
+    console.log(
       `  ${color('--yes, -y', 'command')}                 Skip confirmation prompts (remove)`
     );
     console.log(
@@ -111,6 +123,9 @@ class AuthCommands {
     );
     console.log(
       `  Use ${color('ccs auth default <profile>', 'command')} to change the default profile.`
+    );
+    console.log(
+      `  Account profiles stay isolated unless you opt in with ${color('--share-context', 'command')}.`
     );
     console.log('');
   }

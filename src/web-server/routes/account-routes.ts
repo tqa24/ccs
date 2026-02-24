@@ -53,6 +53,8 @@ router.get('/', (_req: Request, res: Response): void => {
         type: string;
         created: string;
         last_used: string | null;
+        context_mode?: 'isolated' | 'shared';
+        context_group?: string;
         provider?: string;
         displayName?: string;
       }
@@ -64,6 +66,8 @@ router.get('/', (_req: Request, res: Response): void => {
         type: meta.type || 'account',
         created: meta.created,
         last_used: meta.last_used || null,
+        context_mode: meta.context_mode,
+        context_group: meta.context_group,
       };
     }
 
@@ -73,6 +77,8 @@ router.get('/', (_req: Request, res: Response): void => {
         type: 'account',
         created: account.created,
         last_used: account.last_used,
+        context_mode: account.context_mode,
+        context_group: account.context_group,
       };
     }
 

@@ -589,6 +589,8 @@ async function main(): Promise<void> {
   const InstanceManager = InstanceManagerModule.default;
   const ProfileRegistryModule = await import('./auth/profile-registry');
   const ProfileRegistry = ProfileRegistryModule.default;
+  const AccountContextModule = await import('./auth/account-context');
+  const { resolveAccountContextPolicy, isAccountContextMetadata } = AccountContextModule;
 
   const detector = new ProfileDetector();
 
@@ -882,9 +884,13 @@ async function main(): Promise<void> {
       // All platforms: Use instance isolation with CLAUDE_CONFIG_DIR
       const registry = new ProfileRegistry();
       const instanceMgr = new InstanceManager();
+      const accountMetadata = isAccountContextMetadata(profileInfo.profile)
+        ? profileInfo.profile
+        : undefined;
+      const contextPolicy = resolveAccountContextPolicy(accountMetadata);
 
       // Ensure instance exists (lazy init if needed)
-      const instancePath = await instanceMgr.ensureInstance(profileInfo.name);
+      const instancePath = await instanceMgr.ensureInstance(profileInfo.name, contextPolicy);
 
       // Update last_used timestamp (check unified config first, fallback to legacy)
       if (registry.hasAccountUnified(profileInfo.name)) {

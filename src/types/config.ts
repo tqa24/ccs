@@ -87,6 +87,10 @@ export interface ProfileMetadata {
   type?: string; // Profile type (e.g., 'account')
   created: string; // Creation time
   last_used?: string | null; // Last usage time
+  /** Context mode for project workspace data */
+  context_mode?: 'isolated' | 'shared';
+  /** Context-sharing group when context_mode='shared' */
+  context_group?: string;
 }
 
 export interface ProfilesRegistry {
