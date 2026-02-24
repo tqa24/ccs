@@ -17,10 +17,12 @@ import { getCcsDir } from '../utils/config-manager';
  */
 class InstanceManager {
   private readonly instancesDir: string;
+  private readonly locksDir: string;
   private readonly sharedManager: SharedManager;
 
   constructor() {
     this.instancesDir = path.join(getCcsDir(), 'instances');
+    this.locksDir = path.join(this.instancesDir, '.locks');
     this.sharedManager = new SharedManager();
   }
 
@@ -33,16 +35,19 @@ class InstanceManager {
   ): Promise<string> {
     const instancePath = this.getInstancePath(profileName);
 
-    // Lazy initialization
-    if (!fs.existsSync(instancePath)) {
-      this.initializeInstance(profileName, instancePath);
-    }
+    // Serialize context sync operations per profile across processes.
+    await this.withContextSyncLock(profileName, async () => {
+      // Lazy initialization
+      if (!fs.existsSync(instancePath)) {
+        this.initializeInstance(profileName, instancePath);
+      }
 
-    // Validate structure (auto-fix missing dirs)
-    this.validateInstance(instancePath);
+      // Validate structure (auto-fix missing dirs)
+      this.validateInstance(instancePath);
 
-    // Apply context policy (isolated by default, optional shared group).
-    await this.sharedManager.syncProjectContext(instancePath, contextPolicy);
+      // Apply context policy (isolated by default, optional shared group).
+      await this.sharedManager.syncProjectContext(instancePath, contextPolicy);
+    });
 
     return instancePath;
   }
@@ -194,6 +199,64 @@ class InstanceManager {
   private sanitizeName(name: string): string {
     // Replace unsafe characters with dash
     return name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+  }
+
+  private getContextSyncLockPath(profileName: string): string {
+    const safeName = this.sanitizeName(profileName);
+    return path.join(this.locksDir, `${safeName}.lock`);
+  }
+
+  private async withContextSyncLock<T>(
+    profileName: string,
+    callback: () => Promise<T>
+  ): Promise<T> {
+    const lockPath = this.getContextSyncLockPath(profileName);
+    const retryDelayMs = 50;
+    const timeoutMs = 5000;
+    const staleLockMs = 30000;
+    const start = Date.now();
+
+    fs.mkdirSync(this.locksDir, { recursive: true, mode: 0o700 });
+
+    while (true) {
+      try {
+        const fd = fs.openSync(lockPath, 'wx', 0o600);
+        fs.writeFileSync(fd, `${process.pid}`);
+        fs.closeSync(fd);
+        break;
+      } catch (error) {
+        const err = error as NodeJS.ErrnoException;
+        if (err.code !== 'EEXIST') {
+          throw error;
+        }
+
+        try {
+          const lockStats = fs.statSync(lockPath);
+          if (Date.now() - lockStats.mtimeMs > staleLockMs) {
+            fs.unlinkSync(lockPath);
+            continue;
+          }
+        } catch {
+          // Best-effort stale lock cleanup.
+        }
+
+        if (Date.now() - start > timeoutMs) {
+          throw new Error(`Timed out waiting for profile context lock: ${profileName}`);
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+      }
+    }
+
+    try {
+      return await callback();
+    } finally {
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {
+        // Best-effort cleanup.
+      }
+    }
   }
 }
 

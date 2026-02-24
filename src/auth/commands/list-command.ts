@@ -30,6 +30,8 @@ export async function handleList(ctx: CommandContext, args: string[]): Promise<v
         type: 'account',
         created: account.created,
         last_used: account.last_used,
+        context_mode: account.context_mode,
+        context_group: account.context_group,
       };
     }
 

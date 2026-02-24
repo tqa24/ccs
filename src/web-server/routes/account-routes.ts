@@ -7,6 +7,7 @@
 
 import { Router, Request, Response } from 'express';
 import ProfileRegistry from '../../auth/profile-registry';
+import InstanceManager from '../../management/instance-manager';
 import { isUnifiedMode } from '../../config/unified-config-loader';
 import {
   getAllAccountsSummary,
@@ -21,17 +22,23 @@ import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
 
 const router = Router();
 const registry = new ProfileRegistry();
+const instanceMgr = new InstanceManager();
 
 /** Parse CLIProxy account key format: "provider:accountId" */
 function parseCliproxyKey(key: string): { provider: CLIProxyProvider; accountId: string } | null {
-  const colonIndex = key.indexOf(':');
+  const normalizedKey = key.startsWith('cliproxy:') ? key.slice('cliproxy:'.length) : key;
+  const colonIndex = normalizedKey.indexOf(':');
   if (colonIndex === -1) return null;
 
-  const provider = key.slice(0, colonIndex);
-  const accountId = key.slice(colonIndex + 1);
+  const provider = normalizedKey.slice(0, colonIndex);
+  const accountId = normalizedKey.slice(colonIndex + 1);
 
   if (!isCLIProxyProvider(provider) || !accountId) return null;
   return { provider, accountId };
+}
+
+function hasAuthAccount(name: string): boolean {
+  return registry.hasAccountUnified(name) || registry.hasProfile(name);
 }
 
 /**
@@ -91,7 +98,8 @@ router.get('/', (_req: Request, res: Response): void => {
         }
         // Use unique ID for key to prevent collisions between accounts with same nickname/email
         const displayName = acct.nickname || acct.email || acct.id;
-        const key = `${provider}:${acct.id}`;
+        const rawKey = `${provider}:${acct.id}`;
+        const key = merged[rawKey] ? `cliproxy:${rawKey}` : rawKey;
         merged[key] = {
           type: 'cliproxy',
           provider,
@@ -130,7 +138,7 @@ router.post('/default', (req: Request, res: Response): void => {
     }
 
     // Check if this is a CLIProxy account (format: "provider:accountId")
-    const cliproxyKey = parseCliproxyKey(name);
+    const cliproxyKey = !hasAuthAccount(name) ? parseCliproxyKey(name) : null;
     if (cliproxyKey) {
       const success = setCliproxyDefault(cliproxyKey.provider, cliproxyKey.accountId);
       if (!success) {
@@ -192,7 +200,7 @@ router.delete('/:name', (req: Request, res: Response): void => {
     }
 
     // Check if this is a CLIProxy account (format: "provider:accountId")
-    const cliproxyKey = parseCliproxyKey(name);
+    const cliproxyKey = !hasAuthAccount(name) ? parseCliproxyKey(name) : null;
     if (cliproxyKey) {
       const success = removeCliproxyAccount(cliproxyKey.provider, cliproxyKey.accountId);
       if (!success) {
@@ -218,6 +226,9 @@ router.delete('/:name', (req: Request, res: Response): void => {
       res.status(404).json({ error: `Account not found: ${name}` });
       return;
     }
+
+    // Keep API delete behavior aligned with CLI remove command.
+    instanceMgr.deleteInstance(name);
 
     res.json({ success: true, deleted: name });
   } catch (error) {

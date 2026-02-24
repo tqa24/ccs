@@ -9,21 +9,27 @@ import { initUI, header, color, fail, warn, info, infoBox, warnBox } from '../..
 import { getClaudeCliInfo } from '../../utils/claude-detector';
 import { escapeShellArg, stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { isUnifiedMode } from '../../config/unified-config-loader';
+import { ProfileMetadata } from '../../types';
 import {
   resolveCreateAccountContext,
   policyToAccountContextMetadata,
   formatAccountContextPolicy,
+  isValidAccountProfileName,
 } from '../account-context';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
 import { CommandContext, parseArgs } from './types';
+
+function sanitizeProfileNameForInstance(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+}
 
 /**
  * Handle the create command
  */
 export async function handleCreate(ctx: CommandContext, args: string[]): Promise<void> {
   await initUI();
-  const { profileName, force, shareContext, contextGroup } = parseArgs(args);
+  const { profileName, force, shareContext, contextGroup, unknownFlags } = parseArgs(args);
 
   if (!profileName) {
     console.log(fail('Profile name is required'));
@@ -37,6 +43,21 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     exitWithError('Profile name is required', ExitCode.PROFILE_ERROR);
   }
 
+  if (unknownFlags && unknownFlags.length > 0) {
+    const unknownList = unknownFlags.join(', ');
+    console.log(fail(`Unknown option(s): ${unknownList}`));
+    console.log('');
+    exitWithError(`Unknown option(s): ${unknownList}`, ExitCode.PROFILE_ERROR);
+  }
+
+  if (!isValidAccountProfileName(profileName)) {
+    const error =
+      'Invalid profile name. Use letters/numbers/dash/underscore and start with a letter.';
+    console.log(fail(error));
+    console.log('');
+    exitWithError(error, ExitCode.PROFILE_ERROR);
+  }
+
   // Check if profile already exists (check both legacy and unified)
   const existsLegacy = ctx.registry.hasProfile(profileName);
   const existsUnified = ctx.registry.hasAccountUnified(profileName);
@@ -44,6 +65,18 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     console.log(fail(`Profile already exists: ${profileName}`));
     console.log(`    Use ${color('--force', 'command')} to overwrite`);
     exitWithError(`Profile already exists: ${profileName}`, ExitCode.PROFILE_ERROR);
+  }
+
+  const normalizedName = sanitizeProfileNameForInstance(profileName);
+  const collidingName = Object.keys(ctx.registry.getAllProfilesMerged()).find(
+    (name) => name !== profileName && sanitizeProfileNameForInstance(name) === normalizedName
+  );
+
+  if (collidingName) {
+    const error = `Profile "${profileName}" conflicts with existing profile "${collidingName}" on filesystem.`;
+    console.log(fail(error));
+    console.log('');
+    exitWithError(error, ExitCode.PROFILE_ERROR);
   }
 
   const resolvedContext = resolveCreateAccountContext({
@@ -59,14 +92,47 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
 
   const contextPolicy = resolvedContext.policy;
   const contextMetadata = policyToAccountContextMetadata(contextPolicy);
+  const useUnifiedConfig = isUnifiedMode();
+  const createdProfile = useUnifiedConfig ? !existsUnified : !existsLegacy;
+  const previousLegacyProfile: ProfileMetadata | undefined =
+    !useUnifiedConfig && existsLegacy ? ctx.registry.getProfile(profileName) : undefined;
+  const previousUnifiedProfile =
+    useUnifiedConfig && existsUnified
+      ? ctx.registry.getAllAccountsUnified()[profileName]
+      : undefined;
 
   try {
+    const rollbackMetadata = (): void => {
+      try {
+        if (useUnifiedConfig) {
+          if (createdProfile) {
+            if (ctx.registry.hasAccountUnified(profileName)) {
+              ctx.registry.removeAccountUnified(profileName);
+            }
+          } else if (previousUnifiedProfile) {
+            ctx.registry.updateAccountUnified(profileName, previousUnifiedProfile);
+          }
+          return;
+        }
+
+        if (createdProfile) {
+          if (ctx.registry.hasProfile(profileName)) {
+            ctx.registry.deleteProfile(profileName);
+          }
+        } else if (previousLegacyProfile) {
+          ctx.registry.updateProfile(profileName, previousLegacyProfile);
+        }
+      } catch {
+        // Best-effort rollback to avoid leaving stale accounts after failed login.
+      }
+    };
+
     // Create instance directory
     console.log(info(`Creating profile: ${profileName}`));
     const instancePath = await ctx.instanceMgr.ensureInstance(profileName, contextPolicy);
 
     // Create/update profile entry based on config mode
-    if (isUnifiedMode()) {
+    if (useUnifiedConfig) {
       // Use unified config (config.yaml)
       if (existsUnified) {
         ctx.registry.updateAccountUnified(profileName, {
@@ -96,7 +162,11 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
 
     console.log(info(`Instance directory: ${instancePath}`));
     console.log('');
-    console.log(warn('Starting Claude in isolated instance...'));
+    const launchDescription =
+      contextPolicy.mode === 'shared'
+        ? `Starting Claude with shared context group "${contextPolicy.group || 'default'}"...`
+        : 'Starting Claude in isolated instance...';
+    console.log(warn(launchDescription));
     console.log(warn('You will be prompted to login with your account.'));
     console.log('');
 
@@ -112,6 +182,20 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
 
     const { path: claudeCli, needsShell } = claudeInfo;
     const childEnv = stripClaudeCodeEnv({ ...process.env, CLAUDE_CONFIG_DIR: instancePath });
+    // Avoid ambient provider credentials influencing account-login bootstrap behavior.
+    const ambientProviderPrefixes = ['ANTHROPIC_', 'OPENAI_', 'GOOGLE_', 'GEMINI_', 'MINIMAX_'];
+    for (const envKey of Object.keys(childEnv)) {
+      if (envKey === 'CLAUDE_CONFIG_DIR') {
+        continue;
+      }
+
+      if (
+        ambientProviderPrefixes.some((prefix) => envKey.startsWith(prefix)) ||
+        envKey === 'OPENROUTER_API_KEY'
+      ) {
+        delete childEnv[envKey];
+      }
+    }
 
     // Execute Claude in isolated instance (will auto-prompt for login if no credentials)
     // On Windows, .cmd/.bat/.ps1 files need shell: true to execute properly
@@ -162,6 +246,11 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
         console.log('');
         process.exit(0);
       } else {
+        rollbackMetadata();
+        if (createdProfile) {
+          ctx.instanceMgr.deleteInstance(profileName);
+        }
+
         console.log('');
         console.log(fail('Login failed or cancelled'));
         console.log('');
@@ -173,6 +262,10 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     });
 
     child.on('error', (err: Error) => {
+      rollbackMetadata();
+      if (createdProfile) {
+        ctx.instanceMgr.deleteInstance(profileName);
+      }
       exitWithError(`Failed to execute Claude CLI: ${err.message}`, ExitCode.BINARY_ERROR);
     });
   } catch (error) {

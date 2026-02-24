@@ -21,6 +21,7 @@ export interface AuthCommandArgs {
   yes?: boolean;
   shareContext?: boolean;
   contextGroup?: string;
+  unknownFlags?: string[];
 }
 
 /**
@@ -61,6 +62,16 @@ export interface CommandContext {
 export function parseArgs(args: string[]): AuthCommandArgs {
   let profileName: string | undefined;
   let contextGroup: string | undefined;
+  const unknownFlags = new Set<string>();
+  const knownBooleanFlags = new Set([
+    '--force',
+    '--verbose',
+    '--json',
+    '--yes',
+    '-y',
+    '--share-context',
+  ]);
+  const knownValueFlags = new Set(['--context-group']);
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -83,6 +94,18 @@ export function parseArgs(args: string[]): AuthCommandArgs {
     }
 
     if (arg.startsWith('-')) {
+      const normalizedFlag = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg;
+      const isKnownFlag =
+        knownBooleanFlags.has(normalizedFlag) || knownValueFlags.has(normalizedFlag);
+      if (!isKnownFlag) {
+        unknownFlags.add(normalizedFlag);
+        // Best effort: unknown flags often take a value token.
+        // Skip one following non-flag token to avoid mis-parsing profile name.
+        const next = args[i + 1];
+        if (!arg.includes('=') && next && !next.startsWith('-')) {
+          i++;
+        }
+      }
       continue;
     }
 
@@ -99,5 +122,6 @@ export function parseArgs(args: string[]): AuthCommandArgs {
     yes: args.includes('--yes') || args.includes('-y'),
     shareContext: args.includes('--share-context'),
     contextGroup,
+    unknownFlags: [...unknownFlags],
   };
 }

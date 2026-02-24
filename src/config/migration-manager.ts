@@ -148,9 +148,18 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
     if (oldProfiles?.profiles) {
       for (const [name, meta] of Object.entries(oldProfiles.profiles)) {
         const metadata = meta as Record<string, unknown>;
+        const rawContextMode = metadata.context_mode;
+        const rawContextGroup = metadata.context_group;
+        const contextMode = rawContextMode === 'shared' ? 'shared' : 'isolated';
+        const contextGroup =
+          typeof rawContextGroup === 'string' && rawContextGroup.trim().length > 0
+            ? rawContextGroup
+            : undefined;
         const account: AccountConfig = {
           created: (metadata.created as string) || new Date().toISOString(),
           last_used: (metadata.last_used as string) || null,
+          context_mode: contextMode,
+          context_group: contextMode === 'shared' ? contextGroup : undefined,
         };
         unifiedConfig.accounts[name] = account;
       }
