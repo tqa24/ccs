@@ -1,14 +1,16 @@
 import { AlertTriangle, ExternalLink, Settings2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { RISK_ACK_PHRASE } from '@/components/account/antigravity-responsibility-constants';
 
 interface AccountSafetyWarningCardProps {
   className?: string;
   showAcknowledgement?: boolean;
-  acknowledged?: boolean;
-  onAcknowledgedChange?: (value: boolean) => void;
+  acknowledgementPhrase?: string;
+  acknowledgementText?: string;
+  onAcknowledgementTextChange?: (value: string) => void;
   disabled?: boolean;
   showProxySettingsLink?: boolean;
 }
@@ -16,8 +18,9 @@ interface AccountSafetyWarningCardProps {
 export function AccountSafetyWarningCard({
   className,
   showAcknowledgement = false,
-  acknowledged = false,
-  onAcknowledgedChange,
+  acknowledgementPhrase = RISK_ACK_PHRASE,
+  acknowledgementText = '',
+  onAcknowledgementTextChange,
   disabled = false,
   showProxySettingsLink = false,
 }: AccountSafetyWarningCardProps) {
@@ -99,20 +102,22 @@ export function AccountSafetyWarningCard({
           </span>
         </div>
 
-        {showAcknowledgement && onAcknowledgedChange && (
+        {showAcknowledgement && onAcknowledgementTextChange && (
           <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5">
-            <div className="flex items-start gap-2">
-              <Checkbox
-                id="account-risk-ack"
-                checked={acknowledged}
-                onCheckedChange={(checked) => onAcknowledgedChange(Boolean(checked))}
-                disabled={disabled}
-              />
-              <Label htmlFor="account-risk-ack" className="text-xs leading-5">
-                I understand this risk and that CCS takes no responsibility if I continue this
-                setup.
-              </Label>
-            </div>
+            <Label htmlFor="account-risk-ack-text" className="text-xs leading-5">
+              Type exact phrase to continue:{' '}
+              <code className="rounded bg-muted px-1 py-0.5 font-mono">
+                {acknowledgementPhrase}
+              </code>
+            </Label>
+            <Input
+              id="account-risk-ack-text"
+              value={acknowledgementText}
+              onChange={(e) => onAcknowledgementTextChange(e.target.value)}
+              placeholder={acknowledgementPhrase}
+              disabled={disabled}
+              className="mt-2 font-mono text-xs"
+            />
           </div>
         )}
       </div>

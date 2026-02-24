@@ -57,7 +57,7 @@ describe('antigravity-responsibility', () => {
       reviewedIssue509: true,
       understandsBanRisk: true,
       acceptsFullResponsibility: true,
-      typedPhrase: '  i   accept   agy   risk  ',
+      typedPhrase: '  i   accept   risk  ',
     });
 
     expect(result.valid).toBeTrue();

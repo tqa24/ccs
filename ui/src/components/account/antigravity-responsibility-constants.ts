@@ -1,5 +1,6 @@
 export const ANTIGRAVITY_ACK_VERSION = '2026-02-24-antigravity-oauth-v2';
-export const ANTIGRAVITY_ACK_PHRASE = 'I ACCEPT AGY RISK';
+export const RISK_ACK_PHRASE = 'I ACCEPT RISK';
+export const ANTIGRAVITY_ACK_PHRASE = RISK_ACK_PHRASE;
 
 export interface AntigravityRiskChecklistValue {
   reviewedIssue509: boolean;

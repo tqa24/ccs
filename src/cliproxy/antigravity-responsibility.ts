@@ -14,7 +14,8 @@ import { getCliproxySafetyConfig } from '../config/unified-config-loader';
 
 export const ANTIGRAVITY_RISK_ISSUE_URL = 'https://github.com/kaitranntt/ccs/issues/509';
 export const ANTIGRAVITY_ACK_VERSION = '2026-02-24-antigravity-oauth-v2';
-export const ANTIGRAVITY_ACK_PHRASE = 'I ACCEPT AGY RISK';
+export const RISK_ACK_PHRASE = 'I ACCEPT RISK';
+export const ANTIGRAVITY_ACK_PHRASE = RISK_ACK_PHRASE;
 export const ANTIGRAVITY_ACCEPT_RISK_FLAGS = ['--accept-agr-risk', '--accept-antigravity-risk'];
 
 type AgyRiskContext = 'oauth' | 'run';

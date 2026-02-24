@@ -34,6 +34,7 @@ import { AntigravityResponsibilityChecklist } from '@/components/account/antigra
 import {
   ANTIGRAVITY_ACK_VERSION,
   DEFAULT_ANTIGRAVITY_RISK_CHECKLIST,
+  RISK_ACK_PHRASE,
   isAntigravityRiskChecklistComplete,
 } from '@/components/account/antigravity-responsibility-constants';
 import {
@@ -55,6 +56,10 @@ interface AddAccountDialogProps {
   isFirstAccount?: boolean;
 }
 
+function normalizeRiskPhrase(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
 export function AddAccountDialog({
   open,
   onClose,
@@ -66,7 +71,7 @@ export function AddAccountDialog({
   const [callbackUrl, setCallbackUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [acknowledgedRisk, setAcknowledgedRisk] = useState(false);
+  const [riskAcknowledgementText, setRiskAcknowledgementText] = useState('');
   const [agyRiskChecklist, setAgyRiskChecklist] = useState(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
   const [agyAckBypassEnabled, setAgyAckBypassEnabled] = useState(false);
   const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(false);
@@ -80,6 +85,7 @@ export function AddAccountDialog({
   const requiresAgyResponsibilityFlow = provider === 'agy' && !agyAckBypassEnabled;
   const isAgyBypassStatePending = provider === 'agy' && agyAckBypassLoading;
   const isAgyRiskChecklistComplete = isAntigravityRiskChecklistComplete(agyRiskChecklist);
+  const isGeminiRiskAcknowledged = normalizeRiskPhrase(riskAcknowledgementText) === RISK_ACK_PHRASE;
   const defaultDeviceCode = isDeviceCodeProvider(provider);
   const requiresNickname = isNicknameRequiredProvider(provider);
   const kiroMethodOption = getKiroAuthMethodOption(kiroAuthMethod);
@@ -102,7 +108,7 @@ export function AddAccountDialog({
     setCallbackUrl('');
     setCopied(false);
     setLocalError(null);
-    setAcknowledgedRisk(false);
+    setRiskAcknowledgementText('');
     setAgyRiskChecklist(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
     setAgyAckBypassEnabled(false);
     setAgyAckBypassLoading(false);
@@ -113,7 +119,7 @@ export function AddAccountDialog({
 
   useEffect(() => {
     if (open) {
-      setAcknowledgedRisk(false);
+      setRiskAcknowledgementText('');
       setAgyRiskChecklist(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
       setLocalError(null);
     }
@@ -252,9 +258,9 @@ export function AddAccountDialog({
       );
       return;
     }
-    if (requiresSafetyAcknowledgement && !acknowledgedRisk) {
+    if (requiresSafetyAcknowledgement && !isGeminiRiskAcknowledged) {
       setLocalError(
-        'Please acknowledge the account safety warning before authenticating this provider.'
+        `Type "${RISK_ACK_PHRASE}" to acknowledge the account safety warning before authenticating this provider.`
       );
       return;
     }
@@ -348,9 +354,10 @@ export function AddAccountDialog({
           {requiresSafetyAcknowledgement && !showAuthUI && (
             <AccountSafetyWarningCard
               showAcknowledgement
-              acknowledged={acknowledgedRisk}
-              onAcknowledgedChange={(value) => {
-                setAcknowledgedRisk(value);
+              acknowledgementPhrase={RISK_ACK_PHRASE}
+              acknowledgementText={riskAcknowledgementText}
+              onAcknowledgementTextChange={(value) => {
+                setRiskAcknowledgementText(value);
                 setLocalError(null);
               }}
               disabled={isPending}
@@ -549,7 +556,7 @@ export function AddAccountDialog({
                   isAgyBypassStatePending ||
                   (requiresNickname && !nicknameTrimmed) ||
                   (requiresAgyResponsibilityFlow && !isAgyRiskChecklistComplete) ||
-                  (requiresSafetyAcknowledgement && !acknowledgedRisk)
+                  (requiresSafetyAcknowledgement && !isGeminiRiskAcknowledged)
                 }
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
