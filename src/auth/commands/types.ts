@@ -19,6 +19,8 @@ export interface AuthCommandArgs {
   verbose?: boolean;
   json?: boolean;
   yes?: boolean;
+  shareContext?: boolean;
+  contextGroup?: string;
 }
 
 /**
@@ -30,6 +32,8 @@ export interface ProfileOutput {
   is_default: boolean;
   created: string;
   last_used: string | null;
+  context_mode?: 'isolated' | 'shared';
+  context_group?: string | null;
   instance_path?: string;
   session_count?: number;
 }
@@ -55,12 +59,45 @@ export interface CommandContext {
  * Parse command arguments from raw args array
  */
 export function parseArgs(args: string[]): AuthCommandArgs {
-  const profileName = args.find((arg) => !arg.startsWith('--'));
+  let profileName: string | undefined;
+  let contextGroup: string | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg === '--context-group') {
+      const next = args[i + 1];
+      if (!next || next.startsWith('-')) {
+        contextGroup = '';
+        continue;
+      }
+
+      contextGroup = next;
+      i++;
+      continue;
+    }
+
+    if (arg.startsWith('--context-group=')) {
+      contextGroup = arg.slice('--context-group='.length);
+      continue;
+    }
+
+    if (arg.startsWith('-')) {
+      continue;
+    }
+
+    if (!profileName) {
+      profileName = arg;
+    }
+  }
+
   return {
     profileName,
     force: args.includes('--force'),
     verbose: args.includes('--verbose'),
     json: args.includes('--json'),
     yes: args.includes('--yes') || args.includes('-y'),
+    shareContext: args.includes('--share-context'),
+    contextGroup,
   };
 }

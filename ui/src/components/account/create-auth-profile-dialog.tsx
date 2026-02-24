@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Copy, Check, Terminal } from 'lucide-react';
 
 interface CreateAuthProfileDialogProps {
@@ -23,14 +24,32 @@ interface CreateAuthProfileDialogProps {
 
 export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDialogProps) {
   const [profileName, setProfileName] = useState('');
+  const [shareContext, setShareContext] = useState(false);
+  const [contextGroup, setContextGroup] = useState('');
   const [copied, setCopied] = useState(false);
 
   // Validate profile name: alphanumeric, dash, underscore only
   const isValidName = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(profileName);
-  const command = profileName ? `ccs auth create ${profileName}` : 'ccs auth create <name>';
+  const normalizedGroup = contextGroup.trim().toLowerCase();
+  const isValidContextGroup =
+    normalizedGroup.length === 0 || /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(normalizedGroup);
+
+  const command =
+    profileName && isValidName
+      ? [
+          `ccs auth create ${profileName}`,
+          shareContext
+            ? normalizedGroup.length > 0
+              ? `--context-group ${normalizedGroup}`
+              : '--share-context'
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : 'ccs auth create <name>';
 
   const handleCopy = async () => {
-    if (!isValidName) return;
+    if (!isValidName || (shareContext && !isValidContextGroup)) return;
     await navigator.clipboard.writeText(command);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -38,6 +57,8 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
 
   const handleClose = () => {
     setProfileName('');
+    setShareContext(false);
+    setContextGroup('');
     setCopied(false);
     onClose();
   };
@@ -70,6 +91,41 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
             )}
           </div>
 
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="share-context"
+                checked={shareContext}
+                onCheckedChange={(checked) => setShareContext(checked === true)}
+              />
+              <Label htmlFor="share-context" className="cursor-pointer">
+                Share project context with other accounts
+              </Label>
+            </div>
+
+            {shareContext && (
+              <div className="space-y-2 pl-6">
+                <Label htmlFor="context-group">Context Group (optional)</Label>
+                <Input
+                  id="context-group"
+                  value={contextGroup}
+                  onChange={(e) => setContextGroup(e.target.value)}
+                  placeholder="default, sprint-a, client-x"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty to use the default shared group.
+                </p>
+                {contextGroup.trim().length > 0 && !isValidContextGroup && (
+                  <p className="text-xs text-destructive">
+                    Group must start with a letter and use only letters, numbers, dashes, or
+                    underscores.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="space-y-2">
             <Label>Command</Label>
             <div className="flex items-center gap-2 p-3 bg-muted rounded-md font-mono text-sm">
@@ -80,7 +136,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
                 size="sm"
                 className="shrink-0 h-8 px-2"
                 onClick={handleCopy}
-                disabled={!isValidName}
+                disabled={!isValidName || (shareContext && !isValidContextGroup)}
               >
                 {copied ? (
                   <Check className="w-4 h-4 text-green-500" />
@@ -103,7 +159,10 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
             <Button variant="ghost" onClick={handleClose}>
               Close
             </Button>
-            <Button onClick={handleCopy} disabled={!isValidName}>
+            <Button
+              onClick={handleCopy}
+              disabled={!isValidName || (shareContext && !isValidContextGroup)}
+            >
               {copied ? (
                 <>
                   <Check className="w-4 h-4 mr-2" />

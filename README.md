@@ -221,6 +221,18 @@ ccs work "implement feature"    # Terminal 1
 ccs  "review code"              # Terminal 2 (personal account)
 ```
 
+Need continuity between two accounts for the same project? Opt in to shared context:
+
+```bash
+# Share context with default group
+ccs auth create backup --share-context
+
+# Or isolate by named group (only accounts in this group share context)
+ccs auth create backup2 --context-group sprint-a
+```
+
+Isolation remains the default. Shared context only links project workspace data; credentials stay per-account.
+
 <br>
 
 ## Maintenance

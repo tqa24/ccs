@@ -88,6 +88,24 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
       },
     },
     {
+      id: 'context',
+      header: 'Context',
+      size: 170,
+      cell: ({ row }) => {
+        if (row.original.type === 'cliproxy') {
+          return <span className="text-muted-foreground/50">-</span>;
+        }
+
+        const mode = row.original.context_mode || 'isolated';
+        if (mode === 'shared') {
+          const group = row.original.context_group || 'default';
+          return <span className="text-muted-foreground">shared ({group})</span>;
+        }
+
+        return <span className="text-muted-foreground">isolated</span>;
+      },
+    },
+    {
       id: 'actions',
       header: 'Actions',
       size: 180,
@@ -154,6 +172,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
                         type: 'w-[100px]',
                         created: 'w-[150px]',
                         last_used: 'w-[150px]',
+                        context: 'w-[170px]',
                         actions: 'w-[180px]',
                       }[header.id] || 'w-auto';
 
