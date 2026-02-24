@@ -3,7 +3,7 @@
  * Settings section for CLIProxyAPI configuration (local/remote)
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -17,6 +17,7 @@ import {
   Bug,
   Box,
   AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react';
 import { useProxyConfig, useRawConfig } from '../../hooks';
 import { useUpdateBackend, useProxyStatus } from '@/hooks/use-cliproxy';
@@ -67,6 +68,10 @@ export default function ProxySection() {
       return false;
     }
   });
+  const [agyAckBypass, setAgyAckBypass] = useState(false);
+  const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(true);
+  const [agyAckBypassSaving, setAgyAckBypassSaving] = useState(false);
+  const agyAckBypassSavingRef = useRef(false);
 
   const handleDebugModeChange = (enabled: boolean) => {
     setDebugMode(enabled);
@@ -76,6 +81,62 @@ export default function ProxySection() {
       // Ignore storage errors
     }
   };
+
+  const fetchAgyAckBypass = useCallback(async () => {
+    try {
+      setAgyAckBypassLoading(true);
+      const response = await fetch('/api/settings/auth/antigravity-risk');
+      if (!response.ok) {
+        throw new Error('Failed to load AGY power user mode');
+      }
+      const data = (await response.json()) as { antigravityAckBypass?: boolean };
+      setAgyAckBypass(data.antigravityAckBypass === true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load AGY power user mode');
+      setAgyAckBypass(false);
+    } finally {
+      setAgyAckBypassLoading(false);
+    }
+  }, []);
+
+  const saveAgyAckBypass = useCallback(
+    async (nextValue: boolean) => {
+      if (agyAckBypassSavingRef.current || agyAckBypassSaving || saving) return;
+
+      if (nextValue) {
+        const confirmed = window.confirm(
+          'Enable AGY power user mode?\n\nThis skips AGY safety prompts. You accept the OAuth risk.'
+        );
+        if (!confirmed) return;
+      }
+
+      try {
+        agyAckBypassSavingRef.current = true;
+        setAgyAckBypassSaving(true);
+
+        const response = await fetch('/api/settings/auth/antigravity-risk', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ antigravityAckBypass: nextValue }),
+        });
+
+        if (!response.ok) {
+          const data = (await response.json()) as { error?: string };
+          throw new Error(data.error || 'Failed to update AGY power user mode');
+        }
+
+        setAgyAckBypass(nextValue);
+        toast.success(nextValue ? 'AGY power user mode enabled.' : 'AGY power user mode disabled.');
+        await fetchRawConfig();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to update AGY power user mode');
+      } finally {
+        agyAckBypassSavingRef.current = false;
+        setAgyAckBypassSaving(false);
+      }
+    },
+    [agyAckBypassSaving, fetchRawConfig, saving]
+  );
 
   // Backend state (loaded from API) + mutation hook for proper query invalidation
   const [backend, setBackend] = useState<'original' | 'plus'>('plus');
@@ -138,12 +199,13 @@ export default function ProxySection() {
   // Load data on mount
   useEffect(() => {
     fetchConfig();
+    void fetchAgyAckBypass();
     fetchRawConfig();
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Async data fetching on mount is intended
+
     void fetchBackend();
 
     void checkPlusOnlyVariants();
-  }, [fetchConfig, fetchRawConfig, fetchBackend, checkPlusOnlyVariants]);
+  }, [fetchConfig, fetchAgyAckBypass, fetchRawConfig, fetchBackend, checkPlusOnlyVariants]);
 
   if (loading || !config) {
     return (
@@ -403,6 +465,41 @@ export default function ProxySection() {
             )}
           </div>
 
+          {/* Safety */}
+          <div className="space-y-3">
+            <h3 className="text-base font-medium flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+              Safety
+            </h3>
+            <div className="space-y-3 rounded-lg border border-amber-400/35 bg-amber-50/70 p-4 dark:border-amber-800/60 dark:bg-amber-950/25">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-medium text-sm">Antigravity Power User Mode</p>
+                  <p className="text-xs text-muted-foreground">
+                    Skip AGY responsibility checklist in Add Account and `ccs agy` flows.
+                  </p>
+                </div>
+                <Switch
+                  aria-labelledby="agy-power-user-mode-label"
+                  aria-describedby="agy-power-user-mode-description"
+                  checked={agyAckBypass}
+                  disabled={agyAckBypassLoading || agyAckBypassSaving || saving}
+                  onCheckedChange={saveAgyAckBypass}
+                />
+              </div>
+              <p
+                id="agy-power-user-mode-description"
+                className="text-xs text-amber-800/90 dark:text-amber-200/90"
+              >
+                Use only if you fully understand the OAuth suspension/ban risk pattern (#509). CCS
+                cannot assume responsibility for account loss.
+              </p>
+              <span id="agy-power-user-mode-label" className="sr-only">
+                Toggle AGY power user mode
+              </span>
+            </div>
+          </div>
+
           {/* Remote Settings - Show when remote mode is enabled */}
           {isRemoteMode && (
             <RemoteProxyCard
@@ -517,11 +614,12 @@ export default function ProxySection() {
           size="sm"
           onClick={() => {
             fetchConfig();
+            fetchAgyAckBypass();
             fetchRawConfig();
             fetchBackend();
             checkPlusOnlyVariants();
           }}
-          disabled={loading || saving}
+          disabled={loading || saving || agyAckBypassSaving}
           className="w-full"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />

@@ -3,12 +3,11 @@
  * Settings section for CLIProxy auth tokens (API key and management secret)
  */
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Switch } from '@/components/ui/switch';
 import {
   RefreshCw,
   CheckCircle2,
@@ -21,7 +20,6 @@ import {
   Check,
   KeyRound,
   ShieldCheck,
-  ShieldAlert,
   Save,
 } from 'lucide-react';
 import { useRawConfig } from '../hooks';
@@ -53,10 +51,6 @@ export default function AuthSection() {
   const [editedSecret, setEditedSecret] = useState<string | null>(null);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
-  const [agyAckBypass, setAgyAckBypass] = useState(false);
-  const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(true);
-  const [agyAckBypassSaving, setAgyAckBypassSaving] = useState(false);
-  const agyAckBypassSavingRef = useRef(false);
 
   // Fetch tokens
   const fetchTokens = useCallback(async () => {
@@ -77,28 +71,11 @@ export default function AuthSection() {
     }
   }, []);
 
-  const fetchAgyAckBypass = useCallback(async () => {
-    try {
-      setAgyAckBypassLoading(true);
-      const response = await fetch('/api/settings/auth/antigravity-risk');
-      if (!response.ok) {
-        throw new Error('Failed to load Antigravity power user settings');
-      }
-      const data = (await response.json()) as { antigravityAckBypass?: boolean };
-      setAgyAckBypass(data.antigravityAckBypass === true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setAgyAckBypassLoading(false);
-    }
-  }, []);
-
   // Load on mount
   useEffect(() => {
     fetchTokens();
-    fetchAgyAckBypass();
     fetchRawConfig();
-  }, [fetchTokens, fetchAgyAckBypass, fetchRawConfig]);
+  }, [fetchTokens, fetchRawConfig]);
 
   // Clear success after timeout
   useEffect(() => {
@@ -118,8 +95,6 @@ export default function AuthSection() {
 
   // Save all changes
   const saveChanges = async () => {
-    if (agyAckBypassSaving) return;
-
     const hasApiKeyChange = editedApiKey !== null && editedApiKey !== tokens?.apiKey.value;
     const hasSecretChange =
       editedSecret !== null && editedSecret !== tokens?.managementSecret.value;
@@ -159,8 +134,6 @@ export default function AuthSection() {
 
   // Regenerate management secret
   const regenerateSecret = async () => {
-    if (agyAckBypassSaving) return;
-
     try {
       setSaving(true);
       setError(null);
@@ -185,8 +158,6 @@ export default function AuthSection() {
 
   // Reset to defaults
   const resetToDefaults = async () => {
-    if (agyAckBypassSaving) return;
-
     try {
       setSaving(true);
       setError(null);
@@ -226,50 +197,11 @@ export default function AuthSection() {
     setTimeout(() => setCopiedSecret(false), 2000);
   };
 
-  const saveAgyAckBypass = async (nextValue: boolean) => {
-    if (agyAckBypassSavingRef.current || agyAckBypassSaving || saving) return;
-
-    if (nextValue) {
-      const confirmed = window.confirm(
-        'Enable AGY power user mode?\n\nThis skips AGY safety prompts. You accept the OAuth risk.'
-      );
-      if (!confirmed) return;
-    }
-
-    try {
-      agyAckBypassSavingRef.current = true;
-      setAgyAckBypassSaving(true);
-      setError(null);
-
-      const response = await fetch('/api/settings/auth/antigravity-risk', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ antigravityAckBypass: nextValue }),
-      });
-
-      if (!response.ok) {
-        const data = (await response.json()) as { error?: string };
-        throw new Error(data.error || 'Failed to update Antigravity power user mode');
-      }
-
-      setAgyAckBypass(nextValue);
-      setSuccess(
-        nextValue ? 'Antigravity power user mode enabled.' : 'Antigravity power user mode disabled.'
-      );
-      await fetchRawConfig();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      agyAckBypassSavingRef.current = false;
-      setAgyAckBypassSaving(false);
-    }
-  };
-
   const refreshAll = async () => {
-    if (loading || saving || agyAckBypassSaving) return;
+    if (loading || saving) return;
     setError(null);
     setSuccess(null);
-    await Promise.all([fetchTokens(), fetchAgyAckBypass(), fetchRawConfig()]);
+    await Promise.all([fetchTokens(), fetchRawConfig()]);
   };
 
   if (loading || !tokens) {
@@ -344,7 +276,7 @@ export default function AuthSection() {
                   value={displayApiKey}
                   onChange={(e) => setEditedApiKey(e.target.value)}
                   placeholder="API key"
-                  disabled={saving || agyAckBypassSaving}
+                  disabled={saving}
                   className="pr-20 font-mono text-sm"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
@@ -395,7 +327,7 @@ export default function AuthSection() {
                   value={displaySecret}
                   onChange={(e) => setEditedSecret(e.target.value)}
                   placeholder="Management secret"
-                  disabled={saving || agyAckBypassSaving}
+                  disabled={saving}
                   className="pr-20 font-mono text-sm"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
@@ -426,7 +358,7 @@ export default function AuthSection() {
                 variant="outline"
                 size="sm"
                 onClick={regenerateSecret}
-                disabled={saving || agyAckBypassSaving}
+                disabled={saving}
                 title="Generate new secure secret"
               >
                 <Sparkles className="w-4 h-4" />
@@ -434,48 +366,12 @@ export default function AuthSection() {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="space-y-3 rounded-lg border border-amber-400/35 bg-amber-50/70 p-4 dark:border-amber-800/60 dark:bg-amber-950/25">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-                  <h3 className="text-base font-medium">Antigravity Power User Mode</h3>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Skip AGY responsibility checklists in Add Account and `ccs agy` flows.
-                </p>
-              </div>
-              <Switch
-                aria-labelledby="agy-power-user-mode-label"
-                aria-describedby="agy-power-user-mode-description"
-                checked={agyAckBypass}
-                disabled={agyAckBypassLoading || agyAckBypassSaving || saving}
-                onCheckedChange={saveAgyAckBypass}
-              />
-            </div>
-            <p
-              id="agy-power-user-mode-description"
-              className="text-xs text-amber-800/90 dark:text-amber-200/90"
-            >
-              Use only if you fully understand the OAuth suspension/ban risk pattern (#509). CCS
-              cannot assume responsibility for account loss.
-            </p>
-            <span id="agy-power-user-mode-label" className="sr-only">
-              Toggle AGY power user mode
-            </span>
-          </div>
-
           <div className="pt-4 border-t">
             <Button
               variant="outline"
               size="sm"
               onClick={resetToDefaults}
-              disabled={
-                saving ||
-                agyAckBypassSaving ||
-                (!tokens.apiKey.isCustom && !tokens.managementSecret.isCustom)
-              }
+              disabled={saving || (!tokens.apiKey.isCustom && !tokens.managementSecret.isCustom)}
               className="gap-2"
             >
               <RotateCcw className="w-4 h-4" />
@@ -494,7 +390,7 @@ export default function AuthSection() {
           variant="outline"
           size="sm"
           onClick={refreshAll}
-          disabled={loading || saving || agyAckBypassSaving}
+          disabled={loading || saving}
           className="flex-1"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -504,7 +400,7 @@ export default function AuthSection() {
           variant="default"
           size="sm"
           onClick={saveChanges}
-          disabled={!hasChanges || saving || agyAckBypassSaving}
+          disabled={!hasChanges || saving}
           className="flex-1"
         >
           <Save className={`w-4 h-4 mr-2 ${saving ? 'animate-pulse' : ''}`} />

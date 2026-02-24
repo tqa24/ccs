@@ -340,7 +340,7 @@ export function AddAccountDialog({
                 <ShieldAlert className="h-3.5 w-3.5" />
                 Power user mode enabled
               </div>
-              AGY responsibility checklist is skipped from Settings {'>'} Auth. You accept full
+              AGY responsibility checklist is skipped from Settings {'>'} Proxy. You accept full
               responsibility for OAuth/account risk.
             </div>
           )}
