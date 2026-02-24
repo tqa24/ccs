@@ -5,10 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import {
-  ANTIGRAVITY_ACK_PHRASE,
-  AntigravityRiskChecklistValue,
-} from '@/components/account/antigravity-responsibility-constants';
+import { ANTIGRAVITY_ACK_PHRASE } from '@/components/account/antigravity-responsibility-constants';
+import type { AntigravityRiskChecklistValue } from '@/components/account/antigravity-responsibility-constants';
 
 interface AntigravityResponsibilityChecklistProps {
   className?: string;
