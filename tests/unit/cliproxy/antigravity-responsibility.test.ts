@@ -1,12 +1,44 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import {
   ANTIGRAVITY_ACK_PHRASE,
   ANTIGRAVITY_ACK_VERSION,
   hasAntigravityRiskAcceptanceFlag,
+  isAntigravityResponsibilityBypassEnabled,
   validateAntigravityRiskAcknowledgement,
 } from '../../../src/cliproxy/antigravity-responsibility';
 
 describe('antigravity-responsibility', () => {
+  let tempHome = '';
+  let originalCcsHome: string | undefined;
+  let originalAgyRiskEnv: string | undefined;
+
+  beforeEach(() => {
+    tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-agy-risk-test-'));
+    originalCcsHome = process.env.CCS_HOME;
+    originalAgyRiskEnv = process.env.CCS_ACCEPT_AGY_RISK;
+    process.env.CCS_HOME = tempHome;
+    delete process.env.CCS_ACCEPT_AGY_RISK;
+  });
+
+  afterEach(() => {
+    if (originalCcsHome !== undefined) {
+      process.env.CCS_HOME = originalCcsHome;
+    } else {
+      delete process.env.CCS_HOME;
+    }
+
+    if (originalAgyRiskEnv !== undefined) {
+      process.env.CCS_ACCEPT_AGY_RISK = originalAgyRiskEnv;
+    } else {
+      delete process.env.CCS_ACCEPT_AGY_RISK;
+    }
+
+    fs.rmSync(tempHome, { recursive: true, force: true });
+  });
+
   it('accepts a complete acknowledgement payload', () => {
     const result = validateAntigravityRiskAcknowledgement({
       version: ANTIGRAVITY_ACK_VERSION,
@@ -74,5 +106,25 @@ describe('antigravity-responsibility', () => {
     expect(hasAntigravityRiskAcceptanceFlag(['--accept-agr-risk'])).toBeTrue();
     expect(hasAntigravityRiskAcceptanceFlag(['--accept-antigravity-risk'])).toBeTrue();
     expect(hasAntigravityRiskAcceptanceFlag(['--auth'])).toBeFalse();
+  });
+
+  it('enables bypass when CCS_ACCEPT_AGY_RISK is set', () => {
+    process.env.CCS_ACCEPT_AGY_RISK = 'true';
+    expect(isAntigravityResponsibilityBypassEnabled()).toBeTrue();
+  });
+
+  it('enables bypass when cliproxy safety setting is enabled', () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      `version: 8
+cliproxy:
+  safety:
+    antigravity_ack_bypass: true
+`
+    );
+
+    expect(isAntigravityResponsibilityBypassEnabled()).toBeTrue();
   });
 });

@@ -10,6 +10,7 @@
 
 import { createInterface, Interface } from 'readline';
 import { fail, info, ok, warn } from '../utils/ui';
+import { getCliproxySafetyConfig } from '../config/unified-config-loader';
 
 export const ANTIGRAVITY_RISK_ISSUE_URL = 'https://github.com/kaitranntt/ccs/issues/622';
 export const ANTIGRAVITY_PROJECT_ID_ISSUE_URL = 'https://github.com/kaitranntt/ccs/issues/619';
@@ -45,6 +46,19 @@ function isTruthyEnv(value: string | undefined): boolean {
   if (!value) return false;
   const normalized = value.trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes';
+}
+
+export function isAntigravityResponsibilityBypassEnabled(): boolean {
+  if (isTruthyEnv(process.env.CCS_ACCEPT_AGY_RISK)) {
+    return true;
+  }
+
+  try {
+    const safety = getCliproxySafetyConfig();
+    return safety.antigravity_ack_bypass === true;
+  } catch {
+    return false;
+  }
 }
 
 function askQuestion(rl: Interface, prompt: string): Promise<string | null> {
@@ -160,7 +174,7 @@ export function validateAntigravityRiskAcknowledgement(payload: unknown): Valida
 export async function ensureCliAntigravityResponsibility(
   options: EnsureCliRiskOptions
 ): Promise<boolean> {
-  if (options.acceptedByFlag || isTruthyEnv(process.env.CCS_ACCEPT_AGY_RISK)) {
+  if (options.acceptedByFlag || isAntigravityResponsibilityBypassEnabled()) {
     return true;
   }
 

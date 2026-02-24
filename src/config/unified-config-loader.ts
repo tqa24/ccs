@@ -18,10 +18,12 @@ import {
   DEFAULT_CURSOR_CONFIG,
   DEFAULT_GLOBAL_ENV,
   DEFAULT_CLIPROXY_SERVER_CONFIG,
+  DEFAULT_CLIPROXY_SAFETY_CONFIG,
   DEFAULT_QUOTA_MANAGEMENT_CONFIG,
   DEFAULT_THINKING_CONFIG,
   DEFAULT_DASHBOARD_AUTH_CONFIG,
   DEFAULT_IMAGE_ANALYSIS_CONFIG,
+  CLIProxySafetyConfig,
   GlobalEnvConfig,
   ThinkingConfig,
   DashboardAuthConfig,
@@ -248,6 +250,11 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         enabled: partial.cliproxy?.logging?.enabled ?? defaults.cliproxy.logging?.enabled ?? false,
         request_log:
           partial.cliproxy?.logging?.request_log ?? defaults.cliproxy.logging?.request_log ?? false,
+      },
+      safety: {
+        antigravity_ack_bypass:
+          partial.cliproxy?.safety?.antigravity_ack_bypass ??
+          DEFAULT_CLIPROXY_SAFETY_CONFIG.antigravity_ack_bypass,
       },
       // Auth config - preserve user values, no defaults (uses constants as fallback)
       auth: partial.cliproxy?.auth,
@@ -889,6 +896,19 @@ export function getGlobalEnvConfig(): GlobalEnvConfig {
   return {
     enabled: config.global_env?.enabled ?? true,
     env: config.global_env?.env ?? { ...DEFAULT_GLOBAL_ENV },
+  };
+}
+
+/**
+ * Get cliproxy safety configuration.
+ * Returns defaults if not configured.
+ */
+export function getCliproxySafetyConfig(): CLIProxySafetyConfig {
+  const config = loadOrCreateUnifiedConfig();
+  return {
+    antigravity_ack_bypass:
+      config.cliproxy?.safety?.antigravity_ack_bypass ??
+      DEFAULT_CLIPROXY_SAFETY_CONFIG.antigravity_ack_bypass,
   };
 }
 

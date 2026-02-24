@@ -46,7 +46,10 @@ import {
 import { getOAuthFlowType } from '../../cliproxy/provider-capabilities';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
-import { validateAntigravityRiskAcknowledgement } from '../../cliproxy/antigravity-responsibility';
+import {
+  validateAntigravityRiskAcknowledgement,
+  isAntigravityResponsibilityBypassEnabled,
+} from '../../cliproxy/antigravity-responsibility';
 
 const router = Router();
 
@@ -406,7 +409,7 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
     return;
   }
 
-  if (provider === 'agy') {
+  if (provider === 'agy' && !isAntigravityResponsibilityBypassEnabled()) {
     const validation = validateAntigravityRiskAcknowledgement(riskAcknowledgement);
     if (!validation.valid) {
       res.status(400).json({
@@ -634,7 +637,7 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
     return;
   }
 
-  if (provider === 'agy') {
+  if (provider === 'agy' && !isAntigravityResponsibilityBypassEnabled()) {
     const validation = validateAntigravityRiskAcknowledgement(riskAcknowledgement);
     if (!validation.valid) {
       res.status(400).json({

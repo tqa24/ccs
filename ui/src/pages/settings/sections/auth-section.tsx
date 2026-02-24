@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import {
   RefreshCw,
   CheckCircle2,
@@ -20,6 +21,7 @@ import {
   Check,
   KeyRound,
   ShieldCheck,
+  ShieldAlert,
   Save,
 } from 'lucide-react';
 import { useRawConfig } from '../hooks';
@@ -51,6 +53,9 @@ export default function AuthSection() {
   const [editedSecret, setEditedSecret] = useState<string | null>(null);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const [agyAckBypass, setAgyAckBypass] = useState(false);
+  const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(true);
+  const [agyAckBypassSaving, setAgyAckBypassSaving] = useState(false);
 
   // Fetch tokens
   const fetchTokens = useCallback(async () => {
@@ -71,11 +76,28 @@ export default function AuthSection() {
     }
   }, []);
 
+  const fetchAgyAckBypass = useCallback(async () => {
+    try {
+      setAgyAckBypassLoading(true);
+      const response = await fetch('/api/settings/auth/antigravity-risk');
+      if (!response.ok) {
+        throw new Error('Failed to load Antigravity power user settings');
+      }
+      const data = (await response.json()) as { antigravityAckBypass?: boolean };
+      setAgyAckBypass(data.antigravityAckBypass === true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setAgyAckBypassLoading(false);
+    }
+  }, []);
+
   // Load on mount
   useEffect(() => {
     fetchTokens();
+    fetchAgyAckBypass();
     fetchRawConfig();
-  }, [fetchTokens, fetchRawConfig]);
+  }, [fetchTokens, fetchAgyAckBypass, fetchRawConfig]);
 
   // Clear success after timeout
   useEffect(() => {
@@ -195,6 +217,41 @@ export default function AuthSection() {
     await navigator.clipboard.writeText(tokens.managementSecret.value);
     setCopiedSecret(true);
     setTimeout(() => setCopiedSecret(false), 2000);
+  };
+
+  const saveAgyAckBypass = async (nextValue: boolean) => {
+    if (nextValue) {
+      const confirmed = window.confirm(
+        'Enable Antigravity power user mode?\n\nThis disables AGY responsibility checklist prompts in CLI and dashboard. You accept full responsibility for OAuth/account risk.'
+      );
+      if (!confirmed) return;
+    }
+
+    try {
+      setAgyAckBypassSaving(true);
+      setError(null);
+
+      const response = await fetch('/api/settings/auth/antigravity-risk', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ antigravityAckBypass: nextValue }),
+      });
+
+      if (!response.ok) {
+        const data = (await response.json()) as { error?: string };
+        throw new Error(data.error || 'Failed to update Antigravity power user mode');
+      }
+
+      setAgyAckBypass(nextValue);
+      setSuccess(
+        nextValue ? 'Antigravity power user mode enabled.' : 'Antigravity power user mode disabled.'
+      );
+      await fetchRawConfig();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setAgyAckBypassSaving(false);
+    }
   };
 
   if (loading || !tokens) {
@@ -360,6 +417,29 @@ export default function AuthSection() {
           </div>
 
           {/* Actions */}
+          <div className="space-y-3 rounded-lg border border-amber-400/35 bg-amber-50/70 p-4 dark:border-amber-800/60 dark:bg-amber-950/25">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+                  <h3 className="text-base font-medium">Antigravity Power User Mode</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Skip AGY responsibility checklists in Add Account and `ccs agy` flows.
+                </p>
+              </div>
+              <Switch
+                checked={agyAckBypass}
+                disabled={agyAckBypassLoading || agyAckBypassSaving || saving}
+                onCheckedChange={saveAgyAckBypass}
+              />
+            </div>
+            <p className="text-xs text-amber-800/90 dark:text-amber-200/90">
+              Use only if you fully understand the OAuth suspension/ban risk pattern (#622). CCS
+              cannot assume responsibility for account loss.
+            </p>
+          </div>
+
           <div className="pt-4 border-t">
             <Button
               variant="outline"
@@ -385,6 +465,7 @@ export default function AuthSection() {
           size="sm"
           onClick={() => {
             fetchTokens();
+            fetchAgyAckBypass();
             fetchRawConfig();
           }}
           disabled={loading || saving}

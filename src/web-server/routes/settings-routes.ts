@@ -19,6 +19,7 @@ import {
 } from '../../cliproxy';
 import { regenerateConfig } from '../../cliproxy/config-generator';
 import { deduplicateCcsHooks } from '../../utils/websearch/hook-utils';
+import { loadOrCreateUnifiedConfig, saveUnifiedConfig } from '../../config/unified-config-loader';
 import type { Settings } from '../../types/config';
 
 const router = Router();
@@ -382,6 +383,48 @@ router.delete('/:profile/presets/:name', (req: Request, res: Response): void => 
 });
 
 // ==================== Auth Tokens ====================
+
+/**
+ * GET /api/settings/auth/antigravity-risk - Get AGY responsibility bypass setting
+ */
+router.get('/auth/antigravity-risk', (_req: Request, res: Response): void => {
+  try {
+    const config = loadOrCreateUnifiedConfig();
+    res.json({
+      antigravityAckBypass: config.cliproxy?.safety?.antigravity_ack_bypass === true,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * PUT /api/settings/auth/antigravity-risk - Update AGY responsibility bypass setting
+ */
+router.put('/auth/antigravity-risk', (req: Request, res: Response): void => {
+  try {
+    const { antigravityAckBypass } = req.body as { antigravityAckBypass?: unknown };
+
+    if (typeof antigravityAckBypass !== 'boolean') {
+      res.status(400).json({ error: 'antigravityAckBypass must be a boolean' });
+      return;
+    }
+
+    const config = loadOrCreateUnifiedConfig();
+    config.cliproxy.safety = {
+      ...(config.cliproxy.safety ?? {}),
+      antigravity_ack_bypass: antigravityAckBypass,
+    };
+    saveUnifiedConfig(config);
+
+    res.json({
+      success: true,
+      antigravityAckBypass,
+    });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
 
 /**
  * GET /api/settings/auth/tokens - Get current auth token status (masked)

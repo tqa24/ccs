@@ -25,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Loader2, ExternalLink, User, Download, Copy, Check } from 'lucide-react';
+import { Loader2, ExternalLink, User, Download, Copy, Check, ShieldAlert } from 'lucide-react';
 import { useKiroImport } from '@/hooks/use-cliproxy';
 import { useCliproxyAuthFlow } from '@/hooks/use-cliproxy-auth-flow';
 import { applyDefaultPreset } from '@/lib/preset-utils';
@@ -68,6 +68,8 @@ export function AddAccountDialog({
   const [localError, setLocalError] = useState<string | null>(null);
   const [acknowledgedRisk, setAcknowledgedRisk] = useState(false);
   const [agyRiskChecklist, setAgyRiskChecklist] = useState(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
+  const [agyAckBypassEnabled, setAgyAckBypassEnabled] = useState(false);
+  const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(false);
   const [kiroAuthMethod, setKiroAuthMethod] = useState<KiroAuthMethod>(DEFAULT_KIRO_AUTH_METHOD);
   const wasAuthenticatingRef = useRef(false);
   const authFlow = useCliproxyAuthFlow();
@@ -75,7 +77,8 @@ export function AddAccountDialog({
 
   const isKiro = provider === 'kiro';
   const requiresSafetyAcknowledgement = provider === 'gemini';
-  const requiresAgyResponsibilityFlow = provider === 'agy';
+  const requiresAgyResponsibilityFlow = provider === 'agy' && !agyAckBypassEnabled;
+  const isAgyBypassStatePending = provider === 'agy' && agyAckBypassLoading;
   const isAgyRiskChecklistComplete = isAntigravityRiskChecklistComplete(agyRiskChecklist);
   const defaultDeviceCode = isDeviceCodeProvider(provider);
   const requiresNickname = isNicknameRequiredProvider(provider);
@@ -92,6 +95,8 @@ export function AddAccountDialog({
     setLocalError(null);
     setAcknowledgedRisk(false);
     setAgyRiskChecklist(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
+    setAgyAckBypassEnabled(false);
+    setAgyAckBypassLoading(false);
     setKiroAuthMethod(DEFAULT_KIRO_AUTH_METHOD);
     wasAuthenticatingRef.current = false;
     onClose();
@@ -104,6 +109,44 @@ export function AddAccountDialog({
       setLocalError(null);
     }
   }, [provider, open]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!open || provider !== 'agy') {
+      setAgyAckBypassEnabled(false);
+      setAgyAckBypassLoading(false);
+      return;
+    }
+
+    const loadAgyBypassState = async () => {
+      try {
+        setAgyAckBypassLoading(true);
+        const response = await fetch('/api/settings/auth/antigravity-risk');
+        if (!response.ok) {
+          throw new Error('Failed to load Antigravity power user setting');
+        }
+        const data = (await response.json()) as { antigravityAckBypass?: boolean };
+        if (!cancelled) {
+          setAgyAckBypassEnabled(data.antigravityAckBypass === true);
+        }
+      } catch {
+        if (!cancelled) {
+          setAgyAckBypassEnabled(false);
+        }
+      } finally {
+        if (!cancelled) {
+          setAgyAckBypassLoading(false);
+        }
+      }
+    };
+
+    loadAgyBypassState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, provider]);
 
   // When authFlow completes successfully (polling detected success), apply preset and close
   useEffect(() => {
@@ -153,6 +196,10 @@ export function AddAccountDialog({
    * - Authorization code providers use /start-url and polling.
    */
   const handleAuthenticate = () => {
+    if (isAgyBypassStatePending) {
+      setLocalError('Loading Antigravity safety settings. Please wait a moment and retry.');
+      return;
+    }
     if (requiresAgyResponsibilityFlow && !isAgyRiskChecklistComplete) {
       setLocalError(
         'Complete all Antigravity responsibility steps before authenticating this provider.'
@@ -239,6 +286,17 @@ export function AddAccountDialog({
               }}
               disabled={isPending}
             />
+          )}
+
+          {provider === 'agy' && agyAckBypassEnabled && !showAuthUI && (
+            <div className="rounded-lg border border-amber-400/35 bg-amber-50/70 p-3 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/25 dark:text-amber-100">
+              <div className="mb-1.5 flex items-center gap-1.5 font-semibold">
+                <ShieldAlert className="h-3.5 w-3.5" />
+                Power user mode enabled
+              </div>
+              AGY responsibility checklist is skipped from Settings {'>'} Auth. You accept full
+              responsibility for OAuth/account risk.
+            </div>
           )}
 
           {requiresSafetyAcknowledgement && !showAuthUI && (
@@ -443,6 +501,7 @@ export function AddAccountDialog({
                 onClick={handleAuthenticate}
                 disabled={
                   isPending ||
+                  isAgyBypassStatePending ||
                   (requiresNickname && !nicknameTrimmed) ||
                   (requiresAgyResponsibilityFlow && !isAgyRiskChecklistComplete) ||
                   (requiresSafetyAcknowledgement && !acknowledgedRisk)
