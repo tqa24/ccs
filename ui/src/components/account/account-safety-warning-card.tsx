@@ -1,4 +1,4 @@
-import { AlertTriangle, ExternalLink } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Settings2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -6,45 +6,36 @@ import { cn } from '@/lib/utils';
 
 interface AccountSafetyWarningCardProps {
   className?: string;
-  provider?: 'gemini' | 'agy';
   showAcknowledgement?: boolean;
   acknowledged?: boolean;
   onAcknowledgedChange?: (value: boolean) => void;
   disabled?: boolean;
+  showProxySettingsLink?: boolean;
 }
 
 export function AccountSafetyWarningCard({
   className,
-  provider = 'gemini',
   showAcknowledgement = false,
   acknowledged = false,
   onAcknowledgedChange,
   disabled = false,
+  showProxySettingsLink = false,
 }: AccountSafetyWarningCardProps) {
-  const isAgy = provider === 'agy';
-
-  const title = isAgy ? 'Antigravity OAuth Risk' : 'Account Safety Warning';
-  const subtitle = isAgy
-    ? 'Issue #509 · Third-party OAuth ban risk'
-    : 'Issue #509 · Shared Gemini + AGY account risk';
-  const firstLine = isAgy ? (
+  const title = 'OAuth Account Safety Warning';
+  const subtitle = 'Issue #509 · Gemini + AGY OAuth risk';
+  const firstLine = (
     <>
-      Antigravity OAuth currently has active ban/suspension patterns. Complete the responsibility
-      steps before running auth or starting <code className="font-mono">ccs agy</code>.
-    </>
-  ) : (
-    <>
-      Using one Google account for both <code className="font-mono">ccs gemini</code> and{' '}
-      <code className="font-mono">ccs agy</code> can trigger account disable/ban.
+      Issue #509 documents suspension/ban reports tied to <code className="font-mono">ccs agy</code>{' '}
+      and shared-account usage between <code className="font-mono">ccs gemini</code> and{' '}
+      <code className="font-mono">ccs agy</code>.
     </>
   );
-  const secondLine = isAgy ? (
-    <>If you want to keep this account, do not continue unless you accept full responsibility.</>
-  ) : (
-    <>If you want to keep Google AI access, do not continue this shared-account setup.</>
+  const secondLine = (
+    <>Continue only if you accept full responsibility for OAuth and account-access risk.</>
   );
   const issueUrl = 'https://github.com/kaitranntt/ccs/issues/509';
   const issueLabel = 'Read issue #509';
+  const proxySettingsLabel = 'Gemini + AGY controls: Settings > Proxy';
 
   return (
     <section
@@ -94,6 +85,15 @@ export function AccountSafetyWarningCard({
             {issueLabel}
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
+          {showProxySettingsLink && (
+            <a
+              href="/settings?tab=proxy"
+              className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-500/15 dark:text-amber-200"
+            >
+              <Settings2 className="h-3.5 w-3.5" />
+              {proxySettingsLabel}
+            </a>
+          )}
           <span className="rounded-md border border-border/70 bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground">
             Applies to CLI and dashboard auth
           </span>

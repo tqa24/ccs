@@ -347,7 +347,6 @@ export function AddAccountDialog({
 
           {requiresSafetyAcknowledgement && !showAuthUI && (
             <AccountSafetyWarningCard
-              provider="gemini"
               showAcknowledgement
               acknowledged={acknowledgedRisk}
               onAcknowledgedChange={(value) => {
