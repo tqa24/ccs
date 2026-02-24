@@ -29,6 +29,7 @@ import { Loader2, ExternalLink, User, Download, Copy, Check } from 'lucide-react
 import { useKiroImport } from '@/hooks/use-cliproxy';
 import { useCliproxyAuthFlow } from '@/hooks/use-cliproxy-auth-flow';
 import { applyDefaultPreset } from '@/lib/preset-utils';
+import { AccountSafetyWarningCard } from '@/components/account/account-safety-warning-card';
 import {
   DEFAULT_KIRO_AUTH_METHOD,
   getKiroAuthMethodOption,
@@ -59,12 +60,14 @@ export function AddAccountDialog({
   const [callbackUrl, setCallbackUrl] = useState('');
   const [copied, setCopied] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [acknowledgedRisk, setAcknowledgedRisk] = useState(false);
   const [kiroAuthMethod, setKiroAuthMethod] = useState<KiroAuthMethod>(DEFAULT_KIRO_AUTH_METHOD);
   const wasAuthenticatingRef = useRef(false);
   const authFlow = useCliproxyAuthFlow();
   const kiroImportMutation = useKiroImport();
 
   const isKiro = provider === 'kiro';
+  const requiresSafetyAcknowledgement = provider === 'gemini' || provider === 'agy';
   const defaultDeviceCode = isDeviceCodeProvider(provider);
   const requiresNickname = isNicknameRequiredProvider(provider);
   const kiroMethodOption = getKiroAuthMethodOption(kiroAuthMethod);
@@ -78,10 +81,18 @@ export function AddAccountDialog({
     setCallbackUrl('');
     setCopied(false);
     setLocalError(null);
+    setAcknowledgedRisk(false);
     setKiroAuthMethod(DEFAULT_KIRO_AUTH_METHOD);
     wasAuthenticatingRef.current = false;
     onClose();
   };
+
+  useEffect(() => {
+    if (open) {
+      setAcknowledgedRisk(false);
+      setLocalError(null);
+    }
+  }, [provider, open]);
 
   // When authFlow completes successfully (polling detected success), apply preset and close
   useEffect(() => {
@@ -131,6 +142,12 @@ export function AddAccountDialog({
    * - Authorization code providers use /start-url and polling.
    */
   const handleAuthenticate = () => {
+    if (requiresSafetyAcknowledgement && !acknowledgedRisk) {
+      setLocalError(
+        'Please acknowledge the account safety warning before authenticating this provider.'
+      );
+      return;
+    }
     if (requiresNickname && !nicknameTrimmed) {
       setLocalError(`Nickname is required for ${displayName} accounts.`);
       return;
@@ -187,6 +204,18 @@ export function AddAccountDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {requiresSafetyAcknowledgement && !showAuthUI && (
+            <AccountSafetyWarningCard
+              showAcknowledgement
+              acknowledged={acknowledgedRisk}
+              onAcknowledgedChange={(value) => {
+                setAcknowledgedRisk(value);
+                setLocalError(null);
+              }}
+              disabled={isPending}
+            />
+          )}
+
           {/* Kiro auth method */}
           {isKiro && !showAuthUI && (
             <div className="space-y-2">
@@ -374,7 +403,11 @@ export function AddAccountDialog({
             {!showAuthUI && (
               <Button
                 onClick={handleAuthenticate}
-                disabled={isPending || (requiresNickname && !nicknameTrimmed)}
+                disabled={
+                  isPending ||
+                  (requiresNickname && !nicknameTrimmed) ||
+                  (requiresSafetyAcknowledgement && !acknowledgedRisk)
+                }
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Authenticate
