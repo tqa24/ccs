@@ -72,6 +72,11 @@ import {
   enforceProviderIsolation,
   restoreAutoPausedAccounts,
 } from '../account-safety';
+import {
+  ensureCliAntigravityResponsibility,
+  hasAntigravityRiskAcceptanceFlag,
+  ANTIGRAVITY_ACCEPT_RISK_FLAGS,
+} from '../antigravity-responsibility';
 import { getWebSearchHookEnv } from '../../utils/websearch-manager';
 import {
   buildThinkingStartupStatus,
@@ -286,6 +291,7 @@ export async function execClaudeWithCLIProxy(
   const addAccount = argsWithoutProxy.includes('--add');
   const showAccounts = argsWithoutProxy.includes('--accounts');
   const forceImport = argsWithoutProxy.includes('--import');
+  const acceptAgyRisk = hasAntigravityRiskAcceptanceFlag(argsWithoutProxy);
 
   const incognitoFlag = argsWithoutProxy.includes('--incognito');
   const noIncognitoFlag = argsWithoutProxy.includes('--no-incognito');
@@ -523,6 +529,24 @@ export async function execClaudeWithCLIProxy(
     log(`Using remote proxy authentication (skipping local OAuth)`);
   }
 
+  if (provider === 'agy' && !forceAuth && !skipLocalAuth) {
+    const requiresAuthNow = providerConfig.requiresOAuth && !isAuthenticated(provider);
+    if (!requiresAuthNow) {
+      const acknowledged = await ensureCliAntigravityResponsibility({
+        context: 'run',
+        acceptedByFlag: acceptAgyRisk,
+      });
+      if (!acknowledged) {
+        console.error(
+          fail(
+            `Antigravity session blocked. Re-run after completing confirmation or pass ${ANTIGRAVITY_ACCEPT_RISK_FLAGS[0]}.`
+          )
+        );
+        process.exit(1);
+      }
+    }
+  }
+
   if (providerConfig.requiresOAuth && !skipLocalAuth) {
     log(`Checking authentication for ${provider}`);
 
@@ -536,6 +560,7 @@ export async function execClaudeWithCLIProxy(
           const authSuccess = await triggerOAuth(p, {
             verbose,
             add: addAccount,
+            ...(acceptAgyRisk ? { acceptAgyRisk: true } : {}),
             ...(kiroAuthMethod && p === 'kiro' ? { kiroMethod: kiroAuthMethod } : {}),
             ...(forceHeadless ? { headless: true } : {}),
             ...(setNickname ? { nickname: setNickname } : {}),
@@ -577,6 +602,7 @@ export async function execClaudeWithCLIProxy(
       const authSuccess = await triggerOAuth(provider, {
         verbose,
         add: addAccount,
+        ...(acceptAgyRisk ? { acceptAgyRisk: true } : {}),
         ...(kiroAuthMethod ? { kiroMethod: kiroAuthMethod } : {}),
         ...(forceHeadless ? { headless: true } : {}),
         ...(setNickname ? { nickname: setNickname } : {}),
@@ -922,6 +948,8 @@ export async function execClaudeWithCLIProxy(
     '--incognito',
     '--no-incognito',
     '--import',
+    '--accept-agr-risk',
+    '--accept-antigravity-risk',
     '--settings',
     ...PROXY_CLI_FLAGS,
   ];

@@ -28,6 +28,13 @@ interface StartAuthOptions {
   kiroMethod?: string;
   flowType?: 'authorization_code' | 'device_code';
   startEndpoint?: 'start' | 'start-url';
+  riskAcknowledgement?: {
+    version: string;
+    reviewedIssue622: boolean;
+    understandsBanRisk: boolean;
+    acceptsFullResponsibility: boolean;
+    typedPhrase: string;
+  };
 }
 
 /** Polling interval for OAuth status check (3 seconds) */
@@ -175,6 +182,7 @@ export function useCliproxyAuthFlow() {
       const payload = {
         nickname: options?.nickname,
         kiroMethod: options?.kiroMethod,
+        riskAcknowledgement: options?.riskAcknowledgement,
       };
 
       setState({

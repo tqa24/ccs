@@ -248,6 +248,7 @@ export function CliproxyPage() {
     .toLowerCase()
     .trim();
   const showAccountSafetyWarning = warningProvider === 'gemini' || warningProvider === 'agy';
+  const warningProviderType = warningProvider === 'agy' ? 'agy' : 'gemini';
 
   const handleRefresh = () => {
     queryClient.invalidateQueries({ queryKey: ['cliproxy'] });
@@ -394,7 +395,9 @@ export function CliproxyPage() {
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col min-w-0 bg-background">
-        {showAccountSafetyWarning && <AccountSafetyWarningCard className="mx-4 mt-4" />}
+        {showAccountSafetyWarning && (
+          <AccountSafetyWarningCard provider={warningProviderType} className="mx-4 mt-4" />
+        )}
 
         {selectedVariantData && parentAuthForVariant ? (
           // Variant selected - show ProviderEditor with variant profile name

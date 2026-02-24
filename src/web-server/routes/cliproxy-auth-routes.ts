@@ -46,6 +46,7 @@ import {
 import { getOAuthFlowType } from '../../cliproxy/provider-capabilities';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
+import { validateAntigravityRiskAcknowledgement } from '../../cliproxy/antigravity-responsibility';
 
 const router = Router();
 
@@ -385,6 +386,7 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
     nickname: nicknameRaw,
     noIncognito: noIncognitoBody,
     kiroMethod: kiroMethodRaw,
+    riskAcknowledgement,
   } = req.body;
   // Trim nickname for consistency with CLI (oauth-handler.ts trims input)
   const nickname = typeof nicknameRaw === 'string' ? nicknameRaw.trim() : nicknameRaw;
@@ -402,6 +404,17 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       code: 'INVALID_KIRO_METHOD',
     });
     return;
+  }
+
+  if (provider === 'agy') {
+    const validation = validateAntigravityRiskAcknowledgement(riskAcknowledgement);
+    if (!validation.valid) {
+      res.status(400).json({
+        error: validation.error,
+        code: 'AGY_RISK_ACK_REQUIRED',
+      });
+      return;
+    }
   }
 
   // For kiro/ghcp: nickname is required
@@ -451,6 +464,7 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       add: true, // Always add mode from UI
       headless: false, // Force interactive mode
       nickname: nickname || undefined,
+      acceptAgyRisk: provider === 'agy',
       kiroMethod: provider === 'kiro' ? kiroMethod : undefined,
       fromUI: true, // Enable project selection prompt in UI
       noIncognito, // Kiro: use normal browser if enabled
@@ -596,7 +610,7 @@ router.post('/kiro/import', async (_req: Request, res: Response): Promise<void> 
  */
 router.post('/:provider/start-url', async (req: Request, res: Response): Promise<void> => {
   const { provider } = req.params;
-  const { kiroMethod: kiroMethodRaw } = req.body ?? {};
+  const { kiroMethod: kiroMethodRaw, riskAcknowledgement } = req.body ?? {};
   const { method: kiroMethod, invalid: invalidKiroMethod } = parseKiroMethod(kiroMethodRaw);
 
   // Check remote mode
@@ -618,6 +632,17 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       code: 'INVALID_KIRO_METHOD',
     });
     return;
+  }
+
+  if (provider === 'agy') {
+    const validation = validateAntigravityRiskAcknowledgement(riskAcknowledgement);
+    if (!validation.valid) {
+      res.status(400).json({
+        error: validation.error,
+        code: 'AGY_RISK_ACK_REQUIRED',
+      });
+      return;
+    }
   }
 
   const unsupportedReason = getStartUrlUnsupportedReason(provider as CLIProxyProvider, {

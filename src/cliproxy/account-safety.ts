@@ -234,11 +234,17 @@ export function warnOAuthBanRisk(provider: CLIProxyProvider): void {
   if (!isBanWarningProvider(provider) || shownBanWarnings.has(provider)) return;
 
   shownBanWarnings.add(provider);
+  const isAgy = provider === 'agy';
   console.error('');
   console.error(warn('Account safety warning (#509 - read before continuing)'));
   console.error(
     '    Known risk: one Google account shared by "ccs gemini" + "ccs agy" can be disabled/banned.'
   );
+  if (isAgy) {
+    console.error(
+      '    Antigravity-specific warning (#622): OAuth usage can still trigger suspension/ban patterns.'
+    );
+  }
   console.error(
     '    This risk applies whether auth was done from CLI or from "ccs config" dashboard.'
   );
@@ -249,6 +255,9 @@ export function warnOAuthBanRisk(provider: CLIProxyProvider): void {
     '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
   );
   console.error(`    Details: ${ISSUE_509_URL}`);
+  if (isAgy) {
+    console.error('    Antigravity details: https://github.com/kaitranntt/ccs/issues/622');
+  }
   console.error('');
 }
 

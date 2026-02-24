@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 
 interface AccountSafetyWarningCardProps {
   className?: string;
+  provider?: 'gemini' | 'agy';
   showAcknowledgement?: boolean;
   acknowledged?: boolean;
   onAcknowledgedChange?: (value: boolean) => void;
@@ -14,11 +15,39 @@ interface AccountSafetyWarningCardProps {
 
 export function AccountSafetyWarningCard({
   className,
+  provider = 'gemini',
   showAcknowledgement = false,
   acknowledged = false,
   onAcknowledgedChange,
   disabled = false,
 }: AccountSafetyWarningCardProps) {
+  const isAgy = provider === 'agy';
+
+  const title = isAgy ? 'Antigravity OAuth Risk' : 'Account Safety Warning';
+  const subtitle = isAgy
+    ? 'Issue #622 · Third-party OAuth ban risk'
+    : 'Issue #509 · Shared Gemini + AGY account risk';
+  const firstLine = isAgy ? (
+    <>
+      Antigravity OAuth currently has active ban/suspension patterns. Complete the responsibility
+      steps before running auth or starting <code className="font-mono">ccs agy</code>.
+    </>
+  ) : (
+    <>
+      Using one Google account for both <code className="font-mono">ccs gemini</code> and{' '}
+      <code className="font-mono">ccs agy</code> can trigger account disable/ban.
+    </>
+  );
+  const secondLine = isAgy ? (
+    <>If you want to keep this account, do not continue unless you accept full responsibility.</>
+  ) : (
+    <>If you want to keep Google AI access, do not continue this shared-account setup.</>
+  );
+  const issueUrl = isAgy
+    ? 'https://github.com/kaitranntt/ccs/issues/622'
+    : 'https://github.com/kaitranntt/ccs/issues/509';
+  const issueLabel = isAgy ? 'Read issue #622' : 'Read issue #509';
+
   return (
     <section
       role="alert"
@@ -36,10 +65,8 @@ export function AccountSafetyWarningCard({
               <AlertTriangle className="h-4 w-4" />
             </div>
             <div>
-              <p className="text-sm font-semibold leading-5">Account Safety Warning</p>
-              <p className="text-xs text-muted-foreground">
-                Issue #509 · Shared Gemini + AGY account risk
-              </p>
+              <p className="text-sm font-semibold leading-5">{title}</p>
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
             </div>
           </div>
           <Badge
@@ -51,13 +78,8 @@ export function AccountSafetyWarningCard({
         </div>
 
         <div className="space-y-2 text-sm leading-relaxed">
-          <p>
-            Using one Google account for both <code className="font-mono">ccs gemini</code> and{' '}
-            <code className="font-mono">ccs agy</code> can trigger account disable/ban.
-          </p>
-          <p className="font-medium text-amber-900 dark:text-amber-200">
-            If you want to keep Google AI access, do not continue this shared-account setup.
-          </p>
+          <p>{firstLine}</p>
+          <p className="font-medium text-amber-900 dark:text-amber-200">{secondLine}</p>
           <p className="text-xs text-muted-foreground">
             CCS is provided as-is and does not take responsibility for suspension, bans, or access
             loss from upstream providers.
@@ -66,12 +88,12 @@ export function AccountSafetyWarningCard({
 
         <div className="flex flex-wrap items-center gap-2">
           <a
-            href="https://github.com/kaitranntt/ccs/issues/509"
+            href={issueUrl}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-800 transition-colors hover:bg-amber-500/15 dark:text-amber-200"
           >
-            Read issue #509
+            {issueLabel}
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
           <span className="rounded-md border border-border/70 bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground">

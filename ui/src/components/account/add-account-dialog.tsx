@@ -30,6 +30,12 @@ import { useKiroImport } from '@/hooks/use-cliproxy';
 import { useCliproxyAuthFlow } from '@/hooks/use-cliproxy-auth-flow';
 import { applyDefaultPreset } from '@/lib/preset-utils';
 import { AccountSafetyWarningCard } from '@/components/account/account-safety-warning-card';
+import { AntigravityResponsibilityChecklist } from '@/components/account/antigravity-responsibility-checklist';
+import {
+  ANTIGRAVITY_ACK_VERSION,
+  DEFAULT_ANTIGRAVITY_RISK_CHECKLIST,
+  isAntigravityRiskChecklistComplete,
+} from '@/components/account/antigravity-responsibility-constants';
 import {
   DEFAULT_KIRO_AUTH_METHOD,
   getKiroAuthMethodOption,
@@ -61,13 +67,16 @@ export function AddAccountDialog({
   const [copied, setCopied] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [acknowledgedRisk, setAcknowledgedRisk] = useState(false);
+  const [agyRiskChecklist, setAgyRiskChecklist] = useState(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
   const [kiroAuthMethod, setKiroAuthMethod] = useState<KiroAuthMethod>(DEFAULT_KIRO_AUTH_METHOD);
   const wasAuthenticatingRef = useRef(false);
   const authFlow = useCliproxyAuthFlow();
   const kiroImportMutation = useKiroImport();
 
   const isKiro = provider === 'kiro';
-  const requiresSafetyAcknowledgement = provider === 'gemini' || provider === 'agy';
+  const requiresSafetyAcknowledgement = provider === 'gemini';
+  const requiresAgyResponsibilityFlow = provider === 'agy';
+  const isAgyRiskChecklistComplete = isAntigravityRiskChecklistComplete(agyRiskChecklist);
   const defaultDeviceCode = isDeviceCodeProvider(provider);
   const requiresNickname = isNicknameRequiredProvider(provider);
   const kiroMethodOption = getKiroAuthMethodOption(kiroAuthMethod);
@@ -82,6 +91,7 @@ export function AddAccountDialog({
     setCopied(false);
     setLocalError(null);
     setAcknowledgedRisk(false);
+    setAgyRiskChecklist(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
     setKiroAuthMethod(DEFAULT_KIRO_AUTH_METHOD);
     wasAuthenticatingRef.current = false;
     onClose();
@@ -90,6 +100,7 @@ export function AddAccountDialog({
   useEffect(() => {
     if (open) {
       setAcknowledgedRisk(false);
+      setAgyRiskChecklist(DEFAULT_ANTIGRAVITY_RISK_CHECKLIST);
       setLocalError(null);
     }
   }, [provider, open]);
@@ -142,6 +153,12 @@ export function AddAccountDialog({
    * - Authorization code providers use /start-url and polling.
    */
   const handleAuthenticate = () => {
+    if (requiresAgyResponsibilityFlow && !isAgyRiskChecklistComplete) {
+      setLocalError(
+        'Complete all Antigravity responsibility steps before authenticating this provider.'
+      );
+      return;
+    }
     if (requiresSafetyAcknowledgement && !acknowledgedRisk) {
       setLocalError(
         'Please acknowledge the account safety warning before authenticating this provider.'
@@ -159,6 +176,15 @@ export function AddAccountDialog({
       kiroMethod: isKiro ? kiroAuthMethod : undefined,
       flowType: isKiro ? kiroMethodOption.flowType : undefined,
       startEndpoint: isKiro ? kiroMethodOption.startEndpoint : undefined,
+      riskAcknowledgement: requiresAgyResponsibilityFlow
+        ? {
+            version: ANTIGRAVITY_ACK_VERSION,
+            reviewedIssue622: agyRiskChecklist.reviewedIssue622,
+            understandsBanRisk: agyRiskChecklist.understandsBanRisk,
+            acceptsFullResponsibility: agyRiskChecklist.acceptsFullResponsibility,
+            typedPhrase: agyRiskChecklist.typedPhrase,
+          }
+        : undefined,
     });
   };
 
@@ -204,8 +230,20 @@ export function AddAccountDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-4">
+          {requiresAgyResponsibilityFlow && !showAuthUI && (
+            <AntigravityResponsibilityChecklist
+              value={agyRiskChecklist}
+              onChange={(value) => {
+                setAgyRiskChecklist(value);
+                setLocalError(null);
+              }}
+              disabled={isPending}
+            />
+          )}
+
           {requiresSafetyAcknowledgement && !showAuthUI && (
             <AccountSafetyWarningCard
+              provider="gemini"
               showAcknowledgement
               acknowledged={acknowledgedRisk}
               onAcknowledgedChange={(value) => {
@@ -406,6 +444,7 @@ export function AddAccountDialog({
                 disabled={
                   isPending ||
                   (requiresNickname && !nicknameTrimmed) ||
+                  (requiresAgyResponsibilityFlow && !isAgyRiskChecklistComplete) ||
                   (requiresSafetyAcknowledgement && !acknowledgedRisk)
                 }
               >
