@@ -4,6 +4,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import { CLIProxyProvider, ProviderModelMapping } from '../types';
 import { getModelMappingFromConfig, getEnvVarsFromConfig } from '../base-config-loader';
 import { getGlobalEnvConfig } from '../../config/unified-config-loader';
@@ -37,6 +38,14 @@ const DEPRECATED_MODEL_PREFIX = 'gemini-claude-';
 const UPSTREAM_MODEL_PREFIX = 'claude-';
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
 const PRESET_MODEL_KEYS = ['default', 'opus', 'sonnet', 'haiku'] as const;
+const REQUIRED_PROVIDER_ENV_KEYS = [
+  'ANTHROPIC_BASE_URL',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+] as const;
 
 function stripCodexEffortSuffix(modelId: string): string {
   return modelId.replace(CODEX_EFFORT_SUFFIX_REGEX, '');
@@ -405,23 +414,72 @@ export function getEffectiveEnvVars(
  */
 export function ensureProviderSettings(provider: CLIProxyProvider): void {
   const settingsPath = getProviderSettingsPath(provider);
+  const defaultEnv = getClaudeEnvVars(provider);
 
-  // Only create if doesn't exist (preserve user edits)
-  if (fs.existsSync(settingsPath)) {
+  const writeSettings = (settings: Record<string, unknown>): void => {
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', {
+      mode: 0o600,
+    });
+  };
+
+  // Create initial file when missing.
+  if (!fs.existsSync(settingsPath)) {
+    writeSettings({ env: defaultEnv });
     return;
   }
 
-  // Generate default settings from PROVIDER_CONFIGS
-  const envVars = getClaudeEnvVars(provider);
-  const settings: ProviderSettings = { env: envVars };
+  // Existing file: repair missing/invalid core env keys without dropping user data.
+  let rawContent = '';
+  try {
+    rawContent = fs.readFileSync(settingsPath, 'utf-8');
+  } catch {
+    return;
+  }
 
-  // Ensure directory exists
-  fs.mkdirSync(require('path').dirname(settingsPath), { recursive: true });
+  let parsed: Record<string, unknown>;
+  try {
+    const value = JSON.parse(rawContent) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new Error('settings root must be an object');
+    }
+    parsed = value as Record<string, unknown>;
+  } catch {
+    // Preserve corrupt payload for manual inspection, then recover with defaults.
+    const backupPath = `${settingsPath}.corrupt-${Date.now()}`;
+    try {
+      fs.writeFileSync(backupPath, rawContent || '', { mode: 0o600 });
+    } catch {
+      // Best effort only.
+    }
+    writeSettings({ env: defaultEnv });
+    return;
+  }
 
-  // Write with restricted permissions
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', {
-    mode: 0o600,
-  });
+  const envCandidate = parsed.env;
+  const mergedEnv: Record<string, string> =
+    envCandidate && typeof envCandidate === 'object' && !Array.isArray(envCandidate)
+      ? { ...(envCandidate as Record<string, string>) }
+      : {};
+
+  let mutated = !(envCandidate && typeof envCandidate === 'object' && !Array.isArray(envCandidate));
+  for (const key of REQUIRED_PROVIDER_ENV_KEYS) {
+    const current = mergedEnv[key];
+    if (typeof current !== 'string' || current.trim().length === 0) {
+      mergedEnv[key] = defaultEnv[key] || '';
+      mutated = true;
+    }
+  }
+
+  if (!mutated) {
+    return;
+  }
+
+  const repairedSettings: Record<string, unknown> = {
+    ...parsed,
+    env: mergedEnv,
+  };
+  writeSettings(repairedSettings);
 }
 
 /**

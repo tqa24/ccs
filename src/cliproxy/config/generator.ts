@@ -54,6 +54,8 @@ const DEFAULT_ANTIGRAVITY_ALIASES: OAuthModelAliasEntry[] = [
   { name: 'gemini-3-pro-high', alias: 'gemini-3.1-pro-preview' },
   { name: 'gemini-3-pro-high', alias: 'gemini-3.1-pro-preview-customtools' },
   { name: 'gemini-3-flash', alias: 'gemini-3-flash-preview' },
+  { name: 'claude-sonnet-4-6', alias: 'gemini-claude-sonnet-4-6', fork: true },
+  { name: 'claude-sonnet-4-6-thinking', alias: 'gemini-claude-sonnet-4-6-thinking', fork: true },
   { name: 'claude-sonnet-4-5', alias: 'gemini-claude-sonnet-4-5', fork: true },
   { name: 'claude-sonnet-4-5-thinking', alias: 'gemini-claude-sonnet-4-5-thinking', fork: true },
   { name: 'claude-opus-4-5-thinking', alias: 'gemini-claude-opus-4-5-thinking', fork: true },

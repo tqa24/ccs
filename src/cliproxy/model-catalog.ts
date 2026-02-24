@@ -104,6 +104,24 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
         },
       },
       {
+        id: 'claude-sonnet-4-6-thinking',
+        name: 'Claude Sonnet 4.6 Thinking',
+        description: 'Latest Sonnet with extended thinking',
+        thinking: {
+          type: 'budget',
+          min: 1024,
+          max: 128000,
+          zeroAllowed: true,
+          dynamicAllowed: true,
+        },
+      },
+      {
+        id: 'claude-sonnet-4-6',
+        name: 'Claude Sonnet 4.6',
+        description: 'Latest Sonnet baseline',
+        thinking: { type: 'none' },
+      },
+      {
         id: 'claude-sonnet-4-5-thinking',
         name: 'Claude Sonnet 4.5 Thinking',
         description: 'Balanced with extended thinking',

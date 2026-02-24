@@ -116,8 +116,9 @@ export async function configureProviderModel(
     ? customSettingsPath.replace(/^~/, os.homedir())
     : getProviderSettingsPath(provider);
 
-  // Skip if already configured (unless --config flag)
-  if (!force && fs.existsSync(settingsPath)) {
+  // Skip if already configured with a model (unless --config flag).
+  // A settings file can exist without model env keys (e.g., hook-only writes).
+  if (!force && getCurrentModel(provider, customSettingsPath)?.trim()) {
     return false;
   }
 
