@@ -22,7 +22,7 @@ import { deduplicateCcsHooks } from '../../utils/websearch/hook-utils';
 import {
   getDashboardAuthConfig,
   loadOrCreateUnifiedConfig,
-  saveUnifiedConfig,
+  mutateUnifiedConfig,
 } from '../../config/unified-config-loader';
 import type { Settings } from '../../types/config';
 
@@ -487,16 +487,16 @@ router.put('/auth/antigravity-risk', (req: Request, res: Response): void => {
       return;
     }
 
-    const config = loadOrCreateUnifiedConfig();
-    config.cliproxy.safety = {
-      ...(config.cliproxy.safety ?? {}),
-      antigravity_ack_bypass: antigravityAckBypass,
-    };
-    saveUnifiedConfig(config);
+    const updatedConfig = mutateUnifiedConfig((config) => {
+      config.cliproxy.safety = {
+        ...(config.cliproxy.safety ?? {}),
+        antigravity_ack_bypass: antigravityAckBypass,
+      };
+    });
 
     res.json({
       success: true,
-      antigravityAckBypass,
+      antigravityAckBypass: updatedConfig.cliproxy?.safety?.antigravity_ack_bypass === true,
     });
   } catch (error) {
     const classified = classifyConfigSaveFailure(error);
