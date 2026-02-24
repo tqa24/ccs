@@ -30,7 +30,7 @@ interface StartAuthOptions {
   startEndpoint?: 'start' | 'start-url';
   riskAcknowledgement?: {
     version: string;
-    reviewedIssue622: boolean;
+    reviewedIssue509: boolean;
     understandsBanRisk: boolean;
     acceptsFullResponsibility: boolean;
     typedPhrase: string;
@@ -41,6 +41,19 @@ interface StartAuthOptions {
 const POLL_INTERVAL = 3000;
 /** Maximum polling duration (5 minutes) */
 const MAX_POLL_DURATION = 5 * 60 * 1000;
+
+async function parseResponseBody(response: Response): Promise<Record<string, unknown>> {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    const fallbackError =
+      response.status >= 400 ? `Request failed with status ${response.status}` : undefined;
+    return fallbackError ? { error: fallbackError } : {};
+  }
+}
 
 /** Initial state for auth flow - extracted for DRY */
 const INITIAL_STATE: AuthFlowState = {
@@ -206,8 +219,9 @@ export function useCliproxyAuthFlow() {
             signal: controller.signal,
           })
             .then(async (response) => {
-              const data = await response.json();
-              if (response.ok && data.success) {
+              const data = await parseResponseBody(response);
+              const success = data.success === true;
+              if (response.ok && success) {
                 queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
                 queryClient.invalidateQueries({ queryKey: ['account-quota'] });
                 // Note: No toast here - DeviceCodeDialog's useDeviceCode hook handles success toast
@@ -215,7 +229,8 @@ export function useCliproxyAuthFlow() {
                 openedAuthUrlRef.current = false;
                 setState(INITIAL_STATE);
               } else {
-                const errorMsg = data.error || 'Authentication failed';
+                const errorMsg =
+                  typeof data.error === 'string' ? data.error : 'Authentication failed';
                 toast.error(errorMsg);
                 setState((prev) => ({
                   ...prev,
@@ -247,30 +262,35 @@ export function useCliproxyAuthFlow() {
             signal: controller.signal,
           });
 
-          const data = await response.json();
+          const data = await parseResponseBody(response);
+          const success = data.success === true;
 
-          if (!response.ok || !data.success) {
-            throw new Error(data.error || 'Failed to start OAuth');
+          if (!response.ok || !success) {
+            const errorMsg = typeof data.error === 'string' ? data.error : 'Failed to start OAuth';
+            throw new Error(errorMsg);
           }
+
+          const authUrl = typeof data.authUrl === 'string' ? data.authUrl : null;
+          const oauthState = typeof data.state === 'string' ? data.state : null;
 
           // Update state with auth URL
           setState((prev) => ({
             ...prev,
-            authUrl: data.authUrl || null,
-            oauthState: data.state,
+            authUrl,
+            oauthState,
           }));
 
           // Auto-open auth URL in new browser tab (fallback URL still shown in dialog)
-          if (data.authUrl) {
+          if (authUrl) {
             openedAuthUrlRef.current = true;
-            window.open(data.authUrl, '_blank');
+            window.open(authUrl, '_blank');
           }
 
           // Start polling for completion
-          if (data.state) {
+          if (oauthState) {
             pollStartRef.current = Date.now();
             pollIntervalRef.current = setInterval(() => {
-              pollStatus(provider, data.state);
+              pollStatus(provider, oauthState);
             }, POLL_INTERVAL);
           }
         }
@@ -319,16 +339,19 @@ export function useCliproxyAuthFlow() {
           body: JSON.stringify({ redirectUrl }),
         });
 
-        const data = await response.json();
+        const data = await parseResponseBody(response);
+        const success = data.success === true;
 
-        if (response.ok && data.success) {
+        if (response.ok && success) {
           stopPolling();
           queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
           queryClient.invalidateQueries({ queryKey: ['account-quota'] });
           toast.success(`${state.provider} authentication successful`);
           setState(INITIAL_STATE);
         } else {
-          throw new Error(data.error || 'Callback submission failed');
+          const errorMsg =
+            typeof data.error === 'string' ? data.error : 'Callback submission failed';
+          throw new Error(errorMsg);
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to submit callback';

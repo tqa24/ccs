@@ -3,7 +3,7 @@
  * Settings section for CLIProxy auth tokens (API key and management secret)
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -56,6 +56,7 @@ export default function AuthSection() {
   const [agyAckBypass, setAgyAckBypass] = useState(false);
   const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(true);
   const [agyAckBypassSaving, setAgyAckBypassSaving] = useState(false);
+  const agyAckBypassSavingRef = useRef(false);
 
   // Fetch tokens
   const fetchTokens = useCallback(async () => {
@@ -117,6 +118,8 @@ export default function AuthSection() {
 
   // Save all changes
   const saveChanges = async () => {
+    if (agyAckBypassSaving) return;
+
     const hasApiKeyChange = editedApiKey !== null && editedApiKey !== tokens?.apiKey.value;
     const hasSecretChange =
       editedSecret !== null && editedSecret !== tokens?.managementSecret.value;
@@ -156,6 +159,8 @@ export default function AuthSection() {
 
   // Regenerate management secret
   const regenerateSecret = async () => {
+    if (agyAckBypassSaving) return;
+
     try {
       setSaving(true);
       setError(null);
@@ -180,6 +185,8 @@ export default function AuthSection() {
 
   // Reset to defaults
   const resetToDefaults = async () => {
+    if (agyAckBypassSaving) return;
+
     try {
       setSaving(true);
       setError(null);
@@ -220,14 +227,17 @@ export default function AuthSection() {
   };
 
   const saveAgyAckBypass = async (nextValue: boolean) => {
+    if (agyAckBypassSavingRef.current || agyAckBypassSaving || saving) return;
+
     if (nextValue) {
       const confirmed = window.confirm(
-        'Enable Antigravity power user mode?\n\nThis disables AGY responsibility checklist prompts in CLI and dashboard. You accept full responsibility for OAuth/account risk.'
+        'Enable AGY power user mode?\n\nThis skips AGY safety prompts. You accept the OAuth risk.'
       );
       if (!confirmed) return;
     }
 
     try {
+      agyAckBypassSavingRef.current = true;
       setAgyAckBypassSaving(true);
       setError(null);
 
@@ -250,8 +260,16 @@ export default function AuthSection() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
+      agyAckBypassSavingRef.current = false;
       setAgyAckBypassSaving(false);
     }
+  };
+
+  const refreshAll = async () => {
+    if (loading || saving || agyAckBypassSaving) return;
+    setError(null);
+    setSuccess(null);
+    await Promise.all([fetchTokens(), fetchAgyAckBypass(), fetchRawConfig()]);
   };
 
   if (loading || !tokens) {
@@ -326,7 +344,7 @@ export default function AuthSection() {
                   value={displayApiKey}
                   onChange={(e) => setEditedApiKey(e.target.value)}
                   placeholder="API key"
-                  disabled={saving}
+                  disabled={saving || agyAckBypassSaving}
                   className="pr-20 font-mono text-sm"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
@@ -377,7 +395,7 @@ export default function AuthSection() {
                   value={displaySecret}
                   onChange={(e) => setEditedSecret(e.target.value)}
                   placeholder="Management secret"
-                  disabled={saving}
+                  disabled={saving || agyAckBypassSaving}
                   className="pr-20 font-mono text-sm"
                 />
                 <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
@@ -408,7 +426,7 @@ export default function AuthSection() {
                 variant="outline"
                 size="sm"
                 onClick={regenerateSecret}
-                disabled={saving}
+                disabled={saving || agyAckBypassSaving}
                 title="Generate new secure secret"
               >
                 <Sparkles className="w-4 h-4" />
@@ -429,15 +447,23 @@ export default function AuthSection() {
                 </p>
               </div>
               <Switch
+                aria-labelledby="agy-power-user-mode-label"
+                aria-describedby="agy-power-user-mode-description"
                 checked={agyAckBypass}
                 disabled={agyAckBypassLoading || agyAckBypassSaving || saving}
                 onCheckedChange={saveAgyAckBypass}
               />
             </div>
-            <p className="text-xs text-amber-800/90 dark:text-amber-200/90">
-              Use only if you fully understand the OAuth suspension/ban risk pattern (#622). CCS
+            <p
+              id="agy-power-user-mode-description"
+              className="text-xs text-amber-800/90 dark:text-amber-200/90"
+            >
+              Use only if you fully understand the OAuth suspension/ban risk pattern (#509). CCS
               cannot assume responsibility for account loss.
             </p>
+            <span id="agy-power-user-mode-label" className="sr-only">
+              Toggle AGY power user mode
+            </span>
           </div>
 
           <div className="pt-4 border-t">
@@ -445,7 +471,11 @@ export default function AuthSection() {
               variant="outline"
               size="sm"
               onClick={resetToDefaults}
-              disabled={saving || (!tokens.apiKey.isCustom && !tokens.managementSecret.isCustom)}
+              disabled={
+                saving ||
+                agyAckBypassSaving ||
+                (!tokens.apiKey.isCustom && !tokens.managementSecret.isCustom)
+              }
               className="gap-2"
             >
               <RotateCcw className="w-4 h-4" />
@@ -463,12 +493,8 @@ export default function AuthSection() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            fetchTokens();
-            fetchAgyAckBypass();
-            fetchRawConfig();
-          }}
-          disabled={loading || saving}
+          onClick={refreshAll}
+          disabled={loading || saving || agyAckBypassSaving}
           className="flex-1"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -478,7 +504,7 @@ export default function AuthSection() {
           variant="default"
           size="sm"
           onClick={saveChanges}
-          disabled={!hasChanges || saving}
+          disabled={!hasChanges || saving || agyAckBypassSaving}
           className="flex-1"
         >
           <Save className={`w-4 h-4 mr-2 ${saving ? 'animate-pulse' : ''}`} />

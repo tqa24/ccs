@@ -7,7 +7,7 @@
  * For Kiro: Also shows "Import from IDE" option.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -88,6 +88,15 @@ export function AddAccountDialog({
   const nicknameTrimmed = nickname.trim();
   const errorMessage = localError || authFlow.error;
 
+  const fetchAgyBypassState = useCallback(async (): Promise<boolean> => {
+    const response = await fetch('/api/settings/auth/antigravity-risk');
+    if (!response.ok) {
+      throw new Error('Failed to load Antigravity power user setting');
+    }
+    const data = (await response.json()) as { antigravityAckBypass?: boolean };
+    return data.antigravityAckBypass === true;
+  }, []);
+
   const resetAndClose = () => {
     setNickname('');
     setCallbackUrl('');
@@ -122,13 +131,9 @@ export function AddAccountDialog({
     const loadAgyBypassState = async () => {
       try {
         setAgyAckBypassLoading(true);
-        const response = await fetch('/api/settings/auth/antigravity-risk');
-        if (!response.ok) {
-          throw new Error('Failed to load Antigravity power user setting');
-        }
-        const data = (await response.json()) as { antigravityAckBypass?: boolean };
+        const enabled = await fetchAgyBypassState();
         if (!cancelled) {
-          setAgyAckBypassEnabled(data.antigravityAckBypass === true);
+          setAgyAckBypassEnabled(enabled);
         }
       } catch {
         if (!cancelled) {
@@ -146,7 +151,48 @@ export function AddAccountDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, provider]);
+  }, [fetchAgyBypassState, open, provider]);
+
+  useEffect(() => {
+    if (!open || provider !== 'agy' || !authFlow.error || !agyAckBypassEnabled) {
+      return;
+    }
+
+    const normalizedError = authFlow.error.toLowerCase();
+    const ackRequired =
+      normalizedError.includes('agy_risk_ack_required') ||
+      normalizedError.includes('responsibility acknowledgement') ||
+      normalizedError.includes('responsibility checklist');
+    if (!ackRequired) return;
+
+    let cancelled = false;
+
+    const syncBypassState = async () => {
+      try {
+        setAgyAckBypassLoading(true);
+        const enabled = await fetchAgyBypassState();
+        if (cancelled) return;
+        setAgyAckBypassEnabled(enabled);
+        if (!enabled) {
+          setLocalError('Power user mode is off. Complete the AGY checklist and retry.');
+        }
+      } catch {
+        if (cancelled) return;
+        setAgyAckBypassEnabled(false);
+        setLocalError('Power user mode is off. Complete the AGY checklist and retry.');
+      } finally {
+        if (!cancelled) {
+          setAgyAckBypassLoading(false);
+        }
+      }
+    };
+
+    void syncBypassState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [agyAckBypassEnabled, authFlow.error, fetchAgyBypassState, open, provider]);
 
   // When authFlow completes successfully (polling detected success), apply preset and close
   useEffect(() => {
@@ -226,7 +272,7 @@ export function AddAccountDialog({
       riskAcknowledgement: requiresAgyResponsibilityFlow
         ? {
             version: ANTIGRAVITY_ACK_VERSION,
-            reviewedIssue622: agyRiskChecklist.reviewedIssue622,
+            reviewedIssue509: agyRiskChecklist.reviewedIssue509,
             understandsBanRisk: agyRiskChecklist.understandsBanRisk,
             acceptsFullResponsibility: agyRiskChecklist.acceptsFullResponsibility,
             typedPhrase: agyRiskChecklist.typedPhrase,
