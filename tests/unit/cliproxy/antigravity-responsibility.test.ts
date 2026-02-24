@@ -42,7 +42,7 @@ describe('antigravity-responsibility', () => {
   it('accepts a complete acknowledgement payload', () => {
     const result = validateAntigravityRiskAcknowledgement({
       version: ANTIGRAVITY_ACK_VERSION,
-      reviewedIssue622: true,
+      reviewedIssue509: true,
       understandsBanRisk: true,
       acceptsFullResponsibility: true,
       typedPhrase: ANTIGRAVITY_ACK_PHRASE,
@@ -54,10 +54,10 @@ describe('antigravity-responsibility', () => {
   it('accepts phrase with extra spacing and lowercase', () => {
     const result = validateAntigravityRiskAcknowledgement({
       version: ANTIGRAVITY_ACK_VERSION,
-      reviewedIssue622: true,
+      reviewedIssue509: true,
       understandsBanRisk: true,
       acceptsFullResponsibility: true,
-      typedPhrase: '  i   accept   full responsibility  ',
+      typedPhrase: '  i   accept   agy   risk  ',
     });
 
     expect(result.valid).toBeTrue();
@@ -66,7 +66,7 @@ describe('antigravity-responsibility', () => {
   it('rejects payload when checklist steps are not fully completed', () => {
     const result = validateAntigravityRiskAcknowledgement({
       version: ANTIGRAVITY_ACK_VERSION,
-      reviewedIssue622: true,
+      reviewedIssue509: true,
       understandsBanRisk: false,
       acceptsFullResponsibility: true,
       typedPhrase: ANTIGRAVITY_ACK_PHRASE,
@@ -79,7 +79,7 @@ describe('antigravity-responsibility', () => {
   it('rejects payload when version is outdated', () => {
     const result = validateAntigravityRiskAcknowledgement({
       version: 'older-version',
-      reviewedIssue622: true,
+      reviewedIssue509: true,
       understandsBanRisk: true,
       acceptsFullResponsibility: true,
       typedPhrase: ANTIGRAVITY_ACK_PHRASE,
@@ -92,7 +92,7 @@ describe('antigravity-responsibility', () => {
   it('rejects payload when phrase does not match', () => {
     const result = validateAntigravityRiskAcknowledgement({
       version: ANTIGRAVITY_ACK_VERSION,
-      reviewedIssue622: true,
+      reviewedIssue509: true,
       understandsBanRisk: true,
       acceptsFullResponsibility: true,
       typedPhrase: 'I AGREE',

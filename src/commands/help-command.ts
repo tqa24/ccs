@@ -167,7 +167,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       'First run: Browser opens for authentication, then model selection',
       'Settings: ~/.ccs/{provider}.settings.json (created after auth)',
       'Safety: do not reuse one Google account across "ccs gemini" and "ccs agy" (issue #509)',
-      'Antigravity requires multi-step responsibility confirmation (issue #622)',
+      'Antigravity requires multi-step responsibility confirmation (issue #509)',
       'If you want to keep Google AI access, do not continue this shared-account setup',
       'CCS is as-is and does not take responsibility for account bans/access loss',
     ],

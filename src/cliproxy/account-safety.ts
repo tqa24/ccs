@@ -242,7 +242,7 @@ export function warnOAuthBanRisk(provider: CLIProxyProvider): void {
   );
   if (isAgy) {
     console.error(
-      '    Antigravity-specific warning (#622): OAuth usage can still trigger suspension/ban patterns.'
+      '    Antigravity-specific warning: OAuth usage can still trigger suspension/ban patterns.'
     );
   }
   console.error(
@@ -255,9 +255,6 @@ export function warnOAuthBanRisk(provider: CLIProxyProvider): void {
     '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
   );
   console.error(`    Details: ${ISSUE_509_URL}`);
-  if (isAgy) {
-    console.error('    Antigravity details: https://github.com/kaitranntt/ccs/issues/622');
-  }
   console.error('');
 }
 

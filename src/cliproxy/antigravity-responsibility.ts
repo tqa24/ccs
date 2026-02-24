@@ -12,17 +12,16 @@ import { createInterface, Interface } from 'readline';
 import { fail, info, ok, warn } from '../utils/ui';
 import { getCliproxySafetyConfig } from '../config/unified-config-loader';
 
-export const ANTIGRAVITY_RISK_ISSUE_URL = 'https://github.com/kaitranntt/ccs/issues/622';
-export const ANTIGRAVITY_PROJECT_ID_ISSUE_URL = 'https://github.com/kaitranntt/ccs/issues/619';
-export const ANTIGRAVITY_ACK_VERSION = '2026-02-24-antigravity-oauth-v1';
-export const ANTIGRAVITY_ACK_PHRASE = 'I ACCEPT FULL RESPONSIBILITY';
+export const ANTIGRAVITY_RISK_ISSUE_URL = 'https://github.com/kaitranntt/ccs/issues/509';
+export const ANTIGRAVITY_ACK_VERSION = '2026-02-24-antigravity-oauth-v2';
+export const ANTIGRAVITY_ACK_PHRASE = 'I ACCEPT AGY RISK';
 export const ANTIGRAVITY_ACCEPT_RISK_FLAGS = ['--accept-agr-risk', '--accept-antigravity-risk'];
 
 type AgyRiskContext = 'oauth' | 'run';
 
 export interface AntigravityRiskAcknowledgement {
   version: string;
-  reviewedIssue622: boolean;
+  reviewedIssue509: boolean;
   understandsBanRisk: boolean;
   acceptsFullResponsibility: boolean;
   typedPhrase: string;
@@ -126,7 +125,6 @@ function printResponsibilityHeader(context: AgyRiskContext): void {
   console.error(`    ${contextLine}`);
   console.error('    Antigravity has active ban/suspension patterns for risky OAuth usage.');
   console.error(`    Policy issue: ${ANTIGRAVITY_RISK_ISSUE_URL}`);
-  console.error(`    Related account reliability issue: ${ANTIGRAVITY_PROJECT_ID_ISSUE_URL}`);
   console.error('');
 }
 
@@ -151,7 +149,7 @@ export function validateAntigravityRiskAcknowledgement(payload: unknown): Valida
     };
   }
 
-  if (!data.reviewedIssue622 || !data.understandsBanRisk || !data.acceptsFullResponsibility) {
+  if (!data.reviewedIssue509 || !data.understandsBanRisk || !data.acceptsFullResponsibility) {
     return {
       valid: false,
       error: 'Complete all Antigravity responsibility checklist steps before authenticating.',
@@ -196,7 +194,7 @@ export async function ensureCliAntigravityResponsibility(
     const step1 = await askYesNoStep(
       rl,
       'Step 1/4',
-      'I reviewed issue #622 and understand Antigravity OAuth can trigger bans/suspensions.'
+      'I reviewed issue #509 and understand AGY OAuth can trigger bans/suspensions.'
     );
     if (!step1) return false;
 

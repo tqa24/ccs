@@ -22,7 +22,7 @@ export function AntigravityResponsibilityChecklist({
   disabled = false,
 }: AntigravityResponsibilityChecklistProps) {
   const completedSteps = [
-    value.reviewedIssue622,
+    value.reviewedIssue509,
     value.understandsBanRisk,
     value.acceptsFullResponsibility,
     value.typedPhrase.trim().replace(/\s+/g, ' ').toUpperCase() === ANTIGRAVITY_ACK_PHRASE,
@@ -73,12 +73,12 @@ export function AntigravityResponsibilityChecklist({
           <div className="flex items-start gap-2">
             <Checkbox
               id="agy-step-reviewed-issue"
-              checked={value.reviewedIssue622}
-              onCheckedChange={(checked) => setValue({ reviewedIssue622: Boolean(checked) })}
+              checked={value.reviewedIssue509}
+              onCheckedChange={(checked) => setValue({ reviewedIssue509: Boolean(checked) })}
               disabled={disabled}
             />
             <Label htmlFor="agy-step-reviewed-issue" className="text-xs leading-5">
-              Step 1: I reviewed issue #622 and understand Antigravity OAuth can trigger account
+              Step 1: I reviewed issue #509 and understand AGY OAuth can trigger account
               bans/suspensions.
             </Label>
           </div>
@@ -128,21 +128,12 @@ export function AntigravityResponsibilityChecklist({
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           <a
-            href="https://github.com/kaitranntt/ccs/issues/622"
+            href="https://github.com/kaitranntt/ccs/issues/509"
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 rounded-md border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 font-medium text-rose-800 transition-colors hover:bg-rose-500/15 dark:text-rose-200"
           >
-            Read issue #622
-            <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          <a
-            href="https://github.com/kaitranntt/ccs/issues/619"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 font-medium text-amber-800 transition-colors hover:bg-amber-500/15 dark:text-amber-200"
-          >
-            Related issue #619
+            Read issue #509
             <ExternalLink className="h-3.5 w-3.5" />
           </a>
         </div>

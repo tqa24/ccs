@@ -25,7 +25,7 @@ export function AccountSafetyWarningCard({
 
   const title = isAgy ? 'Antigravity OAuth Risk' : 'Account Safety Warning';
   const subtitle = isAgy
-    ? 'Issue #622 · Third-party OAuth ban risk'
+    ? 'Issue #509 · Third-party OAuth ban risk'
     : 'Issue #509 · Shared Gemini + AGY account risk';
   const firstLine = isAgy ? (
     <>
@@ -43,10 +43,8 @@ export function AccountSafetyWarningCard({
   ) : (
     <>If you want to keep Google AI access, do not continue this shared-account setup.</>
   );
-  const issueUrl = isAgy
-    ? 'https://github.com/kaitranntt/ccs/issues/622'
-    : 'https://github.com/kaitranntt/ccs/issues/509';
-  const issueLabel = isAgy ? 'Read issue #622' : 'Read issue #509';
+  const issueUrl = 'https://github.com/kaitranntt/ccs/issues/509';
+  const issueLabel = 'Read issue #509';
 
   return (
     <section
