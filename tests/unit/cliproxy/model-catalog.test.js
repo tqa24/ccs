@@ -71,9 +71,7 @@ describe('Model Catalog', () => {
 
     it('includes Claude Opus 4.5 Thinking', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      const opus = MODEL_CATALOG.agy.models.find(
-        (m) => m.id === 'claude-opus-4-5-thinking'
-      );
+      const opus = MODEL_CATALOG.agy.models.find((m) => m.id === 'claude-opus-4-5-thinking');
       assert(opus, 'Should include Claude Opus 4.5 Thinking');
       assert.strictEqual(opus.name, 'Claude Opus 4.5 Thinking');
     });
@@ -85,6 +83,22 @@ describe('Model Catalog', () => {
       );
       assert(sonnetThinking, 'Should include Claude Sonnet 4.5 Thinking');
       assert.strictEqual(sonnetThinking.name, 'Claude Sonnet 4.5 Thinking');
+    });
+
+    it('includes Claude Sonnet 4.6 Thinking', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const sonnetThinking = MODEL_CATALOG.agy.models.find(
+        (m) => m.id === 'claude-sonnet-4-6-thinking'
+      );
+      assert(sonnetThinking, 'Should include Claude Sonnet 4.6 Thinking');
+      assert.strictEqual(sonnetThinking.name, 'Claude Sonnet 4.6 Thinking');
+    });
+
+    it('includes Claude Sonnet 4.6', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const sonnet = MODEL_CATALOG.agy.models.find((m) => m.id === 'claude-sonnet-4-6');
+      assert(sonnet, 'Should include Claude Sonnet 4.6');
+      assert.strictEqual(sonnet.name, 'Claude Sonnet 4.6');
     });
 
     it('includes Claude Sonnet 4.5', () => {
@@ -103,9 +117,9 @@ describe('Model Catalog', () => {
       assert.strictEqual(gem3.tier, undefined, 'AGY models should not have paid tier');
     });
 
-    it('has 5 models total', () => {
+    it('has 7 models total', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      assert.strictEqual(MODEL_CATALOG.agy.models.length, 5);
+      assert.strictEqual(MODEL_CATALOG.agy.models.length, 7);
     });
   });
 
@@ -266,9 +280,7 @@ describe('Model Catalog', () => {
   describe('Thinking models ordering', () => {
     it('Claude Opus 4.5 Thinking is not deprecated', () => {
       const { MODEL_CATALOG } = modelCatalog;
-      const opus = MODEL_CATALOG.agy.models.find(
-        (m) => m.id === 'claude-opus-4-5-thinking'
-      );
+      const opus = MODEL_CATALOG.agy.models.find((m) => m.id === 'claude-opus-4-5-thinking');
       assert(opus, 'Should include Claude Opus 4.5 Thinking');
       assert.strictEqual(opus.deprecated, undefined, 'Should not be marked as deprecated');
     });
@@ -279,7 +291,11 @@ describe('Model Catalog', () => {
         (m) => m.id === 'claude-sonnet-4-5-thinking'
       );
       assert(sonnetThinking, 'Should include Claude Sonnet 4.5 Thinking');
-      assert.strictEqual(sonnetThinking.deprecated, undefined, 'Should not be marked as deprecated');
+      assert.strictEqual(
+        sonnetThinking.deprecated,
+        undefined,
+        'Should not be marked as deprecated'
+      );
     });
 
     it('thinking models are at the top of the list', () => {
@@ -288,9 +304,7 @@ describe('Model Catalog', () => {
 
       // Find indices of thinking models
       const opusIdx = models.findIndex((m) => m.id === 'claude-opus-4-5-thinking');
-      const sonnetThinkingIdx = models.findIndex(
-        (m) => m.id === 'claude-sonnet-4-5-thinking'
-      );
+      const sonnetThinkingIdx = models.findIndex((m) => m.id === 'claude-sonnet-4-5-thinking');
 
       // Find indices of non-thinking models
       const sonnetIdx = models.findIndex((m) => m.id === 'claude-sonnet-4-5');
@@ -299,14 +313,8 @@ describe('Model Catalog', () => {
       // Thinking models should come before non-thinking models
       assert(opusIdx < sonnetIdx, 'Opus Thinking should be above non-thinking Sonnet');
       assert(opusIdx < geminiIdx, 'Opus Thinking should be above non-thinking Gemini');
-      assert(
-        sonnetThinkingIdx < sonnetIdx,
-        'Sonnet Thinking should be above non-thinking Sonnet'
-      );
-      assert(
-        sonnetThinkingIdx < geminiIdx,
-        'Sonnet Thinking should be above non-thinking Gemini'
-      );
+      assert(sonnetThinkingIdx < sonnetIdx, 'Sonnet Thinking should be above non-thinking Sonnet');
+      assert(sonnetThinkingIdx < geminiIdx, 'Sonnet Thinking should be above non-thinking Gemini');
     });
   });
 

@@ -114,7 +114,8 @@ export function ensureProfileHooks(profileName: string): boolean {
             warn(`Malformed ${profileName}.settings.json: ${(parseError as Error).message}`)
           );
         }
-        // Continue with empty settings, will add hooks
+        // Never overwrite malformed settings files; avoid destructive data loss.
+        return false;
       }
     }
 
