@@ -12,30 +12,23 @@ import { isUnifiedMode } from '../../config/unified-config-loader';
 import {
   getAllAccountsSummary,
   setDefaultAccount as setCliproxyDefault,
+  getDefaultAccount as getCliproxyDefaultAccount,
   removeAccount as removeCliproxyAccount,
   bulkPauseAccounts,
   bulkResumeAccounts,
   soloAccount,
 } from '../../cliproxy/account-manager';
-import type { CLIProxyProvider } from '../../cliproxy/types';
 import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
+import { resolveAccountContextPolicy } from '../../auth/account-context';
+import {
+  buildCliproxyAccountKey,
+  parseCliproxyKey,
+  type MergedAccountEntry,
+} from './account-route-helpers';
 
 const router = Router();
 const registry = new ProfileRegistry();
 const instanceMgr = new InstanceManager();
-
-/** Parse CLIProxy account key format: "provider:accountId" */
-function parseCliproxyKey(key: string): { provider: CLIProxyProvider; accountId: string } | null {
-  const normalizedKey = key.startsWith('cliproxy:') ? key.slice('cliproxy:'.length) : key;
-  const colonIndex = normalizedKey.indexOf(':');
-  if (colonIndex === -1) return null;
-
-  const provider = normalizedKey.slice(0, colonIndex);
-  const accountId = normalizedKey.slice(colonIndex + 1);
-
-  if (!isCLIProxyProvider(provider) || !accountId) return null;
-  return { provider, accountId };
-}
 
 function hasAuthAccount(name: string): boolean {
   return registry.hasAccountUnified(name) || registry.hasProfile(name);
@@ -54,38 +47,29 @@ router.get('/', (_req: Request, res: Response): void => {
     const cliproxyAccounts = getAllAccountsSummary();
 
     // Merge profiles: unified config takes precedence
-    const merged: Record<
-      string,
-      {
-        type: string;
-        created: string;
-        last_used: string | null;
-        context_mode?: 'isolated' | 'shared';
-        context_group?: string;
-        provider?: string;
-        displayName?: string;
-      }
-    > = {};
+    const merged: Record<string, MergedAccountEntry> = {};
 
     // Add legacy profiles first
     for (const [name, meta] of Object.entries(legacyProfiles)) {
+      const contextPolicy = resolveAccountContextPolicy(meta);
       merged[name] = {
         type: meta.type || 'account',
         created: meta.created,
         last_used: meta.last_used || null,
-        context_mode: meta.context_mode,
-        context_group: meta.context_group,
+        context_mode: contextPolicy.mode,
+        context_group: contextPolicy.group,
       };
     }
 
     // Override with unified config accounts (takes precedence)
     for (const [name, account] of Object.entries(unifiedAccounts)) {
+      const contextPolicy = resolveAccountContextPolicy(account);
       merged[name] = {
         type: 'account',
         created: account.created,
         last_used: account.last_used,
-        context_mode: account.context_mode,
-        context_group: account.context_group,
+        context_mode: contextPolicy.mode,
+        context_group: contextPolicy.group,
       };
     }
 
@@ -99,7 +83,10 @@ router.get('/', (_req: Request, res: Response): void => {
         // Use unique ID for key to prevent collisions between accounts with same nickname/email
         const displayName = acct.nickname || acct.email || acct.id;
         const rawKey = `${provider}:${acct.id}`;
-        const key = merged[rawKey] ? `cliproxy:${rawKey}` : rawKey;
+        const key = buildCliproxyAccountKey(rawKey, merged);
+        if (!key) {
+          continue;
+        }
         merged[key] = {
           type: 'cliproxy',
           provider,
@@ -202,6 +189,14 @@ router.delete('/:name', (req: Request, res: Response): void => {
     // Check if this is a CLIProxy account (format: "provider:accountId")
     const cliproxyKey = !hasAuthAccount(name) ? parseCliproxyKey(name) : null;
     if (cliproxyKey) {
+      const defaultCliproxyAccount = getCliproxyDefaultAccount(cliproxyKey.provider);
+      if (defaultCliproxyAccount?.id === cliproxyKey.accountId) {
+        res.status(400).json({
+          error: `Cannot delete default CLIProxy account: ${name}. Set another default first.`,
+        });
+        return;
+      }
+
       const success = removeCliproxyAccount(cliproxyKey.provider, cliproxyKey.accountId);
       if (!success) {
         res.status(404).json({ error: `CLIProxy account not found: ${name}` });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import {
   MAX_CONTEXT_GROUP_LENGTH,
   isValidAccountProfileName,
+  policyToAccountContextMetadata,
   resolveAccountContextPolicy,
   resolveCreateAccountContext,
 } from '../../src/auth/account-context';
@@ -27,5 +28,16 @@ describe('account context helpers', () => {
 
     expect(resolved.mode).toBe('shared');
     expect(resolved.group).toBe('default');
+  });
+
+  it('round-trips shared policy metadata with normalized context group', () => {
+    const metadata = policyToAccountContextMetadata({
+      mode: 'shared',
+      group: 'Sprint-A',
+    });
+
+    const resolved = resolveAccountContextPolicy(metadata);
+    expect(resolved.mode).toBe('shared');
+    expect(resolved.group).toBe('sprint-a');
   });
 });

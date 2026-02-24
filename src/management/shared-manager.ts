@@ -240,12 +240,17 @@ class SharedManager {
         if (
           currentTarget &&
           path.resolve(currentTarget) !== path.resolve(sharedProjectsPath) &&
+          this.isSafeProjectsMergeSource(currentTarget, instanceName) &&
           (await this.pathExists(currentTarget))
         ) {
           await this.mergeDirectoryWithConflictCopies(
             currentTarget,
             sharedProjectsPath,
             instanceName
+          );
+        } else if (currentTarget && !this.isSafeProjectsMergeSource(currentTarget, instanceName)) {
+          console.log(
+            warn(`Skipping unsafe project merge source outside CCS roots: ${currentTarget}`)
           );
         }
 
@@ -286,9 +291,14 @@ class SharedManager {
       if (
         currentTarget &&
         path.resolve(currentTarget) !== path.resolve(projectsPath) &&
+        this.isSafeProjectsMergeSource(currentTarget, instanceName) &&
         (await this.pathExists(currentTarget))
       ) {
         await this.mergeDirectoryWithConflictCopies(currentTarget, projectsPath, instanceName);
+      } else if (currentTarget && !this.isSafeProjectsMergeSource(currentTarget, instanceName)) {
+        console.log(
+          warn(`Skipping unsafe project merge source outside CCS roots: ${currentTarget}`)
+        );
       }
 
       return;
@@ -676,6 +686,24 @@ class SharedManager {
     } catch (_err) {
       return null;
     }
+  }
+
+  /**
+   * Guard project merge operations to known CCS-managed roots only.
+   */
+  private isSafeProjectsMergeSource(sourcePath: string, instanceName: string): boolean {
+    const resolvedSource = path.resolve(sourcePath);
+    const sharedContextRoot = path.resolve(path.join(this.sharedDir, 'context-groups'));
+    const instanceProjectsRoot = path.resolve(
+      path.join(this.instancesDir, instanceName, 'projects')
+    );
+
+    const isWithin = (child: string, root: string): boolean =>
+      child === root || child.startsWith(`${root}${path.sep}`);
+
+    return (
+      isWithin(resolvedSource, sharedContextRoot) || isWithin(resolvedSource, instanceProjectsRoot)
+    );
   }
 
   /**

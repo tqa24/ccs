@@ -169,4 +169,46 @@ describe('migration-manager legacy kimi compatibility', () => {
     expect(unified?.accounts.personal.context_mode).toBe('isolated');
     expect(unified?.accounts.personal.context_group).toBeUndefined();
   });
+
+  it('normalizes valid legacy shared groups and drops invalid ones during migration', async () => {
+    fs.writeFileSync(
+      path.join(ccsDir, 'profiles.json'),
+      JSON.stringify(
+        {
+          default: 'work',
+          profiles: {
+            work: {
+              type: 'account',
+              created: '2026-02-01T00:00:00.000Z',
+              last_used: null,
+              context_mode: 'shared',
+              context_group: 'Sprint-A',
+            },
+            broken: {
+              type: 'account',
+              created: '2026-02-02T00:00:00.000Z',
+              last_used: null,
+              context_mode: 'shared',
+              context_group: '###',
+            },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await migrate(false);
+    expect(result.success).toBe(true);
+    expect(
+      result.warnings.some((warning) =>
+        warning.includes('Skipped invalid context group for account "broken"')
+      )
+    ).toBe(true);
+
+    const unified = loadUnifiedConfig();
+    expect(unified?.accounts.work.context_group).toBe('sprint-a');
+    expect(unified?.accounts.broken.context_mode).toBe('shared');
+    expect(unified?.accounts.broken.context_group).toBeUndefined();
+  });
 });

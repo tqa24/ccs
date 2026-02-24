@@ -15,6 +15,7 @@ import {
   policyToAccountContextMetadata,
   formatAccountContextPolicy,
   isValidAccountProfileName,
+  resolveAccountContextPolicy,
 } from '../account-context';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
@@ -24,12 +25,60 @@ function sanitizeProfileNameForInstance(name: string): string {
   return name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
 }
 
+const AMBIENT_PROVIDER_PREFIXES = [
+  'ANTHROPIC_',
+  'OPENAI_',
+  'GOOGLE_',
+  'GEMINI_',
+  'MINIMAX_',
+  'QWEN_',
+  'DEEPSEEK_',
+  'KIMI_',
+  'AZURE_',
+  'OLLAMA_',
+];
+const AMBIENT_PROVIDER_EXACT_KEYS = new Set([
+  'OPENROUTER_API_KEY',
+  'OPENROUTER_KEY',
+  'XAI_API_KEY',
+  'MISTRAL_API_KEY',
+  'COHERE_API_KEY',
+]);
+const AMBIENT_PROVIDER_SUFFIXES = ['_API_KEY', '_AUTH_TOKEN', '_ACCESS_TOKEN', '_SECRET_KEY'];
+
+function stripAmbientProviderCredentials(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const sanitized: NodeJS.ProcessEnv = { ...env };
+
+  for (const envKey of Object.keys(sanitized)) {
+    if (envKey === 'CLAUDE_CONFIG_DIR') {
+      continue;
+    }
+
+    if (
+      AMBIENT_PROVIDER_PREFIXES.some((prefix) => envKey.startsWith(prefix)) ||
+      AMBIENT_PROVIDER_EXACT_KEYS.has(envKey) ||
+      AMBIENT_PROVIDER_SUFFIXES.some((suffix) => envKey.endsWith(suffix))
+    ) {
+      delete sanitized[envKey];
+    }
+  }
+
+  return sanitized;
+}
+
 /**
  * Handle the create command
  */
 export async function handleCreate(ctx: CommandContext, args: string[]): Promise<void> {
   await initUI();
   const { profileName, force, shareContext, contextGroup, unknownFlags } = parseArgs(args);
+
+  if (unknownFlags && unknownFlags.length > 0) {
+    const unknownList = unknownFlags.join(', ');
+    console.log(fail(`Unknown option(s): ${unknownList}`));
+    console.log('');
+    exitWithError(`Unknown option(s): ${unknownList}`, ExitCode.PROFILE_ERROR);
+  }
 
   if (!profileName) {
     console.log(fail('Profile name is required'));
@@ -41,13 +90,6 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     console.log('Example:');
     console.log(`  ${color('ccs auth create work', 'command')}`);
     exitWithError('Profile name is required', ExitCode.PROFILE_ERROR);
-  }
-
-  if (unknownFlags && unknownFlags.length > 0) {
-    const unknownList = unknownFlags.join(', ');
-    console.log(fail(`Unknown option(s): ${unknownList}`));
-    console.log('');
-    exitWithError(`Unknown option(s): ${unknownList}`, ExitCode.PROFILE_ERROR);
   }
 
   if (!isValidAccountProfileName(profileName)) {
@@ -100,33 +142,73 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     useUnifiedConfig && existsUnified
       ? ctx.registry.getAllAccountsUnified()[profileName]
       : undefined;
+  const previousContextPolicy =
+    !createdProfile && (previousUnifiedProfile || previousLegacyProfile)
+      ? resolveAccountContextPolicy(previousUnifiedProfile || previousLegacyProfile)
+      : undefined;
+
+  const claudeInfo = getClaudeCliInfo();
+  if (!claudeInfo) {
+    console.log(fail('Claude CLI not found'));
+    console.log('');
+    console.log('Please install Claude CLI first:');
+    console.log(`  ${color('https://claude.ai/download', 'path')}`);
+    exitWithError('Claude CLI not found', ExitCode.BINARY_ERROR);
+  }
+
+  let rollbackCompleted = false;
+  const rollbackMetadata = (): void => {
+    try {
+      if (useUnifiedConfig) {
+        if (createdProfile) {
+          if (ctx.registry.hasAccountUnified(profileName)) {
+            ctx.registry.removeAccountUnified(profileName);
+          }
+        } else if (previousUnifiedProfile) {
+          ctx.registry.updateAccountUnified(profileName, previousUnifiedProfile);
+        }
+        return;
+      }
+
+      if (createdProfile) {
+        if (ctx.registry.hasProfile(profileName)) {
+          ctx.registry.deleteProfile(profileName);
+        }
+      } else if (previousLegacyProfile) {
+        ctx.registry.updateProfile(profileName, previousLegacyProfile);
+      }
+    } catch {
+      // Best-effort rollback to avoid leaving stale accounts after failed login.
+    }
+  };
+
+  const rollbackFailedCreate = async (): Promise<void> => {
+    if (rollbackCompleted) {
+      return;
+    }
+    rollbackCompleted = true;
+
+    rollbackMetadata();
+
+    if (createdProfile) {
+      try {
+        ctx.instanceMgr.deleteInstance(profileName);
+      } catch {
+        // Best-effort cleanup.
+      }
+      return;
+    }
+
+    if (previousContextPolicy) {
+      try {
+        await ctx.instanceMgr.ensureInstance(profileName, previousContextPolicy);
+      } catch {
+        // Best-effort rollback for context mode/group.
+      }
+    }
+  };
 
   try {
-    const rollbackMetadata = (): void => {
-      try {
-        if (useUnifiedConfig) {
-          if (createdProfile) {
-            if (ctx.registry.hasAccountUnified(profileName)) {
-              ctx.registry.removeAccountUnified(profileName);
-            }
-          } else if (previousUnifiedProfile) {
-            ctx.registry.updateAccountUnified(profileName, previousUnifiedProfile);
-          }
-          return;
-        }
-
-        if (createdProfile) {
-          if (ctx.registry.hasProfile(profileName)) {
-            ctx.registry.deleteProfile(profileName);
-          }
-        } else if (previousLegacyProfile) {
-          ctx.registry.updateProfile(profileName, previousLegacyProfile);
-        }
-      } catch {
-        // Best-effort rollback to avoid leaving stale accounts after failed login.
-      }
-    };
-
     // Create instance directory
     console.log(info(`Creating profile: ${profileName}`));
     const instancePath = await ctx.instanceMgr.ensureInstance(profileName, contextPolicy);
@@ -170,53 +252,39 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     console.log(warn('You will be prompted to login with your account.'));
     console.log('');
 
-    // Detect Claude CLI
-    const claudeInfo = getClaudeCliInfo();
-    if (!claudeInfo) {
-      console.log(fail('Claude CLI not found'));
-      console.log('');
-      console.log('Please install Claude CLI first:');
-      console.log(`  ${color('https://claude.ai/download', 'path')}`);
-      exitWithError('Claude CLI not found', ExitCode.BINARY_ERROR);
-    }
-
     const { path: claudeCli, needsShell } = claudeInfo;
-    const childEnv = stripClaudeCodeEnv({ ...process.env, CLAUDE_CONFIG_DIR: instancePath });
-    // Avoid ambient provider credentials influencing account-login bootstrap behavior.
-    const ambientProviderPrefixes = ['ANTHROPIC_', 'OPENAI_', 'GOOGLE_', 'GEMINI_', 'MINIMAX_'];
-    for (const envKey of Object.keys(childEnv)) {
-      if (envKey === 'CLAUDE_CONFIG_DIR') {
-        continue;
-      }
-
-      if (
-        ambientProviderPrefixes.some((prefix) => envKey.startsWith(prefix)) ||
-        envKey === 'OPENROUTER_API_KEY'
-      ) {
-        delete childEnv[envKey];
-      }
-    }
+    const childEnv = stripAmbientProviderCredentials(
+      stripClaudeCodeEnv({ ...process.env, CLAUDE_CONFIG_DIR: instancePath })
+    );
 
     // Execute Claude in isolated instance (will auto-prompt for login if no credentials)
     // On Windows, .cmd/.bat/.ps1 files need shell: true to execute properly
     let child: ChildProcess;
-    if (needsShell) {
-      const cmdString = escapeShellArg(claudeCli);
-      child = spawn(cmdString, {
-        stdio: 'inherit',
-        windowsHide: true,
-        shell: true,
-        env: childEnv,
-      });
-    } else {
-      child = spawn(claudeCli, [], {
-        stdio: 'inherit',
-        windowsHide: true,
-        env: childEnv,
-      });
+    try {
+      if (needsShell) {
+        const cmdString = escapeShellArg(claudeCli);
+        child = spawn(cmdString, {
+          stdio: 'inherit',
+          windowsHide: true,
+          shell: true,
+          env: childEnv,
+        });
+      } else {
+        child = spawn(claudeCli, [], {
+          stdio: 'inherit',
+          windowsHide: true,
+          env: childEnv,
+        });
+      }
+    } catch (error) {
+      await rollbackFailedCreate();
+      exitWithError(
+        `Failed to execute Claude CLI: ${(error as Error).message}`,
+        ExitCode.BINARY_ERROR
+      );
     }
 
-    child.on('exit', (code: number | null) => {
+    child.on('exit', async (code: number | null) => {
       if (code === 0) {
         console.log('');
         console.log(
@@ -246,10 +314,7 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
         console.log('');
         process.exit(0);
       } else {
-        rollbackMetadata();
-        if (createdProfile) {
-          ctx.instanceMgr.deleteInstance(profileName);
-        }
+        await rollbackFailedCreate();
 
         console.log('');
         console.log(fail('Login failed or cancelled'));
@@ -261,14 +326,12 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
       }
     });
 
-    child.on('error', (err: Error) => {
-      rollbackMetadata();
-      if (createdProfile) {
-        ctx.instanceMgr.deleteInstance(profileName);
-      }
+    child.on('error', async (err: Error) => {
+      await rollbackFailedCreate();
       exitWithError(`Failed to execute Claude CLI: ${err.message}`, ExitCode.BINARY_ERROR);
     });
   } catch (error) {
+    await rollbackFailedCreate();
     exitWithError(`Failed to create profile: ${(error as Error).message}`, ExitCode.GENERAL_ERROR);
   }
 }

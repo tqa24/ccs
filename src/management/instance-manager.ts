@@ -8,6 +8,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { createHash } from 'crypto';
 import SharedManager from './shared-manager';
 import { AccountContextPolicy, DEFAULT_ACCOUNT_CONTEXT_MODE } from '../auth/account-context';
 import { getCcsDir } from '../utils/config-manager';
@@ -203,7 +204,39 @@ class InstanceManager {
 
   private getContextSyncLockPath(profileName: string): string {
     const safeName = this.sanitizeName(profileName);
-    return path.join(this.locksDir, `${safeName}.lock`);
+    // Keep lock filenames deterministic while preventing normalized-name collisions.
+    const profileHash = createHash('sha1').update(profileName).digest('hex').slice(0, 8);
+    return path.join(this.locksDir, `${safeName}-${profileHash}.lock`);
+  }
+
+  private isProcessAlive(pid: number): boolean {
+    if (!Number.isInteger(pid) || pid <= 0) {
+      return false;
+    }
+
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'EPERM') {
+        return true;
+      }
+      return false;
+    }
+  }
+
+  private tryRemoveDeadOwnerLock(lockPath: string): boolean {
+    try {
+      const lockContent = fs.readFileSync(lockPath, 'utf8').trim();
+      const lockPid = Number.parseInt(lockContent, 10);
+      if (!this.isProcessAlive(lockPid)) {
+        fs.unlinkSync(lockPath);
+        return true;
+      }
+    } catch {
+      // Best-effort stale lock cleanup.
+    }
+    return false;
   }
 
   private async withContextSyncLock<T>(
@@ -212,8 +245,8 @@ class InstanceManager {
   ): Promise<T> {
     const lockPath = this.getContextSyncLockPath(profileName);
     const retryDelayMs = 50;
-    const timeoutMs = 5000;
     const staleLockMs = 30000;
+    const timeoutMs = staleLockMs + 5000;
     const start = Date.now();
 
     fs.mkdirSync(this.locksDir, { recursive: true, mode: 0o700 });
@@ -234,6 +267,10 @@ class InstanceManager {
           const lockStats = fs.statSync(lockPath);
           if (Date.now() - lockStats.mtimeMs > staleLockMs) {
             fs.unlinkSync(lockPath);
+            continue;
+          }
+
+          if (this.tryRemoveDeadOwnerLock(lockPath)) {
             continue;
           }
         } catch {

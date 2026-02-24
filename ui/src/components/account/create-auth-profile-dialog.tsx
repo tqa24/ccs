@@ -22,6 +22,8 @@ interface CreateAuthProfileDialogProps {
   onClose: () => void;
 }
 
+const MAX_CONTEXT_GROUP_LENGTH = 64;
+
 export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDialogProps) {
   const [profileName, setProfileName] = useState('');
   const [shareContext, setShareContext] = useState(false);
@@ -32,7 +34,9 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
   const isValidName = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(profileName);
   const normalizedGroup = contextGroup.trim().toLowerCase();
   const isValidContextGroup =
-    normalizedGroup.length === 0 || /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(normalizedGroup);
+    normalizedGroup.length === 0 ||
+    (normalizedGroup.length <= MAX_CONTEXT_GROUP_LENGTH &&
+      /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(normalizedGroup));
 
   const command =
     profileName && isValidName
@@ -119,7 +123,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
                 {contextGroup.trim().length > 0 && !isValidContextGroup && (
                   <p className="text-xs text-destructive">
                     Group must start with a letter and use only letters, numbers, dashes, or
-                    underscores.
+                    underscores (max {MAX_CONTEXT_GROUP_LENGTH} chars).
                   </p>
                 )}
               </div>

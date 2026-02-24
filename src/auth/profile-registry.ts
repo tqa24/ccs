@@ -159,7 +159,7 @@ export class ProfileRegistry {
       throw new Error(`Profile not found: ${name}`);
     }
 
-    return data.profiles[name];
+    return this.normalizeLegacyProfileMetadata(data.profiles[name]);
   }
 
   /**
@@ -215,7 +215,11 @@ export class ProfileRegistry {
    */
   getAllProfiles(): Record<string, ProfileMetadata> {
     const data = this._read();
-    return data.profiles;
+    const normalized: Record<string, ProfileMetadata> = {};
+    for (const [name, profile] of Object.entries(data.profiles)) {
+      normalized[name] = this.normalizeLegacyProfileMetadata(profile);
+    }
+    return normalized;
   }
 
   /**
@@ -357,7 +361,11 @@ export class ProfileRegistry {
   getAllAccountsUnified(): Record<string, AccountConfig> {
     if (!isUnifiedMode()) return {};
     const config = loadOrCreateUnifiedConfig();
-    return config.accounts;
+    const normalized: Record<string, AccountConfig> = {};
+    for (const [name, account] of Object.entries(config.accounts)) {
+      normalized[name] = this.normalizeUnifiedAccountConfig(account);
+    }
+    return normalized;
   }
 
   /**

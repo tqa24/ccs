@@ -18,8 +18,56 @@ import {
   getBackupDirectories,
 } from '../../config/migration-manager';
 import { isUnifiedConfig } from '../../config/unified-config-types';
+import { isValidContextGroupName, normalizeContextGroupName } from '../../auth/account-context';
 
 const router = Router();
+
+function validateAccountContextMetadata(config: unknown): string | null {
+  if (typeof config !== 'object' || config === null) {
+    return 'Invalid config payload';
+  }
+
+  const candidate = config as Record<string, unknown>;
+  const accounts = candidate.accounts;
+  if (accounts === undefined) {
+    return null;
+  }
+
+  if (typeof accounts !== 'object' || accounts === null || Array.isArray(accounts)) {
+    return 'Invalid config.accounts: expected object';
+  }
+
+  for (const [accountName, accountValue] of Object.entries(accounts as Record<string, unknown>)) {
+    if (typeof accountValue !== 'object' || accountValue === null || Array.isArray(accountValue)) {
+      return `Invalid config.accounts.${accountName}: expected object`;
+    }
+
+    const account = accountValue as Record<string, unknown>;
+    const mode = account.context_mode;
+    const group = account.context_group;
+
+    if (mode !== undefined && mode !== 'isolated' && mode !== 'shared') {
+      return `Invalid config.accounts.${accountName}.context_mode: expected isolated|shared`;
+    }
+
+    if (group !== undefined && typeof group !== 'string') {
+      return `Invalid config.accounts.${accountName}.context_group: expected string`;
+    }
+
+    if (mode !== 'shared' && group !== undefined) {
+      return `Invalid config.accounts.${accountName}: context_group requires context_mode=shared`;
+    }
+
+    if (mode === 'shared' && typeof group === 'string' && group.trim().length > 0) {
+      const normalizedGroup = normalizeContextGroupName(group);
+      if (!isValidContextGroupName(normalizedGroup)) {
+        return `Invalid config.accounts.${accountName}.context_group`;
+      }
+    }
+  }
+
+  return null;
+}
 
 /**
  * GET /api/config/format - Return current config format and migration status
@@ -79,6 +127,12 @@ router.put('/', (req: Request, res: Response): void => {
 
   if (!isUnifiedConfig(config)) {
     res.status(400).json({ error: 'Invalid config format' });
+    return;
+  }
+
+  const accountContextError = validateAccountContextMetadata(config);
+  if (accountContextError) {
+    res.status(400).json({ error: accountContextError });
     return;
   }
 
