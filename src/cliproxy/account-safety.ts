@@ -165,9 +165,18 @@ export function warnCrossProviderDuplicates(provider: CLIProxyProvider): boolean
 
   console.error('');
   console.error(warn('Account safety: cross-provider duplicate detected'));
-  console.error('    Same Google account across providers risks account bans (ref: #509).');
   console.error(
-    '    If provider requests start returning 403/Forbidden, treat it as a possible ban.'
+    '    Same Google account across "ccs gemini" + "ccs agy" is a known suspension/ban risk (ref: #509).'
+  );
+  console.error('    This risk applies to both CLI sessions and accounts added from "ccs config".');
+  console.error(
+    '    If provider requests start returning 403/Forbidden, treat it as a possible account disable/ban.'
+  );
+  console.error(
+    '    If you want to keep Google AI access on this account, do not continue this shared-account setup.'
+  );
+  console.error(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
   );
   console.error(`    Details: ${ISSUE_509_URL}`);
   console.error('');
@@ -177,8 +186,8 @@ export function warnCrossProviderDuplicates(provider: CLIProxyProvider): boolean
   }
 
   console.error('');
-  console.error('    Fix: pause duplicate with "ccs <provider> --pause <account>"');
-  console.error('    or use separate Google accounts per provider.');
+  console.error('    Immediate action: pause duplicate account and use separate Google accounts.');
+  console.error('    Fix command: "ccs cliproxy pause <account> --provider <provider>"');
   console.error('');
 
   return true;
@@ -196,8 +205,19 @@ export function warnNewAccountConflict(
   console.error(
     `    ${maskEmail(email)} is also registered under: ${conflictingProviders.join(', ')}`
   );
-  console.error('    Concurrent usage may cause Google to ban your account.');
+  console.error(
+    '    Reusing one Google account between "ccs gemini" and "ccs agy" can trigger bans.'
+  );
+  console.error(
+    '    This applies to both CLI auth and "ccs config" dashboard auth for these providers.'
+  );
   console.error('    403/Forbidden responses can be an early sign of account disablement.');
+  console.error(
+    '    If you want to keep Google AI access, do not continue with this shared-account setup.'
+  );
+  console.error(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
+  );
   console.error('    Consider pausing the duplicate or using a different account.');
   console.error(`    Details: ${ISSUE_509_URL}`);
   console.error('');
@@ -215,15 +235,18 @@ export function warnOAuthBanRisk(provider: CLIProxyProvider): void {
 
   shownBanWarnings.add(provider);
   console.error('');
-  console.error(warn('Account safety warning (#509)'));
+  console.error(warn('Account safety warning (#509 - read before continuing)'));
   console.error(
-    '    Using the same Google account in both "ccs gemini" and "ccs agy" can trigger suspension.'
+    '    Known risk: one Google account shared by "ccs gemini" + "ccs agy" can be disabled/banned.'
   );
   console.error(
-    '    If you see 403/Forbidden during provider calls, treat it as likely account disable/ban.'
+    '    This risk applies whether auth was done from CLI or from "ccs config" dashboard.'
   );
   console.error(
-    '    Use separate Google accounts per provider and stop retrying blocked accounts.'
+    '    If you want to keep Google AI access, do not continue with this shared-account setup.'
+  );
+  console.error(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
   );
   console.error(`    Details: ${ISSUE_509_URL}`);
   console.error('');
@@ -247,11 +270,16 @@ export function warnPossible403Ban(provider: CLIProxyProvider, errorMessage: str
   }
 
   console.error('');
-  console.error(warn(`Account safety: ${provider} returned 403/Forbidden`));
+  console.error(warn(`Account safety: ${provider} returned 403/Forbidden (possible disable/ban)`));
   console.error(
-    '    For gemini/agy flows this often means the Google account was blocked/disabled.'
+    '    For gemini/agy flows this often means Google blocked or disabled the account.'
   );
-  console.error('    Stop retries for this account and switch to a different account/provider.');
+  console.error(
+    '    If you want to keep Google AI access, stop using this account/provider pairing immediately.'
+  );
+  console.error(
+    '    CCS is provided as-is and cannot take responsibility for suspension/ban/access-loss decisions.'
+  );
   console.error(`    Details: ${ISSUE_509_URL}`);
   console.error(`    Error: "${truncate(errorMessage, 160)}"`);
   console.error('');

@@ -184,13 +184,7 @@ router.get('/accounts', async (_req: Request, res: Response): Promise<void> => {
     const target = getProxyTarget();
     if (target.isRemote) {
       const authStatus = await fetchRemoteAuthStatus(target);
-      // Transform RemoteAuthStatus[] to account summary format
-      const accounts = authStatus.flatMap((status) =>
-        status.accounts.map((acc) => ({
-          provider: status.provider,
-          ...acc,
-        }))
-      );
+      const accounts = authStatus.flatMap((status) => status.accounts);
       res.json({ accounts, source: 'remote' });
       return;
     }
