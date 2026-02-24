@@ -529,9 +529,23 @@ export async function execClaudeWithCLIProxy(
     log(`Using remote proxy authentication (skipping local OAuth)`);
   }
 
-  if (provider === 'agy' && !forceAuth && !skipLocalAuth) {
+  if (provider === 'agy' && forceAuth && skipLocalAuth) {
+    const acknowledged = await ensureCliAntigravityResponsibility({
+      context: 'oauth',
+      acceptedByFlag: acceptAgyRisk,
+    });
+    if (!acknowledged) {
+      throw new Error(
+        `Antigravity auth blocked. Re-run after completing confirmation or pass ${ANTIGRAVITY_ACCEPT_RISK_FLAGS[0]}.`
+      );
+    }
+    console.error(info('Remote proxy mode is active; local OAuth flow is skipped in --auth mode.'));
+    return;
+  }
+
+  if (provider === 'agy' && !forceAuth) {
     const requiresAuthNow = providerConfig.requiresOAuth && !isAuthenticated(provider);
-    if (!requiresAuthNow) {
+    if (skipLocalAuth || !requiresAuthNow) {
       const acknowledged = await ensureCliAntigravityResponsibility({
         context: 'run',
         acceptedByFlag: acceptAgyRisk,

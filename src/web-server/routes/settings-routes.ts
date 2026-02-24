@@ -19,7 +19,11 @@ import {
 } from '../../cliproxy';
 import { regenerateConfig } from '../../cliproxy/config-generator';
 import { deduplicateCcsHooks } from '../../utils/websearch/hook-utils';
-import { loadOrCreateUnifiedConfig, saveUnifiedConfig } from '../../config/unified-config-loader';
+import {
+  getDashboardAuthConfig,
+  loadOrCreateUnifiedConfig,
+  saveUnifiedConfig,
+} from '../../config/unified-config-loader';
 import type { Settings } from '../../types/config';
 
 const router = Router();
@@ -31,6 +35,73 @@ const MODEL_ENV_KEYS = [
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
 ] as const;
 const PRESET_MODEL_KEYS = ['default', 'opus', 'sonnet', 'haiku'] as const;
+
+function logRouteError(context: string, error: unknown): void {
+  if (error instanceof Error) {
+    console.error(`[settings-routes] ${context}: ${error.message}`);
+    return;
+  }
+  console.error(`[settings-routes] ${context}: unknown error`);
+}
+
+function respondInternalError(
+  res: Response,
+  error: unknown,
+  fallbackMessage: string,
+  statusCode = 500
+): void {
+  logRouteError(fallbackMessage, error);
+  res.status(statusCode).json({ error: fallbackMessage });
+}
+
+function isLoopbackAddress(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().replace(/^\[|\]$/g, '');
+  return (
+    normalized === '::1' ||
+    normalized === '127.0.0.1' ||
+    normalized.startsWith('127.') ||
+    normalized === '::ffff:127.0.0.1' ||
+    normalized.startsWith('::ffff:127.')
+  );
+}
+
+function requireSensitiveLocalAccess(req: Request, res: Response): boolean {
+  const dashboardAuth = getDashboardAuthConfig();
+  if (dashboardAuth.enabled) {
+    return true;
+  }
+
+  const forwarded = req.headers['x-forwarded-for'];
+  const firstForwarded =
+    typeof forwarded === 'string' ? forwarded.split(',')[0]?.trim() : undefined;
+  const candidateAddress = firstForwarded || req.socket.remoteAddress || req.ip;
+
+  if (isLoopbackAddress(candidateAddress)) {
+    return true;
+  }
+
+  res.status(403).json({
+    error: 'Sensitive settings endpoints require localhost access when dashboard auth is disabled.',
+  });
+  return false;
+}
+
+function classifyConfigSaveFailure(error: unknown): { statusCode: number; message: string } {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+
+  if (message.includes('failed to acquire config lock')) {
+    return { statusCode: 409, message: 'Configuration is busy. Retry in a moment.' };
+  }
+  if (message.includes('eacces') || message.includes('eperm') || message.includes('permission')) {
+    return { statusCode: 403, message: 'Insufficient permission to update configuration.' };
+  }
+  if (message.includes('enospc') || message.includes('no space left')) {
+    return { statusCode: 507, message: 'Insufficient disk space to update configuration.' };
+  }
+
+  return { statusCode: 500, message: 'Failed to update Antigravity power user mode.' };
+}
 
 /**
  * Helper: Resolve settings path for profile or variant
@@ -145,7 +216,7 @@ router.get('/:profile', (req: Request, res: Response): void => {
       path: settingsPath,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -172,7 +243,7 @@ router.get('/:profile/raw', (req: Request, res: Response): void => {
       path: settingsPath,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -265,7 +336,7 @@ router.put('/:profile', (req: Request, res: Response): void => {
       }),
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -287,7 +358,7 @@ router.get('/:profile/presets', (req: Request, res: Response): void => {
     const settings = canonicalizeCodexSettings(profile, loadSettings(settingsPath));
     res.json({ presets: settings.presets || [] });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -346,7 +417,7 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
 
     res.status(201).json({ preset });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -378,7 +449,7 @@ router.delete('/:profile/presets/:name', (req: Request, res: Response): void => 
 
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -387,14 +458,16 @@ router.delete('/:profile/presets/:name', (req: Request, res: Response): void => 
 /**
  * GET /api/settings/auth/antigravity-risk - Get AGY responsibility bypass setting
  */
-router.get('/auth/antigravity-risk', (_req: Request, res: Response): void => {
+router.get('/auth/antigravity-risk', (req: Request, res: Response): void => {
+  if (!requireSensitiveLocalAccess(req, res)) return;
+
   try {
     const config = loadOrCreateUnifiedConfig();
     res.json({
       antigravityAckBypass: config.cliproxy?.safety?.antigravity_ack_bypass === true,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load Antigravity power user mode.');
   }
 });
 
@@ -402,8 +475,12 @@ router.get('/auth/antigravity-risk', (_req: Request, res: Response): void => {
  * PUT /api/settings/auth/antigravity-risk - Update AGY responsibility bypass setting
  */
 router.put('/auth/antigravity-risk', (req: Request, res: Response): void => {
+  if (!requireSensitiveLocalAccess(req, res)) return;
+
   try {
-    const { antigravityAckBypass } = req.body as { antigravityAckBypass?: unknown };
+    const body = req.body as { antigravityAckBypass?: unknown } | null | undefined;
+    const antigravityAckBypass =
+      body && typeof body === 'object' ? body.antigravityAckBypass : undefined;
 
     if (typeof antigravityAckBypass !== 'boolean') {
       res.status(400).json({ error: 'antigravityAckBypass must be a boolean' });
@@ -422,7 +499,8 @@ router.put('/auth/antigravity-risk', (req: Request, res: Response): void => {
       antigravityAckBypass,
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    const classified = classifyConfigSaveFailure(error);
+    respondInternalError(res, error, classified.message, classified.statusCode);
   }
 });
 
@@ -444,7 +522,7 @@ router.get('/auth/tokens', (_req: Request, res: Response): void => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -452,7 +530,9 @@ router.get('/auth/tokens', (_req: Request, res: Response): void => {
  * GET /api/settings/auth/tokens/raw - Get current auth tokens unmasked
  * NOTE: Sensitive endpoint - no caching, localhost only
  */
-router.get('/auth/tokens/raw', (_req: Request, res: Response): void => {
+router.get('/auth/tokens/raw', (req: Request, res: Response): void => {
+  if (!requireSensitiveLocalAccess(req, res)) return;
+
   try {
     // Prevent caching of sensitive data
     res.setHeader('Cache-Control', 'no-store');
@@ -470,7 +550,7 @@ router.get('/auth/tokens/raw', (_req: Request, res: Response): void => {
       },
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to load raw auth tokens.');
   }
 });
 
@@ -506,7 +586,7 @@ router.put('/auth/tokens', (req: Request, res: Response): void => {
       message: 'Restart CLIProxy to apply changes',
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -530,7 +610,7 @@ router.post('/auth/tokens/regenerate-secret', (_req: Request, res: Response): vo
       message: 'Restart CLIProxy to apply changes',
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 
@@ -558,7 +638,7 @@ router.post('/auth/tokens/reset', (_req: Request, res: Response): void => {
       message: 'Tokens reset to defaults. Restart CLIProxy to apply.',
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Internal server error.');
   }
 });
 

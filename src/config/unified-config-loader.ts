@@ -243,6 +243,7 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
     accounts: partial.accounts ?? defaults.accounts,
     profiles: partial.profiles ?? defaults.profiles,
     cliproxy: {
+      ...partial.cliproxy,
       oauth_accounts: partial.cliproxy?.oauth_accounts ?? defaults.cliproxy.oauth_accounts,
       providers: defaults.cliproxy.providers, // Always use defaults for providers
       variants: partial.cliproxy?.variants ?? defaults.cliproxy.variants,
@@ -256,8 +257,12 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
           partial.cliproxy?.safety?.antigravity_ack_bypass ??
           DEFAULT_CLIPROXY_SAFETY_CONFIG.antigravity_ack_bypass,
       },
+      // Kiro browser behavior setting (optional)
+      kiro_no_incognito: partial.cliproxy?.kiro_no_incognito,
       // Auth config - preserve user values, no defaults (uses constants as fallback)
       auth: partial.cliproxy?.auth,
+      // Background token refresh config (optional)
+      token_refresh: partial.cliproxy?.token_refresh,
       // Backend selection - validate and preserve user choice (original vs plus)
       backend:
         partial.cliproxy?.backend === 'original' || partial.cliproxy?.backend === 'plus'
