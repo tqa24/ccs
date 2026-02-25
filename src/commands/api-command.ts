@@ -43,6 +43,7 @@ import {
   type ProviderPreset,
 } from '../api/services';
 import { syncToLocalConfig } from '../cliproxy/sync/local-config-sync';
+import type { TargetType } from '../targets/target-adapter';
 import { extractOption, hasAnyFlag } from './arg-extractor';
 
 interface ApiCommandArgs {
@@ -51,13 +52,14 @@ interface ApiCommandArgs {
   apiKey?: string;
   model?: string;
   preset?: string;
+  target?: TargetType;
   force?: boolean;
   yes?: boolean;
   errors: string[];
 }
 
 const API_BOOLEAN_FLAGS = ['--force', '--yes', '-y'] as const;
-const API_VALUE_FLAGS = ['--base-url', '--api-key', '--model', '--preset'] as const;
+const API_VALUE_FLAGS = ['--base-url', '--api-key', '--model', '--preset', '--target'] as const;
 const API_KNOWN_FLAGS: readonly string[] = [...API_BOOLEAN_FLAGS, ...API_VALUE_FLAGS];
 const API_VALUE_FLAG_SET = new Set<string>(API_VALUE_FLAGS);
 
@@ -130,6 +132,14 @@ function extractPositionalArgs(args: string[]): string[] {
   return positionals;
 }
 
+function parseTargetValue(value: string): TargetType | null {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'claude' || normalized === 'droid') {
+    return normalized;
+  }
+  return null;
+}
+
 /** Parse command line arguments for api commands */
 export function parseApiCommandArgs(args: string[]): ApiCommandArgs {
   const result: ApiCommandArgs = {
@@ -181,6 +191,22 @@ export function parseApiCommandArgs(args: string[]): ApiCommandArgs {
     },
     () => {
       result.errors.push('Missing value for --preset');
+    }
+  );
+
+  remaining = applyRepeatedOption(
+    remaining,
+    ['--target'],
+    (value) => {
+      const target = parseTargetValue(value);
+      if (!target) {
+        result.errors.push(`Invalid --target value "${value}". Use: claude or droid`);
+        return;
+      }
+      result.target = target;
+    },
+    () => {
+      result.errors.push('Missing value for --target');
     }
   );
 
@@ -383,12 +409,23 @@ async function handleCreate(args: string[]): Promise<void> {
     sonnet: sonnetModel,
     haiku: haikuModel,
   };
+  let resolvedTarget: TargetType = parsedArgs.target || 'claude';
+
+  if (!parsedArgs.target && !parsedArgs.yes) {
+    const useDroidByDefault = await InteractivePrompt.confirm(
+      'Set default target to Factory Droid for this profile?',
+      { default: false }
+    );
+    if (useDroidByDefault) {
+      resolvedTarget = 'droid';
+    }
+  }
 
   // Create profile
   console.log('');
   console.log(info('Creating API profile...'));
 
-  const result = createApiProfile(name, baseUrl, apiKey, models);
+  const result = createApiProfile(name, baseUrl, apiKey, models, resolvedTarget);
 
   if (!result.success) {
     console.log(fail(`Failed to create API profile: ${result.error}`));
@@ -411,7 +448,8 @@ async function handleCreate(args: string[]): Promise<void> {
     `Config:   ${isUsingUnifiedConfig() ? '~/.ccs/config.yaml' : '~/.ccs/config.json'}\n` +
     `Settings: ${result.settingsFile}\n` +
     `Base URL: ${baseUrl}\n` +
-    `Model:    ${model}`;
+    `Model:    ${model}\n` +
+    `Target:   ${resolvedTarget}`;
 
   if (hasCustomMapping) {
     infoMsg +=
@@ -424,7 +462,24 @@ async function handleCreate(args: string[]): Promise<void> {
   console.log(infoBox(infoMsg, 'API Profile Created'));
   console.log('');
   console.log(header('Usage'));
-  console.log(`  ${color(`ccs ${name} "your prompt"`, 'command')}`);
+  if (resolvedTarget === 'droid') {
+    console.log(
+      `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses droid by default')}`
+    );
+    console.log(
+      `  ${color(`ccsd ${name} "your prompt"`, 'command')} ${dim('# explicit droid alias')}`
+    );
+    console.log(
+      `  ${color(`ccs ${name} --target claude "your prompt"`, 'command')} ${dim('# override to Claude')}`
+    );
+  } else {
+    console.log(
+      `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses claude by default')}`
+    );
+    console.log(
+      `  ${color(`ccs ${name} --target droid "your prompt"`, 'command')} ${dim('# run on droid for this call')}`
+    );
+  }
   console.log('');
   console.log(header('Edit Settings'));
   console.log(`  ${dim('To modify env vars later:')}`);
@@ -453,13 +508,13 @@ async function handleList(): Promise<void> {
   // Build table data
   const rows: string[][] = profiles.map((p) => {
     const status = p.isConfigured ? color('[OK]', 'success') : color('[!]', 'warning');
-    return [p.name, p.settingsPath, status];
+    return [p.name, p.target, p.settingsPath, status];
   });
 
-  const colWidths = isUsingUnifiedConfig() ? [15, 20, 10] : [15, 35, 10];
+  const colWidths = isUsingUnifiedConfig() ? [15, 10, 20, 10] : [15, 10, 35, 10];
   console.log(
     table(rows, {
-      head: ['API', isUsingUnifiedConfig() ? 'Config' : 'Settings File', 'Status'],
+      head: ['API', 'Target', isUsingUnifiedConfig() ? 'Config' : 'Settings File', 'Status'],
       colWidths,
     })
   );
@@ -468,11 +523,11 @@ async function handleList(): Promise<void> {
   // Show CLIProxy variants if any
   if (variants.length > 0) {
     console.log(subheader('CLIProxy Variants'));
-    const cliproxyRows = variants.map((v) => [v.name, v.provider, v.settings]);
+    const cliproxyRows = variants.map((v) => [v.name, v.provider, v.target, v.settings]);
     console.log(
       table(cliproxyRows, {
-        head: ['Variant', 'Provider', 'Settings'],
-        colWidths: [15, 15, 30],
+        head: ['Variant', 'Provider', 'Target', 'Settings'],
+        colWidths: [15, 12, 10, 28],
       })
     );
     console.log('');
@@ -582,6 +637,9 @@ async function showHelp(): Promise<void> {
   console.log(`  ${color('--base-url <url>', 'command')}     API base URL (create)`);
   console.log(`  ${color('--api-key <key>', 'command')}      API key (create)`);
   console.log(`  ${color('--model <model>', 'command')}      Default model (create)`);
+  console.log(
+    `  ${color('--target <cli>', 'command')}       Default target: claude or droid (create)`
+  );
   console.log(`  ${color('--force', 'command')}              Overwrite existing (create)`);
   console.log(`  ${color('--yes, -y', 'command')}            Skip confirmation prompts`);
   console.log('');
@@ -605,6 +663,7 @@ async function showHelp(): Promise<void> {
   console.log('');
   console.log(`  ${dim('# Create with name')}`);
   console.log(`  ${color('ccs api create myapi', 'command')}`);
+  console.log(`  ${color('ccs api create mydroid --preset glm --target droid', 'command')}`);
   console.log('');
   console.log(`  ${dim('# Remove API profile')}`);
   console.log(`  ${color('ccs api remove myapi', 'command')}`);

@@ -12,7 +12,13 @@ import {
   isUnifiedMode,
 } from '../../config/unified-config-loader';
 import { ensureProfileHooks } from '../../utils/websearch/profile-hook-injector';
-import type { ModelMapping, CreateApiProfileResult, RemoveApiProfileResult } from './profile-types';
+import type { TargetType } from '../../targets/target-adapter';
+import type {
+  ModelMapping,
+  CreateApiProfileResult,
+  RemoveApiProfileResult,
+  UpdateApiProfileTargetResult,
+} from './profile-types';
 
 /** Check if URL is an OpenRouter endpoint */
 function isOpenRouterUrl(baseUrl: string): boolean {
@@ -51,11 +57,15 @@ function createSettingsFile(
 }
 
 /** Update config.json with new API profile (legacy format) */
-function updateLegacyConfig(name: string): void {
+function updateLegacyConfig(name: string, target: TargetType = 'claude'): void {
   const configPath = getConfigPath();
   const ccsDir = getCcsDir();
 
-  let config: { profiles: Record<string, string>; cliproxy?: Record<string, unknown> };
+  let config: {
+    profiles: Record<string, string>;
+    cliproxy?: Record<string, unknown>;
+    profile_targets?: Record<string, TargetType>;
+  };
   try {
     config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
   } catch {
@@ -64,6 +74,12 @@ function updateLegacyConfig(name: string): void {
 
   const relativePath = `~/.ccs/${name}.settings.json`;
   config.profiles[name] = relativePath;
+  config.profile_targets = config.profile_targets || {};
+  if (target === 'claude') {
+    delete config.profile_targets[name];
+  } else {
+    config.profile_targets[name] = target;
+  }
 
   if (!fs.existsSync(ccsDir)) {
     fs.mkdirSync(ccsDir, { recursive: true });
@@ -80,7 +96,8 @@ function createApiProfileUnified(
   name: string,
   baseUrl: string,
   apiKey: string,
-  models: ModelMapping
+  models: ModelMapping,
+  target: TargetType = 'claude'
 ): void {
   const ccsDir = getCcsDir();
   const settingsFile = `${name}.settings.json`;
@@ -112,6 +129,7 @@ function createApiProfileUnified(
   config.profiles[name] = {
     type: 'api',
     settings: `~/.ccs/${settingsFile}`,
+    ...(target !== 'claude' && { target }),
   };
   saveUnifiedConfig(config);
 }
@@ -121,16 +139,17 @@ export function createApiProfile(
   name: string,
   baseUrl: string,
   apiKey: string,
-  models: ModelMapping
+  models: ModelMapping,
+  target: TargetType = 'claude'
 ): CreateApiProfileResult {
   try {
     const settingsFile = `~/.ccs/${name}.settings.json`;
 
     if (isUnifiedMode()) {
-      createApiProfileUnified(name, baseUrl, apiKey, models);
+      createApiProfileUnified(name, baseUrl, apiKey, models, target);
     } else {
       createSettingsFile(name, baseUrl, apiKey, models);
-      updateLegacyConfig(name);
+      updateLegacyConfig(name, target);
     }
 
     return { success: true, settingsFile };
@@ -140,6 +159,63 @@ export function createApiProfile(
       settingsFile: '',
       error: (error as Error).message,
     };
+  }
+}
+
+/**
+ * Update API profile target (claude/droid).
+ * Persists to config.yaml in unified mode and config.json profile_targets in legacy mode.
+ */
+export function updateApiProfileTarget(
+  name: string,
+  target: TargetType
+): UpdateApiProfileTargetResult {
+  try {
+    if (isUnifiedMode()) {
+      const config = loadOrCreateUnifiedConfig();
+      if (!config.profiles[name]) {
+        return { success: false, error: `API profile not found: ${name}` };
+      }
+
+      if (target === 'claude') {
+        delete config.profiles[name].target;
+      } else {
+        config.profiles[name].target = target;
+      }
+      saveUnifiedConfig(config);
+      return { success: true, target };
+    }
+
+    const configPath = getConfigPath();
+    let config: {
+      profiles: Record<string, string>;
+      cliproxy?: Record<string, unknown>;
+      profile_targets?: Record<string, TargetType>;
+    };
+    try {
+      config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    } catch {
+      config = { profiles: {} };
+    }
+
+    if (!config.profiles[name]) {
+      return { success: false, error: `API profile not found: ${name}` };
+    }
+
+    config.profile_targets = config.profile_targets || {};
+    if (target === 'claude') {
+      delete config.profile_targets[name];
+    } else {
+      config.profile_targets[name] = target;
+    }
+
+    const tempPath = configPath + '.tmp';
+    fs.writeFileSync(tempPath, JSON.stringify(config, null, 2) + '\n', 'utf8');
+    fs.renameSync(tempPath, configPath);
+
+    return { success: true, target };
+  } catch (error) {
+    return { success: false, error: (error as Error).message };
   }
 }
 
@@ -175,6 +251,12 @@ function removeApiProfileUnified(name: string): void {
 function removeApiProfileLegacy(name: string): void {
   const config = loadConfigSafe();
   delete config.profiles[name];
+  if (config.profile_targets) {
+    delete config.profile_targets[name];
+    if (Object.keys(config.profile_targets).length === 0) {
+      delete config.profile_targets;
+    }
+  }
 
   const configPath = getConfigPath();
   const tempPath = configPath + '.tmp';

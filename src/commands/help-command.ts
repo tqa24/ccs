@@ -326,6 +326,12 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   printSubSection('Multi-Target', [
     ['ccs glm --target droid', 'Run GLM profile on Droid CLI'],
     ['ccsd glm', 'Same as above (alias)'],
+    ['ccsd codex', 'Run built-in CLIProxy Codex profile on Droid'],
+    ['ccsd agy', 'Run built-in CLIProxy Antigravity profile on Droid'],
+    [
+      'ccs cliproxy create my-codex --provider codex --target droid',
+      'Create CLIProxy variant with Droid as default target',
+    ],
     ['ccs glm', 'Run GLM profile on Claude Code (default)'],
   ]);
 
@@ -347,7 +353,9 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['', ''], // Spacer
     ['ccs cliproxy pause <p> <a>', 'Pause account from rotation'],
     ['ccs cliproxy resume <p> <a>', 'Resume paused account'],
-    ['ccs cliproxy status [provider]', 'Show quota/tier/pause status'],
+    ['ccs cliproxy status', 'Show CLIProxy process status'],
+    ['ccs cliproxy quota', 'Show quota/tier/pause status for all providers'],
+    ['ccs cliproxy quota --provider <name>', 'Show quota/tier/pause status for one provider'],
   ]);
 
   // CLI Proxy configuration flags (new)

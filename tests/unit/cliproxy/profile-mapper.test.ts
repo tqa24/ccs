@@ -4,9 +4,11 @@
  */
 
 import * as assert from 'assert';
+const fs = require('fs');
 
 describe('Profile Mapper', () => {
   const profileMapper = require('../../../dist/cliproxy/sync/profile-mapper');
+  const profileReader = require('../../../dist/api/services/profile-reader');
 
   describe('mapProfileToClaudeKey', () => {
     it('returns null when env is missing', () => {
@@ -85,6 +87,100 @@ describe('Profile Mapper', () => {
       // and returns array (actual filtering tested via integration)
       const result = profileMapper.loadSyncableProfiles();
       assert.ok(Array.isArray(result));
+    });
+
+    it('uses profile-provided settingsPath instead of reconstructing from profile name', () => {
+      const originalListApiProfiles = profileReader.listApiProfiles;
+      const originalExistsSync = fs.existsSync;
+      const originalReadFileSync = fs.readFileSync;
+
+      const customSettingsPath = '/tmp/custom-sync-path.settings.json';
+      const readPaths: string[] = [];
+
+      try {
+        profileReader.listApiProfiles = () => ({
+          profiles: [
+            {
+              name: 'glm',
+              settingsPath: customSettingsPath,
+              isConfigured: true,
+              configSource: 'legacy',
+              target: 'claude',
+            },
+          ],
+          variants: [],
+        });
+
+        fs.existsSync = (filePath: string) => filePath === customSettingsPath;
+        fs.readFileSync = (filePath: string) => {
+          readPaths.push(filePath);
+          return JSON.stringify({
+            env: {
+              ANTHROPIC_AUTH_TOKEN: 'sk-test-key',
+            },
+          });
+        };
+
+        const result = profileMapper.loadSyncableProfiles();
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].settingsPath, customSettingsPath);
+        assert.deepStrictEqual(readPaths, [customSettingsPath]);
+      } finally {
+        profileReader.listApiProfiles = originalListApiProfiles;
+        fs.existsSync = originalExistsSync;
+        fs.readFileSync = originalReadFileSync;
+      }
+    });
+
+    it('skips profiles pinned to non-claude targets during local sync mapping', () => {
+      const originalListApiProfiles = profileReader.listApiProfiles;
+      const originalExistsSync = fs.existsSync;
+      const originalReadFileSync = fs.readFileSync;
+
+      const claudePath = '/tmp/claude-target.settings.json';
+      const droidPath = '/tmp/droid-target.settings.json';
+      const readPaths: string[] = [];
+
+      try {
+        profileReader.listApiProfiles = () => ({
+          profiles: [
+            {
+              name: 'claude-profile',
+              settingsPath: claudePath,
+              isConfigured: true,
+              configSource: 'legacy',
+              target: 'claude',
+            },
+            {
+              name: 'droid-profile',
+              settingsPath: droidPath,
+              isConfigured: true,
+              configSource: 'legacy',
+              target: 'droid',
+            },
+          ],
+          variants: [],
+        });
+
+        fs.existsSync = (filePath: string) => filePath === claudePath || filePath === droidPath;
+        fs.readFileSync = (filePath: string) => {
+          readPaths.push(filePath);
+          return JSON.stringify({
+            env: {
+              ANTHROPIC_AUTH_TOKEN: 'sk-test-key',
+            },
+          });
+        };
+
+        const result = profileMapper.loadSyncableProfiles();
+        assert.strictEqual(result.length, 1);
+        assert.strictEqual(result[0].name, 'claude-profile');
+        assert.deepStrictEqual(readPaths, [claudePath]);
+      } finally {
+        profileReader.listApiProfiles = originalListApiProfiles;
+        fs.existsSync = originalExistsSync;
+        fs.readFileSync = originalReadFileSync;
+      }
     });
   });
 

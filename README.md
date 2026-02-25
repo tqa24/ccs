@@ -53,6 +53,8 @@ ccs config
 # Opens http://localhost:3000
 ```
 
+Dashboard updates hub: `http://localhost:3000/updates`
+
 Want to run the dashboard in Docker? See `docker/README.md`.
 
 ### 3. Configure Your Accounts
@@ -62,6 +64,7 @@ The dashboard provides visual management for all account types:
 - **Claude Accounts**: Create isolated instances (work, personal, client)
 - **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity, Kiro, Copilot
 - **API Profiles**: Configure GLM, Kimi with your keys
+- **Updates Center**: Track support rollouts (Droid target, CLIProxy provider changes, WebSearch integrations)
 - **Health Monitor**: Real-time status across all profiles
 
 **Analytics Dashboard**
@@ -153,6 +156,30 @@ ccsd glm
 ```
 
 Need additional alias names? Set `CCS_DROID_ALIASES` as a comma-separated list (for example: `CCS_DROID_ALIASES=ccs-droid,mydroid`).
+
+### Per-Profile Target Defaults
+
+You can pin a default target (`claude` or `droid`) per profile:
+
+```bash
+# API profile defaults to Droid
+ccs api create myglm --preset glm --target droid
+
+# CLIProxy variant defaults to Droid
+ccs cliproxy create mycodex --provider codex --target droid
+```
+
+Built-in CLIProxy providers also work with Droid alias/target override:
+
+```bash
+ccsd codex
+ccsd agy
+ccs codex --target droid
+```
+
+Dashboard parity:
+- `ccs config` -> `API Profiles` -> set **Default Target**
+- `ccs config` -> `CLIProxy` -> create/edit variant -> set **Default Target**
 
 ### Kiro Auth Methods
 

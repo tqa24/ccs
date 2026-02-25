@@ -1,12 +1,7 @@
-/**
- * CLIProxy Variant Config Adapters
- *
- * Handles reading/writing variant config in both unified and legacy formats.
- */
-
 import * as fs from 'fs';
 import { getConfigPath, loadConfigSafe } from '../../utils/config-manager';
 import { CLIProxyProvider } from '../types';
+import type { TargetType } from '../../targets/target-adapter';
 import {
   CLIProxyVariantConfig,
   CompositeVariantConfig,
@@ -20,19 +15,15 @@ import {
 } from '../../config/unified-config-loader';
 import { CLIPROXY_DEFAULT_PORT } from '../config-generator';
 
-/** First port for variant profiles (8318 = default + 1) */
 export const VARIANT_PORT_BASE = CLIPROXY_DEFAULT_PORT + 1;
-
-/** Maximum port offset for variants (100 ports: 8318-8417) */
 export const VARIANT_PORT_MAX_OFFSET = 100;
-
-/** Variant configuration structure */
 export interface VariantConfig {
   provider: string;
   settings?: string;
   account?: string;
   model?: string;
   port?: number;
+  target?: TargetType;
   /** Composite variant fields */
   type?: 'composite';
   default_tier?: 'opus' | 'sonnet' | 'haiku';
@@ -45,9 +36,6 @@ export interface VariantConfig {
   hasFallback?: boolean;
 }
 
-/**
- * Check if variant exists in config
- */
 export function variantExistsInConfig(name: string): boolean {
   try {
     if (isUnifiedMode()) {
@@ -61,10 +49,6 @@ export function variantExistsInConfig(name: string): boolean {
   }
 }
 
-/**
- * Get next available port for a new variant.
- * Scans existing variants, returns first unused port starting from VARIANT_PORT_BASE.
- */
 export function getNextAvailablePort(): number {
   const variants = listVariantsFromConfig();
   const usedPorts = new Set<number>();
@@ -89,9 +73,6 @@ export function getNextAvailablePort(): number {
   );
 }
 
-/**
- * List variants from config
- */
 export function listVariantsFromConfig(): Record<string, VariantConfig> {
   try {
     if (isUnifiedMode()) {
@@ -139,6 +120,7 @@ export function listVariantsFromConfig(): Record<string, VariantConfig> {
               provider: defaultTierConfig.provider,
               settings: composite.settings,
               port: composite.port,
+              target: composite.target || 'claude',
               type: 'composite',
               default_tier: composite.default_tier,
               tiers: normalizedTiers,
@@ -151,6 +133,7 @@ export function listVariantsFromConfig(): Record<string, VariantConfig> {
               settings: single.settings,
               account: single.account,
               port: single.port,
+              target: single.target || 'claude',
             };
           }
         } catch (error) {
@@ -171,12 +154,14 @@ export function listVariantsFromConfig(): Record<string, VariantConfig> {
         settings: string;
         account?: string;
         port?: number;
+        target?: TargetType;
       };
       result[name] = {
         provider: v.provider,
         settings: v.settings,
         account: v.account,
         port: v.port,
+        target: v.target || 'claude',
       };
     }
     return result;
@@ -185,9 +170,6 @@ export function listVariantsFromConfig(): Record<string, VariantConfig> {
   }
 }
 
-/**
- * Save composite variant to unified config
- */
 export function saveCompositeVariantUnified(name: string, config: CompositeVariantConfig): void {
   const unifiedConfig = loadOrCreateUnifiedConfig();
 
@@ -206,15 +188,13 @@ export function saveCompositeVariantUnified(name: string, config: CompositeVaria
   saveUnifiedConfig(unifiedConfig);
 }
 
-/**
- * Save variant to unified config
- */
 export function saveVariantUnified(
   name: string,
   provider: CLIProxyProvider,
   settingsPath: string,
   account?: string,
-  port?: number
+  port?: number,
+  target: TargetType = 'claude'
 ): void {
   const config = loadOrCreateUnifiedConfig();
 
@@ -234,20 +214,19 @@ export function saveVariantUnified(
     account,
     settings: settingsPath,
     port,
+    ...(target !== 'claude' && { target }),
   };
 
   saveUnifiedConfig(config);
 }
 
-/**
- * Save variant to legacy JSON config
- */
 export function saveVariantLegacy(
   name: string,
   provider: string,
   settingsPath: string,
   account?: string,
-  port?: number
+  port?: number,
+  target: TargetType = 'claude'
 ): void {
   const configPath = getConfigPath();
 
@@ -262,7 +241,13 @@ export function saveVariantLegacy(
     config.cliproxy = {};
   }
 
-  const variantConfig: { provider: string; settings: string; account?: string; port?: number } = {
+  const variantConfig: {
+    provider: string;
+    settings: string;
+    account?: string;
+    port?: number;
+    target?: TargetType;
+  } = {
     provider,
     settings: settingsPath,
   };
@@ -272,6 +257,9 @@ export function saveVariantLegacy(
   if (port) {
     variantConfig.port = port;
   }
+  if (target !== 'claude') {
+    variantConfig.target = target;
+  }
   config.cliproxy[name] = variantConfig;
 
   const tempPath = configPath + '.tmp';
@@ -279,9 +267,6 @@ export function saveVariantLegacy(
   fs.renameSync(tempPath, configPath);
 }
 
-/**
- * Remove variant from unified config
- */
 export function removeVariantFromUnifiedConfig(name: string): VariantConfig | null {
   const config = loadOrCreateUnifiedConfig();
 
@@ -299,6 +284,7 @@ export function removeVariantFromUnifiedConfig(name: string): VariantConfig | nu
       provider: composite.tiers[composite.default_tier].provider,
       settings: composite.settings,
       port: composite.port,
+      target: composite.target || 'claude',
       type: 'composite',
       default_tier: composite.default_tier,
       tiers: composite.tiers,
@@ -309,12 +295,10 @@ export function removeVariantFromUnifiedConfig(name: string): VariantConfig | nu
     provider: singleVariant.provider,
     settings: singleVariant.settings,
     port: singleVariant.port,
+    target: singleVariant.target || 'claude',
   };
 }
 
-/**
- * Remove variant from legacy JSON config
- */
 export function removeVariantFromLegacyConfig(name: string): VariantConfig | null {
   const configPath = getConfigPath();
 
@@ -329,7 +313,12 @@ export function removeVariantFromLegacyConfig(name: string): VariantConfig | nul
     return null;
   }
 
-  const variant = config.cliproxy[name] as { provider: string; settings: string; port?: number };
+  const variant = config.cliproxy[name] as {
+    provider: string;
+    settings: string;
+    port?: number;
+    target?: TargetType;
+  };
   delete config.cliproxy[name];
 
   if (Object.keys(config.cliproxy).length === 0) {

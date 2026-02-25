@@ -45,10 +45,13 @@ export async function handleList(): Promise<void> {
       const variant = variants[name];
       const providerDisplay = variant.type === 'composite' ? 'composite' : variant.provider;
       const portStr = variant.port ? String(variant.port) : '-';
-      return [name, providerDisplay, portStr, variant.settings || '-'];
+      return [name, providerDisplay, variant.target || 'claude', portStr, variant.settings || '-'];
     });
     console.log(
-      table(rows, { head: ['Variant', 'Provider', 'Port', 'Settings'], colWidths: [15, 12, 8, 30] })
+      table(rows, {
+        head: ['Variant', 'Provider', 'Target', 'Port', 'Settings'],
+        colWidths: [15, 12, 10, 8, 24],
+      })
     );
     console.log('');
     console.log(dim(`Total: ${variantNames.length} custom variant(s)`));

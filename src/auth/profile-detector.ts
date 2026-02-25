@@ -309,12 +309,15 @@ class ProfileDetector {
 
     // Priority 2: Check user-defined CLIProxy variants (config.cliproxy section)
     const config = this.readConfig();
+    const legacyTargetMap = (config as { profile_targets?: Record<string, TargetType> })
+      .profile_targets;
 
     if (config.cliproxy && config.cliproxy[profileName]) {
       const variant = config.cliproxy[profileName];
       return {
         type: 'cliproxy',
         name: profileName,
+        target: variant.target,
         provider: variant.provider as CLIProxyProfileName,
         settingsPath: variant.settings,
         port: variant.port,
@@ -333,6 +336,7 @@ class ProfileDetector {
           type: 'settings',
           name: profileName,
           settingsPath: config.profiles[candidate],
+          target: legacyTargetMap?.[candidate],
           message: viaLegacyAlias
             ? `Using legacy API profile "${candidate}" for "${profileName}".`
             : undefined,
@@ -392,6 +396,8 @@ class ProfileDetector {
 
     // Check if settings-based default exists
     const config = this.readConfig();
+    const legacyTargetMap = (config as { profile_targets?: Record<string, TargetType> })
+      .profile_targets;
 
     if (config.profiles && config.profiles['default']) {
       const settingsPath = config.profiles['default'];
@@ -409,6 +415,7 @@ class ProfileDetector {
         type: 'settings',
         name: 'default',
         settingsPath,
+        target: legacyTargetMap?.['default'],
       };
     }
 

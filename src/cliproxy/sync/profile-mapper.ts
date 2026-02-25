@@ -7,6 +7,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir } from '../../utils/config-manager';
+import { expandPath } from '../../utils/helpers';
 import { listApiProfiles, isApiProfileConfigured } from '../../api/services/profile-reader';
 import type { ClaudeKey } from '../management-api-types';
 
@@ -31,6 +32,15 @@ interface SettingsJson {
   env?: Record<string, string>;
 }
 
+function resolveProfileSettingsPath(settingsPath: string): string {
+  const normalized = settingsPath.replace(/\\/g, '/');
+  if (normalized.startsWith('~/.ccs/')) {
+    return path.join(getCcsDir(), normalized.slice('~/.ccs/'.length));
+  }
+
+  return expandPath(settingsPath);
+}
+
 /**
  * Load syncable API profiles from CCS config.
  * Filters to only configured profiles (with real API keys).
@@ -45,9 +55,14 @@ export function loadSyncableProfiles(): SyncableProfile[] {
       continue;
     }
 
+    // Local CLIProxy sync writes Claude-compatible entries only.
+    // Profiles pinned to non-claude targets are intentionally skipped.
+    if (profile.target !== 'claude') {
+      continue;
+    }
+
     // Load settings.json for env vars
-    const ccsDir = getCcsDir();
-    const settingsPath = path.join(ccsDir, `${profile.name}.settings.json`);
+    const settingsPath = resolveProfileSettingsPath(profile.settingsPath);
 
     let env: Record<string, string> | undefined;
     try {

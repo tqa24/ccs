@@ -30,6 +30,29 @@ const MAX_LOGS = 500;
 const FLUSH_INTERVAL = 100; // ms
 const POLL_INTERVAL = 1000; // ms
 
+interface CliproxyErrorLogFile {
+  name: string;
+  size: number;
+  modified: number;
+  statusCode?: number;
+  model?: string;
+}
+
+function toTimestampMs(modified: number): number {
+  return modified > 1_000_000_000_000 ? modified : modified * 1000;
+}
+
+function buildLogMessage(file: CliproxyErrorLogFile): string {
+  const parts = [file.name];
+  if (typeof file.statusCode === 'number') {
+    parts.push(`HTTP ${file.statusCode}`);
+  }
+  if (file.model) {
+    parts.push(file.model);
+  }
+  return parts.join(' | ');
+}
+
 export function useCliproxyLogs() {
   const [state, setState] = useState<LogsState>({
     logs: [],
@@ -86,15 +109,27 @@ export function useCliproxyLogs() {
     if (isPausedRef.current) return;
 
     try {
-      const after = lastTimestampRef.current ?? new Date(Date.now() - 60000).toISOString();
-      const response = await fetch(`/api/cliproxy/logs?after=${encodeURIComponent(after)}`);
+      const afterIso = lastTimestampRef.current ?? new Date(Date.now() - 60000).toISOString();
+      const parsedAfterMs = Date.parse(afterIso);
+      const afterMs = Number.isNaN(parsedAfterMs) ? Date.now() - 60000 : parsedAfterMs;
+      const response = await fetch('/api/cliproxy/error-logs');
 
       if (!response.ok) {
         throw new Error('Failed to fetch logs');
       }
 
-      const data = await response.json();
-      const entries: LogEntry[] = data.logs ?? [];
+      const data = (await response.json()) as { files?: CliproxyErrorLogFile[] };
+      const entries: LogEntry[] = (data.files ?? [])
+        .filter((file) => toTimestampMs(file.modified) > afterMs)
+        .sort((a, b) => toTimestampMs(a.modified) - toTimestampMs(b.modified))
+        .map((file) => ({
+          id: file.name,
+          timestamp: new Date(toTimestampMs(file.modified)).toISOString(),
+          level: 'error' as const,
+          message: buildLogMessage(file),
+          provider: 'cliproxy',
+          requestId: file.name,
+        }));
 
       if (entries.length > 0) {
         bufferRef.current.push(...entries);

@@ -170,38 +170,33 @@ export function AppSidebar() {
                         defaultOpen={isParentActive(item.children) || isRouteActive(item.path)}
                         className="group/collapsible"
                       >
-                        <SidebarMenuItem>
-                          {/* Click navigates to overview AND opens submenu */}
-                          <CollapsibleTrigger asChild>
-                            <SidebarMenuButton
-                              tooltip={getItemLabel(item)}
-                              isActive={isParentActive(item.children)}
-                              onClick={() => navigate(item.path)}
-                            >
-                              {renderMenuIcon(item)}
-                              <span className="group-data-[collapsible=icon]:hidden">
-                                {getItemLabel(item)}
-                              </span>
-                              <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
-                            </SidebarMenuButton>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <SidebarMenuSub>
-                              {item.children.map((child) => (
-                                <SidebarMenuSubItem key={child.path}>
-                                  <SidebarMenuSubButton
-                                    asChild
-                                    isActive={isRouteActive(child.path)}
-                                  >
-                                    <Link to={child.path}>
-                                      <span>{child.label}</span>
-                                    </Link>
-                                  </SidebarMenuSubButton>
-                                </SidebarMenuSubItem>
-                              ))}
-                            </SidebarMenuSub>
-                          </CollapsibleContent>
-                        </SidebarMenuItem>
+                        {/* Click navigates to overview AND opens submenu */}
+                        <CollapsibleTrigger asChild>
+                          <SidebarMenuButton
+                            tooltip={getItemLabel(item)}
+                            isActive={isParentActive(item.children)}
+                            onClick={() => navigate(item.path)}
+                          >
+                            {renderMenuIcon(item)}
+                            <span className="group-data-[collapsible=icon]:hidden">
+                              {getItemLabel(item)}
+                            </span>
+                            <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                          </SidebarMenuButton>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                          <SidebarMenuSub>
+                            {item.children.map((child) => (
+                              <SidebarMenuSubItem key={child.path}>
+                                <SidebarMenuSubButton asChild isActive={isRouteActive(child.path)}>
+                                  <Link to={child.path}>
+                                    <span>{child.label}</span>
+                                  </Link>
+                                </SidebarMenuSubButton>
+                              </SidebarMenuSubItem>
+                            ))}
+                          </SidebarMenuSub>
+                        </CollapsibleContent>
                       </Collapsible>
                     ) : (
                       <SidebarMenuButton

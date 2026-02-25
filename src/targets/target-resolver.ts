@@ -48,9 +48,13 @@ interface ParsedTargetFlags {
   cleanedArgs: string[];
 }
 
+function isValidTarget(target: unknown): target is TargetType {
+  return typeof target === 'string' && VALID_TARGETS.has(target as TargetType);
+}
+
 function normalizeTargetValue(value: string): TargetType {
   const normalized = value.toLowerCase();
-  if (VALID_TARGETS.has(normalized)) {
+  if (isValidTarget(normalized)) {
     return normalized as TargetType;
   }
 
@@ -120,8 +124,8 @@ export function resolveTargetType(
   }
 
   // 2. Check per-profile config
-  if (profileConfig?.target) {
-    return profileConfig.target;
+  if (profileConfig?.target !== undefined) {
+    return isValidTarget(profileConfig.target) ? profileConfig.target : 'claude';
   }
 
   // 3. Check argv[0] (busybox pattern)

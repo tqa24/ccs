@@ -2,7 +2,7 @@
  * Type definitions for ProviderEditor components
  */
 
-import type { AuthStatus, OAuthAccount } from '@/lib/api-client';
+import type { AuthStatus, OAuthAccount, CliTarget } from '@/lib/api-client';
 import type { ProviderCatalog } from '../provider-model-selector';
 
 export interface SettingsResponse {
@@ -27,6 +27,8 @@ export interface ProviderEditorProps {
   isRemoteMode?: boolean;
   /** Port number for variant (for display in header) */
   port?: number;
+  /** Default execution target for this profile/variant */
+  defaultTarget?: CliTarget;
   onAddAccount: () => void;
   onSetDefault: (accountId: string) => void;
   onRemoveAccount: (accountId: string) => void;
