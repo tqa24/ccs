@@ -53,9 +53,9 @@ export class DroidAdapter implements TargetAdapter {
   }
 
   buildArgs(profile: string, userArgs: string[]): string[] {
-    if (!/^[a-zA-Z0-9_-]+$/.test(profile)) {
+    if (!/^[a-zA-Z0-9._-]+$/.test(profile)) {
       throw new Error(
-        `Invalid profile name "${profile}" for Droid target: only alphanumeric, underscore, hyphen allowed`
+        `Invalid profile name "${profile}" for Droid target: only alphanumeric, dot, underscore, hyphen allowed`
       );
     }
     return ['-m', `custom:ccs-${profile}`, ...userArgs];
@@ -154,10 +154,8 @@ export class DroidAdapter implements TargetAdapter {
     });
   }
 
-  /**
-   * Droid currently supports direct settings-based and default flows only.
-   */
+  /** Droid supports settings/default and CLIProxy-executed profile flows. */
   supportsProfileType(profileType: ProfileType): boolean {
-    return profileType === 'settings' || profileType === 'default';
+    return profileType === 'settings' || profileType === 'default' || profileType === 'cliproxy';
   }
 }

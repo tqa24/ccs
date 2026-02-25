@@ -120,8 +120,8 @@ describe('DroidAdapter', () => {
     expect(adapter.supportsProfileType('default')).toBe(true);
   });
 
-  it('should NOT support cliproxy and copilot profile types', () => {
-    expect(adapter.supportsProfileType('cliproxy')).toBe(false);
+  it('should support cliproxy and NOT support copilot profile type', () => {
+    expect(adapter.supportsProfileType('cliproxy')).toBe(true);
     expect(adapter.supportsProfileType('copilot')).toBe(false);
   });
 

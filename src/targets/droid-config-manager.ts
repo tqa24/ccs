@@ -20,16 +20,16 @@ const LOCK_RETRY_MAX_MS = 1000;
 
 /**
  * Validate profile name to prevent filesystem/security issues.
- * Only alphanumeric, underscore, hyphen allowed.
+ * Only alphanumeric, dot, underscore, hyphen allowed.
  */
 function isValidProfileName(profile: string): boolean {
-  return !!profile && /^[a-zA-Z0-9_-]+$/.test(profile);
+  return !!profile && /^[a-zA-Z0-9._-]+$/.test(profile);
 }
 
 function validateProfileName(profile: string): void {
   if (!isValidProfileName(profile)) {
     throw new Error(
-      `Invalid profile name "${profile}": must contain only alphanumeric characters, underscores, or hyphens`
+      `Invalid profile name "${profile}": must contain only alphanumeric characters, dots, underscores, or hyphens`
     );
   }
 }
