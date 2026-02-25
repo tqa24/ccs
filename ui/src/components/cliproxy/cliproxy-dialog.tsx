@@ -26,7 +26,7 @@ const singleProviderSchema = z.object({
   provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
   model: z.string().optional(),
   account: z.string().optional(),
-  target: z.enum(['claude', 'droid']).default('claude'),
+  target: z.enum(['claude', 'droid']),
 });
 
 const compositeSchema = z.object({
@@ -35,7 +35,7 @@ const compositeSchema = z.object({
     .min(1, 'Name is required')
     .regex(/^[a-zA-Z][a-zA-Z0-9._-]*$/, 'Invalid variant name'),
   default_tier: z.enum(['opus', 'sonnet', 'haiku'], { message: 'Default tier is required' }),
-  target: z.enum(['claude', 'droid']).default('claude'),
+  target: z.enum(['claude', 'droid']),
   tiers: z.object({
     opus: z.object({
       provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
