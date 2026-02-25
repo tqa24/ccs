@@ -88,8 +88,8 @@ describe('droid-dashboard-service', () => {
     expect(summary.customModels[0].apiKeyPreview).toBe('***1234');
   });
 
-  it('returns raw settings payload for missing settings file', () => {
-    const raw = getDroidRawSettings();
+  it('returns raw settings payload for missing settings file', async () => {
+    const raw = await getDroidRawSettings();
 
     expect(raw.exists).toBe(false);
     expect(raw.path).toBe('~/.factory/settings.json');
@@ -97,12 +97,12 @@ describe('droid-dashboard-service', () => {
     expect(raw.settings).toBeNull();
   });
 
-  it('returns parseError when settings.json is invalid JSON', () => {
+  it('returns parseError when settings.json is invalid JSON', async () => {
     const settingsDir = path.join(testRoot, '.factory');
     fs.mkdirSync(settingsDir, { recursive: true });
     fs.writeFileSync(path.join(settingsDir, 'settings.json'), '{ invalid-json');
 
-    const raw = getDroidRawSettings();
+    const raw = await getDroidRawSettings();
 
     expect(raw.exists).toBe(true);
     expect(raw.parseError).toBeString();
@@ -110,8 +110,8 @@ describe('droid-dashboard-service', () => {
     expect(raw.rawText).toContain('invalid-json');
   });
 
-  it('saves valid raw settings content', () => {
-    const result = saveDroidRawSettings({
+  it('saves valid raw settings content', async () => {
+    const result = await saveDroidRawSettings({
       rawText: JSON.stringify({
         model: 'custom:test-model',
         customModels: [],
@@ -126,23 +126,23 @@ describe('droid-dashboard-service', () => {
     expect(written.model).toBe('custom:test-model');
   });
 
-  it('rejects invalid JSON while saving raw settings', () => {
-    expect(() => saveDroidRawSettings({ rawText: '{ invalid-json' })).toThrow(
+  it('rejects invalid JSON while saving raw settings', async () => {
+    await expect(saveDroidRawSettings({ rawText: '{ invalid-json' })).rejects.toThrow(
       DroidRawSettingsValidationError
     );
   });
 
-  it('rejects stale writes with conflict error', () => {
+  it('rejects stale writes with conflict error', async () => {
     const settingsDir = path.join(testRoot, '.factory');
     fs.mkdirSync(settingsDir, { recursive: true });
     const settingsPath = path.join(settingsDir, 'settings.json');
     fs.writeFileSync(settingsPath, JSON.stringify({ customModels: [] }));
 
-    expect(() =>
+    await expect(
       saveDroidRawSettings({
         rawText: JSON.stringify({ model: 'custom:next', customModels: [] }),
         expectedMtime: 1,
       })
-    ).toThrow(DroidRawSettingsConflictError);
+    ).rejects.toThrow(DroidRawSettingsConflictError);
   });
 });

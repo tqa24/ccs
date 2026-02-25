@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import { promises as fs } from 'fs';
 import * as path from 'path';
 
 export interface JsonFileDiagnostics {
@@ -55,12 +55,24 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function probeJsonObjectFile(
+async function statPath(filePath: string): Promise<import('fs').Stats | null> {
+  try {
+    return await fs.lstat(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function probeJsonObjectFile(
   filePath: string,
   label: string,
   displayPath: string
-): JsonFileProbe {
-  if (!fs.existsSync(filePath)) {
+): Promise<JsonFileProbe> {
+  const stat = await statPath(filePath);
+  if (!stat) {
     return {
       diagnostics: {
         label,
@@ -79,7 +91,6 @@ export function probeJsonObjectFile(
     };
   }
 
-  const stat = fs.lstatSync(filePath);
   const diagnostics: JsonFileDiagnostics = {
     label,
     path: displayPath,
@@ -104,7 +115,7 @@ export function probeJsonObjectFile(
   }
 
   try {
-    const rawText = fs.readFileSync(filePath, 'utf8');
+    const rawText = await fs.readFile(filePath, 'utf8');
     try {
       const parsed = JSON.parse(rawText);
       if (!isObject(parsed)) {
@@ -140,9 +151,9 @@ export function parseJsonObjectText(
   return parsed;
 }
 
-export function writeJsonObjectFileAtomic(
+export async function writeJsonObjectFileAtomic(
   input: WriteJsonObjectFileInput
-): WriteJsonObjectFileResult {
+): Promise<WriteJsonObjectFileResult> {
   const fileLabel = input.fileLabel || path.basename(input.filePath);
   const parsed = parseJsonObjectText(input.rawText, fileLabel);
   const targetPath = input.filePath;
@@ -151,10 +162,11 @@ export function writeJsonObjectFileAtomic(
   const dirMode = input.dirMode ?? 0o700;
   const fileMode = input.fileMode ?? 0o600;
 
-  fs.mkdirSync(targetDir, { recursive: true, mode: dirMode });
+  await fs.mkdir(targetDir, { recursive: true, mode: dirMode });
 
-  if (fs.existsSync(targetPath)) {
-    const stat = fs.lstatSync(targetPath);
+  const targetStat = await statPath(targetPath);
+  if (targetStat) {
+    const stat = targetStat;
     if (stat.isSymbolicLink()) {
       throw new Error(`Refusing to write: ${fileLabel} is a symlink.`);
     }
@@ -172,8 +184,9 @@ export function writeJsonObjectFileAtomic(
 
   let wroteTemp = false;
   try {
-    if (fs.existsSync(tempPath)) {
-      const tempStat = fs.lstatSync(tempPath);
+    const existingTempStat = await statPath(tempPath);
+    if (existingTempStat) {
+      const tempStat = existingTempStat;
       if (tempStat.isSymbolicLink()) {
         throw new Error(`Refusing to write: ${fileLabel}.tmp is a symlink.`);
       }
@@ -182,10 +195,10 @@ export function writeJsonObjectFileAtomic(
       }
     }
 
-    fs.writeFileSync(tempPath, JSON.stringify(parsed, null, 2) + '\n', { mode: fileMode });
+    await fs.writeFile(tempPath, JSON.stringify(parsed, null, 2) + '\n', { mode: fileMode });
     wroteTemp = true;
 
-    const tempStat = fs.lstatSync(tempPath);
+    const tempStat = await fs.lstat(tempPath);
     if (tempStat.isSymbolicLink()) {
       throw new Error(`Refusing to write: ${fileLabel}.tmp is a symlink.`);
     }
@@ -193,20 +206,26 @@ export function writeJsonObjectFileAtomic(
       throw new Error(`Refusing to write: ${fileLabel}.tmp is not a regular file.`);
     }
 
-    fs.renameSync(tempPath, targetPath);
+    await fs.rename(tempPath, targetPath);
     wroteTemp = false;
 
     try {
-      fs.chmodSync(targetPath, fileMode);
+      await fs.chmod(targetPath, fileMode);
     } catch {
       // Best-effort permission hardening.
     }
 
-    const stat = fs.statSync(targetPath);
+    const stat = await fs.stat(targetPath);
     return { mtime: stat.mtimeMs };
   } finally {
-    if (wroteTemp && fs.existsSync(tempPath)) {
-      fs.unlinkSync(tempPath);
+    if (wroteTemp) {
+      try {
+        await fs.unlink(tempPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+      }
     }
   }
 }

@@ -157,18 +157,18 @@ export function summarizeDroidCustomModels(customModelsValue: unknown): DroidByo
   };
 }
 
-export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
+export async function getDroidDashboardDiagnostics(): Promise<DroidDashboardDiagnostics> {
   const paths = resolveDroidConfigPaths();
   const binaryPath = detectDroidCli();
 
   const source = process.env.CCS_DROID_PATH ? 'CCS_DROID_PATH' : binaryPath ? 'PATH' : 'missing';
 
-  const settingsProbe = probeJsonObjectFile(
+  const settingsProbe = await probeJsonObjectFile(
     paths.settingsPath,
     'BYOK settings',
     paths.settingsDisplayPath
   );
-  const legacyConfigProbe = probeJsonObjectFile(
+  const legacyConfigProbe = await probeJsonObjectFile(
     paths.legacyConfigPath,
     'Legacy config',
     paths.legacyConfigDisplayPath
@@ -222,9 +222,9 @@ export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
   };
 }
 
-export function getDroidRawSettings(): DroidRawSettingsResponse {
+export async function getDroidRawSettings(): Promise<DroidRawSettingsResponse> {
   const paths = resolveDroidConfigPaths();
-  const settingsProbe = probeJsonObjectFile(
+  const settingsProbe = await probeJsonObjectFile(
     paths.settingsPath,
     'BYOK settings',
     paths.settingsDisplayPath
@@ -241,13 +241,15 @@ export function getDroidRawSettings(): DroidRawSettingsResponse {
   };
 }
 
-export function saveDroidRawSettings(input: SaveDroidRawSettingsInput): SaveDroidRawSettingsResult {
+export async function saveDroidRawSettings(
+  input: SaveDroidRawSettingsInput
+): Promise<SaveDroidRawSettingsResult> {
   const paths = resolveDroidConfigPaths();
   if (typeof input.rawText !== 'string') {
     throw new JsonFileValidationError('rawText must be a string.');
   }
 
-  const saved = writeJsonObjectFileAtomic({
+  const saved = await writeJsonObjectFileAtomic({
     filePath: paths.settingsPath,
     rawText: input.rawText,
     expectedMtime: input.expectedMtime,

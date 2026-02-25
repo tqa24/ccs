@@ -14,9 +14,9 @@ const router = Router();
  * GET /api/droid/diagnostics
  * Dashboard-ready Droid installation + BYOK configuration diagnostics.
  */
-router.get('/diagnostics', (_req: Request, res: Response): void => {
+router.get('/diagnostics', async (_req: Request, res: Response): Promise<void> => {
   try {
-    res.json(getDroidDashboardDiagnostics());
+    res.json(await getDroidDashboardDiagnostics());
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
@@ -26,9 +26,9 @@ router.get('/diagnostics', (_req: Request, res: Response): void => {
  * GET /api/droid/settings/raw
  * Raw ~/.factory/settings.json payload for editor.
  */
-router.get('/settings/raw', (_req: Request, res: Response): void => {
+router.get('/settings/raw', async (_req: Request, res: Response): Promise<void> => {
   try {
-    res.json(getDroidRawSettings());
+    res.json(await getDroidRawSettings());
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
@@ -38,7 +38,7 @@ router.get('/settings/raw', (_req: Request, res: Response): void => {
  * PUT /api/droid/settings/raw
  * Save raw ~/.factory/settings.json payload from dashboard editor.
  */
-router.put('/settings/raw', (req: Request, res: Response): void => {
+router.put('/settings/raw', async (req: Request, res: Response): Promise<void> => {
   try {
     const { rawText, expectedMtime } = req.body ?? {};
 
@@ -54,7 +54,7 @@ router.put('/settings/raw', (req: Request, res: Response): void => {
       return;
     }
 
-    res.json(saveDroidRawSettings({ rawText, expectedMtime }));
+    res.json(await saveDroidRawSettings({ rawText, expectedMtime }));
   } catch (error) {
     if (error instanceof DroidRawSettingsValidationError) {
       res.status(400).json({ error: error.message });
