@@ -11,6 +11,7 @@ import {
   BarChart3,
   Gauge,
   Github,
+  TerminalSquare,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -102,6 +103,10 @@ const navGroups: SidebarGroupDef[] = [
         ],
       },
     ],
+  },
+  {
+    title: 'Compatible CLIs',
+    items: [{ path: '/droid', icon: TerminalSquare, label: 'Factory Droid' }],
   },
   {
     title: 'System',
