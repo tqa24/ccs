@@ -35,4 +35,19 @@ describe('api-command arg parser', () => {
     expect(parsed.yes).toBe(true);
     expect(parsed.name).toBe('-my-api');
   });
+
+  test('parses --target for default profile target', () => {
+    const parsed = parseApiCommandArgs(['my-api', '--target', 'droid']);
+
+    expect(parsed.name).toBe('my-api');
+    expect(parsed.target).toBe('droid');
+    expect(parsed.errors).toEqual([]);
+  });
+
+  test('validates invalid --target values', () => {
+    const parsed = parseApiCommandArgs(['my-api', '--target', 'invalid-target']);
+
+    expect(parsed.target).toBeUndefined();
+    expect(parsed.errors).toEqual(['Invalid --target value "invalid-target". Use: claude or droid']);
+  });
 });
