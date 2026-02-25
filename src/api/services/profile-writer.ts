@@ -251,6 +251,12 @@ function removeApiProfileUnified(name: string): void {
 function removeApiProfileLegacy(name: string): void {
   const config = loadConfigSafe();
   delete config.profiles[name];
+  if (config.profile_targets) {
+    delete config.profile_targets[name];
+    if (Object.keys(config.profile_targets).length === 0) {
+      delete config.profile_targets;
+    }
+  }
 
   const configPath = getConfigPath();
   const tempPath = configPath + '.tmp';
