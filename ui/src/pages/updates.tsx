@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BellRing, Filter, Megaphone, Search } from 'lucide-react';
+import { BellRing, ChevronRight, Filter, Megaphone, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 import { SupportEntryCard } from '@/components/updates/support-entry-card';
 import { SupportStatusBadge } from '@/components/updates/support-status-badge';
 import {
@@ -12,6 +13,7 @@ import {
   SUPPORT_NOTICES,
   SUPPORT_SCOPE_LABELS,
   formatCatalogDate,
+  type SupportNotice,
   type SupportScope,
 } from '@/lib/support-updates-catalog';
 
@@ -25,9 +27,77 @@ const SCOPE_FILTERS: { id: ScopeFilter; label: string }[] = [
   { id: 'websearch', label: SUPPORT_SCOPE_LABELS.websearch },
 ];
 
+const CORE_CONTRACT = [
+  {
+    id: 'base-url',
+    title: 'Base URL',
+    detail: 'Source endpoint is explicit per target/provider/profile.',
+  },
+  {
+    id: 'auth',
+    title: 'Auth',
+    detail: 'OAuth or token ownership is visible in one support matrix.',
+  },
+  {
+    id: 'model',
+    title: 'Model',
+    detail: 'Default model behavior stays configurable and documented.',
+  },
+] as const;
+
+function NoticeListItem({
+  notice,
+  isSelected,
+  onSelect,
+}: {
+  notice: SupportNotice;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={cn(
+        'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
+        isSelected
+          ? 'border-primary/20 bg-primary/10'
+          : 'border-transparent hover:border-border hover:bg-muted/70'
+      )}
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="truncate text-sm font-medium">{notice.title}</p>
+          <p className="text-xs text-muted-foreground">{notice.summary}</p>
+          <div className="flex items-center gap-2">
+            <SupportStatusBadge status={notice.status} className="h-5 px-1.5 text-[10px]" />
+            <span className="text-[10px] text-muted-foreground">
+              {formatCatalogDate(notice.publishedAt)}
+            </span>
+          </div>
+        </div>
+        <ChevronRight
+          className={cn(
+            'mt-0.5 h-4 w-4 shrink-0 text-muted-foreground',
+            isSelected && 'text-primary'
+          )}
+        />
+      </div>
+    </button>
+  );
+}
+
 export function UpdatesPage() {
   const [scope, setScope] = useState<ScopeFilter>('all');
   const [query, setQuery] = useState('');
+  const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(
+    SUPPORT_NOTICES[0]?.id ?? null
+  );
+
+  const selectedNotice = useMemo(
+    () => SUPPORT_NOTICES.find((notice) => notice.id === selectedNoticeId) ?? SUPPORT_NOTICES[0],
+    [selectedNoticeId]
+  );
 
   const filteredEntries = useMemo(() => {
     const queryValue = query.trim().toLowerCase();
@@ -55,160 +125,216 @@ export function UpdatesPage() {
     });
   }, [scope, query]);
 
+  const scopeStats = useMemo(
+    () =>
+      SCOPE_FILTERS.filter((filter) => filter.id !== 'all').map((filter) => ({
+        id: filter.id,
+        label: filter.label,
+        count: CLI_SUPPORT_ENTRIES.filter((entry) => entry.scope === filter.id).length,
+      })),
+    []
+  );
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-6">
-      <Card className="gap-4 border-blue-200/70 bg-gradient-to-br from-blue-50/80 via-background to-cyan-50/70 dark:border-blue-900/40 dark:from-blue-950/20 dark:to-cyan-950/10">
-        <CardHeader className="gap-2">
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Megaphone className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-            CCS Updates Center
-          </CardTitle>
-          <CardDescription>
-            Release visibility for runtime support, CLIProxy providers, and integration readiness.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Alert variant="info">
-            <BellRing className="h-4 w-4" />
-            <AlertDescription>
-              This page is data-driven. Update one catalog file to publish new support notices
-              across dashboard surfaces.
-            </AlertDescription>
-          </Alert>
-
-          <div className="grid gap-2 md:grid-cols-3">
-            <code className="rounded bg-blue-100/70 px-2 py-1.5 text-xs dark:bg-blue-900/30">
-              ccsd glm
-            </code>
-            <code className="rounded bg-blue-100/70 px-2 py-1.5 text-xs dark:bg-blue-900/30">
-              ccs codex --target droid "your prompt"
-            </code>
-            <code className="rounded bg-blue-100/70 px-2 py-1.5 text-xs dark:bg-blue-900/30">
-              ccs cliproxy create mycodex --provider codex --target droid
-            </code>
+    <div className="h-[calc(100vh-100px)] flex">
+      <div className="w-80 border-r bg-muted/30 flex flex-col">
+        <div className="p-4 border-b bg-background">
+          <div className="mb-1 flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-primary" />
+            <h1 className="font-semibold">Updates Center</h1>
           </div>
-        </CardContent>
-      </Card>
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Announcements</h2>
-          <span className="text-xs text-muted-foreground">{SUPPORT_NOTICES.length} published</span>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          {SUPPORT_NOTICES.map((notice) => (
-            <Card key={notice.id} className="gap-4">
-              <CardHeader className="gap-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <CardTitle className="text-base">{notice.title}</CardTitle>
-                    <CardDescription>{notice.summary}</CardDescription>
-                  </div>
-                  <SupportStatusBadge status={notice.status} />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {formatCatalogDate(notice.publishedAt)}
-                </p>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
-                  {notice.highlights.map((highlight) => (
-                    <li key={`${notice.id}-${highlight}`}>{highlight}</li>
-                  ))}
-                </ul>
-
-                <div className="flex flex-wrap gap-2">
-                  {notice.routes.map((route) => (
-                    <Link
-                      key={`${notice.id}-${route.path}`}
-                      to={route.path}
-                      className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
-                    >
-                      {route.label}
-                    </Link>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="space-y-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold">Support Matrix</h2>
-            <p className="text-sm text-muted-foreground">
-              Search by CLI/provider and filter by support surface.
-            </p>
-          </div>
-
-          <div className="relative w-full lg:w-80">
-            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <p className="mb-3 text-xs text-muted-foreground">
+            Release visibility for target, provider, and support rollouts.
+          </p>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by command, provider, or note"
-              className="pl-8"
+              placeholder="Search support matrix"
+              className="pl-8 h-9"
             />
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <Filter className="h-3.5 w-3.5" />
-            Scope:
-          </span>
-          {SCOPE_FILTERS.map((filter) => (
-            <Button
-              key={filter.id}
-              size="sm"
-              variant={scope === filter.id ? 'default' : 'outline'}
-              onClick={() => setScope(filter.id)}
-            >
-              {filter.label}
-            </Button>
-          ))}
-          <span className="text-xs text-muted-foreground">{filteredEntries.length} entries</span>
-        </div>
-
-        {filteredEntries.length === 0 ? (
-          <Card>
-            <CardContent className="py-10 text-center text-sm text-muted-foreground">
-              No support entries match this filter.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {filteredEntries.map((entry) => (
-              <SupportEntryCard key={entry.id} entry={entry} />
+        <ScrollArea className="flex-1">
+          <div className="p-2 space-y-1">
+            {SUPPORT_NOTICES.map((notice) => (
+              <NoticeListItem
+                key={notice.id}
+                notice={notice}
+                isSelected={selectedNotice?.id === notice.id}
+                onSelect={() => setSelectedNoticeId(notice.id)}
+              />
             ))}
           </div>
-        )}
-      </section>
+        </ScrollArea>
 
-      <Card>
-        <CardHeader className="gap-2">
-          <CardTitle className="text-base">Maintainer Notes</CardTitle>
-          <CardDescription>
-            Keep update messaging in one place for future CLI expansions.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            Edit{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5">
-              ui/src/lib/support-updates-catalog.ts
-            </code>{' '}
-            to add new notices or support entries.
-          </p>
-          <p>
-            Home spotlight and this page consume the same catalog, so announcements stay consistent
-            without repeated UI edits.
-          </p>
-        </CardContent>
-      </Card>
+        <div className="border-t bg-background p-3 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span>
+              {SUPPORT_NOTICES.length} notice{SUPPORT_NOTICES.length !== 1 ? 's' : ''}
+            </span>
+            <span>
+              {CLI_SUPPORT_ENTRIES.length} support entr
+              {CLI_SUPPORT_ENTRIES.length !== 1 ? 'ies' : 'y'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 min-w-0 bg-background flex flex-col">
+        {selectedNotice && (
+          <div className="border-b bg-background p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold">{selectedNotice.title}</h2>
+                <p className="text-sm text-muted-foreground">{selectedNotice.summary}</p>
+              </div>
+              <SupportStatusBadge status={selectedNotice.status} />
+            </div>
+
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <BellRing className="h-3.5 w-3.5" />
+              Published {formatCatalogDate(selectedNotice.publishedAt)}
+            </div>
+
+            <ul className="grid gap-1 text-sm text-muted-foreground">
+              {selectedNotice.highlights.map((highlight) => (
+                <li key={`${selectedNotice.id}-${highlight}`}>- {highlight}</li>
+              ))}
+            </ul>
+
+            <div className="flex flex-wrap gap-2">
+              {selectedNotice.routes.map((route) => (
+                <Link
+                  key={`${selectedNotice.id}-${route.path}`}
+                  to={route.path}
+                  className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
+                >
+                  {route.label}
+                </Link>
+              ))}
+            </div>
+
+            <div className="grid gap-2 lg:grid-cols-3">
+              {selectedNotice.commands.map((command) => (
+                <code
+                  key={`${selectedNotice.id}-${command}`}
+                  className="rounded bg-muted px-2 py-1.5 text-[11px]"
+                >
+                  {command}
+                </code>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex-1 min-h-0 p-4">
+          <div className="h-full grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <Card className="h-full gap-3">
+              <CardHeader className="gap-2">
+                <CardTitle className="text-base">Support Matrix</CardTitle>
+                <CardDescription>
+                  Filter by support area. Internal scroll keeps the page frame stable.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="flex-1 min-h-0">
+                <div className="h-full flex flex-col gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                      <Filter className="h-3.5 w-3.5" />
+                      Scope:
+                    </span>
+                    {SCOPE_FILTERS.map((filter) => (
+                      <Button
+                        key={filter.id}
+                        size="sm"
+                        variant={scope === filter.id ? 'default' : 'outline'}
+                        onClick={() => setScope(filter.id)}
+                      >
+                        {filter.label}
+                      </Button>
+                    ))}
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {filteredEntries.length} match
+                    </span>
+                  </div>
+
+                  <div className="flex-1 min-h-0">
+                    <ScrollArea className="h-full pr-2">
+                      {filteredEntries.length === 0 ? (
+                        <div className="h-full grid place-items-center text-sm text-muted-foreground">
+                          No support entries match this filter.
+                        </div>
+                      ) : (
+                        <div className="grid gap-4 pb-1">
+                          {filteredEntries.map((entry) => (
+                            <SupportEntryCard key={entry.id} entry={entry} />
+                          ))}
+                        </div>
+                      )}
+                    </ScrollArea>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="h-full gap-3">
+              <CardHeader className="gap-2">
+                <CardTitle className="text-base">Config Contract</CardTitle>
+                <CardDescription>
+                  Every new CLI integration follows the same three configuration pillars.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="flex-1 min-h-0">
+                <ScrollArea className="h-full pr-2">
+                  <div className="space-y-4 pb-1">
+                    <div className="grid gap-2">
+                      {CORE_CONTRACT.map((item) => (
+                        <div key={item.id} className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                            {item.title}
+                          </p>
+                          <p className="text-sm font-medium">{item.detail}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Coverage by Scope
+                      </p>
+                      <div className="grid gap-2">
+                        {scopeStats.map((stat) => (
+                          <div
+                            key={stat.id}
+                            className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                          >
+                            <span>{stat.label}</span>
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {stat.count}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                      Update source of truth:{' '}
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-[11px]">
+                        ui/src/lib/support-updates-catalog.ts
+                      </code>
+                    </div>
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
