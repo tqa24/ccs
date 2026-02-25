@@ -15,8 +15,14 @@ import { HeaderSection } from './header-section';
 import { FriendlyUISection } from './friendly-ui-section';
 import { RawEditorSection } from './raw-editor-section';
 import type { ProfileEditorProps, Settings, SettingsResponse } from './types';
+import type { CliTarget } from '@/lib/api-client';
 
-export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: ProfileEditorProps) {
+export function ProfileEditor({
+  profileName,
+  profileTarget,
+  onDelete,
+  onHasChangesUpdate,
+}: ProfileEditorProps) {
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [conflictDialog, setConflictDialog] = useState(false);
   const [rawJsonEdits, setRawJsonEdits] = useState<string | null>(null);
@@ -145,6 +151,40 @@ export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: Pro
     },
   });
 
+  const targetMutation = useMutation({
+    mutationFn: async (target: CliTarget) => {
+      const response = await fetch(`/api/profiles/${profileName}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target }),
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to update target';
+        try {
+          const payload = (await response.json()) as { error?: string };
+          if (payload.error) {
+            errorMessage = payload.error;
+          }
+        } catch {
+          // Keep fallback error message.
+        }
+        throw new Error(errorMessage);
+      }
+
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      toast.success('Default target updated');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const resolvedTarget: CliTarget = profileTarget || 'claude';
+
   const handleConflictResolve = async (overwrite: boolean) => {
     setConflictDialog(false);
     if (overwrite) {
@@ -160,12 +200,18 @@ export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: Pro
     <div key={profileName} className="flex-1 flex flex-col overflow-hidden">
       <HeaderSection
         profileName={profileName}
+        target={resolvedTarget}
         data={data}
         settings={currentSettings}
         isLoading={isLoading}
         isSaving={saveMutation.isPending}
+        isTargetSaving={targetMutation.isPending}
         hasChanges={computedHasChanges}
         isRawJsonValid={computedIsRawJsonValid}
+        onTargetChange={(target) => {
+          if (target === resolvedTarget) return;
+          targetMutation.mutate(target);
+        }}
         onRefresh={() => refetch()}
         onDelete={onDelete}
         onSave={() => saveMutation.mutate()}
@@ -191,6 +237,7 @@ export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: Pro
           <div className="flex flex-col overflow-hidden bg-muted/5 min-w-0">
             <FriendlyUISection
               profileName={profileName}
+              target={resolvedTarget}
               data={data}
               currentSettings={currentSettings}
               newEnvKey={newEnvKey}
