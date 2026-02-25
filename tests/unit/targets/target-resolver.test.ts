@@ -37,6 +37,11 @@ describe('resolveTargetType', () => {
     expect(resolveTargetType([], { target: 'droid' })).toBe('droid');
   });
 
+  it('should fallback to claude when persisted profile target is invalid', () => {
+    process.argv = ['node', 'ccs'];
+    expect(resolveTargetType([], { target: 'invalid-target' as never })).toBe('claude');
+  });
+
   it('should prioritize --target flag over profile config', () => {
     process.argv = ['node', 'ccs'];
     expect(resolveTargetType(['--target', 'claude'], { target: 'droid' })).toBe('claude');

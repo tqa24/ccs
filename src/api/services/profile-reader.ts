@@ -12,6 +12,15 @@ import { loadOrCreateUnifiedConfig, isUnifiedMode } from '../../config/unified-c
 import type { TargetType } from '../../targets/target-adapter';
 import type { ApiProfileInfo, CliproxyVariantInfo, ApiListResult } from './profile-types';
 
+const VALID_TARGETS: ReadonlySet<TargetType> = new Set<TargetType>(['claude', 'droid']);
+
+function sanitizeTarget(target: unknown): TargetType {
+  if (typeof target === 'string' && VALID_TARGETS.has(target as TargetType)) {
+    return target as TargetType;
+  }
+  return 'claude';
+}
+
 /**
  * Check if API profile exists in config
  */
@@ -69,7 +78,7 @@ export function listApiProfiles(): ApiListResult {
         settingsPath: profile.settings || 'config.yaml',
         isConfigured: isApiProfileConfigured(name),
         configSource: 'unified',
-        target: profile.target || 'claude',
+        target: sanitizeTarget(profile.target),
       });
     }
     // CLIProxy variants
@@ -82,12 +91,12 @@ export function listApiProfiles(): ApiListResult {
         name,
         provider,
         settings: variant?.settings || '-',
-        target: variant?.target || 'claude',
+        target: sanitizeTarget(variant?.target),
       });
     }
   } else {
     const config = loadConfigSafe();
-    const legacyTargetMap = (config as { profile_targets?: Record<string, TargetType> })
+    const legacyTargetMap = (config as { profile_targets?: Record<string, unknown> })
       .profile_targets;
     for (const [name, settingsPath] of Object.entries(config.profiles)) {
       // Skip 'default' profile - it's the user's native Claude settings
@@ -99,18 +108,18 @@ export function listApiProfiles(): ApiListResult {
         settingsPath: settingsPath as string,
         isConfigured: isApiProfileConfigured(name),
         configSource: 'legacy',
-        target: legacyTargetMap?.[name] || 'claude',
+        target: sanitizeTarget(legacyTargetMap?.[name]),
       });
     }
     // CLIProxy variants
     if (config.cliproxy) {
       for (const [name, v] of Object.entries(config.cliproxy)) {
-        const variant = v as { provider: string; settings: string; target?: TargetType };
+        const variant = v as { provider: string; settings: string; target?: unknown };
         variants.push({
           name,
           provider: variant.provider,
           settings: variant.settings,
-          target: variant.target || 'claude',
+          target: sanitizeTarget(variant.target),
         });
       }
     }
