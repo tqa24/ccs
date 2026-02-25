@@ -24,7 +24,7 @@ import {
 
 const router = Router();
 
-function parseTarget(rawTarget: unknown): TargetType | null {
+export function parseTarget(rawTarget: unknown): TargetType | null {
   if (rawTarget === undefined || rawTarget === null || rawTarget === '') {
     return null;
   }
