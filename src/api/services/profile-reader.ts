@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { getCcsDir, loadConfigSafe } from '../../utils/config-manager';
 import { loadOrCreateUnifiedConfig, isUnifiedMode } from '../../config/unified-config-loader';
+import type { TargetType } from '../../targets/target-adapter';
 import type { ApiProfileInfo, CliproxyVariantInfo, ApiListResult } from './profile-types';
 
 /**
@@ -68,6 +69,7 @@ export function listApiProfiles(): ApiListResult {
         settingsPath: profile.settings || 'config.yaml',
         isConfigured: isApiProfileConfigured(name),
         configSource: 'unified',
+        target: profile.target || 'claude',
       });
     }
     // CLIProxy variants
@@ -80,10 +82,13 @@ export function listApiProfiles(): ApiListResult {
         name,
         provider,
         settings: variant?.settings || '-',
+        target: variant?.target || 'claude',
       });
     }
   } else {
     const config = loadConfigSafe();
+    const legacyTargetMap = (config as { profile_targets?: Record<string, TargetType> })
+      .profile_targets;
     for (const [name, settingsPath] of Object.entries(config.profiles)) {
       // Skip 'default' profile - it's the user's native Claude settings
       if (name === 'default' && (settingsPath as string).includes('.claude/settings.json')) {
@@ -94,16 +99,18 @@ export function listApiProfiles(): ApiListResult {
         settingsPath: settingsPath as string,
         isConfigured: isApiProfileConfigured(name),
         configSource: 'legacy',
+        target: legacyTargetMap?.[name] || 'claude',
       });
     }
     // CLIProxy variants
     if (config.cliproxy) {
       for (const [name, v] of Object.entries(config.cliproxy)) {
-        const variant = v as { provider: string; settings: string };
+        const variant = v as { provider: string; settings: string; target?: TargetType };
         variants.push({
           name,
           provider: variant.provider,
           settings: variant.settings,
+          target: variant.target || 'claude',
         });
       }
     }

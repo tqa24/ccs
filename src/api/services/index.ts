@@ -15,6 +15,7 @@ export {
   type ApiListResult,
   type CreateApiProfileResult,
   type RemoveApiProfileResult,
+  type UpdateApiProfileTargetResult,
 } from './profile-types';
 
 // Profile read operations
@@ -27,7 +28,7 @@ export {
 } from './profile-reader';
 
 // Profile write operations
-export { createApiProfile, removeApiProfile } from './profile-writer';
+export { createApiProfile, removeApiProfile, updateApiProfileTarget } from './profile-writer';
 
 // OpenRouter catalog and picker
 export { isOpenRouterUrl, fetchOpenRouterModels, type OpenRouterModel } from './openrouter-catalog';
