@@ -559,6 +559,18 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
   // ---------------------------------------------------------------------------
   // MiniMax Models - Source: https://platform.minimax.io/docs/pricing/pay-as-you-go
   // ---------------------------------------------------------------------------
+  'MiniMax-M2.5': {
+    inputPerMillion: 0.3,
+    outputPerMillion: 1.2,
+    cacheCreationPerMillion: 0.375,
+    cacheReadPerMillion: 0.03,
+  },
+  'MiniMax-M2.5-lightning': {
+    inputPerMillion: 0.6,
+    outputPerMillion: 2.4,
+    cacheCreationPerMillion: 0.375,
+    cacheReadPerMillion: 0.03,
+  },
   'MiniMax-M2.1': {
     inputPerMillion: 0.3,
     outputPerMillion: 1.2,
@@ -566,7 +578,7 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheReadPerMillion: 0.03,
   },
   'MiniMax-M2.1-lightning': {
-    inputPerMillion: 0.3,
+    inputPerMillion: 0.6,
     outputPerMillion: 2.4,
     cacheCreationPerMillion: 0.375,
     cacheReadPerMillion: 0.03,
@@ -576,6 +588,51 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     outputPerMillion: 1.2,
     cacheCreationPerMillion: 0.375,
     cacheReadPerMillion: 0.03,
+  },
+  // ---------------------------------------------------------------------------
+  // Qwen Models - Source: https://www.alibabacloud.com/help/zh/model-studio/model-pricing
+  // ---------------------------------------------------------------------------
+  'qwen3-max': {
+    inputPerMillion: 1.2,
+    outputPerMillion: 6,
+    cacheCreationPerMillion: 1.2,
+    cacheReadPerMillion: 0.24,
+  },
+  'qwen3-max-2026-01-23': {
+    inputPerMillion: 1.2,
+    outputPerMillion: 6,
+    cacheCreationPerMillion: 1.2,
+    cacheReadPerMillion: 0.24,
+  },
+  'qwen3-max-preview': {
+    inputPerMillion: 1.2,
+    outputPerMillion: 6,
+    cacheCreationPerMillion: 1.2,
+    cacheReadPerMillion: 0.24,
+  },
+  'qwen3.5-plus': {
+    inputPerMillion: 0.4,
+    outputPerMillion: 2.4,
+    cacheCreationPerMillion: 0.4,
+    cacheReadPerMillion: 0.08,
+  },
+  'qwen3.5-flash': {
+    inputPerMillion: 0.1,
+    outputPerMillion: 0.4,
+    cacheCreationPerMillion: 0.1,
+    cacheReadPerMillion: 0.02,
+  },
+  'qwen3-coder-plus': {
+    inputPerMillion: 1,
+    outputPerMillion: 5,
+    cacheCreationPerMillion: 1,
+    cacheReadPerMillion: 0.2,
+  },
+  'qwen3-coder-flash': {
+    inputPerMillion: 0.3,
+    outputPerMillion: 1.5,
+    cacheCreationPerMillion: 0.3,
+    cacheReadPerMillion: 0.06,
   },
 
   // ---------------------------------------------------------------------------
