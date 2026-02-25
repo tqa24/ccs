@@ -120,6 +120,9 @@ function VariantSidebarItem({
           <Badge variant="outline" className="text-[9px] h-4 px-1">
             variant
           </Badge>
+          <Badge variant="outline" className="text-[9px] h-4 px-1 uppercase">
+            {variant.target || 'claude'}
+          </Badge>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {parentAuth?.authenticated ? (
@@ -405,6 +408,7 @@ export function CliproxyPage() {
             catalog={MODEL_CATALOGS[selectedVariantData.provider]}
             logoProvider={selectedVariantData.provider}
             baseProvider={selectedVariantData.provider}
+            defaultTarget={selectedVariantData.target}
             isRemoteMode={isRemoteMode}
             port={selectedVariantData.port}
             onAddAccount={() =>

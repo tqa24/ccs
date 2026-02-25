@@ -35,6 +35,7 @@ export function ProviderEditor({
   baseProvider,
   isRemoteMode,
   port,
+  defaultTarget,
   onAddAccount,
   onSetDefault,
   onRemoveAccount,
@@ -244,6 +245,7 @@ export function ProviderEditor({
                   <ProviderInfoTab
                     provider={provider}
                     displayName={displayName}
+                    defaultTarget={defaultTarget}
                     data={data}
                     authStatus={authStatus}
                   />
