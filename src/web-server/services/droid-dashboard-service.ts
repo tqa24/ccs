@@ -14,8 +14,8 @@ import type {
 interface DroidConfigPaths {
   settingsPath: string;
   settingsDisplayPath: string;
-  globalConfigPath: string;
-  globalConfigDisplayPath: string;
+  legacyConfigPath: string;
+  legacyConfigDisplayPath: string;
 }
 
 interface JsonFileProbe {
@@ -57,25 +57,18 @@ export function resolveDroidConfigPaths(
     homeDir?: string;
   } = {}
 ): DroidConfigPaths {
-  const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
   const homeDir = options.homeDir ?? os.homedir();
 
   const byokBase = env.CCS_HOME || homeDir;
   const settingsPath = path.join(byokBase, '.factory', 'settings.json');
-
-  const globalConfigRoot =
-    platform === 'win32'
-      ? env.APPDATA || path.join(homeDir, 'AppData', 'Roaming')
-      : env.XDG_CONFIG_HOME || path.join(homeDir, '.config');
-  const globalConfigPath = path.join(globalConfigRoot, 'factory', 'config.json');
+  const legacyConfigPath = path.join(byokBase, '.factory', 'config.json');
 
   return {
     settingsPath,
     settingsDisplayPath: '~/.factory/settings.json',
-    globalConfigPath,
-    globalConfigDisplayPath:
-      platform === 'win32' ? '%APPDATA%/factory/config.json' : '~/.config/factory/config.json',
+    legacyConfigPath,
+    legacyConfigDisplayPath: '~/.factory/config.json',
   };
 }
 
@@ -225,10 +218,10 @@ export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
     'BYOK settings',
     paths.settingsDisplayPath
   );
-  const globalConfigProbe = readJsonFileProbe(
-    paths.globalConfigPath,
-    'Global config',
-    paths.globalConfigDisplayPath
+  const legacyConfigProbe = readJsonFileProbe(
+    paths.legacyConfigPath,
+    'Legacy config',
+    paths.legacyConfigDisplayPath
   );
 
   const byok = summarizeDroidCustomModels(settingsProbe.json?.customModels);
@@ -242,8 +235,8 @@ export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
   if (byok.invalidModelEntryCount > 0) {
     warnings.push(`${byok.invalidModelEntryCount} customModels entries are malformed.`);
   }
-  if (globalConfigProbe.diagnostics.parseError) {
-    warnings.push('Global Droid config JSON is invalid.');
+  if (legacyConfigProbe.diagnostics.parseError) {
+    warnings.push('Legacy Droid config (~/.factory/config.json) JSON is invalid.');
   }
 
   return {
@@ -257,7 +250,7 @@ export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
     },
     files: {
       settings: settingsProbe.diagnostics,
-      globalConfig: globalConfigProbe.diagnostics,
+      legacyConfig: legacyConfigProbe.diagnostics,
     },
     byok,
     warnings,
@@ -271,6 +264,7 @@ export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
       ],
       notes: [
         'BYOK custom models are read from ~/.factory/settings.json customModels[]',
+        'Factory docs mention legacy support for ~/.factory/config.json',
         'Interactive model selection uses settings.model (custom:<alias>)',
         'droid exec supports --model for one-off execution mode',
       ],

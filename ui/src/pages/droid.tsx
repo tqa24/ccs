@@ -147,7 +147,7 @@ export function DroidPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {[diagnostics.files.settings, diagnostics.files.globalConfig].map((file) => (
+              {[diagnostics.files.settings, diagnostics.files.legacyConfig].map((file) => (
                 <div key={file.label} className="rounded-md border p-3 space-y-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-medium text-sm">{file.label}</span>

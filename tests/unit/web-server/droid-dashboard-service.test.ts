@@ -29,31 +29,26 @@ describe('droid-dashboard-service', () => {
       platform: 'darwin',
       env: {
         CCS_HOME: '/tmp/ccs-home',
-        XDG_CONFIG_HOME: '/tmp/xdg',
       } as NodeJS.ProcessEnv,
       homeDir: '/Users/tester',
     });
 
     expect(resolved.settingsPath).toBe('/tmp/ccs-home/.factory/settings.json');
-    expect(resolved.globalConfigPath).toBe('/tmp/xdg/factory/config.json');
+    expect(resolved.legacyConfigPath).toBe('/tmp/ccs-home/.factory/config.json');
     expect(resolved.settingsDisplayPath).toBe('~/.factory/settings.json');
-    expect(resolved.globalConfigDisplayPath).toBe('~/.config/factory/config.json');
+    expect(resolved.legacyConfigDisplayPath).toBe('~/.factory/config.json');
   });
 
   it('resolves droid config paths on windows platforms', () => {
     const resolved = resolveDroidConfigPaths({
       platform: 'win32',
-      env: {
-        APPDATA: 'C:/Users/test/AppData/Roaming',
-      } as NodeJS.ProcessEnv,
+      env: {} as NodeJS.ProcessEnv,
       homeDir: 'C:/Users/test',
     });
 
     expect(resolved.settingsPath).toBe(path.join('C:/Users/test', '.factory', 'settings.json'));
-    expect(resolved.globalConfigPath).toBe(
-      path.join('C:/Users/test/AppData/Roaming', 'factory', 'config.json')
-    );
-    expect(resolved.globalConfigDisplayPath).toBe('%APPDATA%/factory/config.json');
+    expect(resolved.legacyConfigPath).toBe(path.join('C:/Users/test', '.factory', 'config.json'));
+    expect(resolved.legacyConfigDisplayPath).toBe('~/.factory/config.json');
   });
 
   it('masks api key preview with only suffix', () => {

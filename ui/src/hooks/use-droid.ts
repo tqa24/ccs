@@ -40,7 +40,7 @@ export interface DroidDashboardDiagnostics {
   binary: DroidBinaryDiagnostics;
   files: {
     settings: DroidConfigFileDiagnostics;
-    globalConfig: DroidConfigFileDiagnostics;
+    legacyConfig: DroidConfigFileDiagnostics;
   };
   byok: {
     activeModelSelector: string | null;
