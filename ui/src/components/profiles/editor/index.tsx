@@ -15,7 +15,7 @@ import { HeaderSection } from './header-section';
 import { FriendlyUISection } from './friendly-ui-section';
 import { RawEditorSection } from './raw-editor-section';
 import type { ProfileEditorProps, Settings, SettingsResponse } from './types';
-import type { CliTarget } from '@/lib/api-client';
+import { api, type CliTarget } from '@/lib/api-client';
 
 export function ProfileEditor({
   profileName,
@@ -151,39 +151,24 @@ export function ProfileEditor({
     },
   });
 
-  const targetMutation = useMutation({
+  const targetMutation = useMutation<CliTarget, Error, CliTarget>({
     mutationFn: async (target: CliTarget) => {
-      const response = await fetch(`/api/profiles/${profileName}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to update target';
-        try {
-          const payload = (await response.json()) as { error?: string };
-          if (payload.error) {
-            errorMessage = payload.error;
-          }
-        } catch {
-          // Keep fallback error message.
-        }
-        throw new Error(errorMessage);
-      }
-
-      return response.json();
+      await api.profiles.update(profileName, { target });
+      return target;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       toast.success('Default target updated');
     },
-    onError: (error: Error) => {
-      toast.error(error.message);
+    onError: (error: Error, target: CliTarget) => {
+      const targetLabel = target === 'droid' ? 'Factory Droid' : 'Claude Code';
+      const suffix = error.message.trim() ? `: ${error.message}` : '';
+      toast.error(`Failed to update default target to ${targetLabel}${suffix}`);
     },
   });
 
   const resolvedTarget: CliTarget = profileTarget || 'claude';
+  const isHeaderMutationPending = saveMutation.isPending || targetMutation.isPending;
 
   const handleConflictResolve = async (overwrite: boolean) => {
     setConflictDialog(false);
@@ -209,12 +194,19 @@ export function ProfileEditor({
         hasChanges={computedHasChanges}
         isRawJsonValid={computedIsRawJsonValid}
         onTargetChange={(target) => {
+          if (isHeaderMutationPending) return;
           if (target === resolvedTarget) return;
           targetMutation.mutate(target);
         }}
-        onRefresh={() => refetch()}
+        onRefresh={() => {
+          if (isHeaderMutationPending) return;
+          refetch();
+        }}
         onDelete={onDelete}
-        onSave={() => saveMutation.mutate()}
+        onSave={() => {
+          if (isHeaderMutationPending) return;
+          saveMutation.mutate();
+        }}
       />
 
       {isLoading ? (

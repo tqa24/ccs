@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useUpdateVariant } from '@/hooks/use-cliproxy';
 import { CLIPROXY_PROVIDERS, getProviderDisplayName } from '@/lib/provider-config';
-import type { Variant } from '@/lib/api-client';
+import type { UpdateVariant, Variant } from '@/lib/api-client';
 
 const singleProviderSchema = z.object({
   provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
@@ -59,6 +59,63 @@ const providerOptions = CLIPROXY_PROVIDERS.map((id) => ({
   label: getProviderDisplayName(id),
 }));
 
+const COMPOSITE_TIERS = ['opus', 'sonnet', 'haiku'] as const;
+
+function normalizeOptionalValue(value?: string): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function isSingleVariantOnlyTargetChange(variant: Variant, data: SingleProviderFormData): boolean {
+  const currentTarget = variant.target || 'claude';
+  const currentModel = normalizeOptionalValue(variant.model);
+  const currentAccount = normalizeOptionalValue(variant.account);
+  const nextModel = normalizeOptionalValue(data.model);
+  const nextAccount = normalizeOptionalValue(data.account);
+
+  return (
+    data.target !== currentTarget &&
+    data.provider === variant.provider &&
+    nextModel === currentModel &&
+    nextAccount === currentAccount
+  );
+}
+
+function normalizeCompositeTier(tier: { provider: string; model: string; account?: string }) {
+  return {
+    provider: tier.provider,
+    model: tier.model.trim(),
+    account: normalizeOptionalValue(tier.account),
+  };
+}
+
+function isCompositeVariantOnlyTargetChange(variant: Variant, data: CompositeFormData): boolean {
+  const currentTarget = variant.target || 'claude';
+  const existingTiers = variant.tiers;
+
+  if (!existingTiers || !variant.default_tier) {
+    return false;
+  }
+
+  if (data.target === currentTarget) {
+    return false;
+  }
+
+  if (data.default_tier !== variant.default_tier) {
+    return false;
+  }
+
+  return COMPOSITE_TIERS.every((tier) => {
+    const current = normalizeCompositeTier(existingTiers[tier]);
+    const next = normalizeCompositeTier(data.tiers[tier]);
+    return (
+      next.provider === current.provider &&
+      next.model === current.model &&
+      next.account === current.account
+    );
+  });
+}
+
 export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEditDialogProps) {
   const updateMutation = useUpdateVariant();
   const isComposite = variant?.type === 'composite';
@@ -102,10 +159,40 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
 
   const onSubmitSingle = async (data: SingleProviderFormData) => {
     if (!variant) return;
-    // Filter out undefined values - backend interprets undefined as "no change"
-    const payload = Object.fromEntries(
-      Object.entries(data).filter(([, v]) => v !== undefined && v !== '')
-    ) as SingleProviderFormData;
+
+    let payload: UpdateVariant = {};
+
+    if (isSingleVariantOnlyTargetChange(variant, data)) {
+      payload = { target: data.target };
+    } else {
+      const currentTarget = variant.target || 'claude';
+      const currentModel = normalizeOptionalValue(variant.model);
+      const currentAccount = normalizeOptionalValue(variant.account);
+      const nextModel = normalizeOptionalValue(data.model);
+      const nextAccount = normalizeOptionalValue(data.account);
+
+      if (data.provider !== variant.provider) {
+        payload.provider = data.provider;
+      }
+
+      if (nextModel !== currentModel) {
+        payload.model = nextModel;
+      }
+
+      if (nextAccount !== currentAccount) {
+        payload.account = nextAccount;
+      }
+
+      if (data.target !== currentTarget) {
+        payload.target = data.target;
+      }
+    }
+
+    if (Object.keys(payload).length === 0) {
+      onOpenChange(false);
+      return;
+    }
+
     try {
       await updateMutation.mutateAsync({ name: variant.name, data: payload });
       onOpenChange(false);
@@ -116,14 +203,53 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
 
   const onSubmitComposite = async (data: CompositeFormData) => {
     if (!variant) return;
+
+    let payload: UpdateVariant = {};
+
+    if (isCompositeVariantOnlyTargetChange(variant, data)) {
+      payload = { target: data.target };
+    } else {
+      const existingTiers = variant.tiers;
+      const normalizedTiers: NonNullable<UpdateVariant['tiers']> = {
+        opus: normalizeCompositeTier(data.tiers.opus),
+        sonnet: normalizeCompositeTier(data.tiers.sonnet),
+        haiku: normalizeCompositeTier(data.tiers.haiku),
+      };
+
+      const tiersChanged = !existingTiers
+        ? true
+        : COMPOSITE_TIERS.some((tier) => {
+            const current = normalizeCompositeTier(existingTiers[tier]);
+            const next = normalizedTiers[tier];
+            return (
+              next.provider !== current.provider ||
+              next.model !== current.model ||
+              next.account !== current.account
+            );
+          });
+
+      if (variant.default_tier !== data.default_tier) {
+        payload.default_tier = data.default_tier;
+      }
+
+      if ((variant.target || 'claude') !== data.target) {
+        payload.target = data.target;
+      }
+
+      if (tiersChanged) {
+        payload.tiers = normalizedTiers;
+      }
+    }
+
+    if (Object.keys(payload).length === 0) {
+      onOpenChange(false);
+      return;
+    }
+
     try {
       await updateMutation.mutateAsync({
         name: variant.name,
-        data: {
-          default_tier: data.default_tier,
-          target: data.target,
-          tiers: data.tiers,
-        },
+        data: payload,
       });
       onOpenChange(false);
     } catch (error) {

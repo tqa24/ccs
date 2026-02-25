@@ -49,6 +49,9 @@ export function HeaderSection({
   onDelete,
   onSave,
 }: HeaderSectionProps) {
+  const isMutating = isSaving || isTargetSaving;
+  const disableHeaderActions = isLoading || isMutating;
+
   return (
     <div className="px-6 py-4 border-b bg-background flex items-center justify-between shrink-0">
       <div>
@@ -68,8 +71,15 @@ export function HeaderSection({
         )}
         <div className="mt-2 flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Default target:</span>
-          <Select value={target} onValueChange={(value) => onTargetChange(value as CliTarget)}>
-            <SelectTrigger className="h-7 w-[170px] text-xs" disabled={isTargetSaving}>
+          <Select
+            value={target}
+            onValueChange={(value) => {
+              if (disableHeaderActions) return;
+              onTargetChange(value as CliTarget);
+            }}
+            disabled={disableHeaderActions}
+          >
+            <SelectTrigger className="h-7 w-[170px] text-xs" disabled={disableHeaderActions}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -81,15 +91,15 @@ export function HeaderSection({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={isLoading}>
+        <Button variant="ghost" size="sm" onClick={onRefresh} disabled={disableHeaderActions}>
           <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
         </Button>
         {onDelete && (
-          <Button variant="ghost" size="sm" onClick={onDelete}>
+          <Button variant="ghost" size="sm" onClick={onDelete} disabled={isMutating}>
             <Trash2 className="w-4 h-4 text-destructive" />
           </Button>
         )}
-        <Button size="sm" onClick={onSave} disabled={isSaving || !hasChanges || !isRawJsonValid}>
+        <Button size="sm" onClick={onSave} disabled={isMutating || !hasChanges || !isRawJsonValid}>
           {isSaving ? (
             <>
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
