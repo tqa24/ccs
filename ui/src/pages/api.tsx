@@ -7,6 +7,7 @@ import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 import {
   Plus,
   Search,
@@ -222,6 +223,7 @@ export function ApiPage() {
             <ProfileEditor
               key={selectedProfileData.name}
               profileName={selectedProfileData.name}
+              profileTarget={selectedProfileData.target}
               onDelete={() => setDeleteConfirm(selectedProfileData.name)}
               onHasChangesUpdate={setEditorHasChanges}
             />
@@ -308,7 +310,12 @@ function ProfileListItem({
 
       {/* Profile info */}
       <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm truncate">{profile.name}</div>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="font-medium text-sm truncate">{profile.name}</div>
+          <Badge variant="outline" className="text-[10px] h-4 px-1.5 uppercase">
+            {profile.target || 'claude'}
+          </Badge>
+        </div>
         <div className="flex items-center gap-1.5 min-w-0">
           <div className="text-xs text-muted-foreground truncate flex-1">
             {profile.settingsPath}
