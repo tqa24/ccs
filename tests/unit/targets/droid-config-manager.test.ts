@@ -32,6 +32,25 @@ describe('droid-config-manager', () => {
   });
 
   describe('upsertCcsModel', () => {
+    it('should return a selector reference for the managed model', async () => {
+      const ref = await upsertCcsModel('gemini', {
+        model: 'claude-opus-4-6',
+        displayName: 'CCS gemini',
+        baseUrl: 'http://localhost:8317',
+        apiKey: 'dummy-key',
+        provider: 'anthropic',
+      });
+
+      expect(ref.profile).toBe('gemini');
+      expect(ref.selectorAlias).toBe('CCS-gemini-0');
+      expect(ref.selector).toBe('custom:CCS-gemini-0');
+      expect(ref.index).toBe(0);
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.model).toBe('custom:CCS-gemini-0');
+    });
+
     it('should create settings.json with customModels', async () => {
       await upsertCcsModel('gemini', {
         model: 'claude-opus-4-6',
@@ -48,6 +67,7 @@ describe('droid-config-manager', () => {
       expect(settings.customModels).toHaveLength(1);
       expect(settings.customModels[0].displayName).toBe('CCS gemini');
       expect(settings.customModels[0].baseUrl).toBe('http://localhost:8317');
+      expect(settings.model).toBe('custom:CCS-gemini-0');
     });
 
     it('should update existing entry on second upsert', async () => {

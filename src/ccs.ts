@@ -54,6 +54,7 @@ import {
   ClaudeAdapter,
   DroidAdapter,
   pruneOrphanedModels,
+  resolveDroidProvider,
   type TargetCredentials,
 } from './targets';
 import { resolveTargetType, stripTargetFlag } from './targets/target-resolver';
@@ -841,7 +842,11 @@ async function main(): Promise<void> {
           baseUrl: envVars['ANTHROPIC_BASE_URL'] || '',
           apiKey: envVars['ANTHROPIC_AUTH_TOKEN'] || '',
           model: envVars['ANTHROPIC_MODEL'] || undefined,
-          provider: 'anthropic',
+          provider: resolveDroidProvider({
+            provider: envVars['CCS_DROID_PROVIDER'] || envVars['DROID_PROVIDER'],
+            baseUrl: envVars['ANTHROPIC_BASE_URL'],
+            model: envVars['ANTHROPIC_MODEL'],
+          }),
           envVars,
         };
 
@@ -1010,6 +1015,11 @@ async function main(): Promise<void> {
             baseUrl: settingsEnv['ANTHROPIC_BASE_URL'] || '',
             apiKey: settingsEnv['ANTHROPIC_AUTH_TOKEN'] || '',
             model: settingsEnv['ANTHROPIC_MODEL'],
+            provider: resolveDroidProvider({
+              provider: settingsEnv['CCS_DROID_PROVIDER'] || settingsEnv['DROID_PROVIDER'],
+              baseUrl: settingsEnv['ANTHROPIC_BASE_URL'],
+              model: settingsEnv['ANTHROPIC_MODEL'],
+            }),
           };
           await adapter.prepareCredentials(creds);
           const targetArgs = adapter.buildArgs(profileInfo.name, remainingArgs);
@@ -1076,6 +1086,11 @@ async function main(): Promise<void> {
           baseUrl: process.env['ANTHROPIC_BASE_URL'] || '',
           apiKey: process.env['ANTHROPIC_AUTH_TOKEN'] || '',
           model: process.env['ANTHROPIC_MODEL'],
+          provider: resolveDroidProvider({
+            provider: process.env['CCS_DROID_PROVIDER'] || process.env['DROID_PROVIDER'],
+            baseUrl: process.env['ANTHROPIC_BASE_URL'],
+            model: process.env['ANTHROPIC_MODEL'],
+          }),
         };
         if (!creds.baseUrl || !creds.apiKey) {
           console.error(

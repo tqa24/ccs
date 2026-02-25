@@ -14,6 +14,7 @@ import {
 } from '../../api/services/profile-writer';
 import { apiProfileExists, listApiProfiles } from '../../api/services/profile-reader';
 import type { TargetType } from '../../targets/target-adapter';
+import { normalizeDroidProvider } from '../../targets/droid-provider';
 import { updateSettingsFile } from './route-helpers';
 
 const router = Router();
@@ -61,10 +62,18 @@ router.get('/', (_req: Request, res: Response): void => {
  */
 router.post('/', (req: Request, res: Response): void => {
   const { name, baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel, target } = req.body;
+  const providerHint = req.body?.droidProvider ?? req.body?.provider;
+  const parsedProvider = normalizeDroidProvider(providerHint);
 
   const parsedTarget = parseTarget(target);
   if (target !== undefined && parsedTarget === null) {
     res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    return;
+  }
+  if (providerHint !== undefined && parsedProvider === null) {
+    res.status(400).json({
+      error: 'Invalid droid provider. Expected: anthropic, openai, or generic-chat-completion-api',
+    });
     return;
   }
 
@@ -99,7 +108,8 @@ router.post('/', (req: Request, res: Response): void => {
       sonnet: sonnetModel || model || '',
       haiku: haikuModel || model || '',
     },
-    parsedTarget || 'claude'
+    parsedTarget || 'claude',
+    parsedProvider || undefined
   );
 
   if (!result.success) {
@@ -120,10 +130,18 @@ router.post('/', (req: Request, res: Response): void => {
 router.put('/:name', (req: Request, res: Response): void => {
   const { name } = req.params;
   const { baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel, target } = req.body;
+  const providerHint = req.body?.droidProvider ?? req.body?.provider;
+  const parsedProvider = normalizeDroidProvider(providerHint);
 
   const parsedTarget = parseTarget(target);
   if (target !== undefined && parsedTarget === null) {
     res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    return;
+  }
+  if (providerHint !== undefined && parsedProvider === null) {
+    res.status(400).json({
+      error: 'Invalid droid provider. Expected: anthropic, openai, or generic-chat-completion-api',
+    });
     return;
   }
 
@@ -150,7 +168,8 @@ router.put('/:name', (req: Request, res: Response): void => {
       model !== undefined ||
       opusModel !== undefined ||
       sonnetModel !== undefined ||
-      haikuModel !== undefined;
+      haikuModel !== undefined ||
+      providerHint !== undefined;
     const hasTargetUpdate = target !== undefined;
 
     if (!hasSettingsUpdates && !hasTargetUpdate) {
@@ -159,7 +178,15 @@ router.put('/:name', (req: Request, res: Response): void => {
     }
 
     if (hasSettingsUpdates) {
-      updateSettingsFile(name, { baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel });
+      updateSettingsFile(name, {
+        baseUrl,
+        apiKey,
+        model,
+        opusModel,
+        sonnetModel,
+        haikuModel,
+        provider: parsedProvider || undefined,
+      });
     }
 
     if (hasTargetUpdate && parsedTarget) {

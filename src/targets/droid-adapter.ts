@@ -2,7 +2,7 @@
  * Droid Adapter
  *
  * TargetAdapter implementation for Factory Droid CLI.
- * Writes credentials to ~/.factory/settings.json and spawns `droid -m custom:ccs-<profile>`.
+ * Writes credentials + active model to ~/.factory/settings.json and spawns `droid`.
  */
 
 import { spawn, ChildProcess } from 'child_process';
@@ -11,6 +11,7 @@ import { TargetAdapter, TargetBinaryInfo, TargetCredentials, TargetType } from '
 import { getDroidBinaryInfo, detectDroidCli, checkDroidVersion } from './droid-detector';
 import type { ProfileType } from '../types/profile';
 import { upsertCcsModel } from './droid-config-manager';
+import { resolveDroidProvider } from './droid-provider';
 import { escapeShellArg } from '../utils/shell-executor';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
 import { runCleanup } from '../errors';
@@ -43,13 +44,21 @@ export class DroidAdapter implements TargetAdapter {
    */
   async prepareCredentials(creds: TargetCredentials): Promise<void> {
     this.validateCredentials(creds);
-    await upsertCcsModel(creds.profile, {
+    const provider = resolveDroidProvider({
+      provider: creds.provider,
+      baseUrl: creds.baseUrl,
+      model: creds.model,
+    });
+    const modelRef = await upsertCcsModel(creds.profile, {
       model: creds.model || 'claude-opus-4-6',
       displayName: `CCS ${creds.profile}`,
       baseUrl: creds.baseUrl,
       apiKey: creds.apiKey,
-      provider: creds.provider || 'anthropic',
+      provider,
     });
+    if (!modelRef.selector) {
+      throw new Error(`Failed to resolve Droid model selector for profile "${creds.profile}"`);
+    }
   }
 
   buildArgs(profile: string, userArgs: string[]): string[] {
@@ -58,7 +67,9 @@ export class DroidAdapter implements TargetAdapter {
         `Invalid profile name "${profile}" for Droid target: only alphanumeric, dot, underscore, hyphen allowed`
       );
     }
-    return ['-m', `custom:ccs-${profile}`, ...userArgs];
+    // Droid interactive mode treats unknown argv as queued prompt text.
+    // Model selection must be persisted in settings.json (`model`) instead of `-m`.
+    return [...userArgs];
   }
 
   /**
