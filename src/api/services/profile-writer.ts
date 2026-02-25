@@ -13,6 +13,7 @@ import {
 } from '../../config/unified-config-loader';
 import { ensureProfileHooks } from '../../utils/websearch/profile-hook-injector';
 import type { TargetType } from '../../targets/target-adapter';
+import { resolveDroidProvider } from '../../targets/droid-provider';
 import type {
   ModelMapping,
   CreateApiProfileResult,
@@ -30,10 +31,16 @@ function createSettingsFile(
   name: string,
   baseUrl: string,
   apiKey: string,
-  models: ModelMapping
+  models: ModelMapping,
+  provider?: string
 ): string {
   const ccsDir = getCcsDir();
   const settingsPath = path.join(ccsDir, `${name}.settings.json`);
+  const droidProvider = resolveDroidProvider({
+    provider,
+    baseUrl,
+    model: models.default,
+  });
 
   const settings = {
     env: {
@@ -43,6 +50,7 @@ function createSettingsFile(
       ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
       ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
       ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
+      CCS_DROID_PROVIDER: droidProvider,
       // OpenRouter requires explicitly blanking the API key to prevent conflicts
       ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
     },
@@ -97,11 +105,17 @@ function createApiProfileUnified(
   baseUrl: string,
   apiKey: string,
   models: ModelMapping,
-  target: TargetType = 'claude'
+  target: TargetType = 'claude',
+  provider?: string
 ): void {
   const ccsDir = getCcsDir();
   const settingsFile = `${name}.settings.json`;
   const settingsPath = path.join(ccsDir, settingsFile);
+  const droidProvider = resolveDroidProvider({
+    provider,
+    baseUrl,
+    model: models.default,
+  });
 
   const settings = {
     env: {
@@ -111,6 +125,7 @@ function createApiProfileUnified(
       ANTHROPIC_DEFAULT_OPUS_MODEL: models.opus,
       ANTHROPIC_DEFAULT_SONNET_MODEL: models.sonnet,
       ANTHROPIC_DEFAULT_HAIKU_MODEL: models.haiku,
+      CCS_DROID_PROVIDER: droidProvider,
       // OpenRouter requires explicitly blanking the API key to prevent conflicts
       ...(isOpenRouterUrl(baseUrl) && { ANTHROPIC_API_KEY: '' }),
     },
@@ -140,15 +155,16 @@ export function createApiProfile(
   baseUrl: string,
   apiKey: string,
   models: ModelMapping,
-  target: TargetType = 'claude'
+  target: TargetType = 'claude',
+  provider?: string
 ): CreateApiProfileResult {
   try {
     const settingsFile = `~/.ccs/${name}.settings.json`;
 
     if (isUnifiedMode()) {
-      createApiProfileUnified(name, baseUrl, apiKey, models, target);
+      createApiProfileUnified(name, baseUrl, apiKey, models, target, provider);
     } else {
-      createSettingsFile(name, baseUrl, apiKey, models);
+      createSettingsFile(name, baseUrl, apiKey, models, provider);
       updateLegacyConfig(name, target);
     }
 

@@ -157,6 +157,11 @@ ccsd glm
 
 Need additional alias names? Set `CCS_DROID_ALIASES` as a comma-separated list (for example: `CCS_DROID_ALIASES=ccs-droid,mydroid`).
 
+For Factory BYOK compatibility, CCS also stores a per-profile Droid provider hint
+(`CCS_DROID_PROVIDER`) using one of:
+`anthropic`, `openai`, or `generic-chat-completion-api`.
+If the hint is missing, CCS resolves provider from base URL/model at runtime.
+
 ### Per-Profile Target Defaults
 
 You can pin a default target (`claude` or `droid`) per profile:

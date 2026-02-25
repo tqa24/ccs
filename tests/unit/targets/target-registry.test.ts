@@ -126,7 +126,8 @@ describe('DroidAdapter', () => {
   });
 
   it('should build args with -m custom:ccs- prefix', () => {
-    const args = adapter.buildArgs('gemini', ['--verbose']);
+    const isolatedAdapter = new DroidAdapter();
+    const args = isolatedAdapter.buildArgs('gemini', ['--verbose']);
     expect(args).toEqual(['-m', 'custom:ccs-gemini', '--verbose']);
   });
 
@@ -177,6 +178,29 @@ describe('DroidAdapter', () => {
 
       const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
       expect(fs.existsSync(settingsPath)).toBe(true);
+    } finally {
+      if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
+      else delete process.env.CCS_HOME;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('buildArgs should use selector returned from Droid settings entry', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-droid-selector-test-'));
+    const originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_HOME = tmpDir;
+
+    try {
+      const isolatedAdapter = new DroidAdapter();
+      await isolatedAdapter.prepareCredentials({
+        profile: 'gemini',
+        baseUrl: 'http://localhost:8317',
+        apiKey: 'dummy-key',
+        model: 'claude-sonnet-4-5-20250929',
+      });
+
+      const args = isolatedAdapter.buildArgs('gemini', ['--verbose']);
+      expect(args).toEqual(['-m', 'custom:CCS-gemini-0', '--verbose']);
     } finally {
       if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
       else delete process.env.CCS_HOME;

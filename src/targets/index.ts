@@ -27,4 +27,6 @@ export {
   pruneOrphanedModels,
 } from './droid-config-manager';
 export type { DroidCustomModel } from './droid-config-manager';
+export { resolveDroidProvider, normalizeDroidProvider } from './droid-provider';
+export type { DroidProvider } from './droid-provider';
 export { resolveTargetType, stripTargetFlag } from './target-resolver';

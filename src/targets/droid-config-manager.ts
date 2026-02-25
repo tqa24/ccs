@@ -43,6 +43,14 @@ export interface DroidCustomModel {
   maxOutputTokens?: number;
 }
 
+export interface DroidManagedModelRef {
+  profile: string;
+  displayName: string;
+  index: number;
+  selectorAlias: string;
+  selector: string;
+}
+
 interface DroidSettings {
   customModels?: DroidCustomModelEntry[];
   [key: string]: unknown;
@@ -95,6 +103,11 @@ function parseManagedProfile(displayName: string): string | null {
 
 function asModelEntry(value: unknown): DroidCustomModelEntry | null {
   return isDroidCustomModelEntry(value) ? value : null;
+}
+
+function buildSelectorAlias(displayName: string, index: number): string {
+  const normalizedDisplayName = displayName.trim().replace(/\s+/g, '-');
+  return `${normalizedDisplayName}-${index}`;
 }
 
 function normalizeCustomModels(value: unknown): DroidCustomModelEntry[] {
@@ -302,11 +315,15 @@ function writeDroidSettings(settings: DroidSettings): void {
  * Upsert a CCS-managed custom model entry.
  * Acquires file lock to prevent concurrent write races.
  */
-export async function upsertCcsModel(profile: string, model: DroidCustomModel): Promise<void> {
+export async function upsertCcsModel(
+  profile: string,
+  model: DroidCustomModel
+): Promise<DroidManagedModelRef> {
   validateProfileName(profile);
   ensureFactoryDir();
 
   let release: (() => Promise<void>) | undefined;
+  let ref: DroidManagedModelRef | null = null;
   try {
     release = await acquireFactoryLock(10);
 
@@ -330,9 +347,32 @@ export async function upsertCcsModel(profile: string, model: DroidCustomModel): 
     }
 
     writeDroidSettings(settings);
+
+    const index = settings.customModels.findIndex(
+      (entry) => parseManagedProfile(entry.displayName) === profile
+    );
+    const safeIndex = index >= 0 ? index : 0;
+    const selectorAlias = buildSelectorAlias(entry.displayName, safeIndex);
+    ref = {
+      profile,
+      displayName: entry.displayName,
+      index: safeIndex,
+      selectorAlias,
+      selector: `custom:${selectorAlias}`,
+    };
   } finally {
     if (release) await release();
   }
+
+  return (
+    ref || {
+      profile,
+      displayName: `CCS ${profile}`,
+      index: 0,
+      selectorAlias: `CCS-${profile}-0`,
+      selector: `custom:CCS-${profile}-0`,
+    }
+  );
 }
 
 /**

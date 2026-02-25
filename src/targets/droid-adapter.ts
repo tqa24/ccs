@@ -2,7 +2,7 @@
  * Droid Adapter
  *
  * TargetAdapter implementation for Factory Droid CLI.
- * Writes credentials to ~/.factory/settings.json and spawns `droid -m custom:ccs-<profile>`.
+ * Writes credentials to ~/.factory/settings.json and spawns `droid -m custom:<alias>`.
  */
 
 import { spawn, ChildProcess } from 'child_process';
@@ -11,6 +11,7 @@ import { TargetAdapter, TargetBinaryInfo, TargetCredentials, TargetType } from '
 import { getDroidBinaryInfo, detectDroidCli, checkDroidVersion } from './droid-detector';
 import type { ProfileType } from '../types/profile';
 import { upsertCcsModel } from './droid-config-manager';
+import { resolveDroidProvider } from './droid-provider';
 import { escapeShellArg } from '../utils/shell-executor';
 import { wireChildProcessSignals } from '../utils/signal-forwarder';
 import { runCleanup } from '../errors';
@@ -18,6 +19,7 @@ import { runCleanup } from '../errors';
 export class DroidAdapter implements TargetAdapter {
   readonly type: TargetType = 'droid';
   readonly displayName = 'Factory Droid';
+  private readonly modelSelectorsByProfile = new Map<string, string>();
 
   private validateCredentials(creds: TargetCredentials): void {
     if (!creds.baseUrl?.trim()) {
@@ -43,13 +45,19 @@ export class DroidAdapter implements TargetAdapter {
    */
   async prepareCredentials(creds: TargetCredentials): Promise<void> {
     this.validateCredentials(creds);
-    await upsertCcsModel(creds.profile, {
+    const provider = resolveDroidProvider({
+      provider: creds.provider,
+      baseUrl: creds.baseUrl,
+      model: creds.model,
+    });
+    const modelRef = await upsertCcsModel(creds.profile, {
       model: creds.model || 'claude-opus-4-6',
       displayName: `CCS ${creds.profile}`,
       baseUrl: creds.baseUrl,
       apiKey: creds.apiKey,
-      provider: creds.provider || 'anthropic',
+      provider,
     });
+    this.modelSelectorsByProfile.set(creds.profile, modelRef.selector);
   }
 
   buildArgs(profile: string, userArgs: string[]): string[] {
@@ -58,7 +66,8 @@ export class DroidAdapter implements TargetAdapter {
         `Invalid profile name "${profile}" for Droid target: only alphanumeric, dot, underscore, hyphen allowed`
       );
     }
-    return ['-m', `custom:ccs-${profile}`, ...userArgs];
+    const selector = this.modelSelectorsByProfile.get(profile) || `custom:ccs-${profile}`;
+    return ['-m', selector, ...userArgs];
   }
 
   /**
