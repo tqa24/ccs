@@ -64,6 +64,7 @@ The dashboard provides visual management for all account types:
 - **Claude Accounts**: Create isolated instances (work, personal, client)
 - **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity, Kiro, Copilot
 - **API Profiles**: Configure GLM, Kimi with your keys
+- **Factory Droid**: Track Droid install location and BYOK settings health
 - **Updates Center**: Track support rollouts (Droid target, CLIProxy provider changes, WebSearch integrations)
 - **Health Monitor**: Real-time status across all profiles
 
@@ -165,6 +166,8 @@ If the hint is missing, CCS resolves provider from base URL/model at runtime.
 CCS also persists Droid's active model selector in `~/.factory/settings.json`
 (`model: custom:<alias>`). This avoids passing `-m` argv in interactive mode,
 which Droid treats as queued prompt text.
+
+Dashboard parity: `ccs config` -> `Factory Droid`
 
 ### Per-Profile Target Defaults
 
