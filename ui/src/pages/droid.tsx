@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { type ReactNode, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
@@ -25,6 +25,83 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+
+const DEFAULT_DROID_FACTORY_DOC_LINKS = [
+  {
+    id: 'droid-cli-overview',
+    label: 'Droid CLI Overview',
+    url: 'https://docs.factory.ai/cli/',
+    description: 'Primary entry docs for setup, auth, and core CLI usage.',
+  },
+  {
+    id: 'droid-byok-overview',
+    label: 'BYOK Overview',
+    url: 'https://docs.factory.ai/cli/byok/overview/',
+    description: 'BYOK model/provider shape, provider values, and migration notes.',
+  },
+  {
+    id: 'droid-settings-reference',
+    label: 'settings.json Reference',
+    url: 'https://docs.factory.ai/cli/configuration/settings/',
+    description: 'Supported settings keys, defaults, and allowed values.',
+  },
+];
+
+const DEFAULT_DROID_PROVIDER_DOC_LINKS = [
+  {
+    provider: 'anthropic',
+    label: 'Anthropic Messages API',
+    apiFormat: 'Messages API',
+    url: 'https://docs.anthropic.com/en/api/messages',
+  },
+  {
+    provider: 'openai',
+    label: 'OpenAI Responses API',
+    apiFormat: 'Responses API',
+    url: 'https://platform.openai.com/docs/api-reference/responses',
+  },
+  {
+    provider: 'generic-chat-completion-api',
+    label: 'OpenAI Chat Completions Spec',
+    apiFormat: 'Chat Completions API',
+    url: 'https://platform.openai.com/docs/api-reference/chat',
+  },
+];
+
+function renderTextWithLinks(text: string): ReactNode[] {
+  const urlPattern = /https?:\/\/[^\s)]+/g;
+  const nodes: ReactNode[] = [];
+  let cursor = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = urlPattern.exec(text)) !== null) {
+    const [url] = match;
+    const index = match.index;
+
+    if (index > cursor) {
+      nodes.push(text.slice(cursor, index));
+    }
+
+    nodes.push(
+      <a
+        key={`${url}-${index}`}
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="underline underline-offset-2 hover:text-foreground"
+      >
+        {url}
+      </a>
+    );
+    cursor = index + url.length;
+  }
+
+  if (cursor < text.length) {
+    nodes.push(text.slice(cursor));
+  }
+
+  return nodes.length > 0 ? nodes : [text];
+}
 
 function formatTimestamp(value: number | null | undefined): string {
   if (!value || !Number.isFinite(value)) return 'N/A';
@@ -211,8 +288,11 @@ export function DroidPage() {
       settingsHierarchy: [],
     };
     const docsNotes = docsReference.notes ?? [];
-    const docsLinks = docsReference.links ?? [];
-    const providerDocs = docsReference.providerDocs ?? [];
+    const docsLinksRaw = docsReference.links ?? [];
+    const providerDocsRaw = docsReference.providerDocs ?? [];
+    const docsLinks = docsLinksRaw.length > 0 ? docsLinksRaw : DEFAULT_DROID_FACTORY_DOC_LINKS;
+    const providerDocs =
+      providerDocsRaw.length > 0 ? providerDocsRaw : DEFAULT_DROID_PROVIDER_DOC_LINKS;
     const providerValues = docsReference.providerValues ?? [];
     const settingsHierarchy = docsReference.settingsHierarchy ?? [];
 
@@ -350,9 +430,9 @@ export function DroidPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {docsNotes.map((note) => (
-                <p key={note} className="text-muted-foreground">
-                  - {note}
+              {docsNotes.map((note, index) => (
+                <p key={`${index}-${note}`} className="text-muted-foreground">
+                  - {renderTextWithLinks(note)}
                 </p>
               ))}
               <Separator />
@@ -374,6 +454,9 @@ export function DroidPage() {
                         <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">{link.description}</p>
+                      <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground/90 underline underline-offset-2">
+                        {link.url}
+                      </p>
                     </a>
                   ))}
                 </div>
@@ -398,6 +481,9 @@ export function DroidPage() {
                       </div>
                       <p className="mt-0.5 text-[11px] text-muted-foreground">
                         provider: {providerDoc.provider} | format: {providerDoc.apiFormat}
+                      </p>
+                      <p className="mt-1 break-all font-mono text-[11px] text-muted-foreground/90 underline underline-offset-2">
+                        {providerDoc.url}
                       </p>
                     </a>
                   ))}
