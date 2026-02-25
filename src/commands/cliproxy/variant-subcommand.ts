@@ -48,17 +48,24 @@ function parseTargetValue(rawValue: string): TargetType | null {
   return null;
 }
 
-function parseProfileArgs(args: string[]): CliproxyProfileArgs {
+export function parseProfileArgs(args: string[]): CliproxyProfileArgs {
   const result: CliproxyProfileArgs = { errors: [] };
+  let parseOptions = true;
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--provider' && args[i + 1]) {
+    if (parseOptions && arg === '--') {
+      parseOptions = false;
+      continue;
+    }
+
+    if (parseOptions && arg === '--provider' && args[i + 1]) {
       result.provider = args[++i] as CLIProxyProfileName;
-    } else if (arg === '--model' && args[i + 1]) {
+    } else if (parseOptions && arg === '--model' && args[i + 1]) {
       result.model = args[++i];
-    } else if (arg === '--account' && args[i + 1]) {
+    } else if (parseOptions && arg === '--account' && args[i + 1]) {
       result.account = args[++i];
-    } else if (arg === '--target') {
+    } else if (parseOptions && arg === '--target') {
       const rawValue = args[i + 1];
       if (!rawValue || rawValue.startsWith('-')) {
         result.errors.push('Missing value for --target');
@@ -71,7 +78,7 @@ function parseProfileArgs(args: string[]): CliproxyProfileArgs {
           result.target = parsedTarget;
         }
       }
-    } else if (arg.startsWith('--target=')) {
+    } else if (parseOptions && arg.startsWith('--target=')) {
       const rawValue = arg.slice('--target='.length);
       const parsedTarget = parseTargetValue(rawValue);
       if (!parsedTarget) {
@@ -79,13 +86,13 @@ function parseProfileArgs(args: string[]): CliproxyProfileArgs {
       } else {
         result.target = parsedTarget;
       }
-    } else if (arg === '--force') {
+    } else if (parseOptions && arg === '--force') {
       result.force = true;
-    } else if (arg === '--yes' || arg === '-y') {
+    } else if (parseOptions && (arg === '--yes' || arg === '-y')) {
       result.yes = true;
-    } else if (arg === '--composite') {
+    } else if (parseOptions && arg === '--composite') {
       result.composite = true;
-    } else if (!arg.startsWith('-') && !result.name) {
+    } else if ((!parseOptions || !arg.startsWith('-')) && !result.name) {
       result.name = arg;
     }
   }
