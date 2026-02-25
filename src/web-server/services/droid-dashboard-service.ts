@@ -1,15 +1,19 @@
-import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { detectDroidCli } from '../../targets/droid-detector';
 import type {
   DroidByokDiagnostics,
-  DroidConfigFileDiagnostics,
   DroidCustomModelDiagnostics,
   DroidDashboardDiagnostics,
   DroidRawSettingsResponse,
 } from './compatible-cli-types';
+import {
+  JsonFileConflictError,
+  JsonFileValidationError,
+  probeJsonObjectFile,
+  writeJsonObjectFileAtomic,
+} from './compatible-cli-json-file-service';
 
 interface DroidConfigPaths {
   settingsPath: string;
@@ -18,11 +22,20 @@ interface DroidConfigPaths {
   legacyConfigDisplayPath: string;
 }
 
-interface JsonFileProbe {
-  diagnostics: DroidConfigFileDiagnostics;
-  json: Record<string, unknown> | null;
+interface SaveDroidRawSettingsInput {
   rawText: string;
+  expectedMtime?: number;
 }
+
+interface SaveDroidRawSettingsResult {
+  success: true;
+  mtime: number;
+}
+
+export {
+  JsonFileConflictError as DroidRawSettingsConflictError,
+  JsonFileValidationError as DroidRawSettingsValidationError,
+};
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -84,69 +97,6 @@ function getBinaryVersion(binaryPath: string): string | null {
       .trim();
   } catch {
     return null;
-  }
-}
-
-function readJsonFileProbe(filePath: string, label: string, displayPath: string): JsonFileProbe {
-  if (!fs.existsSync(filePath)) {
-    return {
-      diagnostics: {
-        label,
-        path: displayPath,
-        resolvedPath: filePath,
-        exists: false,
-        isSymlink: false,
-        isRegularFile: false,
-        sizeBytes: null,
-        mtimeMs: null,
-        parseError: null,
-        readError: null,
-      },
-      json: null,
-      rawText: '{}',
-    };
-  }
-
-  const stat = fs.lstatSync(filePath);
-  const diagnostics: DroidConfigFileDiagnostics = {
-    label,
-    path: displayPath,
-    resolvedPath: filePath,
-    exists: true,
-    isSymlink: stat.isSymbolicLink(),
-    isRegularFile: stat.isFile(),
-    sizeBytes: stat.size,
-    mtimeMs: stat.mtimeMs,
-    parseError: null,
-    readError: null,
-  };
-
-  if (diagnostics.isSymlink) {
-    diagnostics.readError = 'Refusing symlink file for safety.';
-    return { diagnostics, json: null, rawText: '{}' };
-  }
-
-  if (!diagnostics.isRegularFile) {
-    diagnostics.readError = 'Target is not a regular file.';
-    return { diagnostics, json: null, rawText: '{}' };
-  }
-
-  try {
-    const rawText = fs.readFileSync(filePath, 'utf8');
-    try {
-      const parsed = JSON.parse(rawText);
-      if (!isObject(parsed)) {
-        diagnostics.parseError = 'JSON root must be an object.';
-        return { diagnostics, json: null, rawText };
-      }
-      return { diagnostics, json: parsed, rawText };
-    } catch (error) {
-      diagnostics.parseError = (error as Error).message;
-      return { diagnostics, json: null, rawText };
-    }
-  } catch (error) {
-    diagnostics.readError = (error as Error).message;
-    return { diagnostics, json: null, rawText: '{}' };
   }
 }
 
@@ -213,12 +163,12 @@ export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
 
   const source = process.env.CCS_DROID_PATH ? 'CCS_DROID_PATH' : binaryPath ? 'PATH' : 'missing';
 
-  const settingsProbe = readJsonFileProbe(
+  const settingsProbe = probeJsonObjectFile(
     paths.settingsPath,
     'BYOK settings',
     paths.settingsDisplayPath
   );
-  const legacyConfigProbe = readJsonFileProbe(
+  const legacyConfigProbe = probeJsonObjectFile(
     paths.legacyConfigPath,
     'Legacy config',
     paths.legacyConfigDisplayPath
@@ -274,7 +224,7 @@ export function getDroidDashboardDiagnostics(): DroidDashboardDiagnostics {
 
 export function getDroidRawSettings(): DroidRawSettingsResponse {
   const paths = resolveDroidConfigPaths();
-  const settingsProbe = readJsonFileProbe(
+  const settingsProbe = probeJsonObjectFile(
     paths.settingsPath,
     'BYOK settings',
     paths.settingsDisplayPath
@@ -289,4 +239,19 @@ export function getDroidRawSettings(): DroidRawSettingsResponse {
     settings: settingsProbe.json,
     parseError: settingsProbe.diagnostics.parseError,
   };
+}
+
+export function saveDroidRawSettings(input: SaveDroidRawSettingsInput): SaveDroidRawSettingsResult {
+  const paths = resolveDroidConfigPaths();
+  if (typeof input.rawText !== 'string') {
+    throw new JsonFileValidationError('rawText must be a string.');
+  }
+
+  const saved = writeJsonObjectFileAtomic({
+    filePath: paths.settingsPath,
+    rawText: input.rawText,
+    expectedMtime: input.expectedMtime,
+    fileLabel: 'settings.json',
+  });
+  return { success: true, mtime: saved.mtime };
 }

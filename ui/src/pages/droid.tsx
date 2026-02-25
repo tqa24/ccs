@@ -4,24 +4,21 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   AlertTriangle,
   CheckCircle2,
-  Copy,
-  FileCode2,
   Folder,
   GripVertical,
   Loader2,
-  RefreshCw,
   Server,
   ShieldCheck,
   TerminalSquare,
   XCircle,
 } from 'lucide-react';
 import { useDroid } from '@/hooks/use-droid';
-import { Button } from '@/components/ui/button';
+import { isApiConflictError } from '@/lib/api-client';
+import { RawJsonSettingsEditorPanel } from '@/components/compatible-cli/raw-json-settings-editor-panel';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CodeEditor } from '@/components/shared/code-editor';
 import { cn } from '@/lib/utils';
 
 function formatTimestamp(value: number | null | undefined): string {
@@ -34,6 +31,18 @@ function formatBytes(value: number | null | undefined): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function validateJsonObject(text: string): { valid: true } | { valid: false; error: string } {
+  try {
+    const parsed = JSON.parse(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { valid: false, error: 'JSON root must be an object.' };
+    }
+    return { valid: true };
+  } catch (error) {
+    return { valid: false, error: (error as Error).message };
+  }
 }
 
 function DetailRow({
@@ -62,20 +71,40 @@ export function DroidPage() {
     rawSettings,
     rawSettingsLoading,
     refetchRawSettings,
+    saveRawSettingsAsync,
+    isSavingRawSettings,
   } = useDroid();
 
-  const [copied, setCopied] = useState(false);
-
-  const copyRawSettings = async () => {
-    if (!rawSettings?.rawText) return;
-    await navigator.clipboard.writeText(rawSettings.rawText);
-    setCopied(true);
-    toast.success('Droid settings copied to clipboard');
-    window.setTimeout(() => setCopied(false), 1500);
-  };
+  const [rawDraftText, setRawDraftText] = useState<string | null>(null);
+  const rawBaseText = rawSettings?.rawText ?? '{}';
+  const rawEditorText = rawDraftText ?? rawBaseText;
+  const rawConfigDirty = rawDraftText !== null && rawDraftText !== rawBaseText;
 
   const refreshAll = async () => {
     await Promise.all([refetchDiagnostics(), refetchRawSettings()]);
+  };
+
+  const handleSaveRawSettings = async () => {
+    if (!rawEditorValidation.valid) {
+      toast.error(`Invalid JSON: ${rawEditorValidation.error}`);
+      return;
+    }
+
+    try {
+      await saveRawSettingsAsync({
+        rawText: rawEditorText,
+        expectedMtime: rawSettings?.exists ? rawSettings.mtime : undefined,
+      });
+      setRawDraftText(null);
+      await Promise.all([refetchDiagnostics(), refetchRawSettings()]);
+      toast.success('Droid settings saved');
+    } catch (error) {
+      if (isApiConflictError(error)) {
+        toast.error('Droid settings changed externally. Refresh and retry.');
+      } else {
+        toast.error((error as Error).message || 'Failed to save Droid settings');
+      }
+    }
   };
 
   const customModels = diagnostics?.byok.customModels ?? [];
@@ -83,6 +112,7 @@ export function DroidPage() {
     () => Object.entries(diagnostics?.byok.providerBreakdown ?? {}).sort((a, b) => b[1] - a[1]),
     [diagnostics?.byok.providerBreakdown]
   );
+  const rawEditorValidation = validateJsonObject(rawEditorText);
 
   const renderOverview = () => {
     if (diagnosticsLoading) {
@@ -313,66 +343,30 @@ export function DroidPage() {
           <GripVertical className="w-3 h-3 text-muted-foreground group-hover:text-primary" />
         </PanelResizeHandle>
         <Panel defaultSize={55} minSize={35}>
-          <div className="h-full flex flex-col">
-            <div className="p-4 border-b bg-background flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <h2 className="font-semibold flex items-center gap-2">
-                  <FileCode2 className="h-4 w-4 text-primary" />
-                  Droid BYOK Settings
-                </h2>
-                <p className="text-xs text-muted-foreground font-mono truncate">
-                  {rawSettings?.path || '~/.factory/settings.json'}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={copyRawSettings}
-                  disabled={!rawSettings?.rawText}
-                >
-                  <Copy className="h-4 w-4 mr-1" />
-                  {copied ? 'Copied' : 'Copy'}
-                </Button>
-                <Button variant="outline" size="sm" onClick={refreshAll}>
-                  <RefreshCw
-                    className={cn(
-                      'h-4 w-4',
-                      diagnosticsLoading || rawSettingsLoading ? 'animate-spin' : ''
-                    )}
-                  />
-                </Button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-auto">
-              {rawSettingsLoading ? (
-                <div className="h-full flex items-center justify-center text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                  Loading settings.json...
-                </div>
-              ) : (
-                <div className="h-full flex flex-col">
-                  {rawSettings?.parseError && (
-                    <div className="mx-4 mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
-                      Parse warning: {rawSettings.parseError}
-                    </div>
-                  )}
-                  <div className="flex-1 p-4 pt-3">
-                    <div className="h-full rounded-md border overflow-hidden bg-background">
-                      <CodeEditor
-                        value={rawSettings?.rawText || '{}'}
-                        onChange={() => {}}
-                        language="json"
-                        readonly
-                        minHeight="100%"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <RawJsonSettingsEditorPanel
+            title="Droid BYOK Settings"
+            pathLabel={rawSettings?.path || '~/.factory/settings.json'}
+            loading={rawSettingsLoading}
+            parseWarning={rawSettings?.parseError}
+            value={rawEditorText}
+            dirty={rawConfigDirty}
+            saving={isSavingRawSettings}
+            saveDisabled={
+              !rawConfigDirty ||
+              isSavingRawSettings ||
+              rawSettingsLoading ||
+              !rawEditorValidation.valid
+            }
+            onChange={(next) => {
+              if (next === rawBaseText) {
+                setRawDraftText(null);
+                return;
+              }
+              setRawDraftText(next);
+            }}
+            onSave={handleSaveRawSettings}
+            onRefresh={refreshAll}
+          />
         </Panel>
       </PanelGroup>
     </div>

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { withApiBase } from '@/lib/api-client';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ApiConflictError, withApiBase } from '@/lib/api-client';
 
 export interface DroidBinaryDiagnostics {
   installed: boolean;
@@ -69,6 +69,16 @@ export interface DroidRawSettings {
   parseError: string | null;
 }
 
+interface SaveDroidRawSettingsInput {
+  rawText: string;
+  expectedMtime?: number;
+}
+
+interface SaveDroidRawSettingsResponse {
+  success: true;
+  mtime: number;
+}
+
 async function fetchDroidDiagnostics(): Promise<DroidDashboardDiagnostics> {
   const res = await fetch(withApiBase('/droid/diagnostics'));
   if (!res.ok) throw new Error('Failed to fetch Droid diagnostics');
@@ -81,7 +91,26 @@ async function fetchDroidRawSettings(): Promise<DroidRawSettings> {
   return res.json();
 }
 
+async function saveDroidRawSettings(
+  data: SaveDroidRawSettingsInput
+): Promise<SaveDroidRawSettingsResponse> {
+  const res = await fetch(withApiBase('/droid/settings/raw'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (res.status === 409) throw new ApiConflictError('Droid raw settings changed externally');
+
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error || 'Failed to save Droid raw settings');
+  }
+  return res.json();
+}
+
 export function useDroid() {
+  const queryClient = useQueryClient();
+
   const diagnosticsQuery = useQuery({
     queryKey: ['droid-diagnostics'],
     queryFn: fetchDroidDiagnostics,
@@ -91,6 +120,14 @@ export function useDroid() {
   const rawSettingsQuery = useQuery({
     queryKey: ['droid-raw-settings'],
     queryFn: fetchDroidRawSettings,
+  });
+
+  const saveRawSettingsMutation = useMutation({
+    mutationFn: saveDroidRawSettings,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['droid-diagnostics'] });
+      queryClient.invalidateQueries({ queryKey: ['droid-raw-settings'] });
+    },
   });
 
   return useMemo(
@@ -104,6 +141,10 @@ export function useDroid() {
       rawSettingsLoading: rawSettingsQuery.isLoading,
       rawSettingsError: rawSettingsQuery.error,
       refetchRawSettings: rawSettingsQuery.refetch,
+
+      saveRawSettings: saveRawSettingsMutation.mutate,
+      saveRawSettingsAsync: saveRawSettingsMutation.mutateAsync,
+      isSavingRawSettings: saveRawSettingsMutation.isPending,
     }),
     [
       diagnosticsQuery.data,
@@ -114,6 +155,9 @@ export function useDroid() {
       rawSettingsQuery.isLoading,
       rawSettingsQuery.error,
       rawSettingsQuery.refetch,
+      saveRawSettingsMutation.mutate,
+      saveRawSettingsMutation.mutateAsync,
+      saveRawSettingsMutation.isPending,
     ]
   );
 }
