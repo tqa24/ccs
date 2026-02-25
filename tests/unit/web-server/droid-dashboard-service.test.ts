@@ -5,6 +5,7 @@ import * as path from 'path';
 import {
   DroidRawSettingsConflictError,
   DroidRawSettingsValidationError,
+  getDroidDashboardDiagnostics,
   getDroidRawSettings,
   maskApiKeyPreview,
   resolveDroidConfigPaths,
@@ -108,6 +109,19 @@ describe('droid-dashboard-service', () => {
     expect(raw.parseError).toBeString();
     expect(raw.settings).toBeNull();
     expect(raw.rawText).toContain('invalid-json');
+  });
+
+  it('includes structured docs links for fact-checking providers', async () => {
+    const diagnostics = await getDroidDashboardDiagnostics();
+
+    expect(diagnostics.docsReference.links.length).toBeGreaterThan(0);
+    expect(diagnostics.docsReference.providerDocs.length).toBeGreaterThan(0);
+    expect(diagnostics.docsReference.links.every((link) => link.url.startsWith('https://'))).toBe(
+      true
+    );
+    expect(
+      diagnostics.docsReference.providerDocs.some((doc) => doc.provider === 'anthropic')
+    ).toBe(true);
   });
 
   it('saves valid raw settings content', async () => {

@@ -14,6 +14,7 @@ import {
   probeJsonObjectFile,
   writeJsonObjectFileAtomic,
 } from './compatible-cli-json-file-service';
+import { getCompatibleCliDocsReference } from './compatible-cli-docs-registry';
 
 interface DroidConfigPaths {
   settingsPath: string;
@@ -160,6 +161,7 @@ export function summarizeDroidCustomModels(customModelsValue: unknown): DroidByo
 export async function getDroidDashboardDiagnostics(): Promise<DroidDashboardDiagnostics> {
   const paths = resolveDroidConfigPaths();
   const binaryPath = detectDroidCli();
+  const docsReference = getCompatibleCliDocsReference('droid');
 
   const source = process.env.CCS_DROID_PATH ? 'CCS_DROID_PATH' : binaryPath ? 'PATH' : 'missing';
 
@@ -204,21 +206,7 @@ export async function getDroidDashboardDiagnostics(): Promise<DroidDashboardDiag
     },
     byok,
     warnings,
-    docsReference: {
-      providerValues: ['anthropic', 'openai', 'generic-chat-completion-api'],
-      settingsHierarchy: [
-        'project-level config',
-        'user-level config',
-        'home-level config',
-        'CLI flags and env vars',
-      ],
-      notes: [
-        'BYOK custom models are read from ~/.factory/settings.json customModels[]',
-        'Factory docs mention legacy support for ~/.factory/config.json',
-        'Interactive model selection uses settings.model (custom:<alias>)',
-        'droid exec supports --model for one-off execution mode',
-      ],
-    },
+    docsReference,
   };
 }
 

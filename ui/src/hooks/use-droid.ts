@@ -36,6 +36,22 @@ export interface DroidCustomModelDiagnostics {
   apiKeyPreview: string | null;
 }
 
+export interface CompatibleCliDocLink {
+  id: string;
+  label: string;
+  url: string;
+  category: 'overview' | 'configuration' | 'byok' | 'reference';
+  source: 'factory' | 'provider';
+  description: string;
+}
+
+export interface CompatibleCliProviderDocLink {
+  provider: string;
+  label: string;
+  apiFormat: string;
+  url: string;
+}
+
 export interface DroidDashboardDiagnostics {
   binary: DroidBinaryDiagnostics;
   files: {
@@ -56,6 +72,8 @@ export interface DroidDashboardDiagnostics {
     providerValues: string[];
     settingsHierarchy: string[];
     notes: string[];
+    links: CompatibleCliDocLink[];
+    providerDocs: CompatibleCliProviderDocLink[];
   };
 }
 

@@ -4,6 +4,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import {
   AlertTriangle,
   CheckCircle2,
+  ExternalLink,
   Folder,
   GripVertical,
   Loader2,
@@ -15,6 +16,10 @@ import {
 import { useDroid } from '@/hooks/use-droid';
 import { isApiConflictError } from '@/lib/api-client';
 import { RawJsonSettingsEditorPanel } from '@/components/compatible-cli/raw-json-settings-editor-panel';
+import {
+  DroidSettingsQuickControlsCard,
+  type DroidQuickSettingsValues,
+} from '@/components/compatible-cli/droid-settings-quick-controls-card';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -33,16 +38,30 @@ function formatBytes(value: number | null | undefined): string {
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function validateJsonObject(text: string): { valid: true } | { valid: false; error: string } {
+function parseJsonObjectText(
+  text: string
+): { valid: true; value: Record<string, unknown> } | { valid: false; error: string } {
   try {
     const parsed = JSON.parse(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       return { valid: false, error: 'JSON root must be an object.' };
     }
-    return { valid: true };
+    return { valid: true, value: parsed as Record<string, unknown> };
   } catch (error) {
     return { valid: false, error: (error as Error).message };
   }
+}
+
+function asStringValue(value: unknown): string | null {
+  return typeof value === 'string' ? value : null;
+}
+
+function asNumberValue(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function asBooleanValue(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null;
 }
 
 function DetailRow({
@@ -79,6 +98,59 @@ export function DroidPage() {
   const rawBaseText = rawSettings?.rawText ?? '{}';
   const rawEditorText = rawDraftText ?? rawBaseText;
   const rawConfigDirty = rawDraftText !== null && rawDraftText !== rawBaseText;
+  const rawEditorParsed = parseJsonObjectText(rawEditorText);
+  const rawEditorValidation = rawEditorParsed.valid
+    ? { valid: true as const }
+    : { valid: false as const, error: rawEditorParsed.error };
+
+  const setRawEditorDraftText = (nextText: string) => {
+    if (nextText === rawBaseText) {
+      setRawDraftText(null);
+      return;
+    }
+    setRawDraftText(nextText);
+  };
+
+  const updateSettingsField = (key: string, value: unknown | null) => {
+    if (!rawEditorParsed.valid) {
+      toast.error('Fix JSON syntax before using quick settings controls.');
+      return;
+    }
+
+    const nextSettings = { ...rawEditorParsed.value };
+    if (value === null || value === undefined) {
+      delete nextSettings[key];
+    } else {
+      nextSettings[key] = value;
+    }
+    setRawEditorDraftText(JSON.stringify(nextSettings, null, 2) + '\n');
+  };
+
+  const quickSettingsValues: DroidQuickSettingsValues = rawEditorParsed.valid
+    ? {
+        reasoningEffort: asStringValue(rawEditorParsed.value.reasoningEffort),
+        autonomyLevel: asStringValue(rawEditorParsed.value.autonomyLevel),
+        diffMode: asStringValue(rawEditorParsed.value.diffMode),
+        maxTurns: asNumberValue(rawEditorParsed.value.maxTurns),
+        maxToolCalls: asNumberValue(rawEditorParsed.value.maxToolCalls),
+        autoCompactThreshold: asNumberValue(rawEditorParsed.value.autoCompactThreshold),
+        todoEnabled: asBooleanValue(rawEditorParsed.value.todoEnabled),
+        todoAutoRefresh: asBooleanValue(rawEditorParsed.value.todoAutoRefresh),
+        autoCompactEnabled: asBooleanValue(rawEditorParsed.value.autoCompactEnabled),
+        soundEnabled: asBooleanValue(rawEditorParsed.value.soundEnabled),
+      }
+    : {
+        reasoningEffort: null,
+        autonomyLevel: null,
+        diffMode: null,
+        maxTurns: null,
+        maxToolCalls: null,
+        autoCompactThreshold: null,
+        todoEnabled: null,
+        todoAutoRefresh: null,
+        autoCompactEnabled: null,
+        soundEnabled: null,
+      };
 
   const refreshAll = async () => {
     await Promise.all([refetchDiagnostics(), refetchRawSettings()]);
@@ -112,7 +184,6 @@ export function DroidPage() {
     () => Object.entries(diagnostics?.byok.providerBreakdown ?? {}).sort((a, b) => b[1] - a[1]),
     [diagnostics?.byok.providerBreakdown]
   );
-  const rawEditorValidation = validateJsonObject(rawEditorText);
 
   const renderOverview = () => {
     if (diagnosticsLoading) {
@@ -202,6 +273,23 @@ export function DroidPage() {
             </CardContent>
           </Card>
 
+          <DroidSettingsQuickControlsCard
+            values={quickSettingsValues}
+            disabled={rawSettingsLoading || !rawEditorParsed.valid}
+            disabledReason={
+              rawEditorParsed.valid ? null : `Quick settings disabled: ${rawEditorParsed.error}`
+            }
+            onEnumSettingChange={(key, value) => {
+              updateSettingsField(key, value);
+            }}
+            onBooleanSettingChange={(key, value) => {
+              updateSettingsField(key, value);
+            }}
+            onNumberSettingChange={(key, value) => {
+              updateSettingsField(key, value);
+            }}
+          />
+
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2">
@@ -254,6 +342,54 @@ export function DroidPage() {
                   - {note}
                 </p>
               ))}
+              <Separator />
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Factory Docs
+                </p>
+                <div className="space-y-1.5">
+                  {diagnostics.docsReference.links.map((link) => (
+                    <a
+                      key={link.id}
+                      href={link.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-md border px-2.5 py-2 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium">{link.label}</span>
+                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">{link.description}</p>
+                    </a>
+                  ))}
+                </div>
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">
+                  Provider Fact-Check Docs
+                </p>
+                <div className="space-y-1.5">
+                  {diagnostics.docsReference.providerDocs.map((providerDoc) => (
+                    <a
+                      key={`${providerDoc.provider}-${providerDoc.url}`}
+                      href={providerDoc.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-md border px-2.5 py-2 transition-colors hover:bg-muted/50"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium">{providerDoc.label}</span>
+                        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground" />
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground">
+                        provider: {providerDoc.provider} | format: {providerDoc.apiFormat}
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              </div>
               <Separator />
               <p className="text-xs text-muted-foreground">
                 Provider values: {diagnostics.docsReference.providerValues.join(', ')}
@@ -358,11 +494,7 @@ export function DroidPage() {
               !rawEditorValidation.valid
             }
             onChange={(next) => {
-              if (next === rawBaseText) {
-                setRawDraftText(null);
-                return;
-              }
-              setRawDraftText(next);
+              setRawEditorDraftText(next);
             }}
             onSave={handleSaveRawSettings}
             onRefresh={refreshAll}
