@@ -326,6 +326,12 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   printSubSection('Multi-Target', [
     ['ccs glm --target droid', 'Run GLM profile on Droid CLI'],
     ['ccsd glm', 'Same as above (alias)'],
+    ['ccsd codex', 'Run built-in CLIProxy Codex profile on Droid'],
+    ['ccsd agy', 'Run built-in CLIProxy Antigravity profile on Droid'],
+    [
+      'ccs cliproxy create my-codex --provider codex --target droid',
+      'Create CLIProxy variant with Droid as default target',
+    ],
     ['ccs glm', 'Run GLM profile on Claude Code (default)'],
   ]);
 
