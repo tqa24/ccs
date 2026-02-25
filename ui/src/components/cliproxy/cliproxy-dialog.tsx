@@ -26,6 +26,7 @@ const singleProviderSchema = z.object({
   provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
   model: z.string().optional(),
   account: z.string().optional(),
+  target: z.enum(['claude', 'droid']).default('claude'),
 });
 
 const compositeSchema = z.object({
@@ -34,6 +35,7 @@ const compositeSchema = z.object({
     .min(1, 'Name is required')
     .regex(/^[a-zA-Z][a-zA-Z0-9._-]*$/, 'Invalid variant name'),
   default_tier: z.enum(['opus', 'sonnet', 'haiku'], { message: 'Default tier is required' }),
+  target: z.enum(['claude', 'droid']).default('claude'),
   tiers: z.object({
     opus: z.object({
       provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
@@ -74,12 +76,14 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
 
   const singleForm = useForm<SingleProviderFormData>({
     resolver: zodResolver(singleProviderSchema),
+    defaultValues: { target: 'claude' },
   });
 
   const compositeForm = useForm<CompositeFormData>({
     resolver: zodResolver(compositeSchema),
     defaultValues: {
       default_tier: 'opus',
+      target: 'claude',
       tiers: {
         opus: { provider: 'gemini', model: '' },
         sonnet: { provider: 'gemini', model: '' },
@@ -107,6 +111,7 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
       await createMutation.mutateAsync({
         name: data.name,
         provider: data.tiers[data.default_tier].provider,
+        target: data.target,
         type: 'composite',
         default_tier: data.default_tier,
         tiers: data.tiers,
@@ -200,6 +205,18 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
                 <Input id="model" {...singleForm.register('model')} placeholder="gemini-2.5-pro" />
               </div>
 
+              <div>
+                <Label htmlFor="target">Default Target</Label>
+                <select
+                  id="target"
+                  {...singleForm.register('target')}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="claude">Claude Code</option>
+                  <option value="droid">Factory Droid</option>
+                </select>
+              </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={onClose}>
                   Cancel
@@ -285,6 +302,18 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
                   <option value="opus">Opus</option>
                   <option value="sonnet">Sonnet</option>
                   <option value="haiku">Haiku</option>
+                </select>
+              </div>
+
+              <div>
+                <Label htmlFor="composite-target">Default Target</Label>
+                <select
+                  id="composite-target"
+                  {...compositeForm.register('target')}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="claude">Claude Code</option>
+                  <option value="droid">Factory Droid</option>
                 </select>
               </div>
 

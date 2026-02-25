@@ -20,10 +20,12 @@ const singleProviderSchema = z.object({
   provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
   model: z.string().optional(),
   account: z.string().optional(),
+  target: z.enum(['claude', 'droid']).default('claude'),
 });
 
 const compositeSchema = z.object({
   default_tier: z.enum(['opus', 'sonnet', 'haiku'], { message: 'Default tier is required' }),
+  target: z.enum(['claude', 'droid']).default('claude'),
   tiers: z.object({
     opus: z.object({
       provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
@@ -81,6 +83,7 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
       });
       compositeForm.reset({
         default_tier: variant.default_tier,
+        target: variant.target || 'claude',
         tiers: {
           opus: mapTier(variant.tiers.opus),
           sonnet: mapTier(variant.tiers.sonnet),
@@ -92,6 +95,7 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
         provider: variant.provider,
         model: variant.model ?? undefined,
         account: variant.account ?? undefined,
+        target: variant.target || 'claude',
       });
     }
   }, [variant, isComposite, singleForm, compositeForm]);
@@ -117,6 +121,7 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
         name: variant.name,
         data: {
           default_tier: data.default_tier,
+          target: data.target,
           tiers: data.tiers,
         },
       });
@@ -202,6 +207,18 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
               </select>
             </div>
 
+            <div>
+              <Label htmlFor="edit-composite-target">Default Target</Label>
+              <select
+                id="edit-composite-target"
+                {...compositeForm.register('target')}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="claude">Claude Code</option>
+                <option value="droid">Factory Droid</option>
+              </select>
+            </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel
@@ -240,6 +257,18 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
                 {...singleForm.register('account')}
                 placeholder="account-id"
               />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-target">Default Target</Label>
+              <select
+                id="edit-target"
+                {...singleForm.register('target')}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="claude">Claude Code</option>
+                <option value="droid">Factory Droid</option>
+              </select>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">

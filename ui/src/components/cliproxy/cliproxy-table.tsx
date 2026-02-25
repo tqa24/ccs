@@ -70,6 +70,15 @@ export function CliproxyTable({ data }: CliproxyTableProps) {
       },
     },
     {
+      accessorKey: 'target',
+      header: 'Target',
+      cell: ({ row }) => (
+        <Badge variant="outline" className="text-[10px] h-5 px-1.5 uppercase">
+          {row.original.target || 'claude'}
+        </Badge>
+      ),
+    },
+    {
       accessorKey: 'settings',
       header: 'Settings Path',
       cell: ({ row }) => (
