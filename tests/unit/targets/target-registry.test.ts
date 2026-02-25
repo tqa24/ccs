@@ -125,10 +125,16 @@ describe('DroidAdapter', () => {
     expect(adapter.supportsProfileType('copilot')).toBe(false);
   });
 
-  it('should build args with -m custom:ccs- prefix', () => {
+  it('should keep interactive args clean (no model argv injection)', () => {
     const isolatedAdapter = new DroidAdapter();
     const args = isolatedAdapter.buildArgs('gemini', ['--verbose']);
-    expect(args).toEqual(['-m', 'custom:ccs-gemini', '--verbose']);
+    expect(args).toEqual(['--verbose']);
+  });
+
+  it('should not queue model selector as prompt when no user args', () => {
+    const isolatedAdapter = new DroidAdapter();
+    const args = isolatedAdapter.buildArgs('codex', []);
+    expect(args).toEqual([]);
   });
 
   it('should build minimal env (no ANTHROPIC_ vars)', () => {
@@ -200,7 +206,7 @@ describe('DroidAdapter', () => {
       });
 
       const args = isolatedAdapter.buildArgs('gemini', ['--verbose']);
-      expect(args).toEqual(['-m', 'custom:CCS-gemini-0', '--verbose']);
+      expect(args).toEqual(['--verbose']);
     } finally {
       if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
       else delete process.env.CCS_HOME;

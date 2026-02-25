@@ -46,6 +46,18 @@ describe('droid-provider', () => {
         'generic-chat-completion-api'
       );
     });
+
+    it('detects localhost openai-compatible /v1 endpoints', () => {
+      expect(inferDroidProviderFromBaseUrl('http://127.0.0.1:1234/v1')).toBe(
+        'generic-chat-completion-api'
+      );
+      expect(inferDroidProviderFromBaseUrl('http://localhost:8317/v1/chat/completions')).toBe(
+        'generic-chat-completion-api'
+      );
+      expect(inferDroidProviderFromBaseUrl('http://[::1]:8317/v1')).toBe(
+        'generic-chat-completion-api'
+      );
+    });
   });
 
   describe('inferDroidProviderFromModel', () => {
@@ -55,6 +67,12 @@ describe('droid-provider', () => {
 
     it('detects openai model naming', () => {
       expect(inferDroidProviderFromModel('gpt-5-codex')).toBe('openai');
+    });
+
+    it('detects generic openai-compatible model families', () => {
+      expect(inferDroidProviderFromModel('qwen3-coder-plus')).toBe('generic-chat-completion-api');
+      expect(inferDroidProviderFromModel('deepseek-v3.1')).toBe('generic-chat-completion-api');
+      expect(inferDroidProviderFromModel('kimi-k2')).toBe('generic-chat-completion-api');
     });
   });
 

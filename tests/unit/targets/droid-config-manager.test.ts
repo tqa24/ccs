@@ -45,6 +45,10 @@ describe('droid-config-manager', () => {
       expect(ref.selectorAlias).toBe('CCS-gemini-0');
       expect(ref.selector).toBe('custom:CCS-gemini-0');
       expect(ref.index).toBe(0);
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.model).toBe('custom:CCS-gemini-0');
     });
 
     it('should create settings.json with customModels', async () => {
@@ -63,6 +67,7 @@ describe('droid-config-manager', () => {
       expect(settings.customModels).toHaveLength(1);
       expect(settings.customModels[0].displayName).toBe('CCS gemini');
       expect(settings.customModels[0].baseUrl).toBe('http://localhost:8317');
+      expect(settings.model).toBe('custom:CCS-gemini-0');
     });
 
     it('should update existing entry on second upsert', async () => {

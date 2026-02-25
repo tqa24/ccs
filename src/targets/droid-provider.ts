@@ -65,6 +65,8 @@ export function inferDroidProviderFromBaseUrl(
 
   const host = parsed.host.toLowerCase();
   const pathname = parsed.pathname.toLowerCase();
+  const isLocalHost =
+    host.startsWith('localhost') || host.startsWith('127.0.0.1') || host.startsWith('[::1]');
 
   if (
     host.includes('api.openai.com') ||
@@ -92,6 +94,11 @@ export function inferDroidProviderFromBaseUrl(
     return 'generic-chat-completion-api';
   }
 
+  // Local OpenAI-compatible proxies are commonly exposed at /v1.
+  if (isLocalHost && (pathname === '/v1' || pathname.startsWith('/v1/'))) {
+    return 'generic-chat-completion-api';
+  }
+
   return null;
 }
 
@@ -115,6 +122,13 @@ export function inferDroidProviderFromModel(
     normalized.startsWith('o4')
   ) {
     return 'openai';
+  }
+  if (
+    normalized.startsWith('qwen') ||
+    normalized.startsWith('deepseek') ||
+    normalized.startsWith('kimi')
+  ) {
+    return 'generic-chat-completion-api';
   }
   return null;
 }

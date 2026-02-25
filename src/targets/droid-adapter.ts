@@ -2,7 +2,7 @@
  * Droid Adapter
  *
  * TargetAdapter implementation for Factory Droid CLI.
- * Writes credentials to ~/.factory/settings.json and spawns `droid -m custom:<alias>`.
+ * Writes credentials + active model to ~/.factory/settings.json and spawns `droid`.
  */
 
 import { spawn, ChildProcess } from 'child_process';
@@ -19,7 +19,6 @@ import { runCleanup } from '../errors';
 export class DroidAdapter implements TargetAdapter {
   readonly type: TargetType = 'droid';
   readonly displayName = 'Factory Droid';
-  private readonly modelSelectorsByProfile = new Map<string, string>();
 
   private validateCredentials(creds: TargetCredentials): void {
     if (!creds.baseUrl?.trim()) {
@@ -57,7 +56,9 @@ export class DroidAdapter implements TargetAdapter {
       apiKey: creds.apiKey,
       provider,
     });
-    this.modelSelectorsByProfile.set(creds.profile, modelRef.selector);
+    if (!modelRef.selector) {
+      throw new Error(`Failed to resolve Droid model selector for profile "${creds.profile}"`);
+    }
   }
 
   buildArgs(profile: string, userArgs: string[]): string[] {
@@ -66,8 +67,9 @@ export class DroidAdapter implements TargetAdapter {
         `Invalid profile name "${profile}" for Droid target: only alphanumeric, dot, underscore, hyphen allowed`
       );
     }
-    const selector = this.modelSelectorsByProfile.get(profile) || `custom:ccs-${profile}`;
-    return ['-m', selector, ...userArgs];
+    // Droid interactive mode treats unknown argv as queued prompt text.
+    // Model selection must be persisted in settings.json (`model`) instead of `-m`.
+    return [...userArgs];
   }
 
   /**

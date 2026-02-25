@@ -52,6 +52,7 @@ export interface DroidManagedModelRef {
 }
 
 interface DroidSettings {
+  model?: string;
   customModels?: DroidCustomModelEntry[];
   [key: string]: unknown;
 }
@@ -346,19 +347,21 @@ export async function upsertCcsModel(
       settings.customModels.push(entry);
     }
 
-    writeDroidSettings(settings);
-
     const index = settings.customModels.findIndex(
       (entry) => parseManagedProfile(entry.displayName) === profile
     );
     const safeIndex = index >= 0 ? index : 0;
     const selectorAlias = buildSelectorAlias(entry.displayName, safeIndex);
+    const selector = `custom:${selectorAlias}`;
+    // Droid interactive mode uses settings.model for default model selection.
+    settings.model = selector;
+    writeDroidSettings(settings);
     ref = {
       profile,
       displayName: entry.displayName,
       index: safeIndex,
       selectorAlias,
-      selector: `custom:${selectorAlias}`,
+      selector,
     };
   } finally {
     if (release) await release();

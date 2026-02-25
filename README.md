@@ -162,6 +162,10 @@ For Factory BYOK compatibility, CCS also stores a per-profile Droid provider hin
 `anthropic`, `openai`, or `generic-chat-completion-api`.
 If the hint is missing, CCS resolves provider from base URL/model at runtime.
 
+CCS also persists Droid's active model selector in `~/.factory/settings.json`
+(`model: custom:<alias>`). This avoids passing `-m` argv in interactive mode,
+which Droid treats as queued prompt text.
+
 ### Per-Profile Target Defaults
 
 You can pin a default target (`claude` or `droid`) per profile:
