@@ -114,24 +114,25 @@ export const SUPPORT_NOTICES: SupportNotice[] = [
   },
   {
     id: 'updates-center-launch',
-    title: 'Updates Center added to dashboard navigation',
+    title: 'Updates inbox is available for rollout tasks',
     summary:
-      'CCS now has a dedicated updates route so support announcements are visible and reusable.',
-    primaryAction: 'Use this page as your action inbox, then close updates when done.',
+      'A focused updates inbox exists for setup tasks and rollout guidance when you need it.',
+    primaryAction:
+      'Use this page only when needed for rollout tasks, then return to your normal workflow.',
     publishedAt: '2026-02-25',
     status: 'new',
     scopes: ['target', 'cliproxy', 'api-profiles', 'websearch'],
     entryIds: ['droid-target', 'codex-cliproxy', 'custom-api-profiles', 'opencode-websearch'],
     highlights: [
-      'Single data source powers Home spotlight and Updates Center page.',
-      'New support entries can be added without touching multiple pages.',
-      'Catalog includes targets, CLIProxy providers, and WebSearch integrations.',
+      'Single data source powers update content and integration mapping.',
+      'Notices can be tracked as new, seen, done, or dismissed.',
+      'Catalog covers target CLI, CLIProxy providers, and WebSearch integrations.',
     ],
     actions: [
       {
         id: 'open-updates-page',
-        label: 'Review new support updates',
-        description: 'Work through pending notices and mark them done when configured.',
+        label: 'Open updates inbox when needed',
+        description: 'Review rollout tasks only when you want guided setup changes.',
         type: 'route',
         path: '/updates',
       },
@@ -143,7 +144,7 @@ export const SUPPORT_NOTICES: SupportNotice[] = [
         command: 'ccs config',
       },
     ],
-    routes: [{ label: 'Updates Center', path: '/updates' }],
+    routes: [{ label: 'Updates Inbox', path: '/updates' }],
     commands: ['ccs config'],
   },
 ];

@@ -7,7 +7,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Key, Zap, Users, Activity, AlertTriangle } from 'lucide-react';
 import { useOverview } from '@/hooks/use-overview';
 import { useSharedSummary } from '@/hooks/use-shared';
-import { UpdatesSpotlight } from '@/components/updates/updates-spotlight';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
@@ -165,8 +164,6 @@ export function HomePage() {
           </div>
         </div>
       </div>
-
-      <UpdatesSpotlight />
 
       {/* Configuration Warning */}
       {shared?.symlinkStatus && !shared.symlinkStatus.valid && (

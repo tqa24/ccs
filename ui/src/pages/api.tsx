@@ -23,7 +23,6 @@ import { ProfileCreateDialog } from '@/components/profiles/profile-create-dialog
 import { OpenRouterBanner } from '@/components/profiles/openrouter-banner';
 import { OpenRouterQuickStart } from '@/components/profiles/openrouter-quick-start';
 import { OpenRouterPromoCard } from '@/components/profiles/openrouter-promo-card';
-import { UpdatesSpotlight } from '@/components/updates/updates-spotlight';
 import { useProfiles, useDeleteProfile } from '@/hooks/use-profiles';
 import { useOpenRouterModels } from '@/hooks/use-openrouter-models';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -96,10 +95,6 @@ export function ApiPage() {
     <div className="h-[calc(100vh-100px)] flex flex-col">
       {/* OpenRouter Announcement Banner */}
       <OpenRouterBanner onCreateClick={() => setCreateDialogOpen(true)} />
-
-      <div className="px-4 pt-4">
-        <UpdatesSpotlight compact />
-      </div>
 
       {/* Main Content */}
       <div className="flex-1 flex min-h-0">

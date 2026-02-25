@@ -17,7 +17,6 @@ import { AccountSafetyWarningCard } from '@/components/account/account-safety-wa
 import { ProviderEditor } from '@/components/cliproxy/provider-editor';
 import { ProviderLogo } from '@/components/cliproxy/provider-logo';
 import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
-import { UpdatesSpotlight } from '@/components/updates/updates-spotlight';
 import {
   useCliproxy,
   useCliproxyAuth,
@@ -398,7 +397,6 @@ export function CliproxyPage() {
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col min-w-0 bg-background">
-        <UpdatesSpotlight className="mx-4 mt-4" compact />
         {showAccountSafetyWarning && <AccountSafetyWarningCard className="mx-4 mt-4" />}
 
         {selectedVariantData && parentAuthForVariant ? (

@@ -11,7 +11,6 @@ import {
   BarChart3,
   Gauge,
   Github,
-  Megaphone,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
@@ -68,7 +67,6 @@ const navGroups: SidebarGroupDef[] = [
     title: 'General',
     items: [
       { path: '/', icon: Home, label: 'Home' },
-      { path: '/updates', icon: Megaphone, label: 'Updates Center' },
       { path: '/analytics', icon: BarChart3, label: 'Analytics' },
     ],
   },
