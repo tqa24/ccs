@@ -7,13 +7,26 @@ export interface SupportRouteHint {
   path: string;
 }
 
+export interface SupportNoticeAction {
+  id: string;
+  label: string;
+  description: string;
+  type: 'route' | 'command';
+  path?: string;
+  command?: string;
+}
+
 export interface SupportNotice {
   id: string;
   title: string;
   summary: string;
+  primaryAction: string;
   publishedAt: string;
   status: SupportStatus;
+  scopes: SupportScope[];
+  entryIds: string[];
   highlights: string[];
+  actions: SupportNoticeAction[];
   routes: SupportRouteHint[];
   commands: string[];
 }
@@ -47,12 +60,47 @@ export const SUPPORT_NOTICES: SupportNotice[] = [
     title: 'Factory Droid support is live',
     summary:
       'API Profiles and CLIProxy variants now support Droid as a first-class execution target.',
+    primaryAction: 'Set Droid as your default execution target for non-Claude workflows.',
     publishedAt: '2026-02-25',
     status: 'new',
+    scopes: ['target', 'api-profiles', 'cliproxy'],
+    entryIds: ['droid-target', 'custom-api-profiles', 'codex-cliproxy', 'agy-cliproxy'],
     highlights: [
       'Set default target to Droid when creating or editing API Profiles.',
       'Set default target to Droid for CLIProxy variants, including Codex and Antigravity flows.',
       'Use ccsd alias or --target droid for one-off target overrides.',
+    ],
+    actions: [
+      {
+        id: 'open-api-profiles',
+        label: 'Set default target in API Profiles',
+        description:
+          'Open API Profiles and set Default Target to Droid for profiles you run often.',
+        type: 'route',
+        path: '/providers',
+      },
+      {
+        id: 'open-cliproxy',
+        label: 'Set default target in CLIProxy variants',
+        description:
+          'Open CLIProxy variants and set target to Droid for Codex/Antigravity or custom variants.',
+        type: 'route',
+        path: '/cliproxy',
+      },
+      {
+        id: 'copy-ccsd-command',
+        label: 'Run once with Droid alias',
+        description: 'Use ccsd to force Droid target with your current profile.',
+        type: 'command',
+        command: 'ccsd glm',
+      },
+      {
+        id: 'copy-target-override',
+        label: 'Run once with --target override',
+        description: 'Keep your default profile but force Droid for a single command.',
+        type: 'command',
+        command: 'ccs codex --target droid "your prompt"',
+      },
     ],
     routes: [
       { label: 'API Profiles', path: '/providers' },
@@ -69,12 +117,31 @@ export const SUPPORT_NOTICES: SupportNotice[] = [
     title: 'Updates Center added to dashboard navigation',
     summary:
       'CCS now has a dedicated updates route so support announcements are visible and reusable.',
+    primaryAction: 'Use this page as your action inbox, then close updates when done.',
     publishedAt: '2026-02-25',
     status: 'new',
+    scopes: ['target', 'cliproxy', 'api-profiles', 'websearch'],
+    entryIds: ['droid-target', 'codex-cliproxy', 'custom-api-profiles', 'opencode-websearch'],
     highlights: [
       'Single data source powers Home spotlight and Updates Center page.',
       'New support entries can be added without touching multiple pages.',
       'Catalog includes targets, CLIProxy providers, and WebSearch integrations.',
+    ],
+    actions: [
+      {
+        id: 'open-updates-page',
+        label: 'Review new support updates',
+        description: 'Work through pending notices and mark them done when configured.',
+        type: 'route',
+        path: '/updates',
+      },
+      {
+        id: 'copy-open-dashboard',
+        label: 'Open dashboard from terminal',
+        description: 'Re-open config dashboard anytime from CLI.',
+        type: 'command',
+        command: 'ccs config',
+      },
     ],
     routes: [{ label: 'Updates Center', path: '/updates' }],
     commands: ['ccs config'],
@@ -198,6 +265,14 @@ export const CLI_SUPPORT_ENTRIES: CliSupportEntry[] = [
     notes: 'Enable OpenCode in Settings > WebSearch to activate fallback search.',
   },
 ];
+
+const SUPPORT_ENTRY_LOOKUP = new Map(CLI_SUPPORT_ENTRIES.map((entry) => [entry.id, entry]));
+
+export function getSupportEntriesForNotice(notice: SupportNotice): CliSupportEntry[] {
+  return notice.entryIds
+    .map((entryId) => SUPPORT_ENTRY_LOOKUP.get(entryId))
+    .filter((entry): entry is CliSupportEntry => Boolean(entry));
+}
 
 export function getLatestSupportNotice(): SupportNotice | null {
   if (SUPPORT_NOTICES.length === 0) {
