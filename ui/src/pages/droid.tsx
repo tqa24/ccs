@@ -203,6 +203,19 @@ export function DroidPage() {
       );
     }
 
+    const docsReference = diagnostics.docsReference ?? {
+      notes: [],
+      links: [],
+      providerDocs: [],
+      providerValues: [],
+      settingsHierarchy: [],
+    };
+    const docsNotes = docsReference.notes ?? [];
+    const docsLinks = docsReference.links ?? [];
+    const providerDocs = docsReference.providerDocs ?? [];
+    const providerValues = docsReference.providerValues ?? [];
+    const settingsHierarchy = docsReference.settingsHierarchy ?? [];
+
     return (
       <ScrollArea className="h-full">
         <div className="space-y-4 p-4">
@@ -337,7 +350,7 @@ export function DroidPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              {diagnostics.docsReference.notes.map((note) => (
+              {docsNotes.map((note) => (
                 <p key={note} className="text-muted-foreground">
                   - {note}
                 </p>
@@ -348,7 +361,7 @@ export function DroidPage() {
                   Factory Docs
                 </p>
                 <div className="space-y-1.5">
-                  {diagnostics.docsReference.links.map((link) => (
+                  {docsLinks.map((link) => (
                     <a
                       key={link.id}
                       href={link.url}
@@ -371,7 +384,7 @@ export function DroidPage() {
                   Provider Fact-Check Docs
                 </p>
                 <div className="space-y-1.5">
-                  {diagnostics.docsReference.providerDocs.map((providerDoc) => (
+                  {providerDocs.map((providerDoc) => (
                     <a
                       key={`${providerDoc.provider}-${providerDoc.url}`}
                       href={providerDoc.url}
@@ -392,10 +405,10 @@ export function DroidPage() {
               </div>
               <Separator />
               <p className="text-xs text-muted-foreground">
-                Provider values: {diagnostics.docsReference.providerValues.join(', ')}
+                Provider values: {providerValues.join(', ')}
               </p>
               <p className="text-xs text-muted-foreground">
-                Settings hierarchy: {diagnostics.docsReference.settingsHierarchy.join(' -> ')}
+                Settings hierarchy: {settingsHierarchy.join(' -> ')}
               </p>
             </CardContent>
           </Card>
