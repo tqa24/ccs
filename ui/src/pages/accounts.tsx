@@ -5,7 +5,18 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, ArrowRight, Link2, Plus, Unlink, Users, Waves, Zap } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  ChevronDown,
+  ChevronLeft,
+  Link2,
+  Plus,
+  Unlink,
+  Users,
+  Waves,
+  Zap,
+} from 'lucide-react';
 import { AccountsTable } from '@/components/account/accounts-table';
 import { CreateAuthProfileDialog } from '@/components/account/create-auth-profile-dialog';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -13,8 +24,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useAccounts } from '@/hooks/use-accounts';
+import { useAccounts, useConfirmLegacyAccountPolicies } from '@/hooks/use-accounts';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
 
@@ -90,7 +102,11 @@ function StrategyCard({
 export function AccountsPage() {
   const navigate = useNavigate();
   const { data, isLoading } = useAccounts();
+  const confirmLegacyMutation = useConfirmLegacyAccountPolicies();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [showGuideRail, setShowGuideRail] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
+
   const authAccounts = data?.accounts || [];
   const cliproxyCount = data?.cliproxyCount || 0;
   const legacyContextCount = data?.legacyContextCount || 0;
@@ -99,7 +115,16 @@ export function AccountsPage() {
   const sharedStandardCount = data?.sharedStandardCount || 0;
   const deeperSharedCount = data?.deeperSharedCount || 0;
   const isolatedCount = data?.isolatedCount || 0;
-  const hasLegacyFollowUp = legacyContextCount > 0 || legacyContinuityCount > 0;
+
+  const legacyTargets = authAccounts.filter(
+    (account) => account.context_inferred || account.continuity_inferred
+  );
+  const legacyTargetCount = legacyTargets.length;
+  const hasLegacyFollowUp = legacyTargetCount > 0;
+
+  const handleOpenClaudePool = () => navigate('/cliproxy?provider=claude');
+  const handleOpenClaudePoolAuth = () => navigate('/cliproxy?provider=claude&action=auth');
+  const handleConfirmLegacy = () => confirmLegacyMutation.mutate(legacyTargets);
 
   return (
     <>
@@ -128,10 +153,19 @@ export function AccountsPage() {
                 variant="outline"
                 size="sm"
                 className="justify-start"
-                onClick={() => navigate('/cliproxy')}
+                onClick={handleOpenClaudePool}
               >
                 Open CLIProxy Claude Pool
                 <ArrowRight className="w-4 h-4 ml-auto" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start"
+                onClick={handleOpenClaudePoolAuth}
+              >
+                Authenticate Claude in Pool
+                <Zap className="w-4 h-4 ml-auto" />
               </Button>
             </div>
           </div>
@@ -176,7 +210,7 @@ export function AccountsPage() {
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                     Migration Follow-up
                   </p>
-                  <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3">
+                  <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-3">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400 shrink-0" />
                       <div className="space-y-1 text-xs">
@@ -196,6 +230,18 @@ export function AccountsPage() {
                         )}
                       </div>
                     </div>
+
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={handleConfirmLegacy}
+                      disabled={confirmLegacyMutation.isPending || legacyTargetCount === 0}
+                    >
+                      {confirmLegacyMutation.isPending
+                        ? 'Confirming Legacy Accounts...'
+                        : `Confirm Current Policy for ${legacyTargetCount} Legacy Account${legacyTargetCount > 1 ? 's' : ''}`}
+                    </Button>
                   </div>
                 </section>
               )}
@@ -222,19 +268,29 @@ export function AccountsPage() {
               <div className="flex items-center gap-2">
                 <Badge variant="outline">ccs auth Workspace</Badge>
                 <Badge variant="secondary">History Sync Controls</Badge>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={() => setShowGuideRail((prev) => !prev)}
+                >
+                  {showGuideRail ? 'Hide Action Center' : 'Show Action Center'}
+                </Button>
               </div>
               <h2 className="mt-2 text-xl font-semibold tracking-tight">Auth Accounts</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 This table is intentionally scoped to
                 <code className="mx-1 rounded bg-muted px-1 py-0.5">ccs auth</code>
-                accounts. Edit each account for isolated, shared-standard, or shared-deeper
-                continuity behavior.
+                accounts. Use
+                <code className="mx-1 rounded bg-muted px-1 py-0.5">Link</code>/
+                <code className="mx-1 rounded bg-muted px-1 py-0.5">Unlink</code>
+                for quick policy changes and pencil edit for advanced group/deeper settings.
               </p>
             </div>
 
-            <div className="flex-1 min-h-0 p-5 overflow-auto">
+            <div className="flex-1 min-h-0 p-5 space-y-4 overflow-y-auto">
               {cliproxyCount > 0 && (
-                <Alert variant="info" className="mb-4">
+                <Alert variant="info">
                   <Zap className="h-4 w-4" />
                   <AlertTitle>CLIProxy pool accounts are managed in their own page</AlertTitle>
                   <AlertDescription>
@@ -246,15 +302,15 @@ export function AccountsPage() {
                 </Alert>
               )}
 
-              <Card className="h-full flex flex-col">
+              <Card className="flex flex-col">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-lg">Account Matrix</CardTitle>
                   <CardDescription>
-                    Shared total: {sharedCount}. Update sync behavior from the pencil action in each
-                    row.
+                    Shared total: {sharedCount}. Actions now include quick link/unlink plus legacy
+                    confirmation.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-1 min-h-0">
+                <CardContent>
                   {isLoading ? (
                     <div className="text-muted-foreground">Loading accounts...</div>
                   ) : (
@@ -265,64 +321,137 @@ export function AccountsPage() {
             </div>
           </div>
 
-          {/* Right guidance column */}
-          <div className="w-80 shrink-0 flex flex-col bg-muted/20">
-            <div className="p-4 border-b bg-background">
-              <h3 className="font-semibold">Continuity Guide</h3>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Choose the lightest mode that solves your workflow.
-              </p>
-            </div>
-
-            <ScrollArea className="flex-1">
-              <div className="p-4 space-y-3">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Shared Standard</CardTitle>
-                    <CardDescription>Project workspace sync only.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-xs text-muted-foreground">
-                    Best default when users need continuity but want minimal coupling.
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Shared Deeper (Advanced)</CardTitle>
-                    <CardDescription>
-                      Adds <code>session-env</code>, <code>file-history</code>,{' '}
-                      <code>shell-snapshots</code>, <code>todos</code>.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="text-xs text-muted-foreground">
-                    Use only when cross-account continuity is worth stronger coupling.
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm">Quick Commands</CardTitle>
-                    <CardDescription>Copy and run in terminal.</CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
-                      <span className="flex-1 break-all">
-                        ccs auth create work --context-group sprint-a --deeper-continuity
-                      </span>
-                      <CopyButton
-                        value="ccs auth create work --context-group sprint-a --deeper-continuity"
-                        size="icon"
-                      />
-                    </div>
-                    <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
-                      <span className="flex-1 break-all">ccs cliproxy auth claude</span>
-                      <CopyButton value="ccs cliproxy auth claude" size="icon" />
-                    </div>
-                  </CardContent>
-                </Card>
+          {/* Right action center */}
+          {showGuideRail ? (
+            <div className="w-80 shrink-0 flex flex-col bg-muted/20">
+              <div className="p-4 border-b bg-background flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">Action Center</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    High-value actions for pool auth and legacy cleanup.
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowGuideRail(false)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
               </div>
-            </ScrollArea>
-          </div>
+
+              <ScrollArea className="flex-1">
+                <div className="p-4 space-y-3">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Immediate Actions</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <Button
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={handleOpenClaudePoolAuth}
+                      >
+                        <Zap className="w-4 h-4 mr-2" />
+                        Authenticate Claude in Pool
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={handleOpenClaudePool}
+                      >
+                        Open Claude Pool Settings
+                        <ArrowRight className="w-4 h-4 ml-auto" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full justify-start"
+                        onClick={handleConfirmLegacy}
+                        disabled={confirmLegacyMutation.isPending || legacyTargetCount === 0}
+                      >
+                        {confirmLegacyMutation.isPending
+                          ? 'Confirming Legacy Policies...'
+                          : `Confirm Legacy Policies (${legacyTargetCount})`}
+                      </Button>
+                    </CardContent>
+                  </Card>
+
+                  <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
+                    <Card>
+                      <CardHeader className="pb-2">
+                        <CollapsibleTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            className="h-auto w-full justify-between px-0 py-0"
+                          >
+                            <div className="text-left">
+                              <CardTitle className="text-sm">Continuity Guide</CardTitle>
+                              <CardDescription className="mt-1">
+                                Expand only when needed.
+                              </CardDescription>
+                            </div>
+                            <ChevronDown
+                              className={cn(
+                                'h-4 w-4 transition-transform',
+                                guideOpen && 'rotate-180'
+                              )}
+                            />
+                          </Button>
+                        </CollapsibleTrigger>
+                      </CardHeader>
+                      <CollapsibleContent>
+                        <CardContent className="space-y-3 text-xs text-muted-foreground">
+                          <div className="rounded-md border p-2.5">
+                            <p className="font-semibold text-foreground">Shared Standard</p>
+                            <p className="mt-1">
+                              Project workspace sync only. Best default for most teams.
+                            </p>
+                          </div>
+                          <div className="rounded-md border p-2.5">
+                            <p className="font-semibold text-foreground">Shared Deeper</p>
+                            <p className="mt-1">
+                              Adds <code>session-env</code>, <code>file-history</code>,{' '}
+                              <code>shell-snapshots</code>, <code>todos</code>.
+                            </p>
+                          </div>
+                          <div className="rounded-md border p-2.5">
+                            <p className="font-semibold text-foreground">Isolated</p>
+                            <p className="mt-1">No link. Best for strict separation.</p>
+                          </div>
+                        </CardContent>
+                      </CollapsibleContent>
+                    </Card>
+                  </Collapsible>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Quick Commands</CardTitle>
+                      <CardDescription>Copy and run in terminal.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
+                        <span className="flex-1 break-all">
+                          ccs auth create work --context-group sprint-a --deeper-continuity
+                        </span>
+                        <CopyButton
+                          value="ccs auth create work --context-group sprint-a --deeper-continuity"
+                          size="icon"
+                        />
+                      </div>
+                      <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
+                        <span className="flex-1 break-all">ccs cliproxy auth claude</span>
+                        <CopyButton value="ccs cliproxy auth claude" size="icon" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </ScrollArea>
+            </div>
+          ) : (
+            <div className="w-14 shrink-0 border-l bg-muted/20 flex items-start justify-center pt-3">
+              <Button variant="ghost" size="icon" onClick={() => setShowGuideRail(true)}>
+                <ChevronLeft className="h-4 w-4 rotate-180" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -342,9 +471,23 @@ export function AccountsPage() {
               <Plus className="w-4 h-4 mr-2" />
               Create Account
             </Button>
-            <Button variant="outline" className="w-full" onClick={() => navigate('/cliproxy')}>
+            <Button variant="outline" className="w-full" onClick={handleOpenClaudePool}>
               Open CLIProxy Claude Pool
               <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            <Button variant="outline" className="w-full" onClick={handleOpenClaudePoolAuth}>
+              Authenticate Claude in Pool
+              <Zap className="w-4 h-4 ml-2" />
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleConfirmLegacy}
+              disabled={confirmLegacyMutation.isPending || legacyTargetCount === 0}
+            >
+              {confirmLegacyMutation.isPending
+                ? 'Confirming Legacy Policies...'
+                : `Confirm Legacy Policies (${legacyTargetCount})`}
             </Button>
           </CardContent>
         </Card>

@@ -24,12 +24,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Check, Pencil, Trash2, RotateCcw } from 'lucide-react';
+import { Check, CheckCheck, Link2, Pencil, RotateCcw, Trash2, Unlink } from 'lucide-react';
 import { EditAccountContextDialog } from '@/components/account/edit-account-context-dialog';
 import {
   useSetDefaultAccount,
   useDeleteAccount,
   useResetDefaultAccount,
+  useUpdateAccountContext,
 } from '@/hooks/use-accounts';
 import type { Account } from '@/lib/api-client';
 
@@ -42,6 +43,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
   const setDefaultMutation = useSetDefaultAccount();
   const deleteMutation = useDeleteAccount();
   const resetDefaultMutation = useResetDefaultAccount();
+  const updateContextMutation = useUpdateAccountContext();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [contextTarget, setContextTarget] = useState<Account | null>(null);
 
@@ -130,8 +132,14 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
       size: 220,
       cell: ({ row }) => {
         const isDefault = row.original.name === defaultAccount;
-        const isPending = setDefaultMutation.isPending || deleteMutation.isPending;
+        const isPending =
+          setDefaultMutation.isPending ||
+          deleteMutation.isPending ||
+          updateContextMutation.isPending;
         const isCliproxy = row.original.type === 'cliproxy';
+        const isShared = row.original.context_mode === 'shared';
+        const hasLegacyInference =
+          row.original.context_inferred || row.original.continuity_inferred;
 
         return (
           <div className="flex items-center gap-1">
@@ -145,6 +153,63 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
                 title="Edit context mode"
               >
                 <Pencil className="w-4 h-4" />
+              </Button>
+            )}
+            {!isCliproxy && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                disabled={isPending}
+                onClick={() =>
+                  updateContextMutation.mutate({
+                    name: row.original.name,
+                    context_mode: isShared ? 'isolated' : 'shared',
+                    context_group: isShared ? undefined : row.original.context_group || 'default',
+                    continuity_mode: isShared ? undefined : 'standard',
+                  })
+                }
+                title={isShared ? 'Switch to isolated mode' : 'Switch to shared mode'}
+              >
+                {isShared ? (
+                  <>
+                    <Unlink className="w-3 h-3 mr-1" />
+                    Unlink
+                  </>
+                ) : (
+                  <>
+                    <Link2 className="w-3 h-3 mr-1" />
+                    Link
+                  </>
+                )}
+              </Button>
+            )}
+            {!isCliproxy && hasLegacyInference && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-amber-700 hover:text-amber-700 hover:bg-amber-500/10 dark:text-amber-400 dark:hover:text-amber-400"
+                disabled={isPending}
+                onClick={() =>
+                  updateContextMutation.mutate({
+                    name: row.original.name,
+                    context_mode: row.original.context_mode === 'shared' ? 'shared' : 'isolated',
+                    context_group:
+                      row.original.context_mode === 'shared'
+                        ? row.original.context_group || 'default'
+                        : undefined,
+                    continuity_mode:
+                      row.original.context_mode === 'shared'
+                        ? row.original.continuity_mode === 'deeper'
+                          ? 'deeper'
+                          : 'standard'
+                        : undefined,
+                  })
+                }
+                title="Confirm this legacy account's current mode as explicit"
+              >
+                <CheckCheck className="w-3 h-3 mr-1" />
+                Confirm
               </Button>
             )}
             <Button
@@ -205,7 +270,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
                         created: 'w-[150px]',
                         last_used: 'w-[150px]',
                         context: 'w-[170px]',
-                        actions: 'w-[220px]',
+                        actions: 'w-[340px]',
                       }[header.id] || 'w-auto';
 
                     return (

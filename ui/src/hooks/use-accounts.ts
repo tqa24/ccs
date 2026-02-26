@@ -136,3 +136,44 @@ export function useUpdateAccountContext() {
     },
   });
 }
+
+export function useConfirmLegacyAccountPolicies() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (accounts: Account[]) => {
+      const legacyTargets = accounts.filter(
+        (account) => account.context_inferred || account.continuity_inferred
+      );
+
+      for (const account of legacyTargets) {
+        const isShared = account.context_mode === 'shared';
+        await api.accounts.updateContext(account.name, {
+          context_mode: isShared ? 'shared' : 'isolated',
+          context_group: isShared ? account.context_group || 'default' : undefined,
+          continuity_mode: isShared
+            ? account.continuity_mode === 'deeper'
+              ? 'deeper'
+              : 'standard'
+            : undefined,
+        });
+      }
+
+      return { updatedCount: legacyTargets.length };
+    },
+    onSuccess: ({ updatedCount }) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      if (updatedCount > 0) {
+        toast.success(
+          `Confirmed explicit sync mode for ${updatedCount} legacy account${updatedCount > 1 ? 's' : ''}`
+        );
+        return;
+      }
+
+      toast.info('No legacy accounts need confirmation');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}

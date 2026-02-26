@@ -4,7 +4,7 @@
  * Right panel: Provider Editor with split-view (settings + code editor)
  */
 
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -32,6 +32,7 @@ import {
 } from '@/hooks/use-cliproxy';
 import type { AuthStatus, Variant } from '@/lib/api-client';
 import { MODEL_CATALOGS } from '@/lib/model-catalogs';
+import { getProviderDisplayName, isValidProvider } from '@/lib/provider-config';
 import { cn } from '@/lib/utils';
 
 // Sidebar provider item
@@ -198,9 +199,14 @@ export function CliproxyPage() {
   const deleteMutation = useDeleteVariant();
 
   // Selection state: either a provider or a variant
-  // Initialize from localStorage if available
+  // Initialize from URL provider deep-link, fallback to localStorage.
   const [selectedProvider, setSelectedProviderState] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
+      const query = new URLSearchParams(window.location.search);
+      const queryProvider = query.get('provider')?.trim().toLowerCase();
+      if (queryProvider && isValidProvider(queryProvider)) {
+        return queryProvider;
+      }
       return localStorage.getItem('cliproxy-selected-provider');
     }
     return null;
@@ -211,7 +217,25 @@ export function CliproxyPage() {
     provider: string;
     displayName: string;
     isFirstAccount: boolean;
-  } | null>(null);
+  } | null>(() => {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const query = new URLSearchParams(window.location.search);
+    const queryProvider = query.get('provider')?.trim().toLowerCase();
+    const action = query.get('action');
+
+    if (action !== 'auth' || !queryProvider || !isValidProvider(queryProvider)) {
+      return null;
+    }
+
+    return {
+      provider: queryProvider,
+      displayName: getProviderDisplayName(queryProvider),
+      isFirstAccount: false,
+    };
+  });
 
   const providers = useMemo(() => authData?.authStatus || [], [authData?.authStatus]);
   const isRemoteMode = authData?.source === 'remote';
