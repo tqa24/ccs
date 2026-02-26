@@ -339,6 +339,15 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['ccsd codex', 'Run built-in CLIProxy Codex profile on Droid'],
     ['ccsd agy', 'Run built-in CLIProxy Antigravity profile on Droid'],
     [
+      'ccsd codex exec --skip-permissions-unsafe "fix failing tests"',
+      'Pass through Droid exec mode',
+    ],
+    ['ccsd codex -m custom:gpt-5.3-codex "fix failing tests"', 'Auto-routes short exec flags'],
+    [
+      'ccsd codex --skip-permissions-unsafe "fix failing tests"',
+      'Auto-routes to Droid exec when exec-only flags are detected',
+    ],
+    [
       'ccs cliproxy create my-codex --provider codex --target droid',
       'Create CLIProxy variant with Droid as default target',
     ],
@@ -392,6 +401,11 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['', ''],
     ['--effort <level>', 'Codex alias for reasoning effort (medium/high/xhigh)'],
     ['--effort xhigh', 'Pin Codex effort to xhigh for this run'],
+    ['', ''],
+    ['Droid exec:', 'Use native Droid flag: --reasoning-effort <level>'],
+    ['', 'CCS auto-maps --thinking/--effort to --reasoning-effort in droid exec mode.'],
+    ['', 'For interactive droid sessions, CCS applies reasoning via Droid BYOK model config.'],
+    ['', 'When multiple reasoning flags are provided, the first flag wins.'],
     ['', ''],
     ['Note:', 'Extended thinking allocates compute for step-by-step reasoning'],
     ['', 'before responding.'],
