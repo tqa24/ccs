@@ -686,6 +686,14 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
   },
 };
 
+const MODEL_PRICING_ALIASES: Record<string, string> = {
+  // Keep catalog-only IDs on explicit priced equivalents.
+  'qwen3-coder': 'qwen3-coder-plus',
+  'qwen3-235b': 'qwen3-max',
+  'qwen3-vl-plus': 'qwen3.5-plus',
+  'qwen3-32b': 'qwen3.5-plus',
+};
+
 // Default pricing for unknown models
 const UNKNOWN_MODEL_PRICING: ModelPricing = {
   inputPerMillion: 3.0,
@@ -704,8 +712,49 @@ const UNKNOWN_MODEL_PRICING: ModelPricing = {
  */
 function normalizeModelName(model: string): string {
   // Remove provider prefixes (e.g., "anthropic/claude-..." -> "claude-...")
-  const normalized = model.toLowerCase().replace(/^[^/]+\//, '');
+  const normalized = model
+    .trim()
+    .toLowerCase()
+    .replace(/^[^/]+\//, '');
   return normalized;
+}
+
+const NORMALIZED_PRICING_REGISTRY: Record<string, ModelPricing> = Object.entries(
+  PRICING_REGISTRY
+).reduce<Record<string, ModelPricing>>((acc, [key, pricing]) => {
+  acc[normalizeModelName(key)] = pricing;
+  return acc;
+}, {});
+
+function getLookupCandidates(model: string): string[] {
+  const normalized = normalizeModelName(model);
+  const baseModel = normalized.split(':')[0];
+
+  return baseModel === normalized ? [normalized] : [normalized, baseModel];
+}
+
+function getDirectOrAliasPricing(model: string): ModelPricing | undefined {
+  const directPricing = PRICING_REGISTRY[model];
+  if (directPricing !== undefined) {
+    return directPricing;
+  }
+
+  for (const candidate of getLookupCandidates(model)) {
+    const normalizedPricing = NORMALIZED_PRICING_REGISTRY[candidate];
+    if (normalizedPricing !== undefined) {
+      return normalizedPricing;
+    }
+
+    const alias = MODEL_PRICING_ALIASES[candidate];
+    if (alias !== undefined) {
+      const aliasPricing = NORMALIZED_PRICING_REGISTRY[alias];
+      if (aliasPricing !== undefined) {
+        return aliasPricing;
+      }
+    }
+  }
+
+  return undefined;
 }
 
 /**
@@ -714,29 +763,25 @@ function normalizeModelName(model: string): string {
  * @returns ModelPricing for the model or fallback pricing
  */
 export function getModelPricing(model: string): ModelPricing {
-  // Try exact match first
-  if (PRICING_REGISTRY[model]) {
-    return PRICING_REGISTRY[model];
+  const directOrAliasPricing = getDirectOrAliasPricing(model);
+  if (directOrAliasPricing !== undefined) {
+    return directOrAliasPricing;
   }
 
-  // Try normalized match
-  const normalized = normalizeModelName(model);
-  if (PRICING_REGISTRY[normalized]) {
-    return PRICING_REGISTRY[normalized];
-  }
-
-  // Try suffix matching (e.g., "claude-sonnet-4-5" matches "*-claude-sonnet-4-5")
-  for (const [key, pricing] of Object.entries(PRICING_REGISTRY)) {
-    if (normalized.endsWith(key) || key.endsWith(normalized)) {
-      return pricing;
+  for (const candidate of getLookupCandidates(model)) {
+    // Try suffix matching (e.g., "claude-sonnet-4-5" matches "*-claude-sonnet-4-5")
+    for (const [key, pricing] of Object.entries(NORMALIZED_PRICING_REGISTRY)) {
+      if (candidate.endsWith(key) || key.endsWith(candidate)) {
+        return pricing;
+      }
     }
-  }
 
-  // Try partial matching for model families
-  for (const [key, pricing] of Object.entries(PRICING_REGISTRY)) {
-    // Match by model family prefix
-    if (normalized.startsWith(key.split('-').slice(0, 2).join('-'))) {
-      return pricing;
+    // Try partial matching for model families
+    for (const [key, pricing] of Object.entries(NORMALIZED_PRICING_REGISTRY)) {
+      // Match by model family prefix
+      if (candidate.startsWith(key.split('-').slice(0, 2).join('-'))) {
+        return pricing;
+      }
     }
   }
 
@@ -773,8 +818,5 @@ export function getKnownModels(): string[] {
  * Check if a model has custom pricing (not using fallback)
  */
 export function hasCustomPricing(model: string): boolean {
-  return (
-    PRICING_REGISTRY[model] !== undefined ||
-    PRICING_REGISTRY[normalizeModelName(model)] !== undefined
-  );
+  return getDirectOrAliasPricing(model) !== undefined;
 }
