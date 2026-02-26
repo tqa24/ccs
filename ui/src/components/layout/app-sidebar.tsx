@@ -145,6 +145,13 @@ export function AppSidebar() {
     );
   };
 
+  const getPrimaryRoute = (item: SidebarItem) => {
+    if (item.path === '/accounts') {
+      return '/shared';
+    }
+    return item.path;
+  };
+
   const renderMenuIcon = (item: Pick<SidebarItem, 'icon' | 'iconSrc'>) => {
     if (item.iconSrc) {
       return <img src={item.iconSrc} alt="" className="w-4 h-4 object-contain" />;
@@ -180,7 +187,7 @@ export function AppSidebar() {
                           <SidebarMenuButton
                             tooltip={getItemLabel(item)}
                             isActive={isParentActive(item.children)}
-                            onClick={() => navigate(item.path)}
+                            onClick={() => navigate(getPrimaryRoute(item))}
                           >
                             {renderMenuIcon(item)}
                             <span className="group-data-[collapsible=icon]:hidden">
