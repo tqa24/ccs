@@ -24,25 +24,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Check, Trash2, RotateCcw } from 'lucide-react';
+import { Check, CheckCheck, Pencil, RotateCcw, Trash2 } from 'lucide-react';
+import { EditAccountContextDialog } from '@/components/account/edit-account-context-dialog';
 import {
   useSetDefaultAccount,
   useDeleteAccount,
   useResetDefaultAccount,
+  useUpdateAccountContext,
 } from '@/hooks/use-accounts';
 import type { Account } from '@/lib/api-client';
 
 interface AccountsTableProps {
   data: Account[];
   defaultAccount: string | null;
-  onRefresh?: () => void;
 }
 
 export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
   const setDefaultMutation = useSetDefaultAccount();
   const deleteMutation = useDeleteAccount();
   const resetDefaultMutation = useResetDefaultAccount();
+  const updateContextMutation = useUpdateAccountContext();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [contextTarget, setContextTarget] = useState<Account | null>(null);
 
   const columns: ColumnDef<Account>[] = [
     {
@@ -89,7 +92,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
     },
     {
       id: 'context',
-      header: 'Context',
+      header: 'History Sync',
       size: 170,
       cell: ({ row }) => {
         if (row.original.type === 'cliproxy') {
@@ -99,7 +102,25 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
         const mode = row.original.context_mode || 'isolated';
         if (mode === 'shared') {
           const group = row.original.context_group || 'default';
-          return <span className="text-muted-foreground">shared ({group})</span>;
+          if (row.original.continuity_mode === 'deeper') {
+            return <span className="text-muted-foreground">shared ({group}, deeper)</span>;
+          }
+
+          if (row.original.continuity_inferred) {
+            return (
+              <span className="text-amber-700 dark:text-amber-400">
+                shared ({group}, standard legacy)
+              </span>
+            );
+          }
+
+          return <span className="text-muted-foreground">shared ({group}, standard)</span>;
+        }
+
+        if (row.original.context_inferred) {
+          return (
+            <span className="text-amber-700 dark:text-amber-400">isolated (legacy default)</span>
+          );
         }
 
         return <span className="text-muted-foreground">isolated</span>;
@@ -108,13 +129,60 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
     {
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 220,
       cell: ({ row }) => {
         const isDefault = row.original.name === defaultAccount;
-        const isPending = setDefaultMutation.isPending || deleteMutation.isPending;
+        const isPending =
+          setDefaultMutation.isPending ||
+          deleteMutation.isPending ||
+          updateContextMutation.isPending;
+        const isCliproxy = row.original.type === 'cliproxy';
+        const hasLegacyInference =
+          row.original.context_inferred || row.original.continuity_inferred;
 
         return (
           <div className="flex items-center gap-1">
+            {!isCliproxy && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 px-2"
+                disabled={isPending}
+                onClick={() => setContextTarget(row.original)}
+                title="Edit sync mode, group, and continuity depth"
+              >
+                <Pencil className="w-3.5 h-3.5 mr-1" />
+                Sync
+              </Button>
+            )}
+            {!isCliproxy && hasLegacyInference && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-amber-700 hover:text-amber-700 hover:bg-amber-500/10 dark:text-amber-400 dark:hover:text-amber-400"
+                disabled={isPending}
+                onClick={() =>
+                  updateContextMutation.mutate({
+                    name: row.original.name,
+                    context_mode: row.original.context_mode === 'shared' ? 'shared' : 'isolated',
+                    context_group:
+                      row.original.context_mode === 'shared'
+                        ? row.original.context_group || 'default'
+                        : undefined,
+                    continuity_mode:
+                      row.original.context_mode === 'shared'
+                        ? row.original.continuity_mode === 'deeper'
+                          ? 'deeper'
+                          : 'standard'
+                        : undefined,
+                  })
+                }
+                title="Confirm this legacy account's current mode as explicit"
+              >
+                <CheckCheck className="w-3 h-3 mr-1" />
+                Confirm
+              </Button>
+            )}
             <Button
               variant={isDefault ? 'secondary' : 'default'}
               size="sm"
@@ -151,7 +219,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
   if (data.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        No accounts found. Use{' '}
+        No CCS auth accounts found. Use{' '}
         <code className="text-sm bg-muted px-1 rounded">ccs auth create</code> to add accounts.
       </div>
     );
@@ -173,7 +241,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
                         created: 'w-[150px]',
                         last_used: 'w-[150px]',
                         context: 'w-[170px]',
-                        actions: 'w-[180px]',
+                        actions: 'w-[290px]',
                       }[header.id] || 'w-auto';
 
                     return (
@@ -216,6 +284,10 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
           </div>
         )}
       </div>
+
+      {contextTarget && (
+        <EditAccountContextDialog account={contextTarget} onClose={() => setContextTarget(null)} />
+      )}
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

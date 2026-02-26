@@ -86,6 +86,11 @@ class AuthCommands {
     console.log(`  ${dim('# Share context only within a specific group')}`);
     console.log(`  ${color('ccs auth create backup --context-group sprint-a', 'command')}`);
     console.log('');
+    console.log(`  ${dim('# Advanced: deeper shared continuity for session history artifacts')}`);
+    console.log(
+      `  ${color('ccs auth create backup --context-group sprint-a --deeper-continuity', 'command')}`
+    );
+    console.log('');
     console.log(`  ${dim('# Set work as default')}`);
     console.log(`  ${color('ccs auth default work', 'command')}`);
     console.log('');
@@ -109,6 +114,9 @@ class AuthCommands {
       `  ${color('--context-group <name>', 'command')}    Share context only within a named group`
     );
     console.log(
+      `  ${color('--deeper-continuity', 'command')}       Advanced shared mode: sync additional continuity artifacts`
+    );
+    console.log(
       `  ${color('--yes, -y', 'command')}                 Skip confirmation prompts (remove)`
     );
     console.log(
@@ -127,6 +135,12 @@ class AuthCommands {
     );
     console.log(
       `  Account profiles stay isolated unless you opt in with ${color('--share-context', 'command')}.`
+    );
+    console.log(
+      `  ${color('--deeper-continuity', 'command')} requires shared mode and syncs session-env/file-history/todos/shell-snapshots.`
+    );
+    console.log(
+      `  Existing profiles: open ${color('ccs config', 'command')} -> Accounts -> Edit Context.`
     );
     console.log(`  Shared context groups are normalized (trim + lowercase) and spaces become "-".`);
     console.log(

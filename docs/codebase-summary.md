@@ -203,15 +203,16 @@ src/
 
 ### Account Context Metadata Flow
 
-- Source fields: `accounts.<name>.context_mode` and `accounts.<name>.context_group` in `~/.ccs/config.yaml`.
+- Source fields: `accounts.<name>.context_mode`, `accounts.<name>.context_group`, `accounts.<name>.continuity_mode` in `~/.ccs/config.yaml`.
 - Runtime policy resolver: `src/auth/account-context.ts`.
 - Metadata storage normalization: `src/auth/profile-registry.ts`.
 - API write validation: `PUT /api/config` in `src/web-server/routes/config-routes.ts`.
 - Rules:
   - mode is isolation-first (`isolated` default, `shared` opt-in)
   - shared mode requires non-empty valid `context_group`
+  - shared mode continuity depth is `standard` by default, optional `deeper`
   - `context_group` is normalized (trim + lowercase + whitespace collapse to `-`)
-  - API route rejects `context_group` when mode is not `shared`
+  - API route rejects `context_group`/`continuity_mode` when mode is not `shared`
   - registry normalization drops malformed persisted `context_group` values
 
 ### Target Adapter Module

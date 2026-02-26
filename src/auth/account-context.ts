@@ -6,20 +6,24 @@
  */
 
 export type AccountContextMode = 'isolated' | 'shared';
+export type AccountContinuityMode = 'standard' | 'deeper';
 
 export interface AccountContextMetadata {
   context_mode?: AccountContextMode;
   context_group?: string;
+  continuity_mode?: AccountContinuityMode;
 }
 
 export interface AccountContextPolicy {
   mode: AccountContextMode;
   group?: string;
+  continuityMode?: AccountContinuityMode;
 }
 
 export interface CreateAccountContextInput {
   shareContext: boolean;
   contextGroup?: string;
+  deeperContinuity?: boolean;
 }
 
 export interface ResolvedCreateAccountContext {
@@ -29,6 +33,7 @@ export interface ResolvedCreateAccountContext {
 
 export const DEFAULT_ACCOUNT_CONTEXT_MODE: AccountContextMode = 'isolated';
 export const DEFAULT_ACCOUNT_CONTEXT_GROUP = 'default';
+export const DEFAULT_ACCOUNT_CONTINUITY_MODE: AccountContinuityMode = 'standard';
 export const MAX_CONTEXT_GROUP_LENGTH = 64;
 export const ACCOUNT_PROFILE_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
@@ -66,11 +71,22 @@ export function isAccountContextMetadata(value: unknown): value is AccountContex
   const candidate = value as Record<string, unknown>;
   const mode = candidate['context_mode'];
   const group = candidate['context_group'];
+  const continuity = candidate['continuity_mode'];
 
   const modeValid = mode === undefined || mode === 'isolated' || mode === 'shared';
   const groupValid = group === undefined || typeof group === 'string';
+  const continuityValid =
+    continuity === undefined || continuity === 'standard' || continuity === 'deeper';
 
-  return modeValid && groupValid;
+  if (!modeValid || !groupValid || !continuityValid) {
+    return false;
+  }
+
+  if (mode !== 'shared' && continuity !== undefined) {
+    return false;
+  }
+
+  return true;
 }
 
 /**
@@ -80,6 +96,15 @@ export function resolveCreateAccountContext(
   input: CreateAccountContextInput
 ): ResolvedCreateAccountContext {
   const hasGroupFlag = input.contextGroup !== undefined;
+  const continuityMode: AccountContinuityMode = input.deeperContinuity ? 'deeper' : 'standard';
+
+  if (input.deeperContinuity && !input.shareContext && !hasGroupFlag) {
+    return {
+      policy: { mode: 'isolated' },
+      error:
+        'Advanced deeper continuity requires shared context (--share-context or --context-group).',
+    };
+  }
 
   if (hasGroupFlag) {
     if (!input.contextGroup || input.contextGroup.trim().length === 0) {
@@ -101,6 +126,7 @@ export function resolveCreateAccountContext(
       policy: {
         mode: 'shared',
         group: normalizedGroup,
+        continuityMode,
       },
     };
   }
@@ -110,6 +136,7 @@ export function resolveCreateAccountContext(
       policy: {
         mode: 'shared',
         group: DEFAULT_ACCOUNT_CONTEXT_GROUP,
+        continuityMode,
       },
     };
   }
@@ -128,15 +155,21 @@ export function resolveAccountContextPolicy(
   const mode: AccountContextMode = metadata?.context_mode === 'shared' ? 'shared' : 'isolated';
 
   if (mode === 'shared') {
+    const continuityMode: AccountContinuityMode =
+      metadata?.continuity_mode === 'deeper' ? 'deeper' : 'standard';
     const rawGroup = metadata?.context_group;
     if (rawGroup && rawGroup.trim().length > 0) {
       const normalized = normalizeContextGroupName(rawGroup);
       if (isValidContextGroupName(normalized)) {
-        return { mode: 'shared', group: normalized };
+        return { mode: 'shared', group: normalized, continuityMode };
       }
     }
 
-    return { mode: 'shared', group: DEFAULT_ACCOUNT_CONTEXT_GROUP };
+    return {
+      mode: 'shared',
+      group: DEFAULT_ACCOUNT_CONTEXT_GROUP,
+      continuityMode,
+    };
   }
 
   return { mode: 'isolated' };
@@ -152,6 +185,8 @@ export function policyToAccountContextMetadata(
     return {
       context_mode: 'shared',
       context_group: policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP,
+      continuity_mode:
+        policy.continuityMode === 'deeper' ? 'deeper' : DEFAULT_ACCOUNT_CONTINUITY_MODE,
     };
   }
 
@@ -165,7 +200,8 @@ export function policyToAccountContextMetadata(
  */
 export function formatAccountContextPolicy(policy: AccountContextPolicy): string {
   if (policy.mode === 'shared') {
-    return `shared (${policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP})`;
+    const continuity = policy.continuityMode === 'deeper' ? 'deeper continuity' : 'standard';
+    return `shared (${policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP}, ${continuity})`;
   }
 
   return 'isolated';

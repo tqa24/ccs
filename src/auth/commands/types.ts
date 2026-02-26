@@ -21,6 +21,7 @@ export interface AuthCommandArgs {
   yes?: boolean;
   shareContext?: boolean;
   contextGroup?: string;
+  deeperContinuity?: boolean;
   unknownFlags?: string[];
 }
 
@@ -35,6 +36,7 @@ export interface ProfileOutput {
   last_used: string | null;
   context_mode?: 'isolated' | 'shared';
   context_group?: string | null;
+  continuity_mode?: 'standard' | 'deeper' | null;
   instance_path?: string;
   session_count?: number;
 }
@@ -70,6 +72,7 @@ export function parseArgs(args: string[]): AuthCommandArgs {
     '--yes',
     '-y',
     '--share-context',
+    '--deeper-continuity',
   ]);
   const knownValueFlags = new Set(['--context-group']);
 
@@ -121,6 +124,7 @@ export function parseArgs(args: string[]): AuthCommandArgs {
     json: args.includes('--json'),
     yes: args.includes('--yes') || args.includes('-y'),
     shareContext: args.includes('--share-context'),
+    deeperContinuity: args.includes('--deeper-continuity'),
     contextGroup,
     unknownFlags: [...unknownFlags],
   };

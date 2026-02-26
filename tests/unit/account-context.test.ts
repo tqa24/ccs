@@ -51,4 +51,35 @@ describe('account context helpers', () => {
     expect(result.policy.mode).toBe('shared');
     expect(result.policy.group).toBe('team-alpha');
   });
+
+  it('supports deeper continuity for shared create flows', () => {
+    const result = resolveCreateAccountContext({
+      shareContext: true,
+      deeperContinuity: true,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.policy.mode).toBe('shared');
+    expect(result.policy.continuityMode).toBe('deeper');
+  });
+
+  it('rejects deeper continuity without shared context flags', () => {
+    const result = resolveCreateAccountContext({
+      shareContext: false,
+      deeperContinuity: true,
+    });
+
+    expect(result.error).toContain('requires shared context');
+  });
+
+  it('defaults shared continuity mode to standard for legacy metadata', () => {
+    const resolved = resolveAccountContextPolicy({
+      context_mode: 'shared',
+      context_group: 'team-alpha',
+    });
+
+    expect(resolved.mode).toBe('shared');
+    expect(resolved.group).toBe('team-alpha');
+    expect(resolved.continuityMode).toBe('standard');
+  });
 });

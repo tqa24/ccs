@@ -18,7 +18,11 @@ import {
   getBackupDirectories,
 } from '../../config/migration-manager';
 import { isUnifiedConfig } from '../../config/unified-config-types';
-import { isValidContextGroupName, normalizeContextGroupName } from '../../auth/account-context';
+import {
+  DEFAULT_ACCOUNT_CONTINUITY_MODE,
+  isValidContextGroupName,
+  normalizeContextGroupName,
+} from '../../auth/account-context';
 
 const router = Router();
 
@@ -45,6 +49,7 @@ function validateAndNormalizeAccountContextMetadata(config: unknown): string | n
     const account = accountValue as Record<string, unknown>;
     const mode = account.context_mode;
     const group = account.context_group;
+    const continuity = account.continuity_mode;
 
     if (mode !== undefined && mode !== 'isolated' && mode !== 'shared') {
       return `Invalid config.accounts.${accountName}.context_mode: expected isolated|shared`;
@@ -54,8 +59,16 @@ function validateAndNormalizeAccountContextMetadata(config: unknown): string | n
       return `Invalid config.accounts.${accountName}.context_group: expected string`;
     }
 
+    if (continuity !== undefined && continuity !== 'standard' && continuity !== 'deeper') {
+      return `Invalid config.accounts.${accountName}.continuity_mode: expected standard|deeper`;
+    }
+
     if (mode !== 'shared' && group !== undefined) {
       return `Invalid config.accounts.${accountName}: context_group requires context_mode=shared`;
+    }
+
+    if (mode !== 'shared' && continuity !== undefined) {
+      return `Invalid config.accounts.${accountName}: continuity_mode requires context_mode=shared`;
     }
 
     if (mode === 'shared' && typeof group === 'string' && group.trim().length > 0) {
@@ -66,12 +79,21 @@ function validateAndNormalizeAccountContextMetadata(config: unknown): string | n
       account.context_group = normalizedGroup;
     }
 
+    if (mode === 'shared') {
+      account.continuity_mode =
+        continuity === 'deeper' ? 'deeper' : DEFAULT_ACCOUNT_CONTINUITY_MODE;
+    }
+
     if (mode === 'shared' && typeof group === 'string' && group.trim().length === 0) {
       return `Invalid config.accounts.${accountName}.context_group: shared mode requires a non-empty value`;
     }
 
     if (mode === 'isolated' && group !== undefined) {
       delete account.context_group;
+    }
+
+    if (mode === 'isolated' && continuity !== undefined) {
+      delete account.continuity_mode;
     }
   }
 

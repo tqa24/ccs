@@ -166,8 +166,10 @@ describe('migration-manager legacy kimi compatibility', () => {
     expect(unified).toBeTruthy();
     expect(unified?.accounts.work.context_mode).toBe('shared');
     expect(unified?.accounts.work.context_group).toBe('sprint-a');
+    expect(unified?.accounts.work.continuity_mode).toBe('standard');
     expect(unified?.accounts.personal.context_mode).toBe('isolated');
     expect(unified?.accounts.personal.context_group).toBeUndefined();
+    expect(unified?.accounts.personal.continuity_mode).toBeUndefined();
   });
 
   it('normalizes valid legacy shared groups and drops invalid ones during migration', async () => {
@@ -210,5 +212,7 @@ describe('migration-manager legacy kimi compatibility', () => {
     expect(unified?.accounts.work.context_group).toBe('sprint-a');
     expect(unified?.accounts.broken.context_mode).toBe('shared');
     expect(unified?.accounts.broken.context_group).toBeUndefined();
+    expect(unified?.accounts.work.continuity_mode).toBe('standard');
+    expect(unified?.accounts.broken.continuity_mode).toBe('standard');
   });
 });

@@ -151,7 +151,10 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
         const metadata = meta as Record<string, unknown>;
         const rawContextMode = metadata.context_mode;
         const rawContextGroup = metadata.context_group;
+        const rawContinuityMode = metadata.continuity_mode;
         const contextMode = rawContextMode === 'shared' ? 'shared' : 'isolated';
+        const continuityMode =
+          contextMode === 'shared' && rawContinuityMode === 'deeper' ? 'deeper' : 'standard';
         let contextGroup: string | undefined;
         if (typeof rawContextGroup === 'string' && rawContextGroup.trim().length > 0) {
           const normalizedGroup = normalizeContextGroupName(rawContextGroup);
@@ -168,6 +171,7 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
           last_used: (metadata.last_used as string) || null,
           context_mode: contextMode,
           context_group: contextMode === 'shared' ? contextGroup : undefined,
+          continuity_mode: contextMode === 'shared' ? continuityMode : undefined,
         };
         unifiedConfig.accounts[name] = account;
       }

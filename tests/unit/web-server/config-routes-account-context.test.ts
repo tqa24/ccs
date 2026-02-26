@@ -115,6 +115,47 @@ describe('web-server config-routes account context validation', () => {
     expect(payload.error).toContain('context_group requires context_mode=shared');
   });
 
+  it('rejects continuity_mode when mode is not shared', async () => {
+    const response = await putJson(baseUrl, '/api/config', {
+      version: 8,
+      accounts: {
+        work: {
+          created: '2026-01-01T00:00:00.000Z',
+          last_used: null,
+          context_mode: 'isolated',
+          continuity_mode: 'deeper',
+        },
+      },
+      profiles: {},
+      cliproxy: { oauth_accounts: {}, providers: [], variants: {} },
+    });
+
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('continuity_mode requires context_mode=shared');
+  });
+
+  it('rejects invalid shared continuity_mode values', async () => {
+    const response = await putJson(baseUrl, '/api/config', {
+      version: 8,
+      accounts: {
+        work: {
+          created: '2026-01-01T00:00:00.000Z',
+          last_used: null,
+          context_mode: 'shared',
+          context_group: 'team-alpha',
+          continuity_mode: 'extreme',
+        },
+      },
+      profiles: {},
+      cliproxy: { oauth_accounts: {}, providers: [], variants: {} },
+    });
+
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('continuity_mode');
+  });
+
   it('rejects invalid shared context_group names', async () => {
     const response = await putJson(baseUrl, '/api/config', {
       version: 8,
@@ -162,6 +203,7 @@ describe('web-server config-routes account context validation', () => {
       last_used: null,
       context_mode: 'shared',
       context_group: 'Sprint-A',
+      continuity_mode: 'deeper',
     };
     const response = await putJson(baseUrl, '/api/config', config);
 
@@ -171,6 +213,7 @@ describe('web-server config-routes account context validation', () => {
 
     const savedConfig = loadUnifiedConfig();
     expect(savedConfig?.accounts.work.context_group).toBe('sprint-a');
+    expect(savedConfig?.accounts.work.continuity_mode).toBe('deeper');
   });
 
   it('returns alreadyMigrated when migration is not needed', async () => {

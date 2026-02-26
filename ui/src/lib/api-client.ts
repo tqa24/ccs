@@ -455,6 +455,17 @@ export interface Account {
   last_used?: string | null;
   context_mode?: 'isolated' | 'shared';
   context_group?: string;
+  continuity_mode?: 'standard' | 'deeper';
+  context_inferred?: boolean;
+  continuity_inferred?: boolean;
+  provider?: string;
+  displayName?: string;
+}
+
+export interface UpdateAccountContext {
+  context_mode: 'isolated' | 'shared';
+  context_group?: string;
+  continuity_mode?: 'standard' | 'deeper';
 }
 
 // Unified config types
@@ -785,6 +796,11 @@ export const api = {
       }),
     resetDefault: () => request('/accounts/reset-default', { method: 'DELETE' }),
     delete: (name: string) => request(`/accounts/${name}`, { method: 'DELETE' }),
+    updateContext: (name: string, data: UpdateAccountContext) =>
+      request(`/accounts/${encodeURIComponent(name)}/context`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
   },
   // Unified config API
   config: {

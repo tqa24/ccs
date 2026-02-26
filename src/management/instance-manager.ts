@@ -48,6 +48,7 @@ class InstanceManager {
 
       // Apply context policy (isolated by default, optional shared group).
       await this.sharedManager.syncProjectContext(instancePath, contextPolicy);
+      await this.sharedManager.syncAdvancedContinuityArtifacts(instancePath, contextPolicy);
     });
 
     return instancePath;

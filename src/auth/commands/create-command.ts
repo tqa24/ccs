@@ -31,14 +31,15 @@ function sanitizeProfileNameForInstance(name: string): string {
  */
 export async function handleCreate(ctx: CommandContext, args: string[]): Promise<void> {
   await initUI();
-  const { profileName, force, shareContext, contextGroup, unknownFlags } = parseArgs(args);
+  const { profileName, force, shareContext, contextGroup, deeperContinuity, unknownFlags } =
+    parseArgs(args);
 
   if (unknownFlags && unknownFlags.length > 0) {
     const unknownList = unknownFlags.map((flag) => `"${flag}"`).join(', ');
     console.log(fail(`Unknown option(s): ${unknownList}`));
     console.log('');
     console.log(
-      `Usage: ${color('ccs auth create <profile> [--force] [--share-context] [--context-group <name>]', 'command')}`
+      `Usage: ${color('ccs auth create <profile> [--force] [--share-context] [--context-group <name>] [--deeper-continuity]', 'command')}`
     );
     console.log(`Help:  ${color('ccs auth --help', 'command')}`);
     console.log('');
@@ -49,7 +50,7 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     console.log(fail('Profile name is required'));
     console.log('');
     console.log(
-      `Usage: ${color('ccs auth create <profile> [--force] [--share-context] [--context-group <name>]', 'command')}`
+      `Usage: ${color('ccs auth create <profile> [--force] [--share-context] [--context-group <name>] [--deeper-continuity]', 'command')}`
     );
     console.log('');
     console.log('Example:');
@@ -89,6 +90,7 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
   const resolvedContext = resolveCreateAccountContext({
     shareContext: !!shareContext,
     contextGroup,
+    deeperContinuity: !!deeperContinuity,
   });
 
   if (resolvedContext.error) {
@@ -212,7 +214,9 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     console.log('');
     const launchDescription =
       contextPolicy.mode === 'shared'
-        ? `Starting Claude with shared context group "${contextPolicy.group || 'default'}"...`
+        ? contextPolicy.continuityMode === 'deeper'
+          ? `Starting Claude with shared context group "${contextPolicy.group || 'default'}" (deeper continuity)...`
+          : `Starting Claude with shared context group "${contextPolicy.group || 'default'}"...`
         : 'Starting Claude in isolated instance...';
     console.log(warn(launchDescription));
     console.log(warn('You will be prompted to login with your account.'));

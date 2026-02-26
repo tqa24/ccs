@@ -28,11 +28,12 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
   const [profileName, setProfileName] = useState('');
   const [shareContext, setShareContext] = useState(false);
   const [contextGroup, setContextGroup] = useState('');
+  const [deeperContinuity, setDeeperContinuity] = useState(false);
   const [copied, setCopied] = useState(false);
 
   // Validate profile name: alphanumeric, dash, underscore only
   const isValidName = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(profileName);
-  const normalizedGroup = contextGroup.trim().toLowerCase();
+  const normalizedGroup = contextGroup.trim().toLowerCase().replace(/\s+/g, '-');
   const isValidContextGroup =
     normalizedGroup.length === 0 ||
     (normalizedGroup.length <= MAX_CONTEXT_GROUP_LENGTH &&
@@ -47,6 +48,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
               ? `--context-group ${normalizedGroup}`
               : '--share-context'
             : '',
+          shareContext && deeperContinuity ? '--deeper-continuity' : '',
         ]
           .filter(Boolean)
           .join(' ')
@@ -63,6 +65,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
     setProfileName('');
     setShareContext(false);
     setContextGroup('');
+    setDeeperContinuity(false);
     setCopied(false);
     onClose();
   };
@@ -73,7 +76,8 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
         <DialogHeader>
           <DialogTitle>Create New Account</DialogTitle>
           <DialogDescription>
-            Auth profiles require Claude CLI login. Run the command below in your terminal.
+            Auth profiles require Claude CLI login. Run the command below in your terminal. You can
+            edit sync mode, group, and continuity depth later from the Accounts table.
           </DialogDescription>
         </DialogHeader>
 
@@ -103,13 +107,13 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
                 onCheckedChange={(checked) => setShareContext(checked === true)}
               />
               <Label htmlFor="share-context" className="cursor-pointer">
-                Share project context with other accounts
+                Enable shared history sync with other ccs auth accounts
               </Label>
             </div>
 
             {shareContext && (
               <div className="space-y-2 pl-6">
-                <Label htmlFor="context-group">Context Group (optional)</Label>
+                <Label htmlFor="context-group">History Sync Group (optional)</Label>
                 <Input
                   id="context-group"
                   value={contextGroup}
@@ -118,7 +122,21 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
                   autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave empty to use the default shared group.
+                  Leave empty to use the default shared group. Spaces are normalized to dashes.
+                </p>
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox
+                    id="deeper-continuity"
+                    checked={deeperContinuity}
+                    onCheckedChange={(checked) => setDeeperContinuity(checked === true)}
+                  />
+                  <Label htmlFor="deeper-continuity" className="cursor-pointer">
+                    Advanced: deeper continuity mode
+                  </Label>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Adds sync for <code>session-env</code>, <code>file-history</code>,{' '}
+                  <code>shell-snapshots</code>, and <code>todos</code>. Credentials stay isolated.
                 </p>
                 {contextGroup.trim().length > 0 && !isValidContextGroup && (
                   <p className="text-xs text-destructive">
@@ -157,6 +175,10 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
               <li>Complete the Claude login in your browser</li>
               <li>Return here and refresh to see the new account</li>
             </ol>
+            <p className="pt-1">
+              Prefer pooled Claude OAuth routing instead? Use CLIProxy Claude pool from the Accounts
+              page action button.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

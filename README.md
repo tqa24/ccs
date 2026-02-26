@@ -269,6 +269,11 @@ Account profiles are isolated by default.
 | `isolated` | Yes | No `context_group` required |
 | `shared` | No (explicit opt-in) | Valid non-empty `context_group` |
 
+Shared mode continuity depth:
+
+- `standard` (default): shares project workspace context only
+- `deeper` (advanced opt-in): additionally syncs `session-env`, `file-history`, `shell-snapshots`, `todos`
+
 Opt in to shared context when needed:
 
 ```bash
@@ -277,7 +282,16 @@ ccs auth create backup --share-context
 
 # Share context only within named group
 ccs auth create backup2 --context-group sprint-a
+
+# Advanced deeper continuity mode (requires shared mode)
+ccs auth create backup3 --context-group sprint-a --deeper-continuity
 ```
+
+Update existing accounts without recreating login:
+
+1. Run `ccs config`
+2. Open `Accounts`
+3. Click the pencil icon in Actions and set `isolated` or `shared` mode + continuity depth
 
 Shared mode metadata in `~/.ccs/config.yaml`:
 
@@ -288,6 +302,7 @@ accounts:
     last_used: null
     context_mode: "shared"
     context_group: "team-alpha"
+    continuity_mode: "standard"
 ```
 
 `context_group` rules:
@@ -298,7 +313,13 @@ accounts:
 - non-empty after normalization
 - normalized by trim + lowercase + whitespace collapse (`" Team Alpha "` -> `"team-alpha"`)
 
-Shared context links project workspace data only. Credentials remain isolated per account.
+Shared context with `standard` depth links project workspace data. `deeper` depth links additional continuity artifacts. Credentials remain isolated per account.
+
+Alternative path for lower manual switching:
+
+- Use CLIProxy Claude pool (`ccs cliproxy auth claude`) and manage pool behavior in `ccs config` -> `CLIProxy Plus`.
+
+Technical details: [`docs/session-sharing-technical-analysis.md`](docs/session-sharing-technical-analysis.md)
 
 <br>
 
