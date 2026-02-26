@@ -7,10 +7,15 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import { getCcsDir } from '../utils/config-manager';
 import { getClaudeConfigDir } from '../utils/claude-config-path';
 
 export const sharedRoutes = Router();
+
+const MAX_DIRECTORY_TRAVERSAL_DEPTH = 10;
+const MAX_DESCRIPTION_LENGTH = 140;
+const MAX_MARKDOWN_FILE_BYTES = 1024 * 1024; // 1 MiB
 
 interface SharedItem {
   name: string;
@@ -70,7 +75,7 @@ function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
 
   const items: SharedItem[] = [];
   const sharedDirRoot = safeRealPath(sharedDir) ?? path.resolve(sharedDir);
-  const allowedSkillAgentRoots = new Set<string>([
+  const allowedRoots = new Set<string>([
     sharedDirRoot,
     ...[
       path.join(getClaudeConfigDir(), type),
@@ -81,62 +86,35 @@ function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
       .filter((dirPath): dirPath is string => typeof dirPath === 'string'),
   ]);
 
+  if (type === 'commands') {
+    return getCommandItems(sharedDir, allowedRoots);
+  }
+
   try {
     const entries = fs.readdirSync(sharedDir, { withFileTypes: true });
 
     for (const entry of entries) {
       try {
         const entryPath = path.join(sharedDir, entry.name);
-
-        if (type === 'commands') {
-          if (!entry.name.endsWith('.md')) {
-            continue;
-          }
-          if (!entry.isFile() && !entry.isSymbolicLink()) {
-            continue;
-          }
-
-          const commandPath = safeRealPath(entryPath);
-          if (!commandPath || !isPathWithin(commandPath, sharedDirRoot)) {
-            continue;
-          }
-
-          const description = readMarkdownDescription(commandPath, sharedDirRoot);
-          if (!description) {
-            continue;
-          }
-
-          items.push({
-            name: entry.name.replace('.md', ''),
-            description,
-            path: entryPath,
-            type: 'command',
-          });
+        const resolvedEntryPath = safeRealPath(entryPath);
+        if (!resolvedEntryPath || !isPathWithinAny(resolvedEntryPath, allowedRoots)) {
           continue;
         }
 
-        // Skills/agents are directory-based and may be symlinked directories.
-        if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+        const stats = fs.statSync(resolvedEntryPath);
+        const item = getSkillOrAgentItem(
+          type,
+          entry,
+          entryPath,
+          resolvedEntryPath,
+          allowedRoots,
+          stats
+        );
+        if (!item) {
           continue;
         }
 
-        const entryRoot = safeRealPath(entryPath);
-        if (!entryRoot || !isPathWithinAny(entryRoot, allowedSkillAgentRoots)) {
-          continue;
-        }
-
-        const markdownFile = type === 'skills' ? 'SKILL.md' : 'prompt.md';
-        const description = readMarkdownDescription(path.join(entryRoot, markdownFile), entryRoot);
-        if (!description) {
-          continue;
-        }
-
-        items.push({
-          name: entry.name,
-          description,
-          path: entryPath,
-          type: type === 'skills' ? 'skill' : 'agent',
-        });
+        items.push(item);
       } catch {
         // Fail soft per entry so one bad item does not hide valid results.
       }
@@ -148,27 +126,246 @@ function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
   return items.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function extractDescription(content: string): string {
-  // Extract first non-empty, non-heading line
-  const lines = content.split('\n');
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('---')) {
-      return trimmed.slice(0, 100);
+function getCommandItems(sharedDir: string, allowedRoots: Set<string>): SharedItem[] {
+  const markdownFiles = collectMarkdownFiles(sharedDir, allowedRoots);
+  const items: SharedItem[] = [];
+
+  for (const markdownFile of markdownFiles) {
+    const description = readMarkdownDescription(markdownFile.resolvedPath, allowedRoots);
+    if (!description) {
+      continue;
+    }
+
+    const relativePath = path.relative(sharedDir, markdownFile.displayPath);
+    const normalizedName = relativePath.split(path.sep).join('/').replace(/\.md$/i, '');
+    if (!normalizedName) {
+      continue;
+    }
+
+    items.push({
+      name: normalizedName,
+      description,
+      path: markdownFile.displayPath,
+      type: 'command',
+    });
+  }
+
+  return items.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getSkillOrAgentItem(
+  type: 'skills' | 'agents',
+  entry: fs.Dirent,
+  entryPath: string,
+  resolvedEntryPath: string,
+  allowedRoots: Set<string>,
+  stats: fs.Stats
+): SharedItem | null {
+  if (type === 'skills') {
+    if (!stats.isDirectory()) {
+      return null;
+    }
+
+    const description = readMarkdownDescription(
+      path.join(resolvedEntryPath, 'SKILL.md'),
+      allowedRoots
+    );
+    if (!description) {
+      return null;
+    }
+
+    return {
+      name: entry.name,
+      description,
+      path: entryPath,
+      type: 'skill',
+    };
+  }
+
+  if (stats.isDirectory()) {
+    const description = readFirstMarkdownDescription(
+      [
+        path.join(resolvedEntryPath, 'prompt.md'),
+        path.join(resolvedEntryPath, 'AGENT.md'),
+        path.join(resolvedEntryPath, 'agent.md'),
+      ],
+      allowedRoots
+    );
+    if (!description) {
+      return null;
+    }
+
+    return {
+      name: entry.name,
+      description,
+      path: entryPath,
+      type: 'agent',
+    };
+  }
+
+  if (!stats.isFile() || !entry.name.toLowerCase().endsWith('.md')) {
+    return null;
+  }
+
+  const description = readMarkdownDescription(resolvedEntryPath, allowedRoots);
+  if (!description) {
+    return null;
+  }
+
+  return {
+    name: entry.name.replace(/\.md$/i, ''),
+    description,
+    path: entryPath,
+    type: 'agent',
+  };
+}
+
+interface MarkdownFileEntry {
+  displayPath: string;
+  resolvedPath: string;
+}
+
+function collectMarkdownFiles(sharedDir: string, allowedRoots: Set<string>): MarkdownFileEntry[] {
+  const directoriesToVisit: Array<{ path: string; depth: number }> = [
+    { path: sharedDir, depth: 0 },
+  ];
+  const visitedDirectories = new Set<string>();
+  const markdownFiles: MarkdownFileEntry[] = [];
+
+  while (directoriesToVisit.length > 0) {
+    const current = directoriesToVisit.pop();
+    if (!current) {
+      continue;
+    }
+
+    const currentDir = current.path;
+    const resolvedCurrentDir = safeRealPath(currentDir);
+    if (!resolvedCurrentDir || !isPathWithinAny(resolvedCurrentDir, allowedRoots)) {
+      continue;
+    }
+
+    const normalizedDirPath = normalizeForPathComparison(resolvedCurrentDir);
+    if (visitedDirectories.has(normalizedDirPath)) {
+      continue;
+    }
+    visitedDirectories.add(normalizedDirPath);
+
+    let entries: fs.Dirent[] = [];
+    try {
+      entries = fs.readdirSync(currentDir, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const entryPath = path.join(currentDir, entry.name);
+      const resolvedEntryPath = safeRealPath(entryPath);
+      if (!resolvedEntryPath || !isPathWithinAny(resolvedEntryPath, allowedRoots)) {
+        continue;
+      }
+
+      let stats: fs.Stats;
+      try {
+        stats = fs.statSync(resolvedEntryPath);
+      } catch {
+        continue;
+      }
+
+      if (stats.isDirectory()) {
+        if (current.depth < MAX_DIRECTORY_TRAVERSAL_DEPTH) {
+          directoriesToVisit.push({ path: entryPath, depth: current.depth + 1 });
+        }
+        continue;
+      }
+
+      if (stats.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+        markdownFiles.push({
+          displayPath: entryPath,
+          resolvedPath: resolvedEntryPath,
+        });
+      }
     }
   }
+
+  return markdownFiles;
+}
+
+function extractDescription(content: string): string {
+  const frontmatterDescription = extractFrontmatterDescription(content);
+  if (frontmatterDescription) {
+    return trimDescription(frontmatterDescription);
+  }
+
+  // Extract first non-empty, non-heading line from the markdown body.
+  const lines = stripFrontmatter(content).split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('<!--')) {
+      return trimDescription(trimmed);
+    }
+  }
+
   return 'No description';
 }
 
-function readMarkdownDescription(markdownPath: string, allowedRoot: string): string | null {
+function extractFrontmatterDescription(content: string): string | null {
+  const frontmatterMatch = content.match(/^---\s*\r?\n([\s\S]*?)\r?\n---(?:\s*\r?\n|$)/);
+  if (!frontmatterMatch) {
+    return null;
+  }
+
+  try {
+    const parsed = yaml.load(frontmatterMatch[1]) as Record<string, unknown> | null;
+    const description = parsed?.description;
+    if (typeof description !== 'string') {
+      return null;
+    }
+
+    const trimmed = description.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch {
+    return null;
+  }
+}
+
+function stripFrontmatter(content: string): string {
+  return content.replace(/^---\s*\r?\n[\s\S]*?\r?\n---\s*\r?\n?/, '');
+}
+
+function trimDescription(description: string): string {
+  if (description.length <= MAX_DESCRIPTION_LENGTH) {
+    return description;
+  }
+
+  return `${description.slice(0, MAX_DESCRIPTION_LENGTH - 3).trimEnd()}...`;
+}
+
+function readFirstMarkdownDescription(
+  markdownPaths: string[],
+  allowedRoots: Set<string>
+): string | null {
+  for (const markdownPath of markdownPaths) {
+    const description = readMarkdownDescription(markdownPath, allowedRoots);
+    if (description) {
+      return description;
+    }
+  }
+
+  return null;
+}
+
+function readMarkdownDescription(markdownPath: string, allowedRoots: Set<string>): string | null {
   try {
     const resolvedMarkdownPath = safeRealPath(markdownPath);
-    if (!resolvedMarkdownPath || !isPathWithin(resolvedMarkdownPath, allowedRoot)) {
+    if (!resolvedMarkdownPath || !isPathWithinAny(resolvedMarkdownPath, allowedRoots)) {
       return null;
     }
 
     const stats = fs.statSync(resolvedMarkdownPath);
     if (!stats.isFile()) {
+      return null;
+    }
+    if (stats.size > MAX_MARKDOWN_FILE_BYTES) {
       return null;
     }
     const content = fs.readFileSync(resolvedMarkdownPath, 'utf8');
