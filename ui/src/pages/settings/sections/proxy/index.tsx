@@ -3,9 +3,10 @@
  * Settings section for CLIProxyAPI configuration (local/remote)
  */
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -17,6 +18,8 @@ import {
   Bug,
   Box,
   AlertTriangle,
+  ShieldAlert,
+  ExternalLink,
 } from 'lucide-react';
 import { useProxyConfig, useRawConfig } from '../../hooks';
 import { useUpdateBackend, useProxyStatus } from '@/hooks/use-cliproxy';
@@ -25,6 +28,7 @@ import { RemoteProxyCard } from './remote-proxy-card';
 import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
 import { api } from '@/lib/api-client';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
+import { RISK_ACK_PHRASE } from '@/components/account/antigravity-responsibility-constants';
 import { toast } from 'sonner';
 
 /** LocalStorage key for debug mode preference */
@@ -32,6 +36,10 @@ const DEBUG_MODE_KEY = 'ccs_debug_mode';
 
 /** Providers only available on CLIProxyAPIPlus */
 const PLUS_ONLY_PROVIDERS = ['kiro', 'ghcp'];
+
+function normalizeRiskAckPhrase(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').toUpperCase();
+}
 
 export default function ProxySection() {
   const {
@@ -67,6 +75,14 @@ export default function ProxySection() {
       return false;
     }
   });
+  const [agyAckBypass, setAgyAckBypass] = useState(false);
+  const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(true);
+  const [agyAckBypassSaving, setAgyAckBypassSaving] = useState(false);
+  const [showAgyEnableConfirm, setShowAgyEnableConfirm] = useState(false);
+  const [agyEnableConfirmPhrase, setAgyEnableConfirmPhrase] = useState('');
+  const agyAckBypassSavingRef = useRef(false);
+  const isAgyConfirmPhraseValid =
+    normalizeRiskAckPhrase(agyEnableConfirmPhrase) === RISK_ACK_PHRASE;
 
   const handleDebugModeChange = (enabled: boolean) => {
     setDebugMode(enabled);
@@ -76,6 +92,101 @@ export default function ProxySection() {
       // Ignore storage errors
     }
   };
+
+  const fetchAgyAckBypass = useCallback(async () => {
+    try {
+      setAgyAckBypassLoading(true);
+      const response = await fetch('/api/settings/auth/antigravity-risk');
+      if (!response.ok) {
+        throw new Error('Failed to load AGY power user mode');
+      }
+      const data = (await response.json()) as { antigravityAckBypass?: boolean };
+      setAgyAckBypass(data.antigravityAckBypass === true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load AGY power user mode');
+      setAgyAckBypass(false);
+    } finally {
+      setAgyAckBypassLoading(false);
+    }
+  }, []);
+
+  const persistAgyAckBypass = useCallback(
+    async (nextValue: boolean) => {
+      if (agyAckBypassSavingRef.current || agyAckBypassSaving || saving) return;
+
+      try {
+        agyAckBypassSavingRef.current = true;
+        setAgyAckBypassSaving(true);
+
+        const response = await fetch('/api/settings/auth/antigravity-risk', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ antigravityAckBypass: nextValue }),
+        });
+
+        const payload = (await response.json()) as {
+          antigravityAckBypass?: boolean;
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(payload.error || 'Failed to update AGY power user mode');
+        }
+
+        const persistedValue = payload.antigravityAckBypass === true;
+
+        const verifyResponse = await fetch('/api/settings/auth/antigravity-risk', {
+          cache: 'no-store',
+        });
+        if (!verifyResponse.ok) {
+          throw new Error('Failed to verify AGY power user mode persistence');
+        }
+        const verifyData = (await verifyResponse.json()) as { antigravityAckBypass?: boolean };
+        const verifiedValue = verifyData.antigravityAckBypass === true;
+        if (verifiedValue !== nextValue) {
+          throw new Error(
+            'AGY power user mode was not persisted. Config may have been modified by another process.'
+          );
+        }
+
+        setAgyAckBypass(verifiedValue && persistedValue);
+        setShowAgyEnableConfirm(false);
+        setAgyEnableConfirmPhrase('');
+        toast.success(nextValue ? 'AGY power user mode enabled.' : 'AGY power user mode disabled.');
+        await fetchRawConfig();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Failed to update AGY power user mode');
+      } finally {
+        agyAckBypassSavingRef.current = false;
+        setAgyAckBypassSaving(false);
+      }
+    },
+    [agyAckBypassSaving, fetchRawConfig, saving]
+  );
+
+  const handleAgyAckBypassChange = useCallback(
+    (nextValue: boolean) => {
+      if (agyAckBypassSavingRef.current || agyAckBypassSaving || saving) return;
+
+      if (nextValue) {
+        setShowAgyEnableConfirm(true);
+        return;
+      }
+
+      setShowAgyEnableConfirm(false);
+      setAgyEnableConfirmPhrase('');
+      void persistAgyAckBypass(false);
+    },
+    [agyAckBypassSaving, persistAgyAckBypass, saving]
+  );
+
+  const confirmAgyEnable = useCallback(() => {
+    if (!isAgyConfirmPhraseValid) {
+      toast.error(`Type "${RISK_ACK_PHRASE}" to continue.`);
+      return;
+    }
+    void persistAgyAckBypass(true);
+  }, [isAgyConfirmPhraseValid, persistAgyAckBypass]);
 
   // Backend state (loaded from API) + mutation hook for proper query invalidation
   const [backend, setBackend] = useState<'original' | 'plus'>('plus');
@@ -138,12 +249,13 @@ export default function ProxySection() {
   // Load data on mount
   useEffect(() => {
     fetchConfig();
+    void fetchAgyAckBypass();
     fetchRawConfig();
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- Async data fetching on mount is intended
+
     void fetchBackend();
 
     void checkPlusOnlyVariants();
-  }, [fetchConfig, fetchRawConfig, fetchBackend, checkPlusOnlyVariants]);
+  }, [fetchConfig, fetchAgyAckBypass, fetchRawConfig, fetchBackend, checkPlusOnlyVariants]);
 
   if (loading || !config) {
     return (
@@ -403,6 +515,116 @@ export default function ProxySection() {
             )}
           </div>
 
+          {/* Safety */}
+          <div className="space-y-3">
+            <h3 className="text-base font-medium flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-300" />
+              Safety
+            </h3>
+            <div className="space-y-3 rounded-lg border border-amber-400/35 bg-amber-50/70 p-4 dark:border-amber-800/60 dark:bg-amber-950/25">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <p className="font-medium text-sm">Antigravity Power User Mode</p>
+                  <p className="text-xs text-muted-foreground">
+                    Skip AGY responsibility checklist in Add Account and `ccs agy` flows.
+                  </p>
+                </div>
+                <Switch
+                  aria-labelledby="agy-power-user-mode-label"
+                  aria-describedby="agy-power-user-mode-description"
+                  checked={agyAckBypass}
+                  disabled={agyAckBypassLoading || agyAckBypassSaving || saving}
+                  onCheckedChange={handleAgyAckBypassChange}
+                />
+              </div>
+              <p
+                id="agy-power-user-mode-description"
+                className="text-xs text-amber-800/90 dark:text-amber-200/90"
+              >
+                Use only if you fully understand the OAuth suspension/ban risk pattern (#509). CCS
+                cannot assume responsibility for account loss.
+              </p>
+              {showAgyEnableConfirm && (
+                <div className="space-y-3 rounded-lg border border-rose-500/40 bg-rose-500/[0.08] p-3.5">
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold tracking-wide text-rose-900 dark:text-rose-200">
+                      Final confirmation required
+                    </p>
+                    <p className="text-xs leading-relaxed text-rose-800/95 dark:text-rose-200/90">
+                      Enabling this will skip AGY safety checkpoints in both dashboard and CLI.
+                      Review issue #509 and type the exact phrase to proceed.
+                    </p>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-900 dark:text-rose-200">
+                        Step 1
+                      </p>
+                      <a
+                        href="https://github.com/kaitranntt/ccs/issues/509"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-rose-800 underline decoration-rose-500/60 underline-offset-2 transition-colors hover:text-rose-700 dark:text-rose-200"
+                      >
+                        Read issue #509
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                    </div>
+                    <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-2.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-900 dark:text-rose-200">
+                        Step 2
+                      </p>
+                      <p className="mt-1 text-xs text-rose-800/95 dark:text-rose-200/90">
+                        Type{' '}
+                        <code className="rounded bg-background/80 px-1 py-0.5 font-mono">
+                          {RISK_ACK_PHRASE}
+                        </code>{' '}
+                        to enable.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Input
+                      value={agyEnableConfirmPhrase}
+                      onChange={(e) => setAgyEnableConfirmPhrase(e.target.value)}
+                      placeholder={RISK_ACK_PHRASE}
+                      disabled={agyAckBypassSaving || saving}
+                      className="font-mono text-xs"
+                      aria-label="Type I ACCEPT RISK to enable Antigravity power user mode"
+                    />
+                    <p className="text-[11px] text-rose-800/90 dark:text-rose-200/80">
+                      Exact phrase required.
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowAgyEnableConfirm(false);
+                        setAgyEnableConfirmPhrase('');
+                      }}
+                      disabled={agyAckBypassSaving || saving}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={confirmAgyEnable}
+                      disabled={!isAgyConfirmPhraseValid || agyAckBypassSaving || saving}
+                    >
+                      Enable Power User Mode
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <span id="agy-power-user-mode-label" className="sr-only">
+                Toggle AGY power user mode
+              </span>
+            </div>
+          </div>
+
           {/* Remote Settings - Show when remote mode is enabled */}
           {isRemoteMode && (
             <RemoteProxyCard
@@ -517,11 +739,12 @@ export default function ProxySection() {
           size="sm"
           onClick={() => {
             fetchConfig();
+            fetchAgyAckBypass();
             fetchRawConfig();
             fetchBackend();
             checkPlusOnlyVariants();
           }}
-          disabled={loading || saving}
+          disabled={loading || saving || agyAckBypassSaving}
           className="w-full"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />

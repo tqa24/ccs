@@ -50,6 +50,7 @@ import {
   warnOAuthBanRisk,
   warnPossible403Ban,
 } from '../account-safety';
+import { ensureCliAntigravityResponsibility } from '../antigravity-responsibility';
 
 /**
  * Prompt user to add another account
@@ -429,9 +430,28 @@ export async function triggerOAuth(
   const oauthConfig = getOAuthConfig(provider);
   warnOAuthBanRisk(provider);
   const { verbose = false, add = false, fromUI = false, noIncognito = true } = options;
+  const acceptAgyRisk = options.acceptAgyRisk === true;
   let { nickname } = options;
   const resolvedKiroMethod =
     provider === 'kiro' ? normalizeKiroAuthMethod(options.kiroMethod) : DEFAULT_KIRO_AUTH_METHOD;
+
+  if (provider === 'agy') {
+    if (fromUI && !acceptAgyRisk) {
+      console.log(fail('Antigravity OAuth blocked: responsibility acknowledgement is missing.'));
+      return null;
+    }
+
+    if (!fromUI) {
+      const acknowledged = await ensureCliAntigravityResponsibility({
+        context: 'oauth',
+        acceptedByFlag: acceptAgyRisk,
+      });
+      if (!acknowledged) {
+        console.log(info('Cancelled'));
+        return null;
+      }
+    }
+  }
 
   // Check for existing accounts
   const existingAccounts = getProviderAccounts(provider);

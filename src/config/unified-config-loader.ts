@@ -18,10 +18,12 @@ import {
   DEFAULT_CURSOR_CONFIG,
   DEFAULT_GLOBAL_ENV,
   DEFAULT_CLIPROXY_SERVER_CONFIG,
+  DEFAULT_CLIPROXY_SAFETY_CONFIG,
   DEFAULT_QUOTA_MANAGEMENT_CONFIG,
   DEFAULT_THINKING_CONFIG,
   DEFAULT_DASHBOARD_AUTH_CONFIG,
   DEFAULT_IMAGE_ANALYSIS_CONFIG,
+  CLIProxySafetyConfig,
   GlobalEnvConfig,
   ThinkingConfig,
   DashboardAuthConfig,
@@ -241,6 +243,7 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
     accounts: partial.accounts ?? defaults.accounts,
     profiles: partial.profiles ?? defaults.profiles,
     cliproxy: {
+      ...partial.cliproxy,
       oauth_accounts: partial.cliproxy?.oauth_accounts ?? defaults.cliproxy.oauth_accounts,
       providers: defaults.cliproxy.providers, // Always use defaults for providers
       variants: partial.cliproxy?.variants ?? defaults.cliproxy.variants,
@@ -249,8 +252,17 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
         request_log:
           partial.cliproxy?.logging?.request_log ?? defaults.cliproxy.logging?.request_log ?? false,
       },
+      safety: {
+        antigravity_ack_bypass:
+          partial.cliproxy?.safety?.antigravity_ack_bypass ??
+          DEFAULT_CLIPROXY_SAFETY_CONFIG.antigravity_ack_bypass,
+      },
+      // Kiro browser behavior setting (optional)
+      kiro_no_incognito: partial.cliproxy?.kiro_no_incognito,
       // Auth config - preserve user values, no defaults (uses constants as fallback)
       auth: partial.cliproxy?.auth,
+      // Background token refresh config (optional)
+      token_refresh: partial.cliproxy?.token_refresh,
       // Backend selection - validate and preserve user choice (original vs plus)
       backend:
         partial.cliproxy?.backend === 'original' || partial.cliproxy?.backend === 'plus'
@@ -707,14 +719,24 @@ function generateYamlWithComments(config: UnifiedConfig): string {
 }
 
 /**
- * Save unified config to YAML file.
- * Uses atomic write (temp file + rename) to prevent corruption.
- * Uses lockfile to prevent concurrent writes.
+ * Sync sleep helper for lock retry loops.
+ * Uses Atomics.wait when available to avoid CPU-intensive busy-wait.
  */
-export function saveUnifiedConfig(config: UnifiedConfig): void {
-  const yamlPath = getConfigYamlPath();
-  const dir = path.dirname(yamlPath);
+function sleepSync(ms: number): void {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    const end = Date.now() + ms;
+    while (Date.now() < end) {
+      /* busy-wait */
+    }
+  }
+}
 
+/**
+ * Execute a callback while holding the config lock.
+ */
+function withConfigWriteLock<T>(callback: () => T): T {
   // Acquire lock (retry for up to 1 second)
   const maxRetries = 10;
   const retryDelayMs = 100;
@@ -724,18 +746,7 @@ export function saveUnifiedConfig(config: UnifiedConfig): void {
       lockAcquired = true;
       break;
     }
-    // Synchronous sleep without CPU-intensive busy-wait
-    // Uses Atomics.wait which properly sleeps the thread
-    // Note: saveUnifiedConfig is sync API with 19+ callers, converting to async not feasible
-    try {
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, retryDelayMs);
-    } catch {
-      // Fallback for environments without SharedArrayBuffer/Atomics support
-      const end = Date.now() + retryDelayMs;
-      while (Date.now() < end) {
-        /* busy-wait */
-      }
-    }
+    sleepSync(retryDelayMs);
   }
 
   if (!lockAcquired) {
@@ -743,42 +754,7 @@ export function saveUnifiedConfig(config: UnifiedConfig): void {
   }
 
   try {
-    // Ensure directory exists
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    }
-
-    // Ensure version is set
-    config.version = UNIFIED_CONFIG_VERSION;
-
-    // Generate YAML with section comments
-    const yamlContent = generateYamlWithComments(config);
-    const content = generateYamlHeader() + yamlContent;
-
-    // Atomic write: write to temp file, then rename
-    const tempPath = `${yamlPath}.tmp.${process.pid}`;
-
-    try {
-      fs.writeFileSync(tempPath, content, { mode: 0o600 });
-      fs.renameSync(tempPath, yamlPath);
-    } catch (error) {
-      // Clean up temp file on error
-      if (fs.existsSync(tempPath)) {
-        try {
-          fs.unlinkSync(tempPath);
-        } catch {
-          // Ignore cleanup errors
-        }
-      }
-      // Classify filesystem errors
-      const err = error as NodeJS.ErrnoException;
-      if (err.code === 'ENOSPC') {
-        throw new Error('Disk full - cannot save config. Free up space and try again.');
-      } else if (err.code === 'EROFS' || err.code === 'EACCES') {
-        throw new Error(`Cannot write config - check file permissions: ${err.message}`);
-      }
-      throw error;
-    }
+    return callback();
   } finally {
     // Always release lock
     releaseLock();
@@ -786,14 +762,104 @@ export function saveUnifiedConfig(config: UnifiedConfig): void {
 }
 
 /**
+ * Load unified config directly from disk while lock is already held.
+ * Falls back to empty config when file doesn't exist.
+ */
+function loadUnifiedConfigWithLockHeld(): UnifiedConfig {
+  const yamlPath = getConfigYamlPath();
+  if (!fs.existsSync(yamlPath)) {
+    return createEmptyUnifiedConfig();
+  }
+
+  const content = fs.readFileSync(yamlPath, 'utf8');
+  const parsed = yaml.load(content);
+
+  if (!isUnifiedConfig(parsed)) {
+    throw new Error(`Invalid config format in ${yamlPath}`);
+  }
+
+  const merged = mergeWithDefaults(parsed);
+  validateCompositeVariants(merged);
+  return merged;
+}
+
+/**
+ * Write unified config to disk while lock is already held.
+ */
+function writeUnifiedConfigWithLockHeld(config: UnifiedConfig): void {
+  const yamlPath = getConfigYamlPath();
+  const dir = path.dirname(yamlPath);
+
+  // Ensure directory exists
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  }
+
+  // Ensure version is set
+  config.version = UNIFIED_CONFIG_VERSION;
+
+  // Generate YAML with section comments
+  const yamlContent = generateYamlWithComments(config);
+  const content = generateYamlHeader() + yamlContent;
+
+  // Atomic write: write to temp file, then rename
+  const tempPath = `${yamlPath}.tmp.${process.pid}`;
+
+  try {
+    fs.writeFileSync(tempPath, content, { mode: 0o600 });
+    fs.renameSync(tempPath, yamlPath);
+  } catch (error) {
+    // Clean up temp file on error
+    if (fs.existsSync(tempPath)) {
+      try {
+        fs.unlinkSync(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+    }
+    // Classify filesystem errors
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'ENOSPC') {
+      throw new Error('Disk full - cannot save config. Free up space and try again.');
+    } else if (err.code === 'EROFS' || err.code === 'EACCES') {
+      throw new Error(`Cannot write config - check file permissions: ${err.message}`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Save unified config to YAML file.
+ * Uses atomic write (temp file + rename) to prevent corruption.
+ * Uses lockfile to prevent concurrent writes.
+ */
+export function saveUnifiedConfig(config: UnifiedConfig): void {
+  withConfigWriteLock(() => {
+    writeUnifiedConfigWithLockHeld(config);
+  });
+}
+
+/**
+ * Atomically mutate unified config with lock held across read-modify-write.
+ * Prevents stale writes from overwriting concurrent updates.
+ */
+export function mutateUnifiedConfig(mutator: (config: UnifiedConfig) => void): UnifiedConfig {
+  return withConfigWriteLock(() => {
+    const current = loadUnifiedConfigWithLockHeld();
+    mutator(current);
+    writeUnifiedConfigWithLockHeld(current);
+    return current;
+  });
+}
+
+/**
  * Update unified config with partial data.
  * Loads existing config, merges changes, and saves.
  */
 export function updateUnifiedConfig(updates: Partial<UnifiedConfig>): UnifiedConfig {
-  const config = loadOrCreateUnifiedConfig();
-  const updated = { ...config, ...updates };
-  saveUnifiedConfig(updated);
-  return updated;
+  return mutateUnifiedConfig((config) => {
+    Object.assign(config, updates);
+  });
 }
 
 /**
@@ -889,6 +955,19 @@ export function getGlobalEnvConfig(): GlobalEnvConfig {
   return {
     enabled: config.global_env?.enabled ?? true,
     env: config.global_env?.env ?? { ...DEFAULT_GLOBAL_ENV },
+  };
+}
+
+/**
+ * Get cliproxy safety configuration.
+ * Returns defaults if not configured.
+ */
+export function getCliproxySafetyConfig(): CLIProxySafetyConfig {
+  const config = loadOrCreateUnifiedConfig();
+  return {
+    antigravity_ack_bypass:
+      config.cliproxy?.safety?.antigravity_ack_bypass ??
+      DEFAULT_CLIPROXY_SAFETY_CONFIG.antigravity_ack_bypass,
   };
 }
 
