@@ -399,8 +399,13 @@ interface MarkdownBlockParagraph {
   text: string;
 }
 
-interface MarkdownBlockList {
-  type: 'unordered-list' | 'ordered-list';
+interface MarkdownBlockUnorderedList {
+  type: 'unordered-list';
+  items: string[];
+}
+
+interface MarkdownBlockOrderedList {
+  type: 'ordered-list';
   items: string[];
 }
 
@@ -413,7 +418,8 @@ interface MarkdownBlockCode {
 type MarkdownBlock =
   | MarkdownBlockHeading
   | MarkdownBlockParagraph
-  | MarkdownBlockList
+  | MarkdownBlockUnorderedList
+  | MarkdownBlockOrderedList
   | MarkdownBlockCode;
 
 interface MarkdownFrontmatterEntry {

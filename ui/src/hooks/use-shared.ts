@@ -20,6 +20,11 @@ interface SharedItemContent {
   contentPath: string;
 }
 
+interface SharedItemContentPayload {
+  content: string;
+  contentPath?: string;
+}
+
 function extractErrorFromPayload(payload: unknown, fallbackMessage: string): string {
   if (
     typeof payload === 'object' &&
@@ -49,6 +54,23 @@ function parseJsonPayload(payloadText: string): unknown | null {
 function looksLikeHtml(payloadText: string): boolean {
   const trimmed = payloadText.trim().toLowerCase();
   return trimmed.startsWith('<!doctype html') || trimmed.startsWith('<html');
+}
+
+function isSharedItemContentPayload(payload: unknown): payload is SharedItemContentPayload {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  const candidate = payload as Record<string, unknown>;
+  if (typeof candidate.content !== 'string') {
+    return false;
+  }
+
+  if ('contentPath' in candidate && typeof candidate.contentPath !== 'string') {
+    return false;
+  }
+
+  return true;
 }
 
 async function readJsonOrThrow<T>(response: Response, fallbackMessage: string): Promise<T> {
@@ -111,7 +133,7 @@ export function useSharedItemContent(
         throw new Error(extractErrorFromPayload(payload, `Failed to fetch shared ${type} content`));
       }
 
-      if (payload && typeof payload === 'object' && typeof payload.content === 'string') {
+      if (isSharedItemContentPayload(payload)) {
         return {
           content: payload.content,
           contentPath:
