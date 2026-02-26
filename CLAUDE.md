@@ -43,6 +43,7 @@ CLI wrapper for instant switching between multiple provider accounts and alterna
 | Mistake | Consequence | Correct Action |
 |---------|-------------|----------------|
 | Running `validate` without `format` first | format:check fails | Run `bun run format` BEFORE validate |
+| Assuming maintainability check is always strict | PR/feature branches run warning mode by default | Use `bun run maintainability:check:strict` before merge when touching debt-sensitive code |
 | Using `chore:` for dev→main PR | No npm release triggered | Use `feat:` or `fix:` prefix |
 | Committing directly to `main` or `dev` | Bypasses CI/review | Always use PRs |
 | Manual version bump or git tag | Conflicts with semantic-release | Let CI handle versioning |
@@ -59,7 +60,7 @@ Quality gates MUST pass before pushing. **Both projects have identical workflow.
 # Main project (from repo root)
 bun run format              # Step 1: Fix formatting
 bun run lint:fix            # Step 2: Fix lint issues
-bun run validate            # Step 3: Full test gate (must pass)
+bun run validate            # Step 3: Full gate (typecheck + lint + format + maintainability + tests)
 bun run validate:ci-parity  # Step 4: CI parity gate (build + validate + base branch check)
 
 # UI project (if UI changed)
@@ -78,7 +79,7 @@ bun run validate            # Step 3: Final check (must pass)
 
 | Project | Command | Runs |
 |---------|---------|------|
-| Main | `bun run validate` | typecheck + lint:fix + format:check + test:all |
+| Main | `bun run validate` | typecheck + lint:fix + format:check + maintainability:check + test:all |
 | UI | `bun run validate` | typecheck + lint:fix + format:check |
 
 ### ESLint Rules (ALL errors)
@@ -105,9 +106,30 @@ bun run validate            # Step 3: Final check (must pass)
 ### Automatic Enforcement
 
 - `prepublishOnly` / `prepack` runs `build:all` + `validate` + `sync-version.js`
-- CI/CD runs `bun run validate` on every PR
+- CI/CD runs `bun run validate` on every PR (maintainability is warning mode on PR events)
 - husky `pre-commit` runs quick lint/type/format checks
 - husky `pre-push` runs `bun run validate:ci-parity` to block CI drift before push
+
+### Maintainability Baseline Gate
+
+- Baseline file: `docs/metrics/maintainability-baseline.json`
+- Metric collector/check script: `scripts/maintainability-baseline.js`
+- Branch-aware gate wrapper: `scripts/maintainability-check.js`
+- Enforcement path: `bun run maintainability:check` (included in `bun run validate`)
+- Gate modes:
+  - `strict`: protected branches (`main`, `dev`, `hotfix/*`, `kai/hotfix-*`) and equivalent CI refs
+  - `warn`: pull request CI and non-protected local branches (non-blocking for parallel PR workflow)
+  - override commands:
+    - `bun run maintainability:check:strict`
+    - `bun run maintainability:check:warn`
+- Gated metrics (must not increase vs baseline):
+  - `processExitReferenceCount`
+  - `synchronousFsApiReferenceCount`
+  - `largeFileCountOver350Loc`
+- Baseline update policy:
+  1. Prefer reducing the metric and keeping the baseline unchanged.
+  2. On protected-branch integration (strict mode), if increase is intentional and accepted, run `bun run maintainability:baseline`.
+  3. Commit both the code change and `docs/metrics/maintainability-baseline.json`, and state reason in PR description.
 
 ## Critical Constraints (NEVER VIOLATE)
 
@@ -359,6 +381,8 @@ rm -rf ~/.ccs             # Clean environment
 - [ ] `bun run validate` — all checks pass
 - [ ] `bun run validate:ci-parity` — CI parity passed (also enforced by pre-push hook)
 - [ ] `cd ui && bun run format && bun run validate` — if UI changed
+- [ ] If touching debt-sensitive code, run `bun run maintainability:check:strict` before opening/merging PR
+- [ ] If strict mode fails and increase is intentional: `bun run maintainability:baseline` and commit `docs/metrics/maintainability-baseline.json`
 
 **Code:**
 - [ ] Conventional commit format (`feat:`, `fix:`, etc.)
