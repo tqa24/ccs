@@ -115,10 +115,11 @@ export function HistorySyncLearningMap({
 
         <Collapsible open={open} onOpenChange={setOpen}>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" className="h-auto w-full justify-between px-0 py-0 text-xs">
-              <span className="text-muted-foreground">
-                Show details: groups, switching, and legacy policy
-              </span>
+            <Button
+              variant="ghost"
+              className="h-8 w-full justify-between rounded-md px-2 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+            >
+              <span>Show details: groups, switching, and legacy policy</span>
               <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
             </Button>
           </CollapsibleTrigger>
