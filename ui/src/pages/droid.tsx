@@ -16,6 +16,7 @@ import {
 import { useDroid } from '@/hooks/use-droid';
 import { isApiConflictError } from '@/lib/api-client';
 import { RawJsonSettingsEditorPanel } from '@/components/compatible-cli/raw-json-settings-editor-panel';
+import { DroidByokReasoningControlsCard } from '@/components/compatible-cli/droid-byok-reasoning-controls-card';
 import {
   DroidSettingsQuickControlsCard,
   type DroidQuickSettingsValues,
@@ -25,6 +26,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import {
+  applyAnthropicBudgetTokensToDroidByokModel,
+  applyReasoningEffortToDroidByokModel,
+  extractDroidByokModels,
+} from '@/lib/droid-byok-custom-models';
 
 const DEFAULT_DROID_FACTORY_DOC_LINKS = [
   {
@@ -188,6 +194,10 @@ export function DroidPage() {
     setRawDraftText(nextText);
   };
 
+  const updateSettingsObject = (nextSettings: Record<string, unknown>) => {
+    setRawEditorDraftText(JSON.stringify(nextSettings, null, 2) + '\n');
+  };
+
   const updateSettingsField = (key: string, value: unknown | null) => {
     if (!rawEditorParsed.valid) {
       toast.error('Fix JSON syntax before using quick settings controls.');
@@ -200,7 +210,7 @@ export function DroidPage() {
     } else {
       nextSettings[key] = value;
     }
-    setRawEditorDraftText(JSON.stringify(nextSettings, null, 2) + '\n');
+    updateSettingsObject(nextSettings);
   };
 
   const quickSettingsValues: DroidQuickSettingsValues = rawEditorParsed.valid
@@ -228,6 +238,8 @@ export function DroidPage() {
         autoCompactEnabled: null,
         soundEnabled: null,
       };
+
+  const byokModels = rawEditorParsed.valid ? extractDroidByokModels(rawEditorParsed.value) : [];
 
   const refreshAll = async () => {
     await Promise.all([refetchDiagnostics(), refetchRawSettings()]);
@@ -380,6 +392,52 @@ export function DroidPage() {
             }}
             onNumberSettingChange={(key, value) => {
               updateSettingsField(key, value);
+            }}
+          />
+
+          <DroidByokReasoningControlsCard
+            models={byokModels}
+            disabled={rawSettingsLoading || !rawEditorParsed.valid}
+            disabledReason={
+              rawEditorParsed.valid
+                ? null
+                : `BYOK reasoning controls disabled: ${rawEditorParsed.error}`
+            }
+            onEffortChange={(modelId, effort) => {
+              if (!rawEditorParsed.valid) {
+                toast.error('Fix JSON syntax before updating BYOK reasoning settings.');
+                return;
+              }
+
+              const nextSettings = applyReasoningEffortToDroidByokModel(
+                rawEditorParsed.value,
+                modelId,
+                effort
+              );
+              if (!nextSettings) {
+                toast.error('Unable to update selected BYOK model reasoning setting.');
+                return;
+              }
+
+              updateSettingsObject(nextSettings);
+            }}
+            onAnthropicBudgetChange={(modelId, budgetTokens) => {
+              if (!rawEditorParsed.valid) {
+                toast.error('Fix JSON syntax before updating thinking budget.');
+                return;
+              }
+
+              const nextSettings = applyAnthropicBudgetTokensToDroidByokModel(
+                rawEditorParsed.value,
+                modelId,
+                budgetTokens
+              );
+              if (!nextSettings) {
+                toast.error('Thinking budget is only available for Anthropic BYOK models.');
+                return;
+              }
+
+              updateSettingsObject(nextSettings);
             }}
           />
 

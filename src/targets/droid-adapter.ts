@@ -55,6 +55,7 @@ export class DroidAdapter implements TargetAdapter {
       baseUrl: creds.baseUrl,
       apiKey: creds.apiKey,
       provider,
+      reasoningOverride: creds.reasoningOverride,
     });
     if (!modelRef.selector) {
       throw new Error(`Failed to resolve Droid model selector for profile "${creds.profile}"`);

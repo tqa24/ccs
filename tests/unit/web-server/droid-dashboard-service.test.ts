@@ -89,6 +89,26 @@ describe('droid-dashboard-service', () => {
     expect(summary.customModels[0].apiKeyPreview).toBe('***1234');
   });
 
+  it('supports legacy snake_case model fields in summaries', () => {
+    const summary = summarizeDroidCustomModels([
+      {
+        model_display_name: 'Kimi K2 Thinking Nvidia',
+        model: 'moonshotai/kimi-k2-thinking',
+        base_url: 'https://integrate.api.nvidia.com/v1',
+        api_key: 'legacy-token-1234',
+        provider: 'generic-chat-completion-api',
+        max_tokens: 220000,
+      },
+    ]);
+
+    expect(summary.customModelCount).toBe(1);
+    expect(summary.invalidModelEntryCount).toBe(0);
+    expect(summary.providerBreakdown['generic-chat-completion-api']).toBe(1);
+    expect(summary.customModels[0].displayName).toBe('Kimi K2 Thinking Nvidia');
+    expect(summary.customModels[0].maxOutputTokens).toBe(220000);
+    expect(summary.customModels[0].apiKeyPreview).toBe('***1234');
+  });
+
   it('returns raw settings payload for missing settings file', async () => {
     const raw = await getDroidRawSettings();
 
@@ -122,6 +142,58 @@ describe('droid-dashboard-service', () => {
     expect(
       diagnostics.docsReference.providerDocs.some((doc) => doc.provider === 'anthropic')
     ).toBe(true);
+  });
+
+  it('falls back to legacy config custom_models when settings customModels is absent', async () => {
+    const settingsDir = path.join(testRoot, '.factory');
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(path.join(settingsDir, 'settings.json'), JSON.stringify({ model: 'custom:legacy' }));
+    fs.writeFileSync(
+      path.join(settingsDir, 'config.json'),
+      JSON.stringify({
+        custom_models: [
+          {
+            model_display_name: 'Legacy OpenAI',
+            model: 'gpt-5.2',
+            base_url: 'https://api.openai.com/v1',
+            api_key: 'legacy-openai-1234',
+            provider: 'openai',
+          },
+        ],
+      })
+    );
+
+    const diagnostics = await getDroidDashboardDiagnostics();
+
+    expect(diagnostics.byok.customModelCount).toBe(1);
+    expect(diagnostics.byok.customModels[0].displayName).toBe('Legacy OpenAI');
+    expect(diagnostics.byok.customModels[0].provider).toBe('openai');
+  });
+
+  it('warns when settings.json uses legacy custom_models key', async () => {
+    const settingsDir = path.join(testRoot, '.factory');
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(settingsDir, 'settings.json'),
+      JSON.stringify({
+        custom_models: [
+          {
+            model_display_name: 'Legacy Generic',
+            model: 'glm-4.7',
+            base_url: 'https://api.z.ai/api/coding/paas/v4',
+            api_key: 'legacy-zai-1234',
+            provider: 'generic-chat-completion-api',
+          },
+        ],
+      })
+    );
+
+    const diagnostics = await getDroidDashboardDiagnostics();
+
+    expect(
+      diagnostics.warnings.some((warning) => warning.includes('legacy "custom_models" key'))
+    ).toBe(true);
+    expect(diagnostics.byok.customModelCount).toBe(1);
   });
 
   it('saves valid raw settings content', async () => {
