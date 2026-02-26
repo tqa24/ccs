@@ -231,6 +231,75 @@ describe('web-server shared-routes', () => {
     ]);
   });
 
+  it('returns full content for a shared command markdown file', async () => {
+    const commandsDir = path.join(ccsDir, 'shared', 'commands');
+    fs.mkdirSync(commandsDir, { recursive: true });
+    const commandPath = path.join(commandsDir, 'review.md');
+    fs.writeFileSync(commandPath, '# Review\n\nDetailed workflow steps');
+
+    const payload = await getJson<{ content: string; contentPath: string }>(
+      baseUrl,
+      `/api/shared/content?type=commands&path=${encodeURIComponent(commandPath)}`
+    );
+
+    expect(payload.content).toContain('Detailed workflow steps');
+    expect(payload.contentPath).toBe(fs.realpathSync(commandPath));
+  });
+
+  it('returns full content for a shared skill from SKILL.md', async () => {
+    const skillsDir = path.join(ccsDir, 'shared', 'skills');
+    fs.mkdirSync(skillsDir, { recursive: true });
+
+    const skillTargetDir = path.join(ccsDir, '.claude', 'skills', 'planner-skill');
+    fs.mkdirSync(skillTargetDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(skillTargetDir, 'SKILL.md'),
+      [
+        '---',
+        'description: Plan things',
+        '---',
+        '',
+        '# Planner Skill',
+        '',
+        'Full skill details',
+      ].join('\n')
+    );
+
+    const linkPath = path.join(skillsDir, 'planner-skill');
+    createDirectorySymlink(skillTargetDir, linkPath);
+
+    const payload = await getJson<{ content: string; contentPath: string }>(
+      baseUrl,
+      `/api/shared/content?type=skills&path=${encodeURIComponent(linkPath)}`
+    );
+
+    expect(payload.content).toContain('Full skill details');
+    expect(payload.contentPath).toBe(fs.realpathSync(path.join(skillTargetDir, 'SKILL.md')));
+  });
+
+  it('does not use markdown frontmatter fences as descriptions when frontmatter is malformed', async () => {
+    const commandsDir = path.join(ccsDir, 'shared', 'commands');
+    fs.mkdirSync(commandsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(commandsDir, 'broken-frontmatter.md'),
+      ['---', '', '# Heading', '', 'Fallback body description'].join('\n')
+    );
+
+    const payload = await getJson<{
+      items: Array<{ name: string; type: string; description: string; path: string }>;
+    }>(baseUrl, '/api/shared/commands');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'broken-frontmatter',
+        type: 'command',
+        description: 'Fallback body description',
+        path: path.join(commandsDir, 'broken-frontmatter.md'),
+      },
+    ]);
+  });
+
   it('skips markdown files deeper than traversal depth limit', async () => {
     const commandsDir = path.join(ccsDir, 'shared', 'commands');
     let currentDir = commandsDir;
@@ -376,6 +445,65 @@ describe('web-server shared-routes', () => {
       '/api/shared/commands'
     );
     expect(payload.items).toEqual([]);
+  });
+
+  it('rejects shared command content lookups that escape the commands root', async () => {
+    const commandsDir = path.join(ccsDir, 'shared', 'commands');
+    fs.mkdirSync(commandsDir, { recursive: true });
+
+    const outsideMarkdown = path.join(tempHome, 'outside-command.md');
+    fs.writeFileSync(outsideMarkdown, 'Outside command should not be read');
+    const escapedLinkPath = path.join(commandsDir, 'outside.md');
+    createFileSymlink(outsideMarkdown, escapedLinkPath);
+
+    const response = await fetch(
+      `${baseUrl}/api/shared/content?type=commands&path=${encodeURIComponent(escapedLinkPath)}`
+    );
+    expect(response.status).toBe(404);
+
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toBe('Shared content not found');
+  });
+
+  it('returns 400 for invalid shared content query parameters', async () => {
+    const missingType = await fetch(
+      `${baseUrl}/api/shared/content?path=${encodeURIComponent('/tmp/a.md')}`
+    );
+    expect(missingType.status).toBe(400);
+
+    const missingPath = await fetch(`${baseUrl}/api/shared/content?type=commands`);
+    expect(missingPath.status).toBe(400);
+  });
+
+  it('ignores command file symlinks that escape into CCS_HOME/.claude/commands', async () => {
+    const commandsDir = path.join(ccsDir, 'shared', 'commands');
+    fs.mkdirSync(commandsDir, { recursive: true });
+
+    const claudeCommandsDir = path.join(ccsDir, '.claude', 'commands');
+    fs.mkdirSync(claudeCommandsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeCommandsDir, 'borrowed.md'),
+      'Borrowed command should be ignored'
+    );
+
+    fs.writeFileSync(path.join(commandsDir, 'local.md'), 'Local command stays visible');
+    createFileSymlink(
+      path.join(claudeCommandsDir, 'borrowed.md'),
+      path.join(commandsDir, 'borrowed.md')
+    );
+
+    const payload = await getJson<{
+      items: Array<{ name: string; type: string; description: string; path: string }>;
+    }>(baseUrl, '/api/shared/commands');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'local',
+        type: 'command',
+        description: 'Local command stays visible',
+        path: path.join(commandsDir, 'local.md'),
+      },
+    ]);
   });
 
   it('summary uses CLAUDE_CONFIG_DIR for symlink status and counts', async () => {

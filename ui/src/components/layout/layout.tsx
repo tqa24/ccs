@@ -1,5 +1,5 @@
-import { Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Suspense, useEffect } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from './app-sidebar';
 import { ThemeToggle } from './theme-toggle';
@@ -16,6 +16,7 @@ import { DeviceCodeDialog } from '@/components/shared/device-code-dialog';
 import { UserMenu } from '@/components/auth/user-menu';
 import { useProjectSelection } from '@/hooks/use-project-selection';
 import { useDeviceCode } from '@/hooks/use-device-code';
+import { storeLastRoute } from '@/lib/last-route';
 
 function PageLoader() {
   return (
@@ -27,8 +28,13 @@ function PageLoader() {
 }
 
 export function Layout() {
+  const location = useLocation();
   const { isOpen, prompt, onSelect, onClose } = useProjectSelection();
   const deviceCode = useDeviceCode();
+
+  useEffect(() => {
+    storeLastRoute(location.pathname, location.search, location.hash);
+  }, [location.pathname, location.search, location.hash]);
 
   return (
     <SidebarProvider>

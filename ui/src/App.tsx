@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { queryClient } from '@/lib/query-client';
@@ -8,6 +8,7 @@ import { PrivacyProvider } from '@/contexts/privacy-context';
 import { AuthProvider } from '@/contexts/auth-context';
 import { RequireAuth } from '@/components/auth/require-auth';
 import { Layout } from '@/components/layout/layout';
+import { getStoredLastRoute, shouldRestoreRoute } from '@/lib/last-route';
 import { Loader2 } from 'lucide-react';
 
 // Eager load: HomePage (initial route) + LoginPage (auth flow)
@@ -47,6 +48,15 @@ function PageLoader() {
   );
 }
 
+function HomeEntryRoute() {
+  const lastRoute = getStoredLastRoute();
+  if (shouldRestoreRoute(lastRoute)) {
+    return <Navigate to={lastRoute} replace />;
+  }
+
+  return <HomePage />;
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -61,7 +71,7 @@ export default function App() {
                 {/* Protected routes: wrapped with RequireAuth */}
                 <Route element={<RequireAuth />}>
                   <Route element={<Layout />}>
-                    <Route path="/" element={<HomePage />} />
+                    <Route path="/" element={<HomeEntryRoute />} />
                     <Route
                       path="/analytics"
                       element={

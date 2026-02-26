@@ -16,6 +16,10 @@ export const sharedRoutes = Router();
 const MAX_DIRECTORY_TRAVERSAL_DEPTH = 10;
 const MAX_DESCRIPTION_LENGTH = 140;
 const MAX_MARKDOWN_FILE_BYTES = 1024 * 1024; // 1 MiB
+const MAX_CONTENT_FILE_BYTES = 2 * 1024 * 1024; // 2 MiB
+const SHARED_ITEMS_CACHE_TTL_MS = 1000;
+
+type SharedCollectionType = 'commands' | 'skills' | 'agents';
 
 interface SharedItem {
   name: string;
@@ -23,6 +27,14 @@ interface SharedItem {
   path: string;
   type: 'command' | 'skill' | 'agent';
 }
+
+interface SharedItemsCacheEntry {
+  items: SharedItem[];
+  sharedDir: string;
+  expiresAt: number;
+}
+
+const sharedItemsCache = new Map<SharedCollectionType, SharedItemsCacheEntry>();
 
 /**
  * GET /api/shared/commands
@@ -49,6 +61,41 @@ sharedRoutes.get('/agents', (_req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/shared/content?type=commands|skills|agents&path=<item-path>
+ */
+sharedRoutes.get('/content', (req: Request, res: Response) => {
+  const typeParam = req.query.type;
+  const itemPathParam = req.query.path;
+
+  if (!isSharedCollectionType(typeParam)) {
+    res.status(400).json({ error: 'Invalid or missing type parameter' });
+    return;
+  }
+  if (typeof itemPathParam !== 'string' || itemPathParam.trim().length === 0) {
+    res.status(400).json({ error: 'Invalid or missing path parameter' });
+    return;
+  }
+
+  const ccsDir = getCcsDir();
+  const sharedDir = path.join(ccsDir, 'shared', typeParam);
+  if (!fs.existsSync(sharedDir)) {
+    res.status(404).json({ error: 'Shared directory not found' });
+    return;
+  }
+
+  const sharedDirRoot = safeRealPath(sharedDir) ?? path.resolve(sharedDir);
+  const allowedRoots = resolveAllowedRoots(typeParam, ccsDir, sharedDirRoot);
+  const contentResult = getSharedItemContent(typeParam, itemPathParam, allowedRoots);
+
+  if (!contentResult) {
+    res.status(404).json({ error: 'Shared content not found' });
+    return;
+  }
+
+  res.json(contentResult);
+});
+
+/**
  * GET /api/shared/summary
  */
 sharedRoutes.get('/summary', (_req: Request, res: Response) => {
@@ -65,17 +112,20 @@ sharedRoutes.get('/summary', (_req: Request, res: Response) => {
   });
 });
 
-function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
-  const ccsDir = getCcsDir();
-  const sharedDir = path.join(ccsDir, 'shared', type);
+function isSharedCollectionType(value: unknown): value is SharedCollectionType {
+  return value === 'commands' || value === 'skills' || value === 'agents';
+}
 
-  if (!fs.existsSync(sharedDir)) {
-    return [];
+function resolveAllowedRoots(
+  type: SharedCollectionType,
+  ccsDir: string,
+  sharedDirRoot: string
+): Set<string> {
+  if (type === 'commands') {
+    return new Set<string>([sharedDirRoot]);
   }
 
-  const items: SharedItem[] = [];
-  const sharedDirRoot = safeRealPath(sharedDir) ?? path.resolve(sharedDir);
-  const allowedRoots = new Set<string>([
+  return new Set<string>([
     sharedDirRoot,
     ...[
       path.join(getClaudeConfigDir(), type),
@@ -85,9 +135,35 @@ function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
       .map((dirPath) => safeRealPath(dirPath))
       .filter((dirPath): dirPath is string => typeof dirPath === 'string'),
   ]);
+}
+
+function getSharedItems(type: SharedCollectionType): SharedItem[] {
+  const ccsDir = getCcsDir();
+  const sharedDir = path.join(ccsDir, 'shared', type);
+  const now = Date.now();
+
+  if (!fs.existsSync(sharedDir)) {
+    sharedItemsCache.delete(type);
+    return [];
+  }
+
+  const cached = sharedItemsCache.get(type);
+  if (cached && cached.sharedDir === sharedDir && cached.expiresAt > now) {
+    return cached.items;
+  }
+
+  const items: SharedItem[] = [];
+  const sharedDirRoot = safeRealPath(sharedDir) ?? path.resolve(sharedDir);
+  const allowedRoots = resolveAllowedRoots(type, ccsDir, sharedDirRoot);
 
   if (type === 'commands') {
-    return getCommandItems(sharedDir, allowedRoots);
+    const commandItems = getCommandItems(sharedDir, allowedRoots);
+    sharedItemsCache.set(type, {
+      items: commandItems,
+      sharedDir,
+      expiresAt: now + SHARED_ITEMS_CACHE_TTL_MS,
+    });
+    return commandItems;
   }
 
   try {
@@ -123,7 +199,13 @@ function getSharedItems(type: 'commands' | 'skills' | 'agents'): SharedItem[] {
     // Directory read failed
   }
 
-  return items.sort((a, b) => a.name.localeCompare(b.name));
+  const sortedItems = items.sort((a, b) => a.name.localeCompare(b.name));
+  sharedItemsCache.set(type, {
+    items: sortedItems,
+    sharedDir,
+    expiresAt: now + SHARED_ITEMS_CACHE_TTL_MS,
+  });
+  return sortedItems;
 }
 
 function getCommandItems(sharedDir: string, allowedRoots: Set<string>): SharedItem[] {
@@ -300,12 +382,24 @@ function extractDescription(content: string): string {
   const lines = stripFrontmatter(content).split('\n');
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('<!--')) {
+    if (isDescriptionBodyLine(trimmed)) {
       return trimDescription(trimmed);
     }
   }
 
   return 'No description';
+}
+
+function isDescriptionBodyLine(line: string): boolean {
+  if (!line) {
+    return false;
+  }
+
+  if (line === '---' || line === '...') {
+    return false;
+  }
+
+  return !line.startsWith('#') && !line.startsWith('<!--');
 }
 
 function extractFrontmatterDescription(content: string): string | null {
@@ -373,6 +467,112 @@ function readMarkdownDescription(markdownPath: string, allowedRoots: Set<string>
   } catch {
     return null;
   }
+}
+
+function readMarkdownContent(markdownPath: string, allowedRoots: Set<string>): string | null {
+  try {
+    const resolvedMarkdownPath = safeRealPath(markdownPath);
+    if (!resolvedMarkdownPath || !isPathWithinAny(resolvedMarkdownPath, allowedRoots)) {
+      return null;
+    }
+
+    const stats = fs.statSync(resolvedMarkdownPath);
+    if (!stats.isFile()) {
+      return null;
+    }
+    if (stats.size > MAX_CONTENT_FILE_BYTES) {
+      return null;
+    }
+
+    return fs.readFileSync(resolvedMarkdownPath, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function resolveReadableMarkdownPath(
+  markdownPaths: string[],
+  allowedRoots: Set<string>
+): string | null {
+  for (const markdownPath of markdownPaths) {
+    const resolvedMarkdownPath = safeRealPath(markdownPath);
+    if (!resolvedMarkdownPath || !isPathWithinAny(resolvedMarkdownPath, allowedRoots)) {
+      continue;
+    }
+
+    try {
+      const stats = fs.statSync(resolvedMarkdownPath);
+      if (!stats.isFile() || stats.size > MAX_CONTENT_FILE_BYTES) {
+        continue;
+      }
+      return resolvedMarkdownPath;
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
+}
+
+function getSharedItemContent(
+  type: SharedCollectionType,
+  itemPath: string,
+  allowedRoots: Set<string>
+): { content: string; contentPath: string } | null {
+  const resolvedItemPath = safeRealPath(itemPath);
+  if (!resolvedItemPath || !isPathWithinAny(resolvedItemPath, allowedRoots)) {
+    return null;
+  }
+
+  let itemStats: fs.Stats;
+  try {
+    itemStats = fs.statSync(resolvedItemPath);
+  } catch {
+    return null;
+  }
+
+  let markdownPath: string | null = null;
+  if (type === 'commands') {
+    if (!itemStats.isFile() || !itemPath.toLowerCase().endsWith('.md')) {
+      return null;
+    }
+    markdownPath = resolvedItemPath;
+  } else if (type === 'skills') {
+    if (!itemStats.isDirectory()) {
+      return null;
+    }
+    markdownPath = resolveReadableMarkdownPath(
+      [path.join(resolvedItemPath, 'SKILL.md')],
+      allowedRoots
+    );
+  } else {
+    if (itemStats.isDirectory()) {
+      markdownPath = resolveReadableMarkdownPath(
+        [
+          path.join(resolvedItemPath, 'prompt.md'),
+          path.join(resolvedItemPath, 'AGENT.md'),
+          path.join(resolvedItemPath, 'agent.md'),
+        ],
+        allowedRoots
+      );
+    } else if (itemStats.isFile() && itemPath.toLowerCase().endsWith('.md')) {
+      markdownPath = resolvedItemPath;
+    }
+  }
+
+  if (!markdownPath) {
+    return null;
+  }
+
+  const content = readMarkdownContent(markdownPath, allowedRoots);
+  if (!content) {
+    return null;
+  }
+
+  return {
+    content,
+    contentPath: markdownPath,
+  };
 }
 
 function safeRealPath(targetPath: string): string | null {
