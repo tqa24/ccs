@@ -288,12 +288,58 @@ export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
   iflow: {
     provider: 'iflow',
     displayName: 'iFlow',
-    defaultModel: 'iflow-default',
+    defaultModel: 'qwen3-coder-plus',
     models: [
       {
-        id: 'iflow-default',
-        name: 'iFlow Default',
-        description: 'Default iFlow model',
+        id: 'qwen3-coder-plus',
+        name: 'Qwen3 Coder Plus',
+        description: 'Recommended default for iFlow accounts',
+        presetMapping: {
+          default: 'qwen3-coder-plus',
+          opus: 'qwen3-coder-plus',
+          sonnet: 'qwen3-coder-plus',
+          haiku: 'qwen3-coder-plus',
+        },
+      },
+      {
+        id: 'qwen3-max',
+        name: 'Qwen3 Max',
+        description: 'Flagship Qwen model via iFlow',
+      },
+      {
+        id: 'kimi-k2.5',
+        name: 'Kimi K2.5',
+        description: 'Latest Kimi model via iFlow',
+      },
+      {
+        id: 'kimi-k2',
+        name: 'Kimi K2',
+        description: 'Kimi general model',
+      },
+      {
+        id: 'deepseek-v3.2-chat',
+        name: 'DeepSeek V3.2 Chat',
+        description: 'Stable DeepSeek chat model',
+      },
+      {
+        id: 'deepseek-r1',
+        name: 'DeepSeek R1',
+        description: 'Reasoning-focused DeepSeek model',
+      },
+      {
+        id: 'glm-4.7',
+        name: 'GLM 4.7',
+        description: 'Zhipu GLM 4.7 via iFlow',
+      },
+      {
+        id: 'minimax-m2.5',
+        name: 'MiniMax M2.5',
+        description: 'MiniMax M2.5 via iFlow',
+      },
+      {
+        id: 'qwen3-vl-plus',
+        name: 'Qwen3 VL Plus',
+        description: 'Vision-language model',
       },
     ],
   },
