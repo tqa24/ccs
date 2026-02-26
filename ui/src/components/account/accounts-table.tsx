@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Check, CheckCheck, Link2, Pencil, RotateCcw, Trash2, Unlink } from 'lucide-react';
+import { Check, CheckCheck, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import { EditAccountContextDialog } from '@/components/account/edit-account-context-dialog';
 import {
   useSetDefaultAccount,
@@ -137,7 +137,6 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
           deleteMutation.isPending ||
           updateContextMutation.isPending;
         const isCliproxy = row.original.type === 'cliproxy';
-        const isShared = row.original.context_mode === 'shared';
         const hasLegacyInference =
           row.original.context_inferred || row.original.continuity_inferred;
 
@@ -145,43 +144,15 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
           <div className="flex items-center gap-1">
             {!isCliproxy && (
               <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 px-2"
-                disabled={isPending}
-                onClick={() => setContextTarget(row.original)}
-                title="Edit context mode"
-              >
-                <Pencil className="w-4 h-4" />
-              </Button>
-            )}
-            {!isCliproxy && (
-              <Button
                 variant="outline"
                 size="sm"
                 className="h-8 px-2"
                 disabled={isPending}
-                onClick={() =>
-                  updateContextMutation.mutate({
-                    name: row.original.name,
-                    context_mode: isShared ? 'isolated' : 'shared',
-                    context_group: isShared ? undefined : row.original.context_group || 'default',
-                    continuity_mode: isShared ? undefined : 'standard',
-                  })
-                }
-                title={isShared ? 'Switch to isolated mode' : 'Switch to shared mode'}
+                onClick={() => setContextTarget(row.original)}
+                title="Edit sync mode, group, and continuity depth"
               >
-                {isShared ? (
-                  <>
-                    <Unlink className="w-3 h-3 mr-1" />
-                    Unlink
-                  </>
-                ) : (
-                  <>
-                    <Link2 className="w-3 h-3 mr-1" />
-                    Link
-                  </>
-                )}
+                <Pencil className="w-3.5 h-3.5 mr-1" />
+                Sync
               </Button>
             )}
             {!isCliproxy && hasLegacyInference && (
@@ -270,7 +241,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
                         created: 'w-[150px]',
                         last_used: 'w-[150px]',
                         context: 'w-[170px]',
-                        actions: 'w-[340px]',
+                        actions: 'w-[290px]',
                       }[header.id] || 'w-auto';
 
                     return (
