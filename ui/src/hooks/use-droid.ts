@@ -97,6 +97,30 @@ interface SaveDroidRawSettingsResponse {
   mtime: number;
 }
 
+function parseDroidRawSettingsText(rawText: string): {
+  settings: Record<string, unknown> | null;
+  parseError: string | null;
+} {
+  try {
+    const parsed = JSON.parse(rawText);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {
+        settings: null,
+        parseError: 'JSON root must be an object.',
+      };
+    }
+    return {
+      settings: parsed as Record<string, unknown>,
+      parseError: null,
+    };
+  } catch (error) {
+    return {
+      settings: null,
+      parseError: (error as Error).message,
+    };
+  }
+}
+
 async function fetchDroidDiagnostics(): Promise<DroidDashboardDiagnostics> {
   const res = await fetch(withApiBase('/droid/diagnostics'));
   if (!res.ok) throw new Error('Failed to fetch Droid diagnostics');
@@ -142,9 +166,23 @@ export function useDroid() {
 
   const saveRawSettingsMutation = useMutation({
     mutationFn: saveDroidRawSettings,
-    onSuccess: () => {
+    onSuccess: (result, variables) => {
+      queryClient.setQueryData<DroidRawSettings>(['droid-raw-settings'], (current) => {
+        const path = current?.path ?? '~/.factory/settings.json';
+        const resolvedPath = current?.resolvedPath ?? path;
+        const parsed = parseDroidRawSettingsText(variables.rawText);
+
+        return {
+          path,
+          resolvedPath,
+          exists: true,
+          mtime: result.mtime,
+          rawText: variables.rawText,
+          settings: parsed.settings,
+          parseError: parsed.parseError,
+        };
+      });
       queryClient.invalidateQueries({ queryKey: ['droid-diagnostics'] });
-      queryClient.invalidateQueries({ queryKey: ['droid-raw-settings'] });
     },
   });
 
