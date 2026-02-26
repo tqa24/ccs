@@ -103,6 +103,12 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
           return <span className="text-muted-foreground">shared ({group})</span>;
         }
 
+        if (row.original.context_inferred) {
+          return (
+            <span className="text-amber-700 dark:text-amber-400">isolated (legacy default)</span>
+          );
+        }
+
         return <span className="text-muted-foreground">isolated</span>;
       },
     },
@@ -165,7 +171,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
   if (data.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        No accounts found. Use{' '}
+        No CCS auth accounts found. Use{' '}
         <code className="text-sm bg-muted px-1 rounded">ccs auth create</code> to add accounts.
       </div>
     );

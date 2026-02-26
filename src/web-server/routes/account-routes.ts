@@ -56,24 +56,30 @@ router.get('/', (_req: Request, res: Response): void => {
     // Add legacy profiles first
     for (const [name, meta] of Object.entries(legacyProfiles)) {
       const contextPolicy = resolveAccountContextPolicy(meta);
+      const hasExplicitContextMode =
+        meta.context_mode === 'isolated' || meta.context_mode === 'shared';
       merged[name] = {
         type: meta.type || 'account',
         created: meta.created,
         last_used: meta.last_used || null,
         context_mode: contextPolicy.mode,
         context_group: contextPolicy.group,
+        context_inferred: !hasExplicitContextMode,
       };
     }
 
     // Override with unified config accounts (takes precedence)
     for (const [name, account] of Object.entries(unifiedAccounts)) {
       const contextPolicy = resolveAccountContextPolicy(account);
+      const hasExplicitContextMode =
+        account.context_mode === 'isolated' || account.context_mode === 'shared';
       merged[name] = {
         type: 'account',
         created: account.created,
         last_used: account.last_used,
         context_mode: contextPolicy.mode,
         context_group: contextPolicy.group,
+        context_inferred: !hasExplicitContextMode,
       };
     }
 
@@ -252,6 +258,7 @@ router.put('/:name/context', async (req: Request, res: Response): Promise<void> 
       name,
       context_mode: policy.mode,
       context_group: policy.group ?? null,
+      context_inferred: false,
     });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });

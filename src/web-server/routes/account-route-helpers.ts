@@ -7,6 +7,7 @@ export interface MergedAccountEntry {
   last_used: string | null;
   context_mode?: 'isolated' | 'shared';
   context_group?: string;
+  context_inferred?: boolean;
   provider?: string;
   displayName?: string;
 }

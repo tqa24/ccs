@@ -104,12 +104,18 @@ describe('web-server account-routes context normalization', () => {
     );
 
     const payload = await getJson<{
-      accounts: Array<{ name: string; context_mode?: string; context_group?: string }>;
+      accounts: Array<{
+        name: string;
+        context_mode?: string;
+        context_group?: string;
+        context_inferred?: boolean;
+      }>;
     }>(baseUrl, '/api/accounts');
 
     const work = payload.accounts.find((account) => account.name === 'work');
     expect(work).toBeTruthy();
     expect(work?.context_mode).toBe('isolated');
+    expect(work?.context_inferred).toBe(true);
     expect(work && 'context_group' in work).toBe(false);
   });
 
@@ -137,13 +143,19 @@ describe('web-server account-routes context normalization', () => {
     );
 
     const payload = await getJson<{
-      accounts: Array<{ name: string; context_mode?: string; context_group?: string }>;
+      accounts: Array<{
+        name: string;
+        context_mode?: string;
+        context_group?: string;
+        context_inferred?: boolean;
+      }>;
     }>(baseUrl, '/api/accounts');
 
     const work = payload.accounts.find((account) => account.name === 'work');
     expect(work).toBeTruthy();
     expect(work?.context_mode).toBe('shared');
     expect(work?.context_group).toBe('default');
+    expect(work?.context_inferred).toBe(false);
   });
 
   it('does not delete metadata when instance deletion fails', async () => {
@@ -210,9 +222,14 @@ describe('web-server account-routes context normalization', () => {
       context_group: ' Team Alpha ',
     });
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { context_mode: string; context_group: string | null };
+    const payload = (await response.json()) as {
+      context_mode: string;
+      context_group: string | null;
+      context_inferred?: boolean;
+    };
     expect(payload.context_mode).toBe('shared');
     expect(payload.context_group).toBe('team-alpha');
+    expect(payload.context_inferred).toBe(false);
 
     const accountsPayload = await getJson<{
       accounts: Array<{ name: string; context_mode?: string; context_group?: string }>;
