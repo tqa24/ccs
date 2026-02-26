@@ -172,10 +172,14 @@ CCS supports structural Droid command passthrough after profile selection:
 ```bash
 ccsd codex exec --skip-permissions-unsafe "fix failing tests"
 ccsd codex --skip-permissions-unsafe "fix failing tests"   # auto-routed to: droid exec ...
+ccsd codex -m custom:gpt-5.3-codex "fix failing tests"     # short exec flags auto-routed too
 ```
 
 If you pass exec-only flags without a prompt (for example `--skip-permissions-unsafe`),
 Droid `exec` will return its native "No prompt provided" usage guidance.
+
+If multiple reasoning flags are provided in Droid exec mode, CCS keeps the first
+flag and warns about duplicates.
 
 Dashboard parity: `ccs config` -> `Factory Droid`
 

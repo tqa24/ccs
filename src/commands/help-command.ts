@@ -342,6 +342,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       'ccsd codex exec --skip-permissions-unsafe "fix failing tests"',
       'Pass through Droid exec mode',
     ],
+    ['ccsd codex -m custom:gpt-5.3-codex "fix failing tests"', 'Auto-routes short exec flags'],
     [
       'ccsd codex --skip-permissions-unsafe "fix failing tests"',
       'Auto-routes to Droid exec when exec-only flags are detected',
@@ -404,6 +405,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['Droid exec:', 'Use native Droid flag: --reasoning-effort <level>'],
     ['', 'CCS auto-maps --thinking/--effort to --reasoning-effort in droid exec mode.'],
     ['', 'For interactive droid sessions, CCS applies reasoning via Droid BYOK model config.'],
+    ['', 'When multiple reasoning flags are provided, the first flag wins.'],
     ['', ''],
     ['Note:', 'Extended thinking allocates compute for step-by-step reasoning'],
     ['', 'before responding.'],
