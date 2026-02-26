@@ -114,7 +114,19 @@ describe('web-server shared-routes', () => {
     fs.mkdirSync(sharedSkillsDir, { recursive: true });
     const targetDir = path.join(ccsDir, '.claude', 'skills', 'my-skill');
     fs.mkdirSync(targetDir, { recursive: true });
-    fs.writeFileSync(path.join(targetDir, 'SKILL.md'), 'name: my-skill\n\nMy test skill');
+    fs.writeFileSync(
+      path.join(targetDir, 'SKILL.md'),
+      [
+        '---',
+        'name: my-skill',
+        'description: This skill handles daily maintenance workflows.',
+        '---',
+        '',
+        '# My Skill',
+        '',
+        'My test skill body',
+      ].join('\n')
+    );
 
     const linkPath = path.join(sharedSkillsDir, 'my-skill');
     createDirectorySymlink(targetDir, linkPath);
@@ -128,7 +140,7 @@ describe('web-server shared-routes', () => {
       name: 'my-skill',
       type: 'skill',
     });
-    expect(payload.items[0].description.length).toBeGreaterThan(0);
+    expect(payload.items[0].description).toBe('This skill handles daily maintenance workflows.');
     expect(payload.items[0].path).toBe(linkPath);
   });
 
@@ -153,6 +165,70 @@ describe('web-server shared-routes', () => {
     });
     expect(payload.items[0].description.length).toBeGreaterThan(0);
     expect(payload.items[0].path).toBe(linkPath);
+  });
+
+  it('lists file-based agents from symlinked ~/.claude/agents directory', async () => {
+    const sharedAgentsDir = path.join(ccsDir, 'shared', 'agents');
+    const claudeAgentsDir = path.join(ccsDir, '.claude', 'agents');
+    fs.mkdirSync(claudeAgentsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeAgentsDir, 'planner.md'),
+      [
+        '---',
+        'description: Plans implementation phases and dependencies.',
+        '---',
+        '',
+        '# Planner',
+      ].join('\n')
+    );
+    createDirectorySymlink(claudeAgentsDir, sharedAgentsDir);
+
+    const payload = await getJson<{
+      items: Array<{ name: string; type: string; description: string; path: string }>;
+    }>(baseUrl, '/api/shared/agents');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'planner',
+        type: 'agent',
+        description: 'Plans implementation phases and dependencies.',
+        path: path.join(sharedAgentsDir, 'planner.md'),
+      },
+    ]);
+  });
+
+  it('lists command markdown files recursively', async () => {
+    const commandsDir = path.join(ccsDir, 'shared', 'commands');
+    fs.mkdirSync(path.join(commandsDir, 'mkt'), { recursive: true });
+    fs.mkdirSync(path.join(commandsDir, 'engineer'), { recursive: true });
+
+    fs.writeFileSync(
+      path.join(commandsDir, 'mkt', 'campaign.md'),
+      '# Campaign\n\nDraft campaign brief'
+    );
+    fs.writeFileSync(
+      path.join(commandsDir, 'engineer', 'review.md'),
+      ['---', 'description: Code review command for engineering workflows.', '---'].join('\n')
+    );
+
+    const payload = await getJson<{
+      items: Array<{ name: string; type: string; description: string; path: string }>;
+    }>(baseUrl, '/api/shared/commands');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'engineer/review',
+        type: 'command',
+        description: 'Code review command for engineering workflows.',
+        path: path.join(commandsDir, 'engineer', 'review.md'),
+      },
+      {
+        name: 'mkt/campaign',
+        type: 'command',
+        description: 'Draft campaign brief',
+        path: path.join(commandsDir, 'mkt', 'campaign.md'),
+      },
+    ]);
   });
 
   it('ignores markdown files in shared skills root', async () => {
