@@ -58,6 +58,10 @@ import {
   type TargetCredentials,
 } from './targets';
 import { resolveTargetType, stripTargetFlag } from './targets/target-resolver';
+import {
+  DroidReasoningFlagError,
+  resolveDroidReasoningRuntime,
+} from './targets/droid-reasoning-runtime';
 
 // Version and Update check utilities
 import { getVersion } from './utils/version';
@@ -711,6 +715,32 @@ async function main(): Promise<void> {
       }
     }
 
+    let targetRemainingArgs = remainingArgs;
+    let droidReasoningOverride: string | number | undefined;
+    if (resolvedTarget === 'droid') {
+      try {
+        const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
+        targetRemainingArgs = runtime.argsWithoutReasoningFlags;
+        droidReasoningOverride = runtime.reasoningOverride;
+
+        if (runtime.duplicateDisplays.length > 0) {
+          console.error(
+            warn(
+              `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
+            )
+          );
+        }
+      } catch (error) {
+        if (error instanceof DroidReasoningFlagError) {
+          console.error(fail(error.message));
+          console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
+          console.error('    Codex alias: --effort medium|high|xhigh');
+          process.exit(1);
+        }
+        throw error;
+      }
+    }
+
     // Special case: headless delegation (-p/--prompt)
     // Keep existing behavior for Claude targets only; non-claude targets must continue
     // through normal adapter dispatch logic.
@@ -772,14 +802,13 @@ async function main(): Promise<void> {
           '--remote-only',
           '--no-fallback',
           '--allow-self-signed',
-          '--thinking',
-          '--effort',
           '--1m',
           '--no-1m',
         ];
         const providedUnsupportedFlag = unsupportedCliproxyFlags.find(
           (flag) =>
-            remainingArgs.includes(flag) || remainingArgs.some((arg) => arg.startsWith(`${flag}=`))
+            targetRemainingArgs.includes(flag) ||
+            targetRemainingArgs.some((arg) => arg.startsWith(`${flag}=`))
         );
         if (providedUnsupportedFlag) {
           console.error(
@@ -817,7 +846,7 @@ async function main(): Promise<void> {
 
         const ensureServiceResult = await ensureCliproxyService(
           cliproxyPort,
-          remainingArgs.includes('--verbose') || remainingArgs.includes('-v')
+          targetRemainingArgs.includes('--verbose') || targetRemainingArgs.includes('-v')
         );
         if (!ensureServiceResult.started) {
           console.error(
@@ -847,6 +876,7 @@ async function main(): Promise<void> {
             baseUrl: envVars['ANTHROPIC_BASE_URL'],
             model: envVars['ANTHROPIC_MODEL'],
           }),
+          reasoningOverride: droidReasoningOverride,
           envVars,
         };
 
@@ -864,7 +894,7 @@ async function main(): Promise<void> {
         }
 
         await adapter.prepareCredentials(creds);
-        const targetArgs = adapter.buildArgs(profileInfo.name, remainingArgs);
+        const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs);
         const targetEnv = adapter.buildEnv(creds, profileInfo.type);
         adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
         return;
@@ -1020,9 +1050,10 @@ async function main(): Promise<void> {
               baseUrl: settingsEnv['ANTHROPIC_BASE_URL'],
               model: settingsEnv['ANTHROPIC_MODEL'],
             }),
+            reasoningOverride: droidReasoningOverride,
           };
           await adapter.prepareCredentials(creds);
-          const targetArgs = adapter.buildArgs(profileInfo.name, remainingArgs);
+          const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs);
           const targetEnv = adapter.buildEnv(creds, profileInfo.type);
           adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
           return;
@@ -1091,6 +1122,7 @@ async function main(): Promise<void> {
             baseUrl: process.env['ANTHROPIC_BASE_URL'],
             model: process.env['ANTHROPIC_MODEL'],
           }),
+          reasoningOverride: droidReasoningOverride,
         };
         if (!creds.baseUrl || !creds.apiKey) {
           console.error(
@@ -1102,7 +1134,7 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         await adapter.prepareCredentials(creds);
-        const targetArgs = adapter.buildArgs('default', remainingArgs);
+        const targetArgs = adapter.buildArgs('default', targetRemainingArgs);
         const targetEnv = adapter.buildEnv(creds, 'default');
         adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
         return;

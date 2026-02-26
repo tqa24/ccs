@@ -191,6 +191,31 @@ describe('DroidAdapter', () => {
     }
   });
 
+  it('prepareCredentials should persist reasoning override into Droid extraArgs', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-droid-adapter-reasoning-test-'));
+    const originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_HOME = tmpDir;
+
+    try {
+      await adapter.prepareCredentials({
+        profile: 'codex',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'dummy-key',
+        model: 'gpt-5.2',
+        provider: 'openai',
+        reasoningOverride: 'high',
+      });
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.customModels?.[0]?.extraArgs?.reasoning?.effort).toBe('high');
+    } finally {
+      if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
+      else delete process.env.CCS_HOME;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   it('buildArgs should use selector returned from Droid settings entry', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-droid-selector-test-'));
     const originalCcsHome = process.env.CCS_HOME;

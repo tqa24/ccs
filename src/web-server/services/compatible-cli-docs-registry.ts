@@ -42,8 +42,10 @@ const COMPATIBLE_CLI_DOCS_REGISTRY: Record<string, CompatibleCliDocsRegistryEntr
       ],
       notes: [
         'BYOK custom models are read from ~/.factory/settings.json customModels[]',
+        'Legacy key style (custom_models, model_display_name, base_url, api_key, max_tokens) remains in circulation',
         'Factory docs mention legacy support for ~/.factory/config.json',
         'Interactive model selection uses settings.model (custom:<alias>)',
+        'Provider-specific reasoning keys in extraArgs: generic-chat-completion-api => reasoning_effort, openai => reasoning.effort, anthropic => thinking.{type,budget_tokens}',
         'droid exec supports --model for one-off execution mode',
       ],
       links: [
