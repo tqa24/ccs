@@ -13,6 +13,10 @@ import { getClaudeConfigDir } from '../utils/claude-config-path';
 
 export const sharedRoutes = Router();
 
+const MAX_DIRECTORY_TRAVERSAL_DEPTH = 10;
+const MAX_DESCRIPTION_LENGTH = 140;
+const MAX_MARKDOWN_FILE_BYTES = 1024 * 1024; // 1 MiB
+
 interface SharedItem {
   name: string;
   description: string;
@@ -222,16 +226,19 @@ interface MarkdownFileEntry {
 }
 
 function collectMarkdownFiles(sharedDir: string, allowedRoots: Set<string>): MarkdownFileEntry[] {
-  const directoriesToVisit = [sharedDir];
+  const directoriesToVisit: Array<{ path: string; depth: number }> = [
+    { path: sharedDir, depth: 0 },
+  ];
   const visitedDirectories = new Set<string>();
   const markdownFiles: MarkdownFileEntry[] = [];
 
   while (directoriesToVisit.length > 0) {
-    const currentDir = directoriesToVisit.pop();
-    if (!currentDir) {
+    const current = directoriesToVisit.pop();
+    if (!current) {
       continue;
     }
 
+    const currentDir = current.path;
     const resolvedCurrentDir = safeRealPath(currentDir);
     if (!resolvedCurrentDir || !isPathWithinAny(resolvedCurrentDir, allowedRoots)) {
       continue;
@@ -265,7 +272,9 @@ function collectMarkdownFiles(sharedDir: string, allowedRoots: Set<string>): Mar
       }
 
       if (stats.isDirectory()) {
-        directoriesToVisit.push(entryPath);
+        if (current.depth < MAX_DIRECTORY_TRAVERSAL_DEPTH) {
+          directoriesToVisit.push({ path: entryPath, depth: current.depth + 1 });
+        }
         continue;
       }
 
@@ -324,12 +333,11 @@ function stripFrontmatter(content: string): string {
 }
 
 function trimDescription(description: string): string {
-  const maxLength = 140;
-  if (description.length <= maxLength) {
+  if (description.length <= MAX_DESCRIPTION_LENGTH) {
     return description;
   }
 
-  return `${description.slice(0, maxLength - 3).trimEnd()}...`;
+  return `${description.slice(0, MAX_DESCRIPTION_LENGTH - 3).trimEnd()}...`;
 }
 
 function readFirstMarkdownDescription(
@@ -355,6 +363,9 @@ function readMarkdownDescription(markdownPath: string, allowedRoots: Set<string>
 
     const stats = fs.statSync(resolvedMarkdownPath);
     if (!stats.isFile()) {
+      return null;
+    }
+    if (stats.size > MAX_MARKDOWN_FILE_BYTES) {
       return null;
     }
     const content = fs.readFileSync(resolvedMarkdownPath, 'utf8');

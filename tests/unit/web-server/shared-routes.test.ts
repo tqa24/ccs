@@ -231,6 +231,45 @@ describe('web-server shared-routes', () => {
     ]);
   });
 
+  it('skips markdown files deeper than traversal depth limit', async () => {
+    const commandsDir = path.join(ccsDir, 'shared', 'commands');
+    let currentDir = commandsDir;
+    for (let index = 0; index < 11; index += 1) {
+      currentDir = path.join(currentDir, `depth-${index}`);
+      fs.mkdirSync(currentDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(currentDir, 'too-deep.md'), 'This should be ignored');
+
+    const payload = await getJson<{ items: Array<{ name: string }> }>(
+      baseUrl,
+      '/api/shared/commands'
+    );
+
+    expect(payload.items).toEqual([]);
+  });
+
+  it('skips oversized markdown files when extracting descriptions', async () => {
+    const commandsDir = path.join(ccsDir, 'shared', 'commands');
+    fs.mkdirSync(commandsDir, { recursive: true });
+
+    const oversizedBody = `# Big\n\n${'x'.repeat(1024 * 1024)}`;
+    fs.writeFileSync(path.join(commandsDir, 'oversized.md'), oversizedBody);
+    fs.writeFileSync(path.join(commandsDir, 'safe.md'), 'Safe command description');
+
+    const payload = await getJson<{
+      items: Array<{ name: string; type: string; description: string; path: string }>;
+    }>(baseUrl, '/api/shared/commands');
+
+    expect(payload.items).toEqual([
+      {
+        name: 'safe',
+        type: 'command',
+        description: 'Safe command description',
+        path: path.join(commandsDir, 'safe.md'),
+      },
+    ]);
+  });
+
   it('ignores markdown files in shared skills root', async () => {
     const sharedSkillsDir = path.join(ccsDir, 'shared', 'skills');
     fs.mkdirSync(sharedSkillsDir, { recursive: true });
