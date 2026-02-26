@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AccountsTable } from '@/components/account/accounts-table';
 import { CreateAuthProfileDialog } from '@/components/account/create-auth-profile-dialog';
+import { HistorySyncLearningMap } from '@/components/account/history-sync-learning-map';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -115,6 +116,13 @@ export function AccountsPage() {
   const sharedStandardCount = data?.sharedStandardCount || 0;
   const deeperSharedCount = data?.deeperSharedCount || 0;
   const isolatedCount = data?.isolatedCount || 0;
+  const sharedGroups = Array.from(
+    new Set(
+      authAccounts
+        .filter((account) => account.context_mode === 'shared')
+        .map((account) => account.context_group || 'default')
+    )
+  ).sort((a, b) => a.localeCompare(b));
 
   const legacyTargets = authAccounts.filter(
     (account) => account.context_inferred || account.continuity_inferred
@@ -149,25 +157,10 @@ export function AccountsPage() {
                 <Plus className="w-4 h-4 mr-2" />
                 Create Account
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start"
-                onClick={handleOpenClaudePool}
-              >
-                Open CLIProxy Claude Pool
-                <ArrowRight className="w-4 h-4 ml-auto" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="justify-start"
-                onClick={handleOpenClaudePoolAuth}
-              >
-                Authenticate Claude in Pool
-                <Zap className="w-4 h-4 ml-auto" />
-              </Button>
             </div>
+            <p className="text-[11px] text-muted-foreground">
+              Pool auth actions live in Action Center to avoid duplicate controls.
+            </p>
           </div>
 
           <ScrollArea className="flex-1">
@@ -301,6 +294,14 @@ export function AccountsPage() {
                   </AlertDescription>
                 </Alert>
               )}
+
+              <HistorySyncLearningMap
+                isolatedCount={isolatedCount}
+                sharedStandardCount={sharedStandardCount}
+                deeperSharedCount={deeperSharedCount}
+                sharedGroups={sharedGroups}
+                legacyTargetCount={legacyTargetCount}
+              />
 
               <Card className="flex flex-col">
                 <CardHeader className="pb-3">
