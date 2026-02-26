@@ -32,7 +32,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
 
   // Validate profile name: alphanumeric, dash, underscore only
   const isValidName = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(profileName);
-  const normalizedGroup = contextGroup.trim().toLowerCase();
+  const normalizedGroup = contextGroup.trim().toLowerCase().replace(/\s+/g, '-');
   const isValidContextGroup =
     normalizedGroup.length === 0 ||
     (normalizedGroup.length <= MAX_CONTEXT_GROUP_LENGTH &&
@@ -73,7 +73,8 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
         <DialogHeader>
           <DialogTitle>Create New Account</DialogTitle>
           <DialogDescription>
-            Auth profiles require Claude CLI login. Run the command below in your terminal.
+            Auth profiles require Claude CLI login. Run the command below in your terminal. You can
+            edit context mode/group later from the Accounts table.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,7 +119,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
                   autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave empty to use the default shared group.
+                  Leave empty to use the default shared group. Spaces are normalized to dashes.
                 </p>
                 {contextGroup.trim().length > 0 && !isValidContextGroup && (
                   <p className="text-xs text-destructive">

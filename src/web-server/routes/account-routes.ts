@@ -19,7 +19,11 @@ import {
   soloAccount,
 } from '../../cliproxy/account-manager';
 import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
-import { resolveAccountContextPolicy } from '../../auth/account-context';
+import {
+  isValidContextGroupName,
+  normalizeContextGroupName,
+  resolveAccountContextPolicy,
+} from '../../auth/account-context';
 import {
   buildCliproxyAccountKey,
   parseCliproxyKey,
@@ -144,6 +148,111 @@ router.post('/default', (req: Request, res: Response): void => {
     }
 
     res.json({ default: name });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * PUT /api/accounts/:name/context - Update account context mode/group
+ */
+router.put('/:name/context', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name } = req.params;
+
+    if (!name) {
+      res.status(400).json({ error: 'Missing account name' });
+      return;
+    }
+
+    // CLIProxy OAuth accounts do not support local account context metadata.
+    const cliproxyKey = !hasAuthAccount(name) ? parseCliproxyKey(name) : null;
+    if (cliproxyKey) {
+      res
+        .status(400)
+        .json({ error: `Context mode is not supported for CLIProxy account: ${name}` });
+      return;
+    }
+
+    const existsUnified = isUnifiedMode() && registry.hasAccountUnified(name);
+    const existsLegacy = registry.hasProfile(name);
+    if (!existsUnified && !existsLegacy) {
+      res.status(404).json({ error: `Account not found: ${name}` });
+      return;
+    }
+
+    const mode = req.body?.context_mode;
+    const rawGroup = req.body?.context_group;
+
+    if (mode !== 'isolated' && mode !== 'shared') {
+      res.status(400).json({ error: 'Missing or invalid context_mode: expected isolated|shared' });
+      return;
+    }
+
+    if (mode !== 'shared' && rawGroup !== undefined) {
+      res
+        .status(400)
+        .json({ error: 'Invalid payload: context_group requires context_mode=shared' });
+      return;
+    }
+
+    let normalizedGroup: string | undefined;
+    if (mode === 'shared') {
+      if (typeof rawGroup !== 'string' || rawGroup.trim().length === 0) {
+        res
+          .status(400)
+          .json({ error: 'Invalid payload: shared context_mode requires non-empty context_group' });
+        return;
+      }
+
+      normalizedGroup = normalizeContextGroupName(rawGroup);
+      if (!isValidContextGroupName(normalizedGroup)) {
+        res.status(400).json({
+          error:
+            'Invalid context_group. Use letters/numbers/dash/underscore, start with a letter, max 64 chars.',
+        });
+        return;
+      }
+    }
+
+    const metadata =
+      mode === 'shared'
+        ? {
+            context_mode: 'shared' as const,
+            context_group: normalizedGroup,
+          }
+        : {
+            context_mode: 'isolated' as const,
+          };
+    const policy = resolveAccountContextPolicy(metadata);
+
+    const previousUnified = existsUnified ? registry.getAllAccountsUnified()[name] : undefined;
+    const previousLegacy = existsLegacy ? registry.getProfile(name) : undefined;
+
+    try {
+      if (existsUnified) {
+        registry.updateAccountUnified(name, metadata);
+      }
+      if (existsLegacy) {
+        registry.updateProfile(name, metadata);
+      }
+
+      await instanceMgr.ensureInstance(name, policy);
+    } catch (error) {
+      if (existsUnified && previousUnified) {
+        registry.updateAccountUnified(name, previousUnified);
+      }
+      if (existsLegacy && previousLegacy) {
+        registry.updateProfile(name, previousLegacy);
+      }
+      throw error;
+    }
+
+    res.json({
+      name,
+      context_mode: policy.mode,
+      context_group: policy.group ?? null,
+    });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

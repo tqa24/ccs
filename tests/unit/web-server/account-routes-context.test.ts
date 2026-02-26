@@ -18,6 +18,14 @@ async function deletePath(baseUrl: string, routePath: string): Promise<Response>
   return fetch(`${baseUrl}${routePath}`, { method: 'DELETE' });
 }
 
+async function putJson(baseUrl: string, routePath: string, body: unknown): Promise<Response> {
+  return fetch(`${baseUrl}${routePath}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 describe('web-server account-routes context normalization', () => {
   let server: Server;
   let baseUrl = '';
@@ -27,6 +35,7 @@ describe('web-server account-routes context normalization', () => {
 
   beforeAll(async () => {
     const app = express();
+    app.use(express.json());
     app.use('/api/accounts', accountRoutes);
 
     await new Promise<void>((resolve, reject) => {
@@ -172,5 +181,85 @@ describe('web-server account-routes context normalization', () => {
     } finally {
       InstanceManager.prototype.deleteInstance = originalDeleteInstance;
     }
+  });
+
+  it('updates existing account context metadata and normalizes shared group', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 8',
+        'accounts:',
+        '  work:',
+        '    created: "2026-02-01T00:00:00.000Z"',
+        '    last_used: null',
+        '    context_mode: isolated',
+        'profiles: {}',
+        'cliproxy:',
+        '  oauth_accounts: {}',
+        '  providers: {}',
+        '  variants: {}',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const response = await putJson(baseUrl, '/api/accounts/work/context', {
+      context_mode: 'shared',
+      context_group: ' Team Alpha ',
+    });
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { context_mode: string; context_group: string | null };
+    expect(payload.context_mode).toBe('shared');
+    expect(payload.context_group).toBe('team-alpha');
+
+    const accountsPayload = await getJson<{
+      accounts: Array<{ name: string; context_mode?: string; context_group?: string }>;
+    }>(baseUrl, '/api/accounts');
+    const work = accountsPayload.accounts.find((account) => account.name === 'work');
+    expect(work?.context_mode).toBe('shared');
+    expect(work?.context_group).toBe('team-alpha');
+  });
+
+  it('rejects shared mode updates without context_group', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 8',
+        'accounts:',
+        '  work:',
+        '    created: "2026-02-01T00:00:00.000Z"',
+        '    last_used: null',
+        'profiles: {}',
+        'cliproxy:',
+        '  oauth_accounts: {}',
+        '  providers: {}',
+        '  variants: {}',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const response = await putJson(baseUrl, '/api/accounts/work/context', {
+      context_mode: 'shared',
+    });
+    expect(response.status).toBe(400);
+
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('context_group');
+  });
+
+  it('rejects context updates for CLIProxy account identifiers', async () => {
+    const response = await putJson(baseUrl, '/api/accounts/gemini:test/context', {
+      context_mode: 'shared',
+      context_group: 'default',
+    });
+    expect(response.status).toBe(400);
+
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('CLIProxy');
   });
 });

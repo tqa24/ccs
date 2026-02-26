@@ -457,6 +457,11 @@ export interface Account {
   context_group?: string;
 }
 
+export interface UpdateAccountContext {
+  context_mode: 'isolated' | 'shared';
+  context_group?: string;
+}
+
 // Unified config types
 export interface ConfigFormat {
   format: 'yaml' | 'json' | 'none';
@@ -785,6 +790,11 @@ export const api = {
       }),
     resetDefault: () => request('/accounts/reset-default', { method: 'DELETE' }),
     delete: (name: string) => request(`/accounts/${name}`, { method: 'DELETE' }),
+    updateContext: (name: string, data: UpdateAccountContext) =>
+      request(`/accounts/${encodeURIComponent(name)}/context`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
   },
   // Unified config API
   config: {

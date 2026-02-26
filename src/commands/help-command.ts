@@ -151,6 +151,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     [
       ['ccs auth --help', 'Show account management commands'],
       ['ccs auth create <name>', 'Create account profile (supports context sharing flags)'],
+      ['ccs config', 'Dashboard: Accounts table can edit context mode/group'],
       ['ccs auth list', 'List all account profiles'],
       ['ccs auth default <name>', 'Set default profile'],
       ['ccs auth reset-default', 'Restore original CCS default'],

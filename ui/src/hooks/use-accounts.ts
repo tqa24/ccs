@@ -1,5 +1,5 @@
 /**
- * React Query hooks for accounts (profiles.json)
+ * React Query hooks for account management
  * Dashboard parity: Full CRUD operations for auth profiles
  */
 
@@ -52,6 +52,33 @@ export function useDeleteAccount() {
     onSuccess: (_data, name) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       toast.success(`Account "${name}" deleted`);
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+export function useUpdateAccountContext() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      name,
+      context_mode,
+      context_group,
+    }: {
+      name: string;
+      context_mode: 'isolated' | 'shared';
+      context_group?: string;
+    }) => api.accounts.updateContext(name, { context_mode, context_group }),
+    onSuccess: (_data, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      const contextSummary =
+        vars.context_mode === 'shared'
+          ? `shared (${(vars.context_group || 'default').trim().toLowerCase().replace(/\s+/g, '-')})`
+          : 'isolated';
+      toast.success(`Updated "${vars.name}" context to ${contextSummary}`);
     },
     onError: (error: Error) => {
       toast.error(error.message);

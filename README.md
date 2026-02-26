@@ -279,6 +279,12 @@ ccs auth create backup --share-context
 ccs auth create backup2 --context-group sprint-a
 ```
 
+Update existing accounts without recreating login:
+
+1. Run `ccs config`
+2. Open `Accounts`
+3. Click the pencil icon in Actions and set `isolated` or `shared` mode
+
 Shared mode metadata in `~/.ccs/config.yaml`:
 
 ```yaml
@@ -299,6 +305,8 @@ accounts:
 - normalized by trim + lowercase + whitespace collapse (`" Team Alpha "` -> `"team-alpha"`)
 
 Shared context links project workspace data only. Credentials remain isolated per account.
+
+Technical details: [`docs/session-sharing-technical-analysis.md`](docs/session-sharing-technical-analysis.md)
 
 <br>
 

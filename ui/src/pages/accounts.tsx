@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useAccounts } from '@/hooks/use-accounts';
 
 export function AccountsPage() {
-  const { data, isLoading, refetch } = useAccounts();
+  const { data, isLoading } = useAccounts();
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   return (
@@ -20,7 +20,7 @@ export function AccountsPage() {
         <div>
           <h1 className="text-2xl font-bold">Accounts</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Manage multi-account Claude sessions (profiles.json)
+            Manage multi-account Claude sessions and shared context groups
           </p>
         </div>
         <Button onClick={() => setCreateDialogOpen(true)}>
@@ -32,11 +32,13 @@ export function AccountsPage() {
       {isLoading ? (
         <div className="text-muted-foreground">Loading accounts...</div>
       ) : (
-        <AccountsTable
-          data={data?.accounts || []}
-          defaultAccount={data?.default ?? null}
-          onRefresh={refetch}
-        />
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground">
+            New profile login: <code className="rounded bg-muted px-1 py-0.5">Create Account</code>.
+            Existing profile context: use the pencil icon in the table.
+          </p>
+          <AccountsTable data={data?.accounts || []} defaultAccount={data?.default ?? null} />
+        </div>
       )}
 
       <CreateAuthProfileDialog open={createDialogOpen} onClose={() => setCreateDialogOpen(false)} />

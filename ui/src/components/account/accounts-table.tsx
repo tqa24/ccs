@@ -24,7 +24,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Check, Trash2, RotateCcw } from 'lucide-react';
+import { Check, Pencil, Trash2, RotateCcw } from 'lucide-react';
+import { EditAccountContextDialog } from '@/components/account/edit-account-context-dialog';
 import {
   useSetDefaultAccount,
   useDeleteAccount,
@@ -35,7 +36,6 @@ import type { Account } from '@/lib/api-client';
 interface AccountsTableProps {
   data: Account[];
   defaultAccount: string | null;
-  onRefresh?: () => void;
 }
 
 export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
@@ -43,6 +43,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
   const deleteMutation = useDeleteAccount();
   const resetDefaultMutation = useResetDefaultAccount();
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [contextTarget, setContextTarget] = useState<Account | null>(null);
 
   const columns: ColumnDef<Account>[] = [
     {
@@ -108,13 +109,26 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
     {
       id: 'actions',
       header: 'Actions',
-      size: 180,
+      size: 220,
       cell: ({ row }) => {
         const isDefault = row.original.name === defaultAccount;
         const isPending = setDefaultMutation.isPending || deleteMutation.isPending;
+        const isCliproxy = row.original.type === 'cliproxy';
 
         return (
           <div className="flex items-center gap-1">
+            {!isCliproxy && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                disabled={isPending}
+                onClick={() => setContextTarget(row.original)}
+                title="Edit context mode"
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+            )}
             <Button
               variant={isDefault ? 'secondary' : 'default'}
               size="sm"
@@ -173,7 +187,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
                         created: 'w-[150px]',
                         last_used: 'w-[150px]',
                         context: 'w-[170px]',
-                        actions: 'w-[180px]',
+                        actions: 'w-[220px]',
                       }[header.id] || 'w-auto';
 
                     return (
@@ -216,6 +230,10 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
           </div>
         )}
       </div>
+
+      {contextTarget && (
+        <EditAccountContextDialog account={contextTarget} onClose={() => setContextTarget(null)} />
+      )}
 
       {/* Delete confirmation dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>

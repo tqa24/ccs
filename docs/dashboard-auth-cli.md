@@ -1,6 +1,6 @@
 # Dashboard Authentication CLI
 
-Last Updated: 2026-02-24
+Last Updated: 2026-02-26
 
 CLI commands for managing CCS dashboard authentication.
 
@@ -38,6 +38,12 @@ Account context is isolation-first:
 - rejects explicit `context_mode: shared` with invalid/empty `context_group`
 - normalizes valid shared `context_group` before save
 - rejects `context_group` when mode is not `shared`
+
+Dashboard accounts context editing:
+
+- `PUT /api/accounts/:name/context` updates context mode/group for existing auth accounts
+- rejects CLIProxy OAuth account keys for this route
+- applies normalization/validation rules above
 
 ## Commands
 

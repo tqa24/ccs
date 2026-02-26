@@ -128,6 +128,9 @@ class AuthCommands {
     console.log(
       `  Account profiles stay isolated unless you opt in with ${color('--share-context', 'command')}.`
     );
+    console.log(
+      `  Existing profiles: open ${color('ccs config', 'command')} -> Accounts -> Edit Context.`
+    );
     console.log(`  Shared context groups are normalized (trim + lowercase) and spaces become "-".`);
     console.log(
       `  ${color('context_group', 'path')} must be non-empty and <= ${MAX_CONTEXT_GROUP_LENGTH} chars in shared mode.`
