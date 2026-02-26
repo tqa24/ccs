@@ -29,6 +29,8 @@ export interface ResolvedCreateAccountContext {
 
 export const DEFAULT_ACCOUNT_CONTEXT_MODE: AccountContextMode = 'isolated';
 export const DEFAULT_ACCOUNT_CONTEXT_GROUP = 'default';
+export const MAX_CONTEXT_GROUP_LENGTH = 64;
+export const ACCOUNT_PROFILE_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
 const CONTEXT_GROUP_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
 
@@ -36,14 +38,21 @@ const CONTEXT_GROUP_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
  * Normalize context group names so paths and config stay consistent.
  */
 export function normalizeContextGroupName(value: string): string {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase().replace(/\s+/g, '-');
 }
 
 /**
  * Validate context group naming constraints.
  */
 export function isValidContextGroupName(value: string): boolean {
-  return CONTEXT_GROUP_PATTERN.test(value);
+  return value.length <= MAX_CONTEXT_GROUP_LENGTH && CONTEXT_GROUP_PATTERN.test(value);
+}
+
+/**
+ * Validate account profile naming constraints.
+ */
+export function isValidAccountProfileName(value: string): boolean {
+  return ACCOUNT_PROFILE_NAME_PATTERN.test(value);
 }
 
 /**
@@ -84,8 +93,7 @@ export function resolveCreateAccountContext(
     if (!isValidContextGroupName(normalizedGroup)) {
       return {
         policy: { mode: 'isolated' },
-        error:
-          'Invalid context group. Use letters/numbers/dash/underscore and start with a letter.',
+        error: `Invalid context group. Use letters/numbers/dash/underscore, start with a letter, max ${MAX_CONTEXT_GROUP_LENGTH} chars.`,
       };
     }
 

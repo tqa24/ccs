@@ -63,8 +63,14 @@ class SharedManager {
       const resolvedTarget = path.resolve(path.dirname(target), targetLink);
 
       // Check if target points back to our shared dir or link path
-      const sharedDir = path.join(getCcsDir(), 'shared');
-      if (resolvedTarget.startsWith(sharedDir) || resolvedTarget === linkPath) {
+      const sharedDir = this.resolveCanonicalPath(path.join(getCcsDir(), 'shared'));
+      const canonicalResolvedTarget = this.resolveCanonicalPath(resolvedTarget);
+      const canonicalLinkPath = this.resolveCanonicalPath(linkPath);
+
+      if (
+        this.isPathWithinDirectory(canonicalResolvedTarget, sharedDir) ||
+        canonicalResolvedTarget === canonicalLinkPath
+      ) {
         console.log(warn(`Circular symlink detected: ${target} → ${resolvedTarget}`));
         return true;
       }
@@ -240,12 +246,17 @@ class SharedManager {
         if (
           currentTarget &&
           path.resolve(currentTarget) !== path.resolve(sharedProjectsPath) &&
+          this.isSafeProjectsMergeSource(currentTarget, instanceName) &&
           (await this.pathExists(currentTarget))
         ) {
           await this.mergeDirectoryWithConflictCopies(
             currentTarget,
             sharedProjectsPath,
             instanceName
+          );
+        } else if (currentTarget && !this.isSafeProjectsMergeSource(currentTarget, instanceName)) {
+          console.log(
+            warn(`Skipping unsafe project merge source outside CCS roots: ${currentTarget}`)
           );
         }
 
@@ -286,9 +297,14 @@ class SharedManager {
       if (
         currentTarget &&
         path.resolve(currentTarget) !== path.resolve(projectsPath) &&
+        this.isSafeProjectsMergeSource(currentTarget, instanceName) &&
         (await this.pathExists(currentTarget))
       ) {
         await this.mergeDirectoryWithConflictCopies(currentTarget, projectsPath, instanceName);
+      } else if (currentTarget && !this.isSafeProjectsMergeSource(currentTarget, instanceName)) {
+        console.log(
+          warn(`Skipping unsafe project merge source outside CCS roots: ${currentTarget}`)
+        );
       }
 
       return;
@@ -679,6 +695,24 @@ class SharedManager {
   }
 
   /**
+   * Guard project merge operations to known CCS-managed roots only.
+   */
+  private isSafeProjectsMergeSource(sourcePath: string, instanceName: string): boolean {
+    const resolvedSource = this.resolveCanonicalPath(sourcePath);
+    const sharedContextRoot = this.resolveCanonicalPath(
+      path.join(this.sharedDir, 'context-groups')
+    );
+    const instanceProjectsRoot = this.resolveCanonicalPath(
+      path.join(this.instancesDir, instanceName, 'projects')
+    );
+
+    return (
+      this.isPathWithinDirectory(resolvedSource, sharedContextRoot) ||
+      this.isPathWithinDirectory(resolvedSource, instanceProjectsRoot)
+    );
+  }
+
+  /**
    * Link directory with Windows fallback to recursive copy.
    */
   private async linkDirectoryWithFallback(targetPath: string, linkPath: string): Promise<void> {
@@ -708,7 +742,7 @@ class SharedManager {
     projectsPath: string,
     instanceName: string
   ): Promise<void> {
-    const sharedMemoryRoot = path.resolve(path.join(this.sharedDir, 'memory'));
+    const sharedMemoryRoot = this.resolveCanonicalPath(path.join(this.sharedDir, 'memory'));
 
     let projectEntries: fs.Dirent[] = [];
     try {
@@ -735,15 +769,20 @@ class SharedManager {
         continue;
       }
 
-      if (!path.resolve(memoryTarget).startsWith(sharedMemoryRoot)) {
+      const canonicalMemoryTarget = this.resolveCanonicalPath(memoryTarget);
+      if (!this.isPathWithinDirectory(canonicalMemoryTarget, sharedMemoryRoot)) {
         continue;
       }
 
       await fs.promises.unlink(memoryPath);
       await this.ensureDirectory(memoryPath);
 
-      if (await this.pathExists(memoryTarget)) {
-        await this.mergeDirectoryWithConflictCopies(memoryTarget, memoryPath, instanceName);
+      if (await this.pathExists(canonicalMemoryTarget)) {
+        await this.mergeDirectoryWithConflictCopies(
+          canonicalMemoryTarget,
+          memoryPath,
+          instanceName
+        );
       }
     }
   }
@@ -849,6 +888,27 @@ class SharedManager {
     }
 
     return candidate;
+  }
+
+  private resolveCanonicalPath(targetPath: string): string {
+    try {
+      return fs.realpathSync.native(targetPath);
+    } catch {
+      return path.resolve(targetPath);
+    }
+  }
+
+  private isPathWithinDirectory(candidatePath: string, rootPath: string): boolean {
+    const normalizeForCompare = (inputPath: string): string => {
+      const resolved = path.resolve(inputPath);
+      return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+    };
+
+    const normalizedCandidate = normalizeForCompare(candidatePath);
+    const normalizedRoot = normalizeForCompare(rootPath);
+    const relative = path.relative(normalizedRoot, normalizedCandidate);
+
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
   }
 
   private async pathExists(targetPath: string): Promise<boolean> {

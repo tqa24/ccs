@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import SharedManager from '../../src/management/shared-manager';
+import InstanceManager from '../../src/management/instance-manager';
 import type { AccountContextPolicy } from '../../src/auth/account-context';
 
 function getTestCcsDir(): string {
@@ -10,6 +11,12 @@ function getTestCcsDir(): string {
     throw new Error('CCS_HOME must be set in tests');
   }
   return path.join(path.resolve(process.env.CCS_HOME), '.ccs');
+}
+
+function createDirectorySymlink(targetPath: string, linkPath: string): void {
+  const symlinkType: 'dir' | 'junction' = process.platform === 'win32' ? 'junction' : 'dir';
+  const linkTarget = process.platform === 'win32' ? path.resolve(targetPath) : targetPath;
+  fs.symlinkSync(linkTarget, linkPath, symlinkType);
 }
 
 describe('SharedManager context policy', () => {
@@ -117,5 +124,58 @@ describe('SharedManager context policy', () => {
     expect(fs.lstatSync(projectsPath).isDirectory()).toBe(true);
     expect(fs.existsSync(projectFile)).toBe(true);
     expect(fs.readFileSync(projectFile, 'utf8')).toBe('shared history');
+  });
+
+  it('serializes concurrent context sync for the same profile', async () => {
+    const instanceMgr = new InstanceManager();
+    const jobs = Array.from({ length: 6 }, () =>
+      instanceMgr.ensureInstance('work', { mode: 'shared', group: 'sprint-a' })
+    );
+
+    await Promise.all(jobs);
+
+    const ccsDir = getTestCcsDir();
+    const projectsPath = path.join(ccsDir, 'instances', 'work', 'projects');
+    const stats = fs.lstatSync(projectsPath);
+
+    expect(stats.isDirectory() || stats.isSymbolicLink()).toBe(true);
+  });
+
+  it('skips merge when projects symlink target is outside canonical CCS roots', async () => {
+    const ccsDir = getTestCcsDir();
+    const instancePath = path.join(ccsDir, 'instances', 'work');
+    const projectsPath = path.join(instancePath, 'projects');
+    const unsafeProjectsPath = path.join(ccsDir, 'shared', 'context-groups-evil', 'projects');
+    const unsafeFile = path.join(unsafeProjectsPath, '-tmp-project', 'notes.md');
+
+    fs.mkdirSync(path.dirname(unsafeFile), { recursive: true });
+    fs.writeFileSync(unsafeFile, 'unsafe source', 'utf8');
+    fs.mkdirSync(instancePath, { recursive: true });
+    createDirectorySymlink(unsafeProjectsPath, projectsPath);
+
+    const manager = new SharedManager();
+    await manager.syncProjectContext(instancePath, { mode: 'isolated' });
+
+    expect(fs.lstatSync(projectsPath).isDirectory()).toBe(true);
+    expect(fs.existsSync(path.join(projectsPath, '-tmp-project', 'notes.md'))).toBe(false);
+  });
+
+  it('does not detach project memory symlink from lookalike shared path prefixes', async () => {
+    const ccsDir = getTestCcsDir();
+    const instancePath = path.join(ccsDir, 'instances', 'work');
+    const projectPath = path.join(instancePath, 'projects', '-tmp-project');
+    const memoryPath = path.join(projectPath, 'memory');
+    const unsafeMemoryTarget = path.join(ccsDir, 'shared', 'memory-evil', '-tmp-project');
+    const unsafeMemoryFile = path.join(unsafeMemoryTarget, 'MEMORY.md');
+
+    fs.mkdirSync(path.dirname(unsafeMemoryFile), { recursive: true });
+    fs.writeFileSync(unsafeMemoryFile, 'unsafe memory', 'utf8');
+    fs.mkdirSync(projectPath, { recursive: true });
+    createDirectorySymlink(unsafeMemoryTarget, memoryPath);
+
+    const manager = new SharedManager();
+    await manager.syncProjectContext(instancePath, { mode: 'isolated' });
+
+    expect(fs.lstatSync(memoryPath).isSymbolicLink()).toBe(true);
   });
 });

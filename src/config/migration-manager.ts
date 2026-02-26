@@ -21,6 +21,7 @@ import type { ProfileConfig, AccountConfig, CLIProxyVariantConfig } from './unif
 import { createEmptyUnifiedConfig } from './unified-config-types';
 import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
 import { saveUnifiedConfig, hasUnifiedConfig, loadUnifiedConfig } from './unified-config-loader';
+import { isValidContextGroupName, normalizeContextGroupName } from '../auth/account-context';
 import { infoBox, warn } from '../utils/ui';
 
 const BACKUP_DIR_PREFIX = 'backup-v1-';
@@ -148,9 +149,25 @@ export async function migrate(dryRun = false): Promise<MigrationResult> {
     if (oldProfiles?.profiles) {
       for (const [name, meta] of Object.entries(oldProfiles.profiles)) {
         const metadata = meta as Record<string, unknown>;
+        const rawContextMode = metadata.context_mode;
+        const rawContextGroup = metadata.context_group;
+        const contextMode = rawContextMode === 'shared' ? 'shared' : 'isolated';
+        let contextGroup: string | undefined;
+        if (typeof rawContextGroup === 'string' && rawContextGroup.trim().length > 0) {
+          const normalizedGroup = normalizeContextGroupName(rawContextGroup);
+          if (isValidContextGroupName(normalizedGroup)) {
+            contextGroup = normalizedGroup;
+          } else {
+            warnings.push(
+              `Skipped invalid context group for account "${name}": "${rawContextGroup}" (fallback to default shared group)`
+            );
+          }
+        }
         const account: AccountConfig = {
           created: (metadata.created as string) || new Date().toISOString(),
           last_used: (metadata.last_used as string) || null,
+          context_mode: contextMode,
+          context_group: contextMode === 'shared' ? contextGroup : undefined,
         };
         unifiedConfig.accounts[name] = account;
       }

@@ -1,8 +1,8 @@
 # CCS Codebase Summary
 
-Last Updated: 2026-02-04
+Last Updated: 2026-02-24
 
-Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, v7.14 Hybrid Quota Management, and v7.34 Image Analysis Hook.
+Comprehensive overview of the modularized CCS codebase structure following the Phase 9 modularization effort (Settings, Analytics, Auth Monitor splits + Test Infrastructure), v7.1 Remote CLIProxy feature, v7.2 Kiro + GitHub Copilot (ghcp) OAuth providers, v7.14 Hybrid Quota Management, v7.34 Image Analysis Hook, and account-context validation hardening.
 
 ## Repository Structure
 
@@ -200,6 +200,19 @@ src/
 | Image Analysis | `utils/image-analysis/`, `utils/hooks/` | Vision model proxying (v7.34) |
 | Services | `web-server/`, `api/` | HTTP server, API services |
 | Utilities | `utils/`, `management/` | Helpers, diagnostics |
+
+### Account Context Metadata Flow
+
+- Source fields: `accounts.<name>.context_mode` and `accounts.<name>.context_group` in `~/.ccs/config.yaml`.
+- Runtime policy resolver: `src/auth/account-context.ts`.
+- Metadata storage normalization: `src/auth/profile-registry.ts`.
+- API write validation: `PUT /api/config` in `src/web-server/routes/config-routes.ts`.
+- Rules:
+  - mode is isolation-first (`isolated` default, `shared` opt-in)
+  - shared mode requires non-empty valid `context_group`
+  - `context_group` is normalized (trim + lowercase + whitespace collapse to `-`)
+  - API route rejects `context_group` when mode is not `shared`
+  - registry normalization drops malformed persisted `context_group` values
 
 ### Target Adapter Module
 

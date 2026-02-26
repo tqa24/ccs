@@ -61,7 +61,7 @@ Want to run the dashboard in Docker? See `docker/README.md`.
 
 The dashboard provides visual management for all account types:
 
-- **Claude Accounts**: Create isolated instances (work, personal, client)
+- **Claude Accounts**: Isolation-first by default (work, personal, client), with explicit shared context opt-in
 - **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity, Kiro, Copilot
 - **API Profiles**: Configure GLM, Kimi with your keys
 - **Factory Droid**: Track Droid install location and BYOK settings health
@@ -260,17 +260,45 @@ ccs work "implement feature"    # Terminal 1
 ccs  "review code"              # Terminal 2 (personal account)
 ```
 
-Need continuity between two accounts for the same project? Opt in to shared context:
+#### Account Context Modes (Isolation-First)
+
+Account profiles are isolated by default.
+
+| Mode | Default | Requirements |
+|------|---------|--------------|
+| `isolated` | Yes | No `context_group` required |
+| `shared` | No (explicit opt-in) | Valid non-empty `context_group` |
+
+Opt in to shared context when needed:
 
 ```bash
 # Share context with default group
 ccs auth create backup --share-context
 
-# Or isolate by named group (only accounts in this group share context)
+# Share context only within named group
 ccs auth create backup2 --context-group sprint-a
 ```
 
-Isolation remains the default. Shared context only links project workspace data; credentials stay per-account.
+Shared mode metadata in `~/.ccs/config.yaml`:
+
+```yaml
+accounts:
+  work:
+    created: "2026-02-24T00:00:00.000Z"
+    last_used: null
+    context_mode: "shared"
+    context_group: "team-alpha"
+```
+
+`context_group` rules:
+
+- lowercase letters, numbers, `_`, `-`
+- must start with a letter
+- max length `64`
+- non-empty after normalization
+- normalized by trim + lowercase + whitespace collapse (`" Team Alpha "` -> `"team-alpha"`)
+
+Shared context links project workspace data only. Credentials remain isolated per account.
 
 <br>
 

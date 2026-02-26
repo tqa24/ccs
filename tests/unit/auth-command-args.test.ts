@@ -31,4 +31,18 @@ describe('auth command args parsing', () => {
     expect(parsed.profileName).toBe('work');
     expect(parsed.contextGroup).toBe('');
   });
+
+  it('flags empty inline context group as empty string', () => {
+    const parsed = parseArgs(['work', '--context-group=']);
+
+    expect(parsed.profileName).toBe('work');
+    expect(parsed.contextGroup).toBe('');
+  });
+
+  it('tracks unknown flags and keeps positional profile intact', () => {
+    const parsed = parseArgs(['--foo', 'bar', 'work']);
+
+    expect(parsed.profileName).toBe('work');
+    expect(parsed.unknownFlags).toEqual(['--foo']);
+  });
 });
