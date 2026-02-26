@@ -75,142 +75,147 @@ export function AccountsPage() {
             <div className="p-4 space-y-3">
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Immediate Actions</CardTitle>
+                  <CardTitle className="text-sm">Action Center</CardTitle>
+                  <CardDescription>
+                    Primary actions plus migration status in one place.
+                  </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-2">
-                  <Button
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={() => setCreateDialogOpen(true)}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Create Account
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={handleOpenClaudePoolAuth}
-                  >
-                    <Zap className="w-4 h-4 mr-2" />
-                    Authenticate Claude in Pool
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={handleOpenClaudePool}
-                  >
-                    Open Claude Pool Settings
-                    <ArrowRight className="w-4 h-4 ml-auto" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full justify-start"
-                    onClick={handleConfirmLegacy}
-                    disabled={confirmLegacyMutation.isPending || legacyTargetCount === 0}
-                  >
-                    {confirmLegacyMutation.isPending
-                      ? 'Confirming Legacy Policies...'
-                      : `Confirm Legacy Policies (${legacyTargetCount})`}
-                  </Button>
+                <CardContent className="space-y-3">
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Primary Actions
+                    </p>
+                    <Button
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={() => setCreateDialogOpen(true)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create Account
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={handleOpenClaudePoolAuth}
+                    >
+                      <Zap className="w-4 h-4 mr-2" />
+                      Authenticate Claude in Pool
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start"
+                      onClick={handleOpenClaudePool}
+                    >
+                      Open Claude Pool Settings
+                      <ArrowRight className="w-4 h-4 ml-auto" />
+                    </Button>
+                  </div>
+
+                  <div className="border-t pt-3 space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Legacy Migration
+                    </p>
+                    {hasLegacyFollowUp ? (
+                      <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400 shrink-0" />
+                          <div className="space-y-1 text-xs">
+                            {legacyContextCount > 0 && (
+                              <p className="text-amber-800 dark:text-amber-300">
+                                {legacyContextCount} account
+                                {legacyContextCount > 1 ? 's still need' : ' still needs'}{' '}
+                                first-time mode confirmation.
+                              </p>
+                            )}
+                            {legacyContinuityCount > 0 && (
+                              <p className="text-amber-800 dark:text-amber-300">
+                                {legacyContinuityCount} shared account
+                                {legacyContinuityCount > 1 ? 's remain' : ' remains'} on standard
+                                legacy continuity depth.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full justify-start"
+                          onClick={handleConfirmLegacy}
+                          disabled={confirmLegacyMutation.isPending || legacyTargetCount === 0}
+                        >
+                          {confirmLegacyMutation.isPending
+                            ? 'Confirming Legacy Policies...'
+                            : `Confirm Legacy Policies (${legacyTargetCount})`}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                        No legacy follow-up pending.
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
-              {hasLegacyFollowUp && (
-                <section className="space-y-2">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Migration Follow-up
-                  </p>
-                  <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-3">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 mt-0.5 text-amber-700 dark:text-amber-400 shrink-0" />
-                      <div className="space-y-1 text-xs">
-                        {legacyContextCount > 0 && (
-                          <p className="text-amber-800 dark:text-amber-300">
-                            {legacyContextCount} account
-                            {legacyContextCount > 1 ? 's still need' : ' still needs'} first-time
-                            mode confirmation.
-                          </p>
-                        )}
-                        {legacyContinuityCount > 0 && (
-                          <p className="text-amber-800 dark:text-amber-300">
-                            {legacyContinuityCount} shared account
-                            {legacyContinuityCount > 1 ? 's remain' : ' remains'} on standard legacy
-                            continuity depth.
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-              )}
-
-              {!hasLegacyFollowUp && (
-                <div className="rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
-                  No legacy follow-up pending.
-                </div>
-              )}
-
-              <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
-                <Card>
-                  <CardHeader className="pb-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Guide & Commands</CardTitle>
+                  <CardDescription>Continuity modes and CLI shortcuts.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" className="h-auto w-full justify-between px-0 py-0">
                         <div className="text-left">
-                          <CardTitle className="text-sm">Continuity Guide</CardTitle>
-                          <CardDescription className="mt-1">
+                          <p className="text-sm font-semibold">Continuity Guide</p>
+                          <p className="mt-1 text-xs text-muted-foreground">
                             Expand only when needed.
-                          </CardDescription>
+                          </p>
                         </div>
                         <ChevronDown
                           className={cn('h-4 w-4 transition-transform', guideOpen && 'rotate-180')}
                         />
                       </Button>
                     </CollapsibleTrigger>
-                  </CardHeader>
-                  <CollapsibleContent>
-                    <CardContent className="space-y-3 text-xs text-muted-foreground">
-                      <div className="rounded-md border p-2.5">
-                        <p className="font-semibold text-foreground">Shared Standard</p>
-                        <p className="mt-1">
-                          Project workspace sync only. Best default for most teams.
-                        </p>
+                    <CollapsibleContent className="pt-2">
+                      <div className="space-y-2 text-xs text-muted-foreground">
+                        <div className="rounded-md border p-2.5">
+                          <p className="font-semibold text-foreground">Shared Standard</p>
+                          <p className="mt-1">
+                            Project workspace sync only. Best default for most teams.
+                          </p>
+                        </div>
+                        <div className="rounded-md border p-2.5">
+                          <p className="font-semibold text-foreground">Shared Deeper</p>
+                          <p className="mt-1">
+                            Adds <code>session-env</code>, <code>file-history</code>,{' '}
+                            <code>shell-snapshots</code>, <code>todos</code>.
+                          </p>
+                        </div>
+                        <div className="rounded-md border p-2.5">
+                          <p className="font-semibold text-foreground">Isolated</p>
+                          <p className="mt-1">No link. Best for strict separation.</p>
+                        </div>
                       </div>
-                      <div className="rounded-md border p-2.5">
-                        <p className="font-semibold text-foreground">Shared Deeper</p>
-                        <p className="mt-1">
-                          Adds <code>session-env</code>, <code>file-history</code>,{' '}
-                          <code>shell-snapshots</code>, <code>todos</code>.
-                        </p>
-                      </div>
-                      <div className="rounded-md border p-2.5">
-                        <p className="font-semibold text-foreground">Isolated</p>
-                        <p className="mt-1">No link. Best for strict separation.</p>
-                      </div>
-                    </CardContent>
-                  </CollapsibleContent>
-                </Card>
-              </Collapsible>
+                    </CollapsibleContent>
+                  </Collapsible>
 
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Quick Commands</CardTitle>
-                  <CardDescription>Copy and run in terminal.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
-                    <span className="flex-1 break-all">
-                      ccs auth create work --context-group sprint-a --deeper-continuity
-                    </span>
-                    <CopyButton
-                      value="ccs auth create work --context-group sprint-a --deeper-continuity"
-                      size="icon"
-                    />
-                  </div>
-                  <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
-                    <span className="flex-1 break-all">ccs cliproxy auth claude</span>
-                    <CopyButton value="ccs cliproxy auth claude" size="icon" />
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold">Quick Commands</p>
+                    <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
+                      <span className="flex-1 break-all">
+                        ccs auth create work --context-group sprint-a --deeper-continuity
+                      </span>
+                      <CopyButton
+                        value="ccs auth create work --context-group sprint-a --deeper-continuity"
+                        size="icon"
+                      />
+                    </div>
+                    <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
+                      <span className="flex-1 break-all">ccs cliproxy auth claude</span>
+                      <CopyButton value="ccs cliproxy auth claude" size="icon" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>
