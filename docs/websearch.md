@@ -1,6 +1,6 @@
 # WebSearch Configuration Guide
 
-Last Updated: 2026-02-04
+Last Updated: 2026-02-26
 
 CCS provides automatic web search capability for all profiles, including third-party providers that cannot access Anthropic's native WebSearch API.
 
@@ -19,7 +19,7 @@ Third-party profiles (OAuth and API-based) cannot use Anthropic's WebSearch beca
 
 CCS solves this with a hybrid fallback approach:
 
-1. **Gemini CLI Transformer** (Primary) - Uses `gemini -p` with `google_web_search` tool
+1. **Gemini CLI Transformer** (Primary) - Uses positional Gemini prompt mode (with legacy `-p` fallback) and `google_web_search` tool
 2. **MCP Fallback Chain** (Secondary) - MCP-based web search servers
 
 ## Architecture
@@ -53,7 +53,7 @@ The **ultimate solution** for third-party WebSearch. Uses `gemini` CLI with OAut
 ### How It Works
 
 1. A PreToolUse hook intercepts WebSearch tool calls
-2. Executes `gemini -p` with explicit google_web_search instruction
+2. Executes `gemini "<prompt>"` (positional mode) with explicit google_web_search instruction
 3. Returns search results directly to Claude via the hook's deny reason
 4. Claude receives full search results and continues the conversation
 
