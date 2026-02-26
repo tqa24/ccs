@@ -197,6 +197,13 @@ export default function AuthSection() {
     setTimeout(() => setCopiedSecret(false), 2000);
   };
 
+  const refreshAll = async () => {
+    if (loading || saving) return;
+    setError(null);
+    setSuccess(null);
+    await Promise.all([fetchTokens(), fetchRawConfig()]);
+  };
+
   if (loading || !tokens) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -359,7 +366,6 @@ export default function AuthSection() {
             </div>
           </div>
 
-          {/* Actions */}
           <div className="pt-4 border-t">
             <Button
               variant="outline"
@@ -383,10 +389,7 @@ export default function AuthSection() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            fetchTokens();
-            fetchRawConfig();
-          }}
+          onClick={refreshAll}
           disabled={loading || saving}
           className="flex-1"
         >

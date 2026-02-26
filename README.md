@@ -53,15 +53,19 @@ ccs config
 # Opens http://localhost:3000
 ```
 
+Dashboard updates hub: `http://localhost:3000/updates`
+
 Want to run the dashboard in Docker? See `docker/README.md`.
 
 ### 3. Configure Your Accounts
 
 The dashboard provides visual management for all account types:
 
-- **Claude Accounts**: Create isolated instances (work, personal, client)
+- **Claude Accounts**: Isolation-first by default (work, personal, client), with explicit shared context opt-in
 - **OAuth Providers**: One-click auth for Gemini, Codex, Antigravity, Kiro, Copilot
 - **API Profiles**: Configure GLM, Kimi with your keys
+- **Factory Droid**: Track Droid install location and BYOK settings health
+- **Updates Center**: Track support rollouts (Droid target, CLIProxy provider changes, WebSearch integrations)
 - **Health Monitor**: Real-time status across all profiles
 
 **Analytics Dashboard**
@@ -154,6 +158,56 @@ ccsd glm
 
 Need additional alias names? Set `CCS_DROID_ALIASES` as a comma-separated list (for example: `CCS_DROID_ALIASES=ccs-droid,mydroid`).
 
+For Factory BYOK compatibility, CCS also stores a per-profile Droid provider hint
+(`CCS_DROID_PROVIDER`) using one of:
+`anthropic`, `openai`, or `generic-chat-completion-api`.
+If the hint is missing, CCS resolves provider from base URL/model at runtime.
+
+CCS also persists Droid's active model selector in `~/.factory/settings.json`
+(`model: custom:<alias>`). This avoids passing `-m` argv in interactive mode,
+which Droid treats as queued prompt text.
+
+CCS supports structural Droid command passthrough after profile selection:
+
+```bash
+ccsd codex exec --skip-permissions-unsafe "fix failing tests"
+ccsd codex --skip-permissions-unsafe "fix failing tests"   # auto-routed to: droid exec ...
+ccsd codex -m custom:gpt-5.3-codex "fix failing tests"     # short exec flags auto-routed too
+```
+
+If you pass exec-only flags without a prompt (for example `--skip-permissions-unsafe`),
+Droid `exec` will return its native "No prompt provided" usage guidance.
+
+If multiple reasoning flags are provided in Droid exec mode, CCS keeps the first
+flag and warns about duplicates.
+
+Dashboard parity: `ccs config` -> `Factory Droid`
+
+### Per-Profile Target Defaults
+
+You can pin a default target (`claude` or `droid`) per profile:
+
+```bash
+# API profile defaults to Droid
+ccs api create myglm --preset glm --target droid
+
+# CLIProxy variant defaults to Droid
+ccs cliproxy create mycodex --provider codex --target droid
+```
+
+Built-in CLIProxy providers also work with Droid alias/target override:
+
+```bash
+ccsd codex
+ccsd agy
+ccs codex --target droid
+ccsd codex exec --auto high "triage this bug report"
+```
+
+Dashboard parity:
+- `ccs config` -> `API Profiles` -> set **Default Target**
+- `ccs config` -> `CLIProxy` -> create/edit variant -> set **Default Target**
+
 ### Kiro Auth Methods
 
 `ccs kiro --auth` defaults to AWS Builder ID Device OAuth (best support for AWS org accounts).
@@ -221,17 +275,66 @@ ccs work "implement feature"    # Terminal 1
 ccs  "review code"              # Terminal 2 (personal account)
 ```
 
-Need continuity between two accounts for the same project? Opt in to shared context:
+#### Account Context Modes (Isolation-First)
+
+Account profiles are isolated by default.
+
+| Mode | Default | Requirements |
+|------|---------|--------------|
+| `isolated` | Yes | No `context_group` required |
+| `shared` | No (explicit opt-in) | Valid non-empty `context_group` |
+
+Shared mode continuity depth:
+
+- `standard` (default): shares project workspace context only
+- `deeper` (advanced opt-in): additionally syncs `session-env`, `file-history`, `shell-snapshots`, `todos`
+
+Opt in to shared context when needed:
 
 ```bash
 # Share context with default group
 ccs auth create backup --share-context
 
-# Or isolate by named group (only accounts in this group share context)
+# Share context only within named group
 ccs auth create backup2 --context-group sprint-a
+
+# Advanced deeper continuity mode (requires shared mode)
+ccs auth create backup3 --context-group sprint-a --deeper-continuity
 ```
 
-Isolation remains the default. Shared context only links project workspace data; credentials stay per-account.
+Update existing accounts without recreating login:
+
+1. Run `ccs config`
+2. Open `Accounts`
+3. Click the pencil icon in Actions and set `isolated` or `shared` mode + continuity depth
+
+Shared mode metadata in `~/.ccs/config.yaml`:
+
+```yaml
+accounts:
+  work:
+    created: "2026-02-24T00:00:00.000Z"
+    last_used: null
+    context_mode: "shared"
+    context_group: "team-alpha"
+    continuity_mode: "standard"
+```
+
+`context_group` rules:
+
+- lowercase letters, numbers, `_`, `-`
+- must start with a letter
+- max length `64`
+- non-empty after normalization
+- normalized by trim + lowercase + whitespace collapse (`" Team Alpha "` -> `"team-alpha"`)
+
+Shared context with `standard` depth links project workspace data. `deeper` depth links additional continuity artifacts. Credentials remain isolated per account.
+
+Alternative path for lower manual switching:
+
+- Use CLIProxy Claude pool (`ccs cliproxy auth claude`) and manage pool behavior in `ccs config` -> `CLIProxy Plus`.
+
+Technical details: [`docs/session-sharing-technical-analysis.md`](docs/session-sharing-technical-analysis.md)
 
 <br>
 

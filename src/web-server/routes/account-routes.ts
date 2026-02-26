@@ -7,31 +7,36 @@
 
 import { Router, Request, Response } from 'express';
 import ProfileRegistry from '../../auth/profile-registry';
+import InstanceManager from '../../management/instance-manager';
 import { isUnifiedMode } from '../../config/unified-config-loader';
 import {
   getAllAccountsSummary,
   setDefaultAccount as setCliproxyDefault,
+  getDefaultAccount as getCliproxyDefaultAccount,
   removeAccount as removeCliproxyAccount,
   bulkPauseAccounts,
   bulkResumeAccounts,
   soloAccount,
 } from '../../cliproxy/account-manager';
-import type { CLIProxyProvider } from '../../cliproxy/types';
 import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
+import {
+  DEFAULT_ACCOUNT_CONTINUITY_MODE,
+  isValidContextGroupName,
+  normalizeContextGroupName,
+  resolveAccountContextPolicy,
+} from '../../auth/account-context';
+import {
+  buildCliproxyAccountKey,
+  parseCliproxyKey,
+  type MergedAccountEntry,
+} from './account-route-helpers';
 
 const router = Router();
 const registry = new ProfileRegistry();
+const instanceMgr = new InstanceManager();
 
-/** Parse CLIProxy account key format: "provider:accountId" */
-function parseCliproxyKey(key: string): { provider: CLIProxyProvider; accountId: string } | null {
-  const colonIndex = key.indexOf(':');
-  if (colonIndex === -1) return null;
-
-  const provider = key.slice(0, colonIndex);
-  const accountId = key.slice(colonIndex + 1);
-
-  if (!isCLIProxyProvider(provider) || !accountId) return null;
-  return { provider, accountId };
+function hasAuthAccount(name: string): boolean {
+  return registry.hasAccountUnified(name) || registry.hasProfile(name);
 }
 
 /**
@@ -47,38 +52,45 @@ router.get('/', (_req: Request, res: Response): void => {
     const cliproxyAccounts = getAllAccountsSummary();
 
     // Merge profiles: unified config takes precedence
-    const merged: Record<
-      string,
-      {
-        type: string;
-        created: string;
-        last_used: string | null;
-        context_mode?: 'isolated' | 'shared';
-        context_group?: string;
-        provider?: string;
-        displayName?: string;
-      }
-    > = {};
+    const merged: Record<string, MergedAccountEntry> = {};
 
     // Add legacy profiles first
     for (const [name, meta] of Object.entries(legacyProfiles)) {
+      const contextPolicy = resolveAccountContextPolicy(meta);
+      const hasExplicitContextMode =
+        meta.context_mode === 'isolated' || meta.context_mode === 'shared';
+      const hasExplicitContinuityMode =
+        meta.continuity_mode === 'standard' || meta.continuity_mode === 'deeper';
       merged[name] = {
         type: meta.type || 'account',
         created: meta.created,
         last_used: meta.last_used || null,
-        context_mode: meta.context_mode,
-        context_group: meta.context_group,
+        context_mode: contextPolicy.mode,
+        context_group: contextPolicy.group,
+        continuity_mode: contextPolicy.mode === 'shared' ? contextPolicy.continuityMode : undefined,
+        context_inferred: !hasExplicitContextMode,
+        continuity_inferred:
+          contextPolicy.mode === 'shared' ? !hasExplicitContinuityMode : undefined,
       };
     }
 
     // Override with unified config accounts (takes precedence)
     for (const [name, account] of Object.entries(unifiedAccounts)) {
+      const contextPolicy = resolveAccountContextPolicy(account);
+      const hasExplicitContextMode =
+        account.context_mode === 'isolated' || account.context_mode === 'shared';
+      const hasExplicitContinuityMode =
+        account.continuity_mode === 'standard' || account.continuity_mode === 'deeper';
       merged[name] = {
         type: 'account',
         created: account.created,
         last_used: account.last_used,
-        context_mode: account.context_mode,
-        context_group: account.context_group,
+        context_mode: contextPolicy.mode,
+        context_group: contextPolicy.group,
+        continuity_mode: contextPolicy.mode === 'shared' ? contextPolicy.continuityMode : undefined,
+        context_inferred: !hasExplicitContextMode,
+        continuity_inferred:
+          contextPolicy.mode === 'shared' ? !hasExplicitContinuityMode : undefined,
       };
     }
 
@@ -91,7 +103,11 @@ router.get('/', (_req: Request, res: Response): void => {
         }
         // Use unique ID for key to prevent collisions between accounts with same nickname/email
         const displayName = acct.nickname || acct.email || acct.id;
-        const key = `${provider}:${acct.id}`;
+        const rawKey = `${provider}:${acct.id}`;
+        const key = buildCliproxyAccountKey(rawKey, merged);
+        if (!key) {
+          continue;
+        }
         merged[key] = {
           type: 'cliproxy',
           provider,
@@ -130,7 +146,7 @@ router.post('/default', (req: Request, res: Response): void => {
     }
 
     // Check if this is a CLIProxy account (format: "provider:accountId")
-    const cliproxyKey = parseCliproxyKey(name);
+    const cliproxyKey = !hasAuthAccount(name) ? parseCliproxyKey(name) : null;
     if (cliproxyKey) {
       const success = setCliproxyDefault(cliproxyKey.provider, cliproxyKey.accountId);
       if (!success) {
@@ -149,6 +165,140 @@ router.post('/default', (req: Request, res: Response): void => {
     }
 
     res.json({ default: name });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+/**
+ * PUT /api/accounts/:name/context - Update account context mode/group
+ */
+router.put('/:name/context', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { name } = req.params;
+
+    if (!name) {
+      res.status(400).json({ error: 'Missing account name' });
+      return;
+    }
+
+    // CLIProxy OAuth accounts do not support local account context metadata.
+    const cliproxyKey = !hasAuthAccount(name) ? parseCliproxyKey(name) : null;
+    if (cliproxyKey) {
+      res
+        .status(400)
+        .json({ error: `Context mode is not supported for CLIProxy account: ${name}` });
+      return;
+    }
+
+    const existsUnified = isUnifiedMode() && registry.hasAccountUnified(name);
+    const existsLegacy = registry.hasProfile(name);
+    if (!existsUnified && !existsLegacy) {
+      res.status(404).json({ error: `Account not found: ${name}` });
+      return;
+    }
+
+    const mode = req.body?.context_mode;
+    const rawGroup = req.body?.context_group;
+    const rawContinuityMode = req.body?.continuity_mode;
+
+    if (mode !== 'isolated' && mode !== 'shared') {
+      res.status(400).json({ error: 'Missing or invalid context_mode: expected isolated|shared' });
+      return;
+    }
+
+    if (mode !== 'shared' && rawGroup !== undefined) {
+      res
+        .status(400)
+        .json({ error: 'Invalid payload: context_group requires context_mode=shared' });
+      return;
+    }
+
+    if (mode !== 'shared' && rawContinuityMode !== undefined) {
+      res
+        .status(400)
+        .json({ error: 'Invalid payload: continuity_mode requires context_mode=shared' });
+      return;
+    }
+
+    let normalizedGroup: string | undefined;
+    let continuityMode: 'standard' | 'deeper' | undefined;
+    if (mode === 'shared') {
+      if (typeof rawGroup !== 'string' || rawGroup.trim().length === 0) {
+        res
+          .status(400)
+          .json({ error: 'Invalid payload: shared context_mode requires non-empty context_group' });
+        return;
+      }
+
+      normalizedGroup = normalizeContextGroupName(rawGroup);
+      if (!isValidContextGroupName(normalizedGroup)) {
+        res.status(400).json({
+          error:
+            'Invalid context_group. Use letters/numbers/dash/underscore, start with a letter, max 64 chars.',
+        });
+        return;
+      }
+
+      if (
+        rawContinuityMode !== undefined &&
+        rawContinuityMode !== 'standard' &&
+        rawContinuityMode !== 'deeper'
+      ) {
+        res.status(400).json({
+          error: 'Invalid continuity_mode: expected standard|deeper',
+        });
+        return;
+      }
+
+      continuityMode = rawContinuityMode === 'deeper' ? 'deeper' : DEFAULT_ACCOUNT_CONTINUITY_MODE;
+    }
+
+    const metadata =
+      mode === 'shared'
+        ? {
+            context_mode: 'shared' as const,
+            context_group: normalizedGroup,
+            continuity_mode: continuityMode,
+          }
+        : {
+            context_mode: 'isolated' as const,
+          };
+    const policy = resolveAccountContextPolicy(metadata);
+
+    const previousUnified = existsUnified ? registry.getAllAccountsUnified()[name] : undefined;
+    const previousLegacy = existsLegacy ? registry.getProfile(name) : undefined;
+
+    try {
+      if (existsUnified) {
+        registry.updateAccountUnified(name, metadata);
+      }
+      if (existsLegacy) {
+        registry.updateProfile(name, metadata);
+      }
+
+      await instanceMgr.ensureInstance(name, policy);
+    } catch (error) {
+      if (existsUnified && previousUnified) {
+        registry.updateAccountUnified(name, previousUnified);
+      }
+      if (existsLegacy && previousLegacy) {
+        registry.updateProfile(name, previousLegacy);
+      }
+      throw error;
+    }
+
+    res.json({
+      name,
+      context_mode: policy.mode,
+      context_group: policy.group ?? null,
+      continuity_mode:
+        policy.mode === 'shared'
+          ? (policy.continuityMode ?? DEFAULT_ACCOUNT_CONTINUITY_MODE)
+          : null,
+      context_inferred: false,
+      continuity_inferred: false,
+    });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }
@@ -192,8 +342,16 @@ router.delete('/:name', (req: Request, res: Response): void => {
     }
 
     // Check if this is a CLIProxy account (format: "provider:accountId")
-    const cliproxyKey = parseCliproxyKey(name);
+    const cliproxyKey = !hasAuthAccount(name) ? parseCliproxyKey(name) : null;
     if (cliproxyKey) {
+      const defaultCliproxyAccount = getCliproxyDefaultAccount(cliproxyKey.provider);
+      if (defaultCliproxyAccount?.id === cliproxyKey.accountId) {
+        res.status(400).json({
+          error: `Cannot delete default CLIProxy account: ${name}. Set another default first.`,
+        });
+        return;
+      }
+
       const success = removeCliproxyAccount(cliproxyKey.provider, cliproxyKey.accountId);
       if (!success) {
         res.status(404).json({ error: `CLIProxy account not found: ${name}` });
@@ -203,20 +361,22 @@ router.delete('/:name', (req: Request, res: Response): void => {
       return;
     }
 
-    // Delete from appropriate config (unified and/or legacy)
-    let deleted = false;
-    if (isUnifiedMode() && registry.hasAccountUnified(name)) {
-      registry.removeAccountUnified(name);
-      deleted = true;
-    }
-    if (registry.hasProfile(name)) {
-      registry.deleteProfile(name);
-      deleted = true;
-    }
+    const existsUnified = isUnifiedMode() && registry.hasAccountUnified(name);
+    const existsLegacy = registry.hasProfile(name);
 
-    if (!deleted) {
+    if (!existsUnified && !existsLegacy) {
       res.status(404).json({ error: `Account not found: ${name}` });
       return;
+    }
+
+    // Match CLI remove ordering: delete instance first, metadata second.
+    instanceMgr.deleteInstance(name);
+
+    if (existsUnified) {
+      registry.removeAccountUnified(name);
+    }
+    if (existsLegacy) {
+      registry.deleteProfile(name);
     }
 
     res.json({ success: true, deleted: name });

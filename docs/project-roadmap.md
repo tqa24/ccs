@@ -203,14 +203,20 @@ All criteria achieved:
 ## Maintainability Gate (Issue #539 Foundation)
 
 - Baseline metrics artifact: `docs/metrics/maintainability-baseline.json`
+- Branch-aware gate wrapper: `scripts/maintainability-check.js`
 - Generate or refresh baseline:
   - `bun run maintainability:baseline`
   - `npm run maintainability:baseline`
 - Run regression check gate:
   - `bun run maintainability:check`
   - `npm run maintainability:check`
+  - `bun run maintainability:check:strict` (force strict locally)
 
 The baseline/check scripts enumerate git-tracked files under `src` for deterministic results and fail fast if git file listing is unavailable.
+
+Default gate behavior:
+- strict mode on protected branches (`main`, `dev`, `hotfix/*`, `kai/hotfix-*`)
+- warning mode on PR CI and non-protected branches (parallel PR friendly)
 
 The check mode supports a maintainability regression gate that blocks increases in:
 - `process.exit` references

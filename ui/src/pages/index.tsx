@@ -15,3 +15,7 @@ export { SharedPage } from './shared';
 export { AnalyticsPage } from './analytics';
 
 export { CursorPage } from './cursor';
+
+export { UpdatesPage } from './updates';
+
+export { DroidPage } from './droid';

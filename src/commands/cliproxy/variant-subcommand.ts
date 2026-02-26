@@ -12,6 +12,7 @@ import { triggerOAuth } from '../../cliproxy/auth/oauth-handler';
 import { CLIProxyProfileName, CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import { supportsModelConfig, getProviderCatalog, ModelEntry } from '../../cliproxy/model-catalog';
 import { CLIProxyProvider, CLIProxyBackend } from '../../cliproxy/types';
+import type { TargetType } from '../../targets/target-adapter';
 import { isUnifiedMode } from '../../config/unified-config-loader';
 import { initUI, header, color, ok, fail, warn, info, infoBox, dim } from '../../utils/ui';
 import { InteractivePrompt } from '../../utils/prompt';
@@ -32,28 +33,66 @@ interface CliproxyProfileArgs {
   provider?: CLIProxyProfileName;
   model?: string;
   account?: string;
+  target?: TargetType;
   force?: boolean;
   yes?: boolean;
   composite?: boolean;
+  errors: string[];
 }
 
-function parseProfileArgs(args: string[]): CliproxyProfileArgs {
-  const result: CliproxyProfileArgs = {};
+function parseTargetValue(rawValue: string): TargetType | null {
+  const normalized = rawValue.trim().toLowerCase();
+  if (normalized === 'claude' || normalized === 'droid') {
+    return normalized;
+  }
+  return null;
+}
+
+export function parseProfileArgs(args: string[]): CliproxyProfileArgs {
+  const result: CliproxyProfileArgs = { errors: [] };
+  let parseOptions = true;
+
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--provider' && args[i + 1]) {
+    if (parseOptions && arg === '--') {
+      parseOptions = false;
+      continue;
+    }
+
+    if (parseOptions && arg === '--provider' && args[i + 1]) {
       result.provider = args[++i] as CLIProxyProfileName;
-    } else if (arg === '--model' && args[i + 1]) {
+    } else if (parseOptions && arg === '--model' && args[i + 1]) {
       result.model = args[++i];
-    } else if (arg === '--account' && args[i + 1]) {
+    } else if (parseOptions && arg === '--account' && args[i + 1]) {
       result.account = args[++i];
-    } else if (arg === '--force') {
+    } else if (parseOptions && arg === '--target') {
+      const rawValue = args[i + 1];
+      if (!rawValue || rawValue.startsWith('-')) {
+        result.errors.push('Missing value for --target');
+      } else {
+        i += 1;
+        const parsedTarget = parseTargetValue(rawValue);
+        if (!parsedTarget) {
+          result.errors.push(`Invalid --target value "${rawValue}". Use: claude or droid`);
+        } else {
+          result.target = parsedTarget;
+        }
+      }
+    } else if (parseOptions && arg.startsWith('--target=')) {
+      const rawValue = arg.slice('--target='.length);
+      const parsedTarget = parseTargetValue(rawValue);
+      if (!parsedTarget) {
+        result.errors.push(`Invalid --target value "${rawValue}". Use: claude or droid`);
+      } else {
+        result.target = parsedTarget;
+      }
+    } else if (parseOptions && arg === '--force') {
       result.force = true;
-    } else if (arg === '--yes' || arg === '-y') {
+    } else if (parseOptions && (arg === '--yes' || arg === '-y')) {
       result.yes = true;
-    } else if (arg === '--composite') {
+    } else if (parseOptions && arg === '--composite') {
       result.composite = true;
-    } else if (!arg.startsWith('-') && !result.name) {
+    } else if ((!parseOptions || !arg.startsWith('-')) && !result.name) {
       result.name = arg;
     }
   }
@@ -145,6 +184,11 @@ export async function handleCreate(
 ): Promise<void> {
   await initUI();
   const parsedArgs = parseProfileArgs(args);
+  if (parsedArgs.errors.length > 0) {
+    parsedArgs.errors.forEach((errorMessage) => console.log(fail(errorMessage)));
+    process.exitCode = 1;
+    return;
+  }
   console.log(header(`Create ${getBackendLabel(backend)} Variant`));
   console.log('');
 
@@ -166,6 +210,17 @@ export async function handleCreate(
     console.log(fail(`Variant '${name}' already exists`));
     console.log(`    Use ${color('--force', 'command')} to overwrite`);
     process.exit(1);
+  }
+
+  let resolvedTarget: TargetType = parsedArgs.target || 'claude';
+  if (!parsedArgs.target && !parsedArgs.yes) {
+    const useDroidByDefault = await InteractivePrompt.confirm(
+      'Set default target to Factory Droid for this variant?',
+      { default: false }
+    );
+    if (useDroidByDefault) {
+      resolvedTarget = 'droid';
+    }
   }
 
   // Composite mode: select provider+model per tier
@@ -203,6 +258,7 @@ export async function handleCreate(
     const result = createCompositeVariant({
       name,
       defaultTier,
+      target: resolvedTarget,
       tiers: { opus, sonnet, haiku },
     });
 
@@ -217,7 +273,8 @@ export async function handleCreate(
       ? `Opus:    ${tiers.opus.provider} / ${tiers.opus.model}\n` +
         `Sonnet:  ${tiers.sonnet.provider} / ${tiers.sonnet.model}\n` +
         `Haiku:   ${tiers.haiku.provider} / ${tiers.haiku.model}\n` +
-        `Default: ${defaultTier}`
+        `Default: ${defaultTier}\n` +
+        `Target:  ${resolvedTarget}`
       : '';
     const portInfo = result.variant?.port ? `\nPort:    ${result.variant.port}` : '';
     console.log(
@@ -228,7 +285,24 @@ export async function handleCreate(
     );
     console.log('');
     console.log(header('Usage'));
-    console.log(`  ${color(`ccs ${name} "your prompt"`, 'command')}`);
+    if (resolvedTarget === 'droid') {
+      console.log(
+        `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses droid by default')}`
+      );
+      console.log(
+        `  ${color(`ccsd ${name} "your prompt"`, 'command')} ${dim('# explicit droid alias')}`
+      );
+      console.log(
+        `  ${color(`ccs ${name} --target claude "your prompt"`, 'command')} ${dim('# override to Claude')}`
+      );
+    } else {
+      console.log(
+        `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses claude by default')}`
+      );
+      console.log(
+        `  ${color(`ccs ${name} --target droid "your prompt"`, 'command')} ${dim('# run on droid for this call')}`
+      );
+    }
     console.log('');
     return;
   }
@@ -350,7 +424,7 @@ export async function handleCreate(
   // Create variant
   console.log('');
   console.log(info(`Creating ${getBackendLabel(backend)} variant...`));
-  const result = createVariant(name, provider, model, account);
+  const result = createVariant(name, provider, model, account, resolvedTarget);
 
   if (!result.success) {
     console.log(fail(`Failed to create variant: ${result.error}`));
@@ -367,13 +441,30 @@ export async function handleCreate(
   const portInfo = result.variant?.port ? `Port:     ${result.variant.port}\n` : '';
   console.log(
     infoBox(
-      `Variant:  ${name}\nProvider: ${provider}\nModel:    ${model}\n${portInfo}${account ? `Account:  ${account}\n` : ''}${isUnifiedMode() ? 'Config' : 'Settings'}:   ${settingsDisplay}`,
+      `Variant:  ${name}\nProvider: ${provider}\nModel:    ${model}\nTarget:   ${resolvedTarget}\n${portInfo}${account ? `Account:  ${account}\n` : ''}${isUnifiedMode() ? 'Config' : 'Settings'}:   ${settingsDisplay}`,
       configType
     )
   );
   console.log('');
   console.log(header('Usage'));
-  console.log(`  ${color(`ccs ${name} "your prompt"`, 'command')}`);
+  if (resolvedTarget === 'droid') {
+    console.log(
+      `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses droid by default')}`
+    );
+    console.log(
+      `  ${color(`ccsd ${name} "your prompt"`, 'command')} ${dim('# explicit droid alias')}`
+    );
+    console.log(
+      `  ${color(`ccs ${name} --target claude "your prompt"`, 'command')} ${dim('# override to Claude')}`
+    );
+  } else {
+    console.log(
+      `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses claude by default')}`
+    );
+    console.log(
+      `  ${color(`ccs ${name} --target droid "your prompt"`, 'command')} ${dim('# run on droid for this call')}`
+    );
+  }
   console.log('');
   console.log(dim('To change model later:'));
   console.log(`  ${color(`ccs ${name} --config`, 'command')}`);
@@ -383,6 +474,11 @@ export async function handleCreate(
 export async function handleRemove(args: string[]): Promise<void> {
   await initUI();
   const parsedArgs = parseProfileArgs(args);
+  if (parsedArgs.errors.length > 0) {
+    parsedArgs.errors.forEach((errorMessage) => console.log(fail(errorMessage)));
+    process.exitCode = 1;
+    return;
+  }
   const variants = listVariants();
   const variantNames = Object.keys(variants);
 
@@ -435,6 +531,7 @@ export async function handleRemove(args: string[]): Promise<void> {
   if (variant.port) {
     console.log(`  Port:     ${variant.port}`);
   }
+  console.log(`  Target:   ${variant.target || 'claude'}`);
   console.log(`  Settings: ${variant.settings || '-'}`);
   console.log('');
 
@@ -461,6 +558,11 @@ export async function handleEdit(
 ): Promise<void> {
   await initUI();
   const parsedArgs = parseProfileArgs(args);
+  if (parsedArgs.errors.length > 0) {
+    parsedArgs.errors.forEach((errorMessage) => console.log(fail(errorMessage)));
+    process.exitCode = 1;
+    return;
+  }
   const variants = listVariants();
   const variantNames = Object.keys(variants);
 
@@ -501,12 +603,14 @@ export async function handleEdit(
 
   // If not composite, use existing updateVariant() flow (interactive prompts)
   if (variant.type !== 'composite') {
+    const currentTarget: TargetType = variant.target || 'claude';
     console.log(header(`Edit Variant: ${name}`));
     console.log('');
     console.log(`Current provider: ${variant.provider}`);
     if (variant.model) {
       console.log(`Current model:    ${variant.model}`);
     }
+    console.log(`Current target:   ${currentTarget}`);
     console.log('');
 
     const changeProvider = await InteractivePrompt.confirm('Change provider?', { default: false });
@@ -552,6 +656,22 @@ export async function handleEdit(
       }
     }
 
+    let newTarget: TargetType | undefined = parsedArgs.target;
+    if (!parsedArgs.target) {
+      const changeTarget = await InteractivePrompt.confirm('Change default target?', {
+        default: false,
+      });
+      if (changeTarget) {
+        const targetOptions = [
+          { id: 'claude', label: 'Claude Code' },
+          { id: 'droid', label: 'Factory Droid' },
+        ];
+        newTarget = (await InteractivePrompt.selectFromList('Select target:', targetOptions, {
+          defaultIndex: currentTarget === 'droid' ? 1 : 0,
+        })) as TargetType;
+      }
+    }
+
     console.log('');
     console.log(info(`Updating ${getBackendLabel(backend)} variant...`));
     // Use existing updateVariant from variant-service for single-provider variants
@@ -559,6 +679,7 @@ export async function handleEdit(
     const result = updateVariant(name, {
       provider: newProvider,
       model: changeModel ? newModel : undefined,
+      target: newTarget,
     });
 
     if (!result.success) {
@@ -566,13 +687,35 @@ export async function handleEdit(
       process.exit(1);
     }
 
+    const resolvedTarget = result.variant?.target || currentTarget;
     console.log('');
     console.log(ok(`Variant updated: ${name}`));
+    console.log('');
+    console.log(header('Usage'));
+    if (resolvedTarget === 'droid') {
+      console.log(
+        `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses droid by default')}`
+      );
+      console.log(
+        `  ${color(`ccsd ${name} "your prompt"`, 'command')} ${dim('# explicit droid alias')}`
+      );
+      console.log(
+        `  ${color(`ccs ${name} --target claude "your prompt"`, 'command')} ${dim('# override to Claude')}`
+      );
+    } else {
+      console.log(
+        `  ${color(`ccs ${name} "your prompt"`, 'command')} ${dim('# uses claude by default')}`
+      );
+      console.log(
+        `  ${color(`ccs ${name} --target droid "your prompt"`, 'command')} ${dim('# run on droid for this call')}`
+      );
+    }
     console.log('');
     return;
   }
 
   // Composite variant edit flow
+  const compositeCurrentTarget: TargetType = variant.target || 'claude';
   console.log(header(`Edit Composite Variant: ${name}`));
   console.log('');
   if (!variant.tiers) {
@@ -585,6 +728,7 @@ export async function handleEdit(
   console.log(`  Sonnet:  ${variant.tiers.sonnet.provider} / ${variant.tiers.sonnet.model}`);
   console.log(`  Haiku:   ${variant.tiers.haiku.provider} / ${variant.tiers.haiku.model}`);
   console.log(`  Default: ${variant.default_tier}`);
+  console.log(`  Target:  ${compositeCurrentTarget}`);
   console.log('');
 
   const verbose = args.includes('--verbose');
@@ -634,11 +778,32 @@ export async function handleEdit(
     )) as 'opus' | 'sonnet' | 'haiku';
   }
 
+  let newCompositeTarget: TargetType | undefined = parsedArgs.target;
+  if (!parsedArgs.target) {
+    const changeTarget = await InteractivePrompt.confirm('Change default target?', {
+      default: false,
+    });
+    if (changeTarget) {
+      const targetOptions = [
+        { id: 'claude', label: 'Claude Code' },
+        { id: 'droid', label: 'Factory Droid' },
+      ];
+      newCompositeTarget = (await InteractivePrompt.selectFromList(
+        'Select target:',
+        targetOptions,
+        {
+          defaultIndex: compositeCurrentTarget === 'droid' ? 1 : 0,
+        }
+      )) as TargetType;
+    }
+  }
+
   console.log('');
   console.log(info(`Updating composite ${getBackendLabel(backend)} variant...`));
   const result = updateCompositeVariant(name, {
     tiers: updatedTiers,
     defaultTier: changeDefault ? newDefaultTier : undefined,
+    target: newCompositeTarget,
   });
 
   if (!result.success) {
@@ -653,7 +818,8 @@ export async function handleEdit(
       `Opus:    ${finalVariant.tiers.opus.provider} / ${finalVariant.tiers.opus.model}\n` +
       `Sonnet:  ${finalVariant.tiers.sonnet.provider} / ${finalVariant.tiers.sonnet.model}\n` +
       `Haiku:   ${finalVariant.tiers.haiku.provider} / ${finalVariant.tiers.haiku.model}\n` +
-      `Default: ${finalVariant.default_tier}`;
+      `Default: ${finalVariant.default_tier}\n` +
+      `Target:  ${finalVariant.target || compositeCurrentTarget}`;
     const portInfo = finalVariant.port ? `\nPort:    ${finalVariant.port}` : '';
     console.log(
       infoBox(

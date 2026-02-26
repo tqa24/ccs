@@ -1,6 +1,6 @@
 {
   "name": "@kaitranntt/ccs",
-  "version": "7.50.0",
+  "version": "7.50.0-dev.11",
   "description": "Claude Code Switch - Instant profile switching between Claude Sonnet 4.5 and GLM 4.6",
   "keywords": [
     "cli",
@@ -69,7 +69,9 @@
     "validate:ci-parity": "bash scripts/ci-parity-gate.sh",
     "verify:bundle": "node scripts/verify-bundle.js",
     "maintainability:baseline": "node scripts/maintainability-baseline.js --out docs/metrics/maintainability-baseline.json",
-    "maintainability:check": "node scripts/maintainability-baseline.js --check docs/metrics/maintainability-baseline.json",
+    "maintainability:check": "node scripts/maintainability-check.js",
+    "maintainability:check:strict": "node scripts/maintainability-check.js --strict",
+    "maintainability:check:warn": "node scripts/maintainability-check.js --warn",
     "test": "bun run build && bun run test:all",
     "test:ci": "bun run test:all",
     "test:all": "bun test tests/unit tests/integration tests/npm",

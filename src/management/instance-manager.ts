@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import SharedManager from './shared-manager';
+import ProfileContextSyncLock from './profile-context-sync-lock';
 import { AccountContextPolicy, DEFAULT_ACCOUNT_CONTEXT_MODE } from '../auth/account-context';
 import { getCcsDir } from '../utils/config-manager';
 
@@ -18,10 +19,12 @@ import { getCcsDir } from '../utils/config-manager';
 class InstanceManager {
   private readonly instancesDir: string;
   private readonly sharedManager: SharedManager;
+  private readonly contextSyncLock: ProfileContextSyncLock;
 
   constructor() {
     this.instancesDir = path.join(getCcsDir(), 'instances');
     this.sharedManager = new SharedManager();
+    this.contextSyncLock = new ProfileContextSyncLock(this.instancesDir);
   }
 
   /**
@@ -33,16 +36,20 @@ class InstanceManager {
   ): Promise<string> {
     const instancePath = this.getInstancePath(profileName);
 
-    // Lazy initialization
-    if (!fs.existsSync(instancePath)) {
-      this.initializeInstance(profileName, instancePath);
-    }
+    // Serialize context sync operations per profile across processes.
+    await this.contextSyncLock.withLock(profileName, async () => {
+      // Lazy initialization
+      if (!fs.existsSync(instancePath)) {
+        this.initializeInstance(profileName, instancePath);
+      }
 
-    // Validate structure (auto-fix missing dirs)
-    this.validateInstance(instancePath);
+      // Validate structure (auto-fix missing dirs)
+      this.validateInstance(instancePath);
 
-    // Apply context policy (isolated by default, optional shared group).
-    await this.sharedManager.syncProjectContext(instancePath, contextPolicy);
+      // Apply context policy (isolated by default, optional shared group).
+      await this.sharedManager.syncProjectContext(instancePath, contextPolicy);
+      await this.sharedManager.syncAdvancedContinuityArtifacts(instancePath, contextPolicy);
+    });
 
     return instancePath;
   }

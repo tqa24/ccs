@@ -120,14 +120,21 @@ describe('DroidAdapter', () => {
     expect(adapter.supportsProfileType('default')).toBe(true);
   });
 
-  it('should NOT support cliproxy and copilot profile types', () => {
-    expect(adapter.supportsProfileType('cliproxy')).toBe(false);
+  it('should support cliproxy and NOT support copilot profile type', () => {
+    expect(adapter.supportsProfileType('cliproxy')).toBe(true);
     expect(adapter.supportsProfileType('copilot')).toBe(false);
   });
 
-  it('should build args with -m custom:ccs- prefix', () => {
-    const args = adapter.buildArgs('gemini', ['--verbose']);
-    expect(args).toEqual(['-m', 'custom:ccs-gemini', '--verbose']);
+  it('should keep interactive args clean (no model argv injection)', () => {
+    const isolatedAdapter = new DroidAdapter();
+    const args = isolatedAdapter.buildArgs('gemini', ['--verbose']);
+    expect(args).toEqual(['--verbose']);
+  });
+
+  it('should not queue model selector as prompt when no user args', () => {
+    const isolatedAdapter = new DroidAdapter();
+    const args = isolatedAdapter.buildArgs('codex', []);
+    expect(args).toEqual([]);
   });
 
   it('should build minimal env (no ANTHROPIC_ vars)', () => {
@@ -177,6 +184,54 @@ describe('DroidAdapter', () => {
 
       const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
       expect(fs.existsSync(settingsPath)).toBe(true);
+    } finally {
+      if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
+      else delete process.env.CCS_HOME;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('prepareCredentials should persist reasoning override into Droid extraArgs', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-droid-adapter-reasoning-test-'));
+    const originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_HOME = tmpDir;
+
+    try {
+      await adapter.prepareCredentials({
+        profile: 'codex',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'dummy-key',
+        model: 'gpt-5.2',
+        provider: 'openai',
+        reasoningOverride: 'high',
+      });
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.customModels?.[0]?.extraArgs?.reasoning?.effort).toBe('high');
+    } finally {
+      if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
+      else delete process.env.CCS_HOME;
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it('buildArgs should use selector returned from Droid settings entry', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-droid-selector-test-'));
+    const originalCcsHome = process.env.CCS_HOME;
+    process.env.CCS_HOME = tmpDir;
+
+    try {
+      const isolatedAdapter = new DroidAdapter();
+      await isolatedAdapter.prepareCredentials({
+        profile: 'gemini',
+        baseUrl: 'http://localhost:8317',
+        apiKey: 'dummy-key',
+        model: 'claude-sonnet-4-5-20250929',
+      });
+
+      const args = isolatedAdapter.buildArgs('gemini', ['--verbose']);
+      expect(args).toEqual(['--verbose']);
     } finally {
       if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
       else delete process.env.CCS_HOME;

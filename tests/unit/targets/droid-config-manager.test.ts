@@ -32,6 +32,25 @@ describe('droid-config-manager', () => {
   });
 
   describe('upsertCcsModel', () => {
+    it('should return a selector reference for the managed model', async () => {
+      const ref = await upsertCcsModel('gemini', {
+        model: 'claude-opus-4-6',
+        displayName: 'CCS gemini',
+        baseUrl: 'http://localhost:8317',
+        apiKey: 'dummy-key',
+        provider: 'anthropic',
+      });
+
+      expect(ref.profile).toBe('gemini');
+      expect(ref.selectorAlias).toBe('CCS-gemini-0');
+      expect(ref.selector).toBe('custom:CCS-gemini-0');
+      expect(ref.index).toBe(0);
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.model).toBe('custom:CCS-gemini-0');
+    });
+
     it('should create settings.json with customModels', async () => {
       await upsertCcsModel('gemini', {
         model: 'claude-opus-4-6',
@@ -48,6 +67,7 @@ describe('droid-config-manager', () => {
       expect(settings.customModels).toHaveLength(1);
       expect(settings.customModels[0].displayName).toBe('CCS gemini');
       expect(settings.customModels[0].baseUrl).toBe('http://localhost:8317');
+      expect(settings.model).toBe('custom:CCS-gemini-0');
     });
 
     it('should update existing entry on second upsert', async () => {
@@ -72,6 +92,79 @@ describe('droid-config-manager', () => {
       expect(settings.customModels).toHaveLength(1);
       expect(settings.customModels[0].apiKey).toBe('key-2');
       expect(settings.customModels[0].baseUrl).toBe('http://localhost:8318');
+    });
+
+    it('should persist generic provider reasoning_effort from override', async () => {
+      await upsertCcsModel('glm', {
+        model: 'glm-4.7',
+        displayName: 'CCS glm',
+        baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+        apiKey: 'glm-key',
+        provider: 'generic-chat-completion-api',
+        reasoningOverride: 'high',
+      });
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.customModels[0].extraArgs?.reasoning_effort).toBe('high');
+      expect(settings.customModels[0].extraArgs?.reasoning).toBeUndefined();
+      expect(settings.customModels[0].extraArgs?.thinking).toBeUndefined();
+    });
+
+    it('should persist openai provider reasoning.effort from --effort alias override', async () => {
+      await upsertCcsModel('codex', {
+        model: 'gpt-5.2',
+        displayName: 'CCS codex',
+        baseUrl: 'https://api.openai.com/v1',
+        apiKey: 'openai-key',
+        provider: 'openai',
+        reasoningOverride: 'xhigh',
+      });
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.customModels[0].extraArgs?.reasoning?.effort).toBe('xhigh');
+      expect(settings.customModels[0].extraArgs?.reasoning_effort).toBeUndefined();
+    });
+
+    it('should persist anthropic thinking budget from numeric override', async () => {
+      await upsertCcsModel('agy', {
+        model: 'claude-opus-4-5-thinking',
+        displayName: 'CCS agy',
+        baseUrl: 'https://api.anthropic.com',
+        apiKey: 'anthropic-key',
+        provider: 'anthropic',
+        reasoningOverride: 40960,
+      });
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.customModels[0].extraArgs?.thinking?.type).toBe('enabled');
+      expect(settings.customModels[0].extraArgs?.thinking?.budget_tokens).toBe(40960);
+    });
+
+    it('should clear prior reasoning config when override disables thinking', async () => {
+      await upsertCcsModel('glm', {
+        model: 'glm-4.7',
+        displayName: 'CCS glm',
+        baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+        apiKey: 'glm-key',
+        provider: 'generic-chat-completion-api',
+        reasoningOverride: 'high',
+      });
+
+      await upsertCcsModel('glm', {
+        model: 'glm-4.7',
+        displayName: 'CCS glm',
+        baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+        apiKey: 'glm-key',
+        provider: 'generic-chat-completion-api',
+        reasoningOverride: 'off',
+      });
+
+      const settingsPath = path.join(tmpDir, '.factory', 'settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      expect(settings.customModels[0].extraArgs).toBeUndefined();
     });
 
     it('should preserve user entries', async () => {

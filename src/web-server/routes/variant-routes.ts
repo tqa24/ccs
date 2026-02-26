@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express';
 import { isReservedName, RESERVED_PROFILE_NAMES } from '../../config/reserved-names';
 import type { CLIProxyProvider } from '../../cliproxy/types';
+import type { TargetType } from '../../targets/target-adapter';
 import {
   createVariant,
   removeVariant,
@@ -23,6 +24,23 @@ import {
 
 const router = Router();
 
+export function parseTarget(rawTarget: unknown): TargetType | null {
+  if (rawTarget === undefined || rawTarget === null || rawTarget === '') {
+    return null;
+  }
+
+  if (typeof rawTarget !== 'string') {
+    return null;
+  }
+
+  const normalized = rawTarget.trim().toLowerCase();
+  if (normalized === 'claude' || normalized === 'droid') {
+    return normalized;
+  }
+
+  return null;
+}
+
 /**
  * GET /api/cliproxy - List cliproxy variants
  * Uses variant-service for consistent behavior with CLI
@@ -36,6 +54,7 @@ router.get('/', (_req: Request, res: Response) => {
     account: variant.account || 'default',
     port: variant.port, // Include port for port isolation
     model: variant.model,
+    target: variant.target || 'claude',
     type: variant.type,
     default_tier: variant.default_tier,
     tiers: variant.tiers,
@@ -50,6 +69,12 @@ router.get('/', (_req: Request, res: Response) => {
  */
 router.post('/', (req: Request, res: Response): void => {
   const { name, provider, model, account, type, default_tier, tiers } = req.body;
+  const parsedTarget = parseTarget(req.body.target);
+
+  if (req.body.target !== undefined && parsedTarget === null) {
+    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    return;
+  }
 
   if (!name) {
     res.status(400).json({ error: 'Missing required field: name' });
@@ -91,7 +116,12 @@ router.post('/', (req: Request, res: Response): void => {
 
     let result;
     try {
-      result = createCompositeVariant({ name, defaultTier: default_tier, tiers });
+      result = createCompositeVariant({
+        name,
+        defaultTier: default_tier,
+        target: parsedTarget || 'claude',
+        tiers,
+      });
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
       return;
@@ -109,6 +139,7 @@ router.post('/', (req: Request, res: Response): void => {
       tiers,
       settings: result.settingsPath,
       port: result.variant?.port,
+      target: result.variant?.target || 'claude',
     });
     return;
   }
@@ -126,7 +157,13 @@ router.post('/', (req: Request, res: Response): void => {
   }
 
   // Use variant-service for proper port allocation
-  const result = createVariant(name, provider as CLIProxyProvider, model, account);
+  const result = createVariant(
+    name,
+    provider as CLIProxyProvider,
+    model,
+    account,
+    parsedTarget || 'claude'
+  );
 
   if (!result.success) {
     res.status(409).json({ error: result.error });
@@ -140,6 +177,7 @@ router.post('/', (req: Request, res: Response): void => {
     account: account || 'default',
     port: result.variant?.port,
     model: result.variant?.model,
+    target: result.variant?.target || 'claude',
   });
 });
 
@@ -154,6 +192,12 @@ router.put('/:name', (req: Request, res: Response): void => {
   try {
     const { name } = req.params;
     const { provider, account, model, default_tier, tiers } = req.body;
+    const parsedTarget = parseTarget(req.body.target);
+
+    if (req.body.target !== undefined && parsedTarget === null) {
+      res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+      return;
+    }
 
     // Check if variant is composite - use updateCompositeVariant if so
     const variants = listVariants();
@@ -165,8 +209,8 @@ router.put('/:name', (req: Request, res: Response): void => {
     }
 
     if (existing.type === 'composite') {
-      if (!default_tier && !tiers) {
-        res.status(400).json({ error: 'Must provide at least default_tier or tiers' });
+      if (!default_tier && !tiers && req.body.target === undefined) {
+        res.status(400).json({ error: 'Must provide at least default_tier, tiers, or target' });
         return;
       }
 
@@ -189,7 +233,11 @@ router.put('/:name', (req: Request, res: Response): void => {
         }
       }
 
-      const result = updateCompositeVariant(name, { defaultTier: default_tier, tiers });
+      const result = updateCompositeVariant(name, {
+        defaultTier: default_tier,
+        tiers,
+        target: req.body.target !== undefined && parsedTarget ? parsedTarget : undefined,
+      });
 
       if (!result.success) {
         const status = result.error?.includes('not found') ? 404 : 400;
@@ -207,13 +255,19 @@ router.put('/:name', (req: Request, res: Response): void => {
         tiers: persisted?.tiers,
         settings: persisted?.settings,
         port: persisted?.port,
+        target: persisted?.target || 'claude',
         updated: true,
       });
       return;
     }
 
     // Use variant-service for proper update handling (single provider)
-    const result = updateVariant(name, { provider, account, model });
+    const result = updateVariant(name, {
+      provider,
+      account,
+      model,
+      target: req.body.target !== undefined && parsedTarget ? parsedTarget : undefined,
+    });
 
     if (!result.success) {
       const status = result.error?.includes('not found') ? 404 : 400;
@@ -227,6 +281,7 @@ router.put('/:name', (req: Request, res: Response): void => {
       account: result.variant?.account || 'default',
       settings: result.variant?.settings,
       port: result.variant?.port,
+      target: result.variant?.target || 'claude',
       updated: true,
     });
   } catch (error) {

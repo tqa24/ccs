@@ -44,6 +44,8 @@ export interface AccountConfig {
   context_mode?: 'isolated' | 'shared';
   /** Context-sharing group when context_mode='shared' */
   context_group?: string;
+  /** Shared continuity depth when context_mode='shared' */
+  continuity_mode?: 'standard' | 'deeper';
 }
 
 /**
@@ -161,6 +163,22 @@ export interface CLIProxyLoggingConfig {
 }
 
 /**
+ * CLIProxy safety configuration.
+ * Controls high-risk flow safeguards for supported providers.
+ */
+export interface CLIProxySafetyConfig {
+  /** Allow skipping AGY responsibility acknowledgement flow (default: false) */
+  antigravity_ack_bypass?: boolean;
+}
+
+/**
+ * Default CLIProxy safety configuration.
+ */
+export const DEFAULT_CLIPROXY_SAFETY_CONFIG: CLIProxySafetyConfig = {
+  antigravity_ack_bypass: false,
+};
+
+/**
  * Token refresh configuration.
  * Manages background token refresh worker settings.
  */
@@ -191,6 +209,8 @@ export interface CLIProxyConfig {
   variants: Record<string, CLIProxyVariantConfig | CompositeVariantConfig>;
   /** Logging configuration (disabled by default) */
   logging?: CLIProxyLoggingConfig;
+  /** Safety controls for high-risk provider flows */
+  safety?: CLIProxySafetyConfig;
   /** Kiro: disable incognito browser mode (use normal browser to save credentials) */
   kiro_no_incognito?: boolean;
   /** Global auth configuration for CLIProxyAPI */
@@ -781,6 +801,7 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
         enabled: false,
         request_log: false,
       },
+      safety: { ...DEFAULT_CLIPROXY_SAFETY_CONFIG },
       auto_sync: true,
     },
     preferences: {

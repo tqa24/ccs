@@ -4,6 +4,8 @@
  * Shared type definitions for API profile services.
  */
 
+import type { TargetType } from '../../targets/target-adapter';
+
 /** Model mapping for API profiles */
 export interface ModelMapping {
   default: string;
@@ -18,6 +20,7 @@ export interface ApiProfileInfo {
   settingsPath: string;
   isConfigured: boolean;
   configSource: 'unified' | 'legacy';
+  target: TargetType;
 }
 
 /** CLIProxy variant info */
@@ -25,6 +28,7 @@ export interface CliproxyVariantInfo {
   name: string;
   provider: string;
   settings: string;
+  target: TargetType;
 }
 
 /** Result from list operation */
@@ -43,5 +47,12 @@ export interface CreateApiProfileResult {
 /** Result from remove operation */
 export interface RemoveApiProfileResult {
   success: boolean;
+  error?: string;
+}
+
+/** Result from updating API profile target */
+export interface UpdateApiProfileTargetResult {
+  success: boolean;
+  target?: TargetType;
   error?: string;
 }

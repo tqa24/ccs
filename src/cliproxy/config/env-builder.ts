@@ -37,6 +37,8 @@ const DEPRECATED_MODEL_PREFIX = 'gemini-claude-';
 /** Replacement prefix matching actual upstream model names */
 const UPSTREAM_MODEL_PREFIX = 'claude-';
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
+const IFLOW_PLACEHOLDER_MODEL = 'iflow-default';
+const IFLOW_DEFAULT_MODEL = 'qwen3-coder-plus';
 const PRESET_MODEL_KEYS = ['default', 'opus', 'sonnet', 'haiku'] as const;
 const REQUIRED_PROVIDER_ENV_KEYS = [
   'ANTHROPIC_BASE_URL',
@@ -119,6 +121,61 @@ function migrateCodexEffortSuffixes(
         const canonical = stripCodexEffortSuffix(value);
         if (canonical !== value) {
           presetRecord[key] = canonical;
+          migrated = true;
+        }
+      }
+    }
+  }
+
+  if (migrated) {
+    try {
+      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 });
+    } catch {
+      // Best-effort migration — don't block startup if write fails
+    }
+  }
+
+  return migrated;
+}
+
+/**
+ * Migrate legacy iFlow placeholder model IDs to a real default model.
+ * Example: iflow-default -> qwen3-coder-plus
+ */
+function migrateIFlowPlaceholderModel(
+  settingsPath: string,
+  provider: CLIProxyProvider,
+  settings: ProviderSettings
+): boolean {
+  if (provider !== 'iflow') return false;
+  if (!settings.env || typeof settings.env !== 'object') return false;
+
+  let migrated = false;
+  const normalize = (value: string): string => value.trim().toLowerCase();
+  const replaceIfPlaceholder = (value: string): string =>
+    normalize(value) === IFLOW_PLACEHOLDER_MODEL ? IFLOW_DEFAULT_MODEL : value;
+
+  for (const key of MODEL_ENV_VAR_KEYS) {
+    const value = settings.env[key];
+    if (typeof value !== 'string') continue;
+    const replaced = replaceIfPlaceholder(value);
+    if (replaced !== value) {
+      settings.env[key] = replaced;
+      migrated = true;
+    }
+  }
+
+  if (Array.isArray(settings.presets)) {
+    for (const preset of settings.presets) {
+      if (!preset || typeof preset !== 'object') continue;
+      const presetRecord = preset as Record<string, unknown>;
+
+      for (const key of PRESET_MODEL_KEYS) {
+        const value = presetRecord[key];
+        if (typeof value !== 'string') continue;
+        const replaced = replaceIfPlaceholder(value);
+        if (replaced !== value) {
+          presetRecord[key] = replaced;
           migrated = true;
         }
       }
@@ -355,6 +412,8 @@ export function getEffectiveEnvVars(
           migrateDeprecatedModelNames(expandedPath, settings);
           // Migrate codex effort suffixes to canonical IDs if present
           migrateCodexEffortSuffixes(expandedPath, provider, settings);
+          // Migrate legacy iFlow placeholders to supported model IDs
+          migrateIFlowPlaceholderModel(expandedPath, provider, settings);
           // Custom variant settings found - merge with global env
           envVars = { ...globalEnv, ...settings.env };
           // Ensure required vars are present (fall back to defaults if missing)
@@ -388,6 +447,8 @@ export function getEffectiveEnvVars(
         migrateDeprecatedModelNames(settingsPath, settings);
         // Migrate codex effort suffixes to canonical IDs if present
         migrateCodexEffortSuffixes(settingsPath, provider, settings);
+        // Migrate legacy iFlow placeholders to supported model IDs
+        migrateIFlowPlaceholderModel(settingsPath, provider, settings);
         // User override found - merge with global env
         envVars = { ...globalEnv, ...settings.env };
         // Ensure required vars are present (fall back to defaults if missing)
@@ -525,6 +586,7 @@ export function getRemoteEnvVars(
         if (settings.env && typeof settings.env === 'object') {
           migrateDeprecatedModelNames(expandedPath, settings);
           migrateCodexEffortSuffixes(expandedPath, provider, settings);
+          migrateIFlowPlaceholderModel(expandedPath, provider, settings);
           userEnvVars = settings.env as Record<string, string>;
         }
       } catch {
@@ -544,6 +606,7 @@ export function getRemoteEnvVars(
         if (settings.env && typeof settings.env === 'object') {
           migrateDeprecatedModelNames(settingsPath, settings);
           migrateCodexEffortSuffixes(settingsPath, provider, settings);
+          migrateIFlowPlaceholderModel(settingsPath, provider, settings);
           userEnvVars = settings.env as Record<string, string>;
         }
       } catch {

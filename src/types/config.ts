@@ -4,6 +4,7 @@
  */
 
 import type { CLIProxyProvider } from '../cliproxy/types';
+import type { TargetType } from '../targets/target-adapter';
 
 /**
  * Profile configuration mapping
@@ -27,6 +28,8 @@ export interface CLIProxyVariantConfig {
   account?: string;
   /** Unique port for variant isolation (8318-8417) */
   port?: number;
+  /** Target CLI to use for this variant (default: claude) */
+  target?: TargetType;
 }
 
 /**
@@ -44,6 +47,8 @@ export interface CLIProxyVariantsConfig {
 export interface Config {
   /** Settings-based profiles (GLM, Kimi, etc.) */
   profiles: ProfilesConfig;
+  /** Per-profile CLI target overrides (legacy mode) */
+  profile_targets?: Record<string, TargetType>;
   /** User-defined CLIProxy profile variants (optional) */
   cliproxy?: CLIProxyVariantsConfig;
 }
@@ -91,6 +96,8 @@ export interface ProfileMetadata {
   context_mode?: 'isolated' | 'shared';
   /** Context-sharing group when context_mode='shared' */
   context_group?: string;
+  /** Shared continuity depth when context_mode='shared' */
+  continuity_mode?: 'standard' | 'deeper';
 }
 
 export interface ProfilesRegistry {

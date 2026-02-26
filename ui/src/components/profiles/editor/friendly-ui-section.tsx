@@ -20,9 +20,11 @@ import { isOpenRouterProfile, extractTierMapping, applyTierMapping } from './uti
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import type { Settings, SettingsResponse } from './types';
+import type { CliTarget } from '@/lib/api-client';
 
 interface FriendlyUISectionProps {
   profileName: string;
+  target: CliTarget;
   data: SettingsResponse | undefined;
   currentSettings: Settings | undefined;
   newEnvKey: string;
@@ -36,6 +38,7 @@ interface FriendlyUISectionProps {
 
 export function FriendlyUISection({
   profileName,
+  target,
   data,
   currentSettings,
   newEnvKey,
@@ -263,7 +266,7 @@ export function FriendlyUISection({
             value="info"
             className="h-full mt-0 border-0 p-0 data-[state=inactive]:hidden"
           >
-            <InfoSection profileName={profileName} data={data} />
+            <InfoSection profileName={profileName} target={target} data={data} />
           </TabsContent>
         </div>
       </Tabs>

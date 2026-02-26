@@ -7,6 +7,7 @@ import * as path from 'path';
 import { getCcsDir, getConfigPath, loadConfigSafe, loadSettings } from '../../utils/config-manager';
 import { expandPath } from '../../utils/helpers';
 import { getClaudeSettingsPath } from '../../utils/claude-config-path';
+import { resolveDroidProvider } from '../../targets/droid-provider';
 import type { Config, Settings } from '../../types/config';
 
 /** Model mapping for API profiles */
@@ -64,10 +65,16 @@ export function createSettingsFile(
   name: string,
   baseUrl: string,
   apiKey: string,
-  models: ModelMapping = {}
+  models: ModelMapping = {},
+  provider?: string
 ): string {
   const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
   const { model, opusModel, sonnetModel, haikuModel } = models;
+  const droidProvider = resolveDroidProvider({
+    provider,
+    baseUrl,
+    model,
+  });
 
   const settings: Settings = {
     env: {
@@ -77,6 +84,7 @@ export function createSettingsFile(
       ...(opusModel && { ANTHROPIC_DEFAULT_OPUS_MODEL: opusModel }),
       ...(sonnetModel && { ANTHROPIC_DEFAULT_SONNET_MODEL: sonnetModel }),
       ...(haikuModel && { ANTHROPIC_DEFAULT_HAIKU_MODEL: haikuModel }),
+      CCS_DROID_PROVIDER: droidProvider,
     },
   };
 
@@ -96,6 +104,7 @@ export function updateSettingsFile(
     opusModel?: string;
     sonnetModel?: string;
     haikuModel?: string;
+    provider?: string;
   }
 ): void {
   const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
@@ -151,6 +160,21 @@ export function updateSettingsFile(
     } else {
       delete settings.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
     }
+  }
+
+  if (
+    updates.provider !== undefined ||
+    updates.baseUrl !== undefined ||
+    updates.model !== undefined ||
+    settings.env?.CCS_DROID_PROVIDER
+  ) {
+    settings.env = settings.env || {};
+    const resolvedProvider = resolveDroidProvider({
+      provider: updates.provider ?? settings.env.CCS_DROID_PROVIDER,
+      baseUrl: updates.baseUrl ?? settings.env.ANTHROPIC_BASE_URL,
+      model: updates.model ?? settings.env.ANTHROPIC_MODEL,
+    });
+    settings.env.CCS_DROID_PROVIDER = resolvedProvider;
   }
 
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');

@@ -46,11 +46,33 @@ import {
 import { getOAuthFlowType } from '../../cliproxy/provider-capabilities';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
+import {
+  validateAntigravityRiskAcknowledgement,
+  isAntigravityResponsibilityBypassEnabled,
+} from '../../cliproxy/antigravity-responsibility';
 
 const router = Router();
 
 // Valid providers list - derived from canonical CLIPROXY_PROFILES
 const validProviders: CLIProxyProvider[] = [...CLIPROXY_PROFILES];
+
+function logRouteError(context: string, error: unknown): void {
+  if (error instanceof Error) {
+    console.error(`[cliproxy-auth-routes] ${context}: ${error.message}`);
+    return;
+  }
+  console.error(`[cliproxy-auth-routes] ${context}: unknown error`);
+}
+
+function respondInternalError(
+  res: Response,
+  error: unknown,
+  fallbackMessage: string,
+  statusCode = 500
+): void {
+  logRouteError(fallbackMessage, error);
+  res.status(statusCode).json({ error: fallbackMessage });
+}
 
 function parseKiroMethod(raw: unknown): { method: KiroAuthMethod; invalid: boolean } {
   if (raw === undefined || raw === null) {
@@ -163,12 +185,12 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
     const target = getProxyTarget();
     if (target.isRemote) {
       res.status(503).json({
-        error: (error as Error).message,
+        error: 'Failed to fetch remote auth status',
         authStatus: [],
         source: 'remote',
       });
     } else {
-      res.status(500).json({ error: (error as Error).message });
+      respondInternalError(res, error, 'Failed to fetch auth status.');
     }
   }
 });
@@ -198,13 +220,12 @@ router.get('/accounts', async (_req: Request, res: Response): Promise<void> => {
     const target = getProxyTarget();
     if (target.isRemote) {
       res.status(503).json({
-        error: (error as Error).message,
+        error: 'Failed to fetch remote account status',
         accounts: [],
         source: 'remote',
       });
     } else {
-      const message = error instanceof Error ? error.message : 'Failed to list accounts';
-      res.status(500).json({ error: message });
+      respondInternalError(res, error, 'Failed to list accounts.');
     }
   }
 });
@@ -225,8 +246,7 @@ router.get('/accounts/:provider', (req: Request, res: Response): void => {
     const accounts = getProviderAccounts(provider as CLIProxyProvider);
     res.json({ provider, accounts });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to get provider accounts';
-    res.status(500).json({ error: message });
+    respondInternalError(res, error, 'Failed to get provider accounts.');
   }
 });
 
@@ -268,8 +288,7 @@ router.post('/accounts/:provider/default', (req: Request, res: Response): void =
         .json({ error: `Account '${accountId}' not found for provider '${provider}'` });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to set default account';
-    res.status(500).json({ error: message });
+    respondInternalError(res, error, 'Failed to set default account.');
   }
 });
 
@@ -305,8 +324,7 @@ router.delete('/accounts/:provider/:accountId', (req: Request, res: Response): v
         .json({ error: `Account '${accountId}' not found for provider '${provider}'` });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to remove account';
-    res.status(500).json({ error: message });
+    respondInternalError(res, error, 'Failed to remove account.');
   }
 });
 
@@ -338,8 +356,7 @@ router.post('/accounts/:provider/:accountId/pause', (req: Request, res: Response
         .json({ error: `Account '${accountId}' not found for provider '${provider}'` });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to pause account';
-    res.status(500).json({ error: message });
+    respondInternalError(res, error, 'Failed to pause account.');
   }
 });
 
@@ -370,8 +387,7 @@ router.post('/accounts/:provider/:accountId/resume', (req: Request, res: Respons
         .json({ error: `Account '${accountId}' not found for provider '${provider}'` });
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to resume account';
-    res.status(500).json({ error: message });
+    respondInternalError(res, error, 'Failed to resume account.');
   }
 });
 
@@ -381,13 +397,20 @@ router.post('/accounts/:provider/:accountId/resume', (req: Request, res: Respons
  */
 router.post('/:provider/start', async (req: Request, res: Response): Promise<void> => {
   const { provider } = req.params;
-  const {
-    nickname: nicknameRaw,
-    noIncognito: noIncognitoBody,
-    kiroMethod: kiroMethodRaw,
-  } = req.body;
+  const requestBody =
+    req.body && typeof req.body === 'object' ? (req.body as Record<string, unknown>) : {};
+  const nicknameRaw = typeof requestBody.nickname === 'string' ? requestBody.nickname : undefined;
+  const noIncognitoBody =
+    typeof requestBody.noIncognito === 'boolean' ? requestBody.noIncognito : undefined;
+  const kiroMethodRaw = requestBody.kiroMethod;
+  const riskAcknowledgement = requestBody.riskAcknowledgement;
+  const target = getProxyTarget();
+  if (target.isRemote) {
+    res.status(501).json({ error: 'OAuth start flow not available in remote mode' });
+    return;
+  }
   // Trim nickname for consistency with CLI (oauth-handler.ts trims input)
-  const nickname = typeof nicknameRaw === 'string' ? nicknameRaw.trim() : nicknameRaw;
+  const nickname = nicknameRaw?.trim();
   const { method: kiroMethod, invalid: invalidKiroMethod } = parseKiroMethod(kiroMethodRaw);
 
   // Validate provider
@@ -402,6 +425,17 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       code: 'INVALID_KIRO_METHOD',
     });
     return;
+  }
+
+  if (provider === 'agy' && !isAntigravityResponsibilityBypassEnabled()) {
+    const validation = validateAntigravityRiskAcknowledgement(riskAcknowledgement);
+    if (!validation.valid) {
+      res.status(400).json({
+        error: validation.error,
+        code: 'AGY_RISK_ACK_REQUIRED',
+      });
+      return;
+    }
   }
 
   // For kiro/ghcp: nickname is required
@@ -451,6 +485,7 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       add: true, // Always add mode from UI
       headless: false, // Force interactive mode
       nickname: nickname || undefined,
+      acceptAgyRisk: provider === 'agy',
       kiroMethod: provider === 'kiro' ? kiroMethod : undefined,
       fromUI: true, // Enable project selection prompt in UI
       noIncognito, // Kiro: use normal browser if enabled
@@ -471,7 +506,7 @@ router.post('/:provider/start', async (req: Request, res: Response): Promise<voi
       res.status(400).json({ error: 'Authentication failed or was cancelled' });
     }
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to start OAuth flow.');
   }
 });
 
@@ -584,7 +619,7 @@ router.post('/kiro/import', async (_req: Request, res: Response): Promise<void> 
       });
     }
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    respondInternalError(res, error, 'Failed to import Kiro token.');
   }
 });
 
@@ -596,7 +631,7 @@ router.post('/kiro/import', async (_req: Request, res: Response): Promise<void> 
  */
 router.post('/:provider/start-url', async (req: Request, res: Response): Promise<void> => {
   const { provider } = req.params;
-  const { kiroMethod: kiroMethodRaw } = req.body ?? {};
+  const { kiroMethod: kiroMethodRaw, riskAcknowledgement } = req.body ?? {};
   const { method: kiroMethod, invalid: invalidKiroMethod } = parseKiroMethod(kiroMethodRaw);
 
   // Check remote mode
@@ -618,6 +653,17 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       code: 'INVALID_KIRO_METHOD',
     });
     return;
+  }
+
+  if (provider === 'agy' && !isAntigravityResponsibilityBypassEnabled()) {
+    const validation = validateAntigravityRiskAcknowledgement(riskAcknowledgement);
+    if (!validation.valid) {
+      res.status(400).json({
+        error: validation.error,
+        code: 'AGY_RISK_ACK_REQUIRED',
+      });
+      return;
+    }
   }
 
   const unsupportedReason = getStartUrlUnsupportedReason(provider as CLIProxyProvider, {
@@ -672,8 +718,7 @@ router.post('/:provider/start-url', async (req: Request, res: Response): Promise
       method: data.method || null,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to start OAuth';
-    res.status(503).json({ error: `CLIProxyAPI not reachable: ${message}` });
+    respondInternalError(res, error, 'CLIProxyAPI not reachable.', 503);
   }
 });
 
@@ -787,8 +832,7 @@ router.post('/:provider/submit-callback', async (req: Request, res: Response): P
 
     res.json({ success: true });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Failed to submit callback';
-    res.status(503).json({ error: `CLIProxyAPI not reachable: ${message}` });
+    respondInternalError(res, error, 'CLIProxyAPI not reachable.', 503);
   }
 });
 

@@ -15,8 +15,14 @@ import { HeaderSection } from './header-section';
 import { FriendlyUISection } from './friendly-ui-section';
 import { RawEditorSection } from './raw-editor-section';
 import type { ProfileEditorProps, Settings, SettingsResponse } from './types';
+import { api, type CliTarget } from '@/lib/api-client';
 
-export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: ProfileEditorProps) {
+export function ProfileEditor({
+  profileName,
+  profileTarget,
+  onDelete,
+  onHasChangesUpdate,
+}: ProfileEditorProps) {
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [conflictDialog, setConflictDialog] = useState(false);
   const [rawJsonEdits, setRawJsonEdits] = useState<string | null>(null);
@@ -145,6 +151,25 @@ export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: Pro
     },
   });
 
+  const targetMutation = useMutation<CliTarget, Error, CliTarget>({
+    mutationFn: async (target: CliTarget) => {
+      await api.profiles.update(profileName, { target });
+      return target;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profiles'] });
+      toast.success('Default target updated');
+    },
+    onError: (error: Error, target: CliTarget) => {
+      const targetLabel = target === 'droid' ? 'Factory Droid' : 'Claude Code';
+      const suffix = error.message.trim() ? `: ${error.message}` : '';
+      toast.error(`Failed to update default target to ${targetLabel}${suffix}`);
+    },
+  });
+
+  const resolvedTarget: CliTarget = profileTarget || 'claude';
+  const isHeaderMutationPending = saveMutation.isPending || targetMutation.isPending;
+
   const handleConflictResolve = async (overwrite: boolean) => {
     setConflictDialog(false);
     if (overwrite) {
@@ -160,15 +185,28 @@ export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: Pro
     <div key={profileName} className="flex-1 flex flex-col overflow-hidden">
       <HeaderSection
         profileName={profileName}
+        target={resolvedTarget}
         data={data}
         settings={currentSettings}
         isLoading={isLoading}
         isSaving={saveMutation.isPending}
+        isTargetSaving={targetMutation.isPending}
         hasChanges={computedHasChanges}
         isRawJsonValid={computedIsRawJsonValid}
-        onRefresh={() => refetch()}
+        onTargetChange={(target) => {
+          if (isHeaderMutationPending) return;
+          if (target === resolvedTarget) return;
+          targetMutation.mutate(target);
+        }}
+        onRefresh={() => {
+          if (isHeaderMutationPending) return;
+          refetch();
+        }}
         onDelete={onDelete}
-        onSave={() => saveMutation.mutate()}
+        onSave={() => {
+          if (isHeaderMutationPending) return;
+          saveMutation.mutate();
+        }}
       />
 
       {isLoading ? (
@@ -191,6 +229,7 @@ export function ProfileEditor({ profileName, onDelete, onHasChangesUpdate }: Pro
           <div className="flex flex-col overflow-hidden bg-muted/5 min-w-0">
             <FriendlyUISection
               profileName={profileName}
+              target={resolvedTarget}
               data={data}
               currentSettings={currentSettings}
               newEnvKey={newEnvKey}

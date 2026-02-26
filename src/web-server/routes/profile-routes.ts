@@ -7,11 +7,34 @@
 
 import { Router, Request, Response } from 'express';
 import { isReservedName, RESERVED_PROFILE_NAMES } from '../../config/reserved-names';
-import { createApiProfile, removeApiProfile } from '../../api/services/profile-writer';
+import {
+  createApiProfile,
+  removeApiProfile,
+  updateApiProfileTarget,
+} from '../../api/services/profile-writer';
 import { apiProfileExists, listApiProfiles } from '../../api/services/profile-reader';
+import type { TargetType } from '../../targets/target-adapter';
+import { normalizeDroidProvider } from '../../targets/droid-provider';
 import { updateSettingsFile } from './route-helpers';
 
 const router = Router();
+
+export function parseTarget(rawTarget: unknown): TargetType | null {
+  if (rawTarget === undefined || rawTarget === null || rawTarget === '') {
+    return null;
+  }
+
+  if (typeof rawTarget !== 'string') {
+    return null;
+  }
+
+  const normalized = rawTarget.trim().toLowerCase();
+  if (normalized === 'claude' || normalized === 'droid') {
+    return normalized;
+  }
+
+  return null;
+}
 
 // ==================== Profile CRUD ====================
 
@@ -26,6 +49,7 @@ router.get('/', (_req: Request, res: Response): void => {
       name: p.name,
       settingsPath: p.settingsPath,
       configured: p.isConfigured,
+      target: p.target,
     }));
     res.json({ profiles });
   } catch (error) {
@@ -37,7 +61,21 @@ router.get('/', (_req: Request, res: Response): void => {
  * POST /api/profiles - Create new profile
  */
 router.post('/', (req: Request, res: Response): void => {
-  const { name, baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel } = req.body;
+  const { name, baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel, target } = req.body;
+  const providerHint = req.body?.droidProvider ?? req.body?.provider;
+  const parsedProvider = normalizeDroidProvider(providerHint);
+
+  const parsedTarget = parseTarget(target);
+  if (target !== undefined && parsedTarget === null) {
+    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    return;
+  }
+  if (providerHint !== undefined && parsedProvider === null) {
+    res.status(400).json({
+      error: 'Invalid droid provider. Expected: anthropic, openai, or generic-chat-completion-api',
+    });
+    return;
+  }
 
   if (!name || !baseUrl || !apiKey) {
     res.status(400).json({ error: 'Missing required fields: name, baseUrl, apiKey' });
@@ -60,19 +98,30 @@ router.post('/', (req: Request, res: Response): void => {
   }
 
   // Create profile using unified-config-aware service
-  const result = createApiProfile(name, baseUrl, apiKey, {
-    default: model || '',
-    opus: opusModel || model || '',
-    sonnet: sonnetModel || model || '',
-    haiku: haikuModel || model || '',
-  });
+  const result = createApiProfile(
+    name,
+    baseUrl,
+    apiKey,
+    {
+      default: model || '',
+      opus: opusModel || model || '',
+      sonnet: sonnetModel || model || '',
+      haiku: haikuModel || model || '',
+    },
+    parsedTarget || 'claude',
+    parsedProvider || undefined
+  );
 
   if (!result.success) {
     res.status(500).json({ error: result.error || 'Failed to create profile' });
     return;
   }
 
-  res.status(201).json({ name, settingsPath: result.settingsFile });
+  res.status(201).json({
+    name,
+    settingsPath: result.settingsFile,
+    target: parsedTarget || 'claude',
+  });
 });
 
 /**
@@ -80,7 +129,21 @@ router.post('/', (req: Request, res: Response): void => {
  */
 router.put('/:name', (req: Request, res: Response): void => {
   const { name } = req.params;
-  const { baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel } = req.body;
+  const { baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel, target } = req.body;
+  const providerHint = req.body?.droidProvider ?? req.body?.provider;
+  const parsedProvider = normalizeDroidProvider(providerHint);
+
+  const parsedTarget = parseTarget(target);
+  if (target !== undefined && parsedTarget === null) {
+    res.status(400).json({ error: 'Invalid target. Expected: claude or droid' });
+    return;
+  }
+  if (providerHint !== undefined && parsedProvider === null) {
+    res.status(400).json({
+      error: 'Invalid droid provider. Expected: anthropic, openai, or generic-chat-completion-api',
+    });
+    return;
+  }
 
   // Check if profile exists (uses unified config when available)
   if (!apiProfileExists(name)) {
@@ -99,8 +162,46 @@ router.put('/:name', (req: Request, res: Response): void => {
   }
 
   try {
-    updateSettingsFile(name, { baseUrl, apiKey, model, opusModel, sonnetModel, haikuModel });
-    res.json({ name, updated: true });
+    const hasSettingsUpdates =
+      baseUrl !== undefined ||
+      apiKey !== undefined ||
+      model !== undefined ||
+      opusModel !== undefined ||
+      sonnetModel !== undefined ||
+      haikuModel !== undefined ||
+      providerHint !== undefined;
+    const hasTargetUpdate = target !== undefined;
+
+    if (!hasSettingsUpdates && !hasTargetUpdate) {
+      res.status(400).json({ error: 'No updates provided' });
+      return;
+    }
+
+    if (hasSettingsUpdates) {
+      updateSettingsFile(name, {
+        baseUrl,
+        apiKey,
+        model,
+        opusModel,
+        sonnetModel,
+        haikuModel,
+        provider: parsedProvider || undefined,
+      });
+    }
+
+    if (hasTargetUpdate && parsedTarget) {
+      const targetUpdate = updateApiProfileTarget(name, parsedTarget);
+      if (!targetUpdate.success) {
+        res.status(500).json({ error: targetUpdate.error || 'Failed to update target' });
+        return;
+      }
+    }
+
+    res.json({
+      name,
+      updated: true,
+      ...(hasTargetUpdate && parsedTarget && { target: parsedTarget }),
+    });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
   }

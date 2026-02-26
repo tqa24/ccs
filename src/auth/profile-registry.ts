@@ -8,6 +8,7 @@ import {
 } from '../config/unified-config-loader';
 import type { AccountConfig } from '../config/unified-config-types';
 import { getCcsDir } from '../utils/config-manager';
+import { isValidContextGroupName, normalizeContextGroupName } from './account-context';
 
 /**
  * Profile Registry (Simplified)
@@ -22,6 +23,7 @@ import { getCcsDir } from '../utils/config-manager';
  *   last_used: <ISO timestamp or null> // Last usage time
  *   context_mode?: 'isolated' | 'shared' // Workspace context policy
  *   context_group?: <string> // Shared context group when mode=shared
+ *   continuity_mode?: 'standard' | 'deeper' // Shared continuity depth
  * }
  *
  * Removed fields from v2.x:
@@ -42,6 +44,7 @@ interface CreateMetadata {
   last_used?: string | null;
   context_mode?: 'isolated' | 'shared';
   context_group?: string;
+  continuity_mode?: 'standard' | 'deeper';
 }
 
 export class ProfileRegistry {
@@ -51,13 +54,34 @@ export class ProfileRegistry {
     this.profilesPath = path.join(getCcsDir(), 'profiles.json');
   }
 
+  private normalizeContextGroupValue(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+
+    const normalized = normalizeContextGroupName(value);
+    if (normalized.length === 0 || !isValidContextGroupName(normalized)) {
+      return undefined;
+    }
+
+    return normalized;
+  }
+
   private normalizeLegacyProfileMetadata(metadata: ProfileMetadata): ProfileMetadata {
     const normalized: ProfileMetadata = { ...metadata };
 
     if (normalized.context_mode !== 'shared') {
       delete normalized.context_group;
-    } else if (!normalized.context_group || normalized.context_group.trim().length === 0) {
-      delete normalized.context_group;
+      delete normalized.continuity_mode;
+    } else {
+      const normalizedGroup = this.normalizeContextGroupValue(normalized.context_group);
+      if (normalizedGroup) {
+        normalized.context_group = normalizedGroup;
+      } else {
+        delete normalized.context_group;
+      }
+
+      normalized.continuity_mode = normalized.continuity_mode === 'deeper' ? 'deeper' : 'standard';
     }
 
     return normalized;
@@ -68,8 +92,16 @@ export class ProfileRegistry {
 
     if (normalized.context_mode !== 'shared') {
       delete normalized.context_group;
-    } else if (!normalized.context_group || normalized.context_group.trim().length === 0) {
-      delete normalized.context_group;
+      delete normalized.continuity_mode;
+    } else {
+      const normalizedGroup = this.normalizeContextGroupValue(normalized.context_group);
+      if (normalizedGroup) {
+        normalized.context_group = normalizedGroup;
+      } else {
+        delete normalized.context_group;
+      }
+
+      normalized.continuity_mode = normalized.continuity_mode === 'deeper' ? 'deeper' : 'standard';
     }
 
     return normalized;
@@ -140,6 +172,7 @@ export class ProfileRegistry {
       last_used: metadata.last_used || null,
       context_mode: metadata.context_mode,
       context_group: metadata.context_group,
+      continuity_mode: metadata.continuity_mode,
     });
 
     // Note: No longer auto-set as default
@@ -159,7 +192,7 @@ export class ProfileRegistry {
       throw new Error(`Profile not found: ${name}`);
     }
 
-    return data.profiles[name];
+    return this.normalizeLegacyProfileMetadata(data.profiles[name]);
   }
 
   /**
@@ -215,7 +248,11 @@ export class ProfileRegistry {
    */
   getAllProfiles(): Record<string, ProfileMetadata> {
     const data = this._read();
-    return data.profiles;
+    const normalized: Record<string, ProfileMetadata> = {};
+    for (const [name, profile] of Object.entries(data.profiles)) {
+      normalized[name] = this.normalizeLegacyProfileMetadata(profile);
+    }
+    return normalized;
   }
 
   /**
@@ -283,6 +320,7 @@ export class ProfileRegistry {
       last_used: null,
       context_mode: metadata.context_mode,
       context_group: metadata.context_group,
+      continuity_mode: metadata.continuity_mode,
     });
     saveUnifiedConfig(config);
   }
@@ -357,7 +395,11 @@ export class ProfileRegistry {
   getAllAccountsUnified(): Record<string, AccountConfig> {
     if (!isUnifiedMode()) return {};
     const config = loadOrCreateUnifiedConfig();
-    return config.accounts;
+    const normalized: Record<string, AccountConfig> = {};
+    for (const [name, account] of Object.entries(config.accounts)) {
+      normalized[name] = this.normalizeUnifiedAccountConfig(account);
+    }
+    return normalized;
   }
 
   /**
@@ -406,6 +448,7 @@ export class ProfileRegistry {
         last_used: account.last_used,
         context_mode: account.context_mode,
         context_group: account.context_group,
+        continuity_mode: account.continuity_mode,
       };
     }
 

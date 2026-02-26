@@ -12,7 +12,14 @@ import {
 import { expandPath } from './utils/helpers';
 import { validateGlmKey, validateMiniMaxKey } from './utils/api-key-validator';
 import { ErrorManager } from './utils/error-manager';
-import { execClaudeWithCLIProxy, CLIProxyProvider } from './cliproxy';
+import {
+  execClaudeWithCLIProxy,
+  CLIProxyProvider,
+  ensureCliproxyService,
+  isAuthenticated,
+} from './cliproxy';
+import { getEffectiveEnvVars, getCompositeEnvVars } from './cliproxy/config/env-builder';
+import { CLIPROXY_DEFAULT_PORT } from './cliproxy/config/port-manager';
 import {
   ensureMcpWebSearch,
   displayWebSearchStatus,
@@ -47,9 +54,15 @@ import {
   ClaudeAdapter,
   DroidAdapter,
   pruneOrphanedModels,
+  resolveDroidProvider,
   type TargetCredentials,
 } from './targets';
 import { resolveTargetType, stripTargetFlag } from './targets/target-resolver';
+import {
+  DroidReasoningFlagError,
+  resolveDroidReasoningRuntime,
+} from './targets/droid-reasoning-runtime';
+import { DroidCommandRouterError, routeDroidCommandArgs } from './targets/droid-command-router';
 
 // Version and Update check utilities
 import { getVersion } from './utils/version';
@@ -694,10 +707,57 @@ async function main(): Promise<void> {
     if (resolvedTarget === 'droid') {
       try {
         const allProfiles = detector.getAllProfiles();
-        const activeProfiles = allProfiles.settings.filter((name) => /^[a-zA-Z0-9_-]+$/.test(name));
+        const activeProfiles = allProfiles.settings.filter((name) =>
+          /^[a-zA-Z0-9._-]+$/.test(name)
+        );
         await pruneOrphanedModels(activeProfiles);
       } catch (error) {
         console.error(warn(`[!] Droid prune skipped: ${(error as Error).message}`));
+      }
+    }
+
+    let targetRemainingArgs = remainingArgs;
+    let droidReasoningOverride: string | number | undefined;
+    if (resolvedTarget === 'droid') {
+      try {
+        const droidRoute = routeDroidCommandArgs(remainingArgs);
+        targetRemainingArgs = droidRoute.argsForDroid;
+
+        if (droidRoute.mode === 'interactive') {
+          const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
+          targetRemainingArgs = runtime.argsWithoutReasoningFlags;
+          droidReasoningOverride = runtime.reasoningOverride;
+
+          if (runtime.duplicateDisplays.length > 0) {
+            console.error(
+              warn(
+                `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
+              )
+            );
+          }
+        } else {
+          if (droidRoute.duplicateReasoningDisplays.length > 0) {
+            console.error(
+              warn(
+                `[!] Multiple reasoning flags detected. Using first occurrence: ${droidRoute.reasoningSourceDisplay || '<first-flag>'}`
+              )
+            );
+          }
+          if (droidRoute.autoPrependedExec && process.stdout.isTTY) {
+            console.error(
+              info('Detected Droid exec-only flags. Routing as: droid exec <flags> [prompt]')
+            );
+          }
+        }
+      } catch (error) {
+        if (error instanceof DroidReasoningFlagError || error instanceof DroidCommandRouterError) {
+          console.error(fail(error.message));
+          console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
+          console.error('    Codex alias: --effort medium|high|xhigh');
+          console.error('    Droid exec: --reasoning-effort high');
+          process.exit(1);
+        }
+        throw error;
       }
     }
 
@@ -724,9 +784,145 @@ async function main(): Promise<void> {
       const provider = profileInfo.provider || (profileInfo.name as CLIProxyProvider);
       const customSettingsPath = profileInfo.settingsPath; // undefined for hardcoded profiles
       const variantPort = profileInfo.port; // variant-specific port for isolation
+      const cliproxyPort = variantPort || CLIPROXY_DEFAULT_PORT;
+
+      if (resolvedTarget !== 'claude') {
+        const adapter = targetAdapter;
+        if (!adapter) {
+          console.error(fail(`Target adapter not found for "${resolvedTarget}"`));
+          process.exitCode = 1;
+          return;
+        }
+        if (!adapter.supportsProfileType('cliproxy')) {
+          console.error(fail(`${adapter.displayName} does not support CLIProxy profiles`));
+          process.exitCode = 1;
+          return;
+        }
+
+        // Keep CLIProxy management/auth flags on Claude flow only.
+        const unsupportedCliproxyFlags = [
+          '--auth',
+          '--logout',
+          '--accounts',
+          '--add',
+          '--use',
+          '--config',
+          '--headless',
+          '--paste-callback',
+          '--port-forward',
+          '--nickname',
+          '--kiro-auth-method',
+          '--backend',
+          '--proxy-host',
+          '--proxy-port',
+          '--proxy-protocol',
+          '--proxy-auth-token',
+          '--proxy-timeout',
+          '--local-proxy',
+          '--remote-only',
+          '--no-fallback',
+          '--allow-self-signed',
+          '--1m',
+          '--no-1m',
+        ];
+        const providedUnsupportedFlag = unsupportedCliproxyFlags.find(
+          (flag) =>
+            targetRemainingArgs.includes(flag) ||
+            targetRemainingArgs.some((arg) => arg.startsWith(`${flag}=`))
+        );
+        if (providedUnsupportedFlag) {
+          console.error(
+            fail(
+              `${providedUnsupportedFlag} is only supported when running CLIProxy profiles on Claude target`
+            )
+          );
+          console.error(
+            info(`Run with Claude target: ccs ${profileInfo.name} --target claude ...`)
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        // For Droid execution path, require existing OAuth auth and running local proxy.
+        if (profileInfo.isComposite && profileInfo.compositeTiers) {
+          const compositeProviders = [
+            ...new Set(Object.values(profileInfo.compositeTiers).map((tier) => tier.provider)),
+          ] as CLIProxyProvider[];
+          const missingProvider = compositeProviders.find((p) => !isAuthenticated(p));
+          if (missingProvider) {
+            console.error(
+              fail(`Missing OAuth auth for composite tier provider: ${missingProvider}`)
+            );
+            console.error(info(`Authenticate first: ccs ${missingProvider} --auth`));
+            process.exitCode = 1;
+            return;
+          }
+        } else if (!isAuthenticated(provider)) {
+          console.error(fail(`No OAuth authentication found for provider: ${provider}`));
+          console.error(info(`Authenticate first: ccs ${provider} --auth`));
+          process.exitCode = 1;
+          return;
+        }
+
+        const ensureServiceResult = await ensureCliproxyService(
+          cliproxyPort,
+          targetRemainingArgs.includes('--verbose') || targetRemainingArgs.includes('-v')
+        );
+        if (!ensureServiceResult.started) {
+          console.error(
+            fail(ensureServiceResult.error || 'Failed to start local CLIProxy service')
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        const envVars =
+          profileInfo.isComposite && profileInfo.compositeTiers && profileInfo.compositeDefaultTier
+            ? getCompositeEnvVars(
+                profileInfo.compositeTiers,
+                profileInfo.compositeDefaultTier,
+                cliproxyPort,
+                customSettingsPath
+              )
+            : getEffectiveEnvVars(provider, cliproxyPort, customSettingsPath);
+
+        const creds: TargetCredentials = {
+          profile: profileInfo.name,
+          baseUrl: envVars['ANTHROPIC_BASE_URL'] || '',
+          apiKey: envVars['ANTHROPIC_AUTH_TOKEN'] || '',
+          model: envVars['ANTHROPIC_MODEL'] || undefined,
+          provider: resolveDroidProvider({
+            provider: envVars['CCS_DROID_PROVIDER'] || envVars['DROID_PROVIDER'],
+            baseUrl: envVars['ANTHROPIC_BASE_URL'],
+            model: envVars['ANTHROPIC_MODEL'],
+          }),
+          reasoningOverride: droidReasoningOverride,
+          envVars,
+        };
+
+        if (!creds.baseUrl || !creds.apiKey) {
+          console.error(
+            fail(
+              `Missing CLIProxy runtime credentials for ${profileInfo.name} (ANTHROPIC_BASE_URL/AUTH_TOKEN)`
+            )
+          );
+          console.error(
+            info('Reconfigure with: ccs config > CLIProxy, or run ccs <provider> --config')
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        await adapter.prepareCredentials(creds);
+        const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs);
+        const targetEnv = adapter.buildEnv(creds, profileInfo.type);
+        adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
+        return;
+      }
+
       await execClaudeWithCLIProxy(claudeCli, provider, remainingArgs, {
         customSettingsPath,
-        port: variantPort,
+        port: cliproxyPort,
         isComposite: profileInfo.isComposite,
         compositeTiers: profileInfo.compositeTiers,
         compositeDefaultTier: profileInfo.compositeDefaultTier,
@@ -869,9 +1065,15 @@ async function main(): Promise<void> {
             baseUrl: settingsEnv['ANTHROPIC_BASE_URL'] || '',
             apiKey: settingsEnv['ANTHROPIC_AUTH_TOKEN'] || '',
             model: settingsEnv['ANTHROPIC_MODEL'],
+            provider: resolveDroidProvider({
+              provider: settingsEnv['CCS_DROID_PROVIDER'] || settingsEnv['DROID_PROVIDER'],
+              baseUrl: settingsEnv['ANTHROPIC_BASE_URL'],
+              model: settingsEnv['ANTHROPIC_MODEL'],
+            }),
+            reasoningOverride: droidReasoningOverride,
           };
           await adapter.prepareCredentials(creds);
-          const targetArgs = adapter.buildArgs(profileInfo.name, remainingArgs);
+          const targetArgs = adapter.buildArgs(profileInfo.name, targetRemainingArgs);
           const targetEnv = adapter.buildEnv(creds, profileInfo.type);
           adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
           return;
@@ -935,6 +1137,12 @@ async function main(): Promise<void> {
           baseUrl: process.env['ANTHROPIC_BASE_URL'] || '',
           apiKey: process.env['ANTHROPIC_AUTH_TOKEN'] || '',
           model: process.env['ANTHROPIC_MODEL'],
+          provider: resolveDroidProvider({
+            provider: process.env['CCS_DROID_PROVIDER'] || process.env['DROID_PROVIDER'],
+            baseUrl: process.env['ANTHROPIC_BASE_URL'],
+            model: process.env['ANTHROPIC_MODEL'],
+          }),
+          reasoningOverride: droidReasoningOverride,
         };
         if (!creds.baseUrl || !creds.apiKey) {
           console.error(
@@ -946,7 +1154,7 @@ async function main(): Promise<void> {
           process.exit(1);
         }
         await adapter.prepareCredentials(creds);
-        const targetArgs = adapter.buildArgs('default', remainingArgs);
+        const targetArgs = adapter.buildArgs('default', targetRemainingArgs);
         const targetEnv = adapter.buildEnv(creds, 'default');
         adapter.exec(targetArgs, targetEnv, { binaryInfo: targetBinaryInfo || undefined });
         return;

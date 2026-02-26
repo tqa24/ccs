@@ -41,6 +41,41 @@ describe('model-pricing', () => {
       // Should match via normalization
     });
 
+    it('should resolve lowercase MiniMax model IDs to custom pricing', () => {
+      const pricing = getModelPricing('minimax-m2.5');
+      expect(pricing.inputPerMillion).toBe(0.3);
+      expect(pricing.outputPerMillion).toBe(1.2);
+    });
+
+    it('should resolve provider-prefixed MiniMax model IDs to custom pricing', () => {
+      const pricing = getModelPricing('minimax/MiniMax-M2.5');
+      expect(pricing.inputPerMillion).toBe(0.3);
+      expect(pricing.outputPerMillion).toBe(1.2);
+    });
+
+    it('should use updated MiniMax-M2.1-lightning input pricing', () => {
+      const pricing = getModelPricing('MiniMax-M2.1-lightning');
+      expect(pricing.inputPerMillion).toBe(0.6);
+    });
+
+    it('should not use fallback pricing for known Qwen catalog IDs', () => {
+      const fallback = getModelPricing('unknown-model-xyz');
+      const catalogIds = ['qwen3-235b', 'qwen3-vl-plus', 'qwen3-32b'];
+
+      for (const model of catalogIds) {
+        const pricing = getModelPricing(model);
+        expect(pricing).not.toEqual(fallback);
+      }
+    });
+
+    it('should map qwen3-coder to deterministic custom pricing', () => {
+      const pricing = getModelPricing('qwen3-coder');
+      const canonical = getModelPricing('qwen3-coder-plus');
+
+      expect(pricing).toEqual(canonical);
+      expect(pricing).not.toEqual(getModelPricing('unknown-model-xyz'));
+    });
+
     it('should return different pricing for different model tiers', () => {
       const sonnet = getModelPricing('claude-sonnet-4-5');
       const opus = getModelPricing('claude-opus-4-5-20251101');
@@ -132,6 +167,10 @@ describe('model-pricing', () => {
     it('should return true for known models', () => {
       expect(hasCustomPricing('claude-sonnet-4-5')).toBe(true);
       expect(hasCustomPricing('glm-4.6')).toBe(true);
+    });
+
+    it('should return true for deterministic qwen3-coder alias', () => {
+      expect(hasCustomPricing('qwen3-coder')).toBe(true);
     });
 
     it('should return false for unknown models', () => {

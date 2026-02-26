@@ -13,6 +13,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -41,6 +48,7 @@ import {
   getNewestModelsPerProvider,
 } from '@/lib/openrouter-utils';
 import type { CategorizedModel } from '@/lib/openrouter-types';
+import type { CliTarget } from '@/lib/api-client';
 
 const schema = z.object({
   name: z
@@ -53,6 +61,7 @@ const schema = z.object({
   opusModel: z.string().optional(),
   sonnetModel: z.string().optional(),
   haikuModel: z.string().optional(),
+  target: z.enum(['claude', 'droid']),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -78,6 +87,7 @@ const EMPTY_FORM_VALUES: FormData = {
   opusModel: '',
   sonnetModel: '',
   haikuModel: '',
+  target: 'claude',
 };
 
 const RECOMMENDED_PRESETS = getPresetsByCategory('recommended');
@@ -117,6 +127,7 @@ export function ProfileCreateDialog({
   });
 
   const baseUrlValue = useWatch({ control, name: 'baseUrl' });
+  const targetValue = useWatch({ control, name: 'target' });
   const applyPresetToForm = useCallback(
     (preset: ProviderPreset | null) => {
       if (!preset) {
@@ -444,6 +455,30 @@ export function ProfileCreateDialog({
                       <p className="text-xs text-muted-foreground">{currentPreset.apiKeyHint}</p>
                     )
                   )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="target">Default Target CLI</Label>
+                  <Select
+                    value={targetValue}
+                    onValueChange={(value) => setValue('target', value as CliTarget)}
+                  >
+                    <SelectTrigger id="target">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="claude">Claude Code (default)</SelectItem>
+                      <SelectItem value="droid">Factory Droid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Run with{' '}
+                    <code className="bg-muted px-1 rounded text-[10px]">
+                      {targetValue === 'droid' ? 'ccsd' : 'ccs'}
+                    </code>{' '}
+                    by default. You can still override each run with{' '}
+                    <code className="bg-muted px-1 rounded text-[10px]">--target</code>.
+                  </p>
                 </div>
               </TabsContent>
 

@@ -150,10 +150,15 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['Run multiple Claude accounts concurrently'],
     [
       ['ccs auth --help', 'Show account management commands'],
-      ['ccs auth create <name>', 'Create account profile (supports context sharing flags)'],
+      [
+        'ccs auth create <name>',
+        'Create account profile (supports shared groups + --deeper-continuity)',
+      ],
+      ['ccs config', 'Dashboard: Accounts table can edit context mode/group/continuity depth'],
       ['ccs auth list', 'List all account profiles'],
       ['ccs auth default <name>', 'Set default profile'],
       ['ccs auth reset-default', 'Restore original CCS default'],
+      ['ccs cliproxy auth claude', 'Alternative: authenticate Claude account pool via CLIProxy'],
     ]
   );
 
@@ -167,6 +172,7 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       'First run: Browser opens for authentication, then model selection',
       'Settings: ~/.ccs/{provider}.settings.json (created after auth)',
       'Safety: do not reuse one Google account across "ccs gemini" and "ccs agy" (issue #509)',
+      'Antigravity requires multi-step responsibility confirmation (issue #509)',
       'If you want to keep Google AI access, do not continue this shared-account setup',
       'CCS is as-is and does not take responsibility for account bans/access loss',
     ],
@@ -188,6 +194,10 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
       ['ccs <provider> --accounts', 'List all accounts'],
       ['ccs <provider> --use <name>', 'Switch to account'],
       ['ccs <provider> --config', 'Change model (agy, gemini)'],
+      [
+        'ccs agy --accept-agr-risk',
+        'Bypass interactive Antigravity confirmation (you accept full responsibility)',
+      ],
       [
         'ccs <provider> --thinking <value>',
         'Set thinking budget (low/medium/high/xhigh/auto/off or number)',
@@ -326,6 +336,21 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
   printSubSection('Multi-Target', [
     ['ccs glm --target droid', 'Run GLM profile on Droid CLI'],
     ['ccsd glm', 'Same as above (alias)'],
+    ['ccsd codex', 'Run built-in CLIProxy Codex profile on Droid'],
+    ['ccsd agy', 'Run built-in CLIProxy Antigravity profile on Droid'],
+    [
+      'ccsd codex exec --skip-permissions-unsafe "fix failing tests"',
+      'Pass through Droid exec mode',
+    ],
+    ['ccsd codex -m custom:gpt-5.3-codex "fix failing tests"', 'Auto-routes short exec flags'],
+    [
+      'ccsd codex --skip-permissions-unsafe "fix failing tests"',
+      'Auto-routes to Droid exec when exec-only flags are detected',
+    ],
+    [
+      'ccs cliproxy create my-codex --provider codex --target droid',
+      'Create CLIProxy variant with Droid as default target',
+    ],
     ['ccs glm', 'Run GLM profile on Claude Code (default)'],
   ]);
 
@@ -347,7 +372,9 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['', ''], // Spacer
     ['ccs cliproxy pause <p> <a>', 'Pause account from rotation'],
     ['ccs cliproxy resume <p> <a>', 'Resume paused account'],
-    ['ccs cliproxy status [provider]', 'Show quota/tier/pause status'],
+    ['ccs cliproxy status', 'Show CLIProxy process status'],
+    ['ccs cliproxy quota', 'Show quota/tier/pause status for all providers'],
+    ['ccs cliproxy quota --provider <name>', 'Show quota/tier/pause status for one provider'],
   ]);
 
   // CLI Proxy configuration flags (new)
@@ -374,6 +401,11 @@ Run ${color('ccs config', 'command')} for web dashboard`.trim();
     ['', ''],
     ['--effort <level>', 'Codex alias for reasoning effort (medium/high/xhigh)'],
     ['--effort xhigh', 'Pin Codex effort to xhigh for this run'],
+    ['', ''],
+    ['Droid exec:', 'Use native Droid flag: --reasoning-effort <level>'],
+    ['', 'CCS auto-maps --thinking/--effort to --reasoning-effort in droid exec mode.'],
+    ['', 'For interactive droid sessions, CCS applies reasoning via Droid BYOK model config.'],
+    ['', 'When multiple reasoning flags are provided, the first flag wins.'],
     ['', ''],
     ['Note:', 'Extended thinking allocates compute for step-by-step reasoning'],
     ['', 'before responding.'],

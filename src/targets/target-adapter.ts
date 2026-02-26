@@ -23,6 +23,12 @@ export interface TargetCredentials {
   apiKey: string;
   model?: string;
   provider?: 'anthropic' | 'openai' | 'generic-chat-completion-api';
+  /**
+   * Runtime reasoning/thinking override resolved from CCS flags/env
+   * (e.g. --thinking high, --effort xhigh, CCS_THINKING=medium).
+   * Targets may ignore this when unsupported.
+   */
+  reasoningOverride?: string | number;
   /** Additional env vars from profile resolution (websearch, hooks, etc.) */
   envVars?: NodeJS.ProcessEnv;
 }

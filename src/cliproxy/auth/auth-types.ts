@@ -273,6 +273,8 @@ export interface OAuthOptions {
   account?: string;
   add?: boolean;
   nickname?: string;
+  /** If true, caller explicitly accepts Antigravity OAuth risk for this command/session. */
+  acceptAgyRisk?: boolean;
   /** Kiro auth method override (CLI + Dashboard parity). */
   kiroMethod?: KiroAuthMethod;
   /** If true, triggered from Web UI (enables project selection prompt) */

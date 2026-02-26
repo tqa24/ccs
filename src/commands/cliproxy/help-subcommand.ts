@@ -81,6 +81,7 @@ export async function showHelp(): Promise<void> {
       'Options:',
       [
         ['--backend <type>', 'Use specific backend: original | plus (default: from config)'],
+        ['--target <cli>', 'Default target for created/edited variants: claude | droid'],
         ['--verbose, -v', 'Show detailed quota fetch diagnostics'],
       ],
     ],

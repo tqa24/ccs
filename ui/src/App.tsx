@@ -27,6 +27,7 @@ const CliproxyControlPanelPage = lazy(() =>
 );
 const CopilotPage = lazy(() => import('@/pages/copilot').then((m) => ({ default: m.CopilotPage })));
 const CursorPage = lazy(() => import('@/pages/cursor').then((m) => ({ default: m.CursorPage })));
+const DroidPage = lazy(() => import('@/pages/droid').then((m) => ({ default: m.DroidPage })));
 const AccountsPage = lazy(() =>
   import('@/pages/accounts').then((m) => ({ default: m.AccountsPage }))
 );
@@ -35,6 +36,7 @@ const SettingsPage = lazy(() =>
 );
 const HealthPage = lazy(() => import('@/pages/health').then((m) => ({ default: m.HealthPage })));
 const SharedPage = lazy(() => import('@/pages/shared').then((m) => ({ default: m.SharedPage })));
+const UpdatesPage = lazy(() => import('@/pages/updates').then((m) => ({ default: m.UpdatesPage })));
 
 // Loading fallback for lazy components
 function PageLoader() {
@@ -65,6 +67,14 @@ export default function App() {
                       element={
                         <Suspense fallback={<PageLoader />}>
                           <AnalyticsPage />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/updates"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <UpdatesPage />
                         </Suspense>
                       }
                     />
@@ -105,6 +115,14 @@ export default function App() {
                       element={
                         <Suspense fallback={<PageLoader />}>
                           <CursorPage />
+                        </Suspense>
+                      }
+                    />
+                    <Route
+                      path="/droid"
+                      element={
+                        <Suspense fallback={<PageLoader />}>
+                          <DroidPage />
                         </Suspense>
                       }
                     />

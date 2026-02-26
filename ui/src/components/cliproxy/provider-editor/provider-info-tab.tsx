@@ -9,16 +9,26 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Info, Shield } from 'lucide-react';
 import { UsageCommand } from './usage-command';
 import type { SettingsResponse } from './types';
-import type { AuthStatus } from '@/lib/api-client';
+import type { AuthStatus, CliTarget } from '@/lib/api-client';
 
 interface ProviderInfoTabProps {
   provider: string;
   displayName: string;
+  defaultTarget?: CliTarget;
   data?: SettingsResponse;
   authStatus: AuthStatus;
 }
 
-export function ProviderInfoTab({ provider, displayName, data, authStatus }: ProviderInfoTabProps) {
+export function ProviderInfoTab({
+  provider,
+  displayName,
+  defaultTarget,
+  data,
+  authStatus,
+}: ProviderInfoTabProps) {
+  const resolvedTarget = defaultTarget || 'claude';
+  const isDroidTarget = resolvedTarget === 'droid';
+
   return (
     <ScrollArea className="h-full">
       <div className="p-4 space-y-6">
@@ -66,6 +76,10 @@ export function ProviderInfoTab({ provider, displayName, data, authStatus }: Pro
                 </Badge>
               )}
             </div>
+            <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
+              <span className="font-medium text-muted-foreground">Default Target</span>
+              <span className="font-mono">{resolvedTarget}</span>
+            </div>
           </div>
         </div>
 
@@ -74,6 +88,18 @@ export function ProviderInfoTab({ provider, displayName, data, authStatus }: Pro
           <h3 className="text-sm font-medium mb-3">Quick Usage</h3>
           <div className="space-y-3 bg-card rounded-lg border p-4 shadow-sm">
             <UsageCommand label="Run with prompt" command={`ccs ${provider} "your prompt"`} />
+            <UsageCommand
+              label={isDroidTarget ? 'Droid alias (explicit)' : 'Run on Droid'}
+              command={
+                isDroidTarget
+                  ? `ccsd ${provider} "your prompt"`
+                  : `ccs ${provider} --target droid "your prompt"`
+              }
+            />
+            <UsageCommand
+              label={isDroidTarget ? 'Override to Claude' : 'Override target'}
+              command={`ccs ${provider} --target claude "your prompt"`}
+            />
             <UsageCommand label="Change model" command={`ccs ${provider} --config`} />
             <UsageCommand label="Add account" command={`ccs ${provider} --add`} />
             <UsageCommand label="List accounts" command={`ccs ${provider} --accounts`} />

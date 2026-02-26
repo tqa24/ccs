@@ -10,6 +10,7 @@ import * as path from 'path';
 import { CLIProxyProfileName } from '../../auth/profile-detector';
 import { CLIProxyProvider, CLIProxyBackend, PLUS_ONLY_PROVIDERS } from '../types';
 import { CompositeTierConfig, CompositeVariantConfig } from '../../config/unified-config-types';
+import type { TargetType } from '../../targets/target-adapter';
 import { isReservedName, isWindowsReservedName } from '../../config/reserved-names';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { DEFAULT_BACKEND } from '../platform-detector';
@@ -110,7 +111,8 @@ export function createVariant(
   name: string,
   provider: CLIProxyProfileName,
   model: string,
-  account?: string
+  account?: string,
+  target: TargetType = 'claude'
 ): VariantOperationResult {
   try {
     // Validate provider/backend compatibility (block kiro/ghcp on original backend)
@@ -131,17 +133,25 @@ export function createVariant(
         provider as CLIProxyProvider,
         getRelativeSettingsPath(provider, name),
         account,
-        port
+        port,
+        target
       );
     } else {
       settingsPath = createSettingsFile(name, provider, model, port);
-      saveVariantLegacy(name, provider, `~/.ccs/${path.basename(settingsPath)}`, account, port);
+      saveVariantLegacy(
+        name,
+        provider,
+        `~/.ccs/${path.basename(settingsPath)}`,
+        account,
+        port,
+        target
+      );
     }
 
     return {
       success: true,
       settingsPath,
-      variant: { provider, model, account, port },
+      variant: { provider, model, account, port, target },
     };
   } catch (error) {
     return {
@@ -208,6 +218,7 @@ export interface UpdateVariantOptions {
   provider?: CLIProxyProfileName;
   account?: string;
   model?: string;
+  target?: TargetType;
 }
 
 /**
@@ -233,6 +244,8 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
 
     const providerChanged =
       updates.provider !== undefined && updates.provider !== existing.provider;
+    const existingTarget = existing.target || 'claude';
+    const targetChanged = updates.target !== undefined && updates.target !== existingTarget;
     const hasModelUpdate = updates.model !== undefined && updates.model.trim().length > 0;
 
     if (providerChanged && !hasModelUpdate) {
@@ -257,8 +270,8 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
       }
     }
 
-    // Update config entry if provider or account changed
-    if (updates.provider !== undefined || updates.account !== undefined) {
+    // Update config entry if provider/account/target changed
+    if (updates.provider !== undefined || updates.account !== undefined || targetChanged) {
       const newProvider = updates.provider ?? existing.provider;
 
       // Validate provider/backend compatibility on provider change
@@ -269,6 +282,7 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
         }
       }
       const newAccount = updates.account !== undefined ? updates.account : existing.account;
+      const newTarget = updates.target ?? existingTarget;
 
       if (isUnifiedMode()) {
         saveVariantUnified(
@@ -276,7 +290,8 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
           newProvider as CLIProxyProvider,
           existing.settings || '',
           newAccount || undefined,
-          existing.port
+          existing.port,
+          newTarget
         );
       } else {
         saveVariantLegacy(
@@ -284,7 +299,8 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
           newProvider,
           existing.settings || '',
           newAccount || undefined,
-          existing.port
+          existing.port,
+          newTarget
         );
       }
     }
@@ -297,6 +313,7 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
         account: updates.account !== undefined ? updates.account : existing.account,
         port: existing.port,
         settings: existing.settings,
+        target: updates.target ?? existingTarget,
       },
     };
   } catch (error) {
@@ -308,6 +325,7 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
 export interface CreateCompositeVariantOptions {
   name: string;
   defaultTier: 'opus' | 'sonnet' | 'haiku';
+  target?: TargetType;
   tiers: {
     opus: CompositeTierConfig;
     sonnet: CompositeTierConfig;
@@ -329,7 +347,7 @@ export function createCompositeVariant(
   }
 
   try {
-    const { name, defaultTier, tiers } = options;
+    const { name, defaultTier, tiers, target = 'claude' } = options;
 
     const validationError = validateCompositeTiers(tiers, {
       defaultTier,
@@ -361,6 +379,7 @@ export function createCompositeVariant(
       tiers,
       settings: settingsPath,
       port,
+      ...(target !== 'claude' && { target }),
     };
     saveCompositeVariantUnified(name, compositeConfig);
 
@@ -373,6 +392,7 @@ export function createCompositeVariant(
         default_tier: defaultTier,
         tiers,
         port,
+        target,
       },
     };
   } catch (error) {
@@ -384,6 +404,7 @@ export function createCompositeVariant(
 export interface UpdateCompositeVariantOptions {
   defaultTier?: 'opus' | 'sonnet' | 'haiku';
   tiers?: Partial<Record<'opus' | 'sonnet' | 'haiku', CompositeTierConfig>>;
+  target?: TargetType;
 }
 
 /**
@@ -418,6 +439,8 @@ export function updateCompositeVariant(
     };
 
     const newDefaultTier = updates.defaultTier ?? existing.default_tier ?? 'sonnet';
+    const existingTarget = existing.target || 'claude';
+    const newTarget = updates.target ?? existingTarget;
     const validationError = validateCompositeTiers(mergedTiers, {
       defaultTier: newDefaultTier,
       requireAllTiers: true,
@@ -455,6 +478,7 @@ export function updateCompositeVariant(
       tiers: mergedTiers,
       settings: settingsRef,
       port: existing.port,
+      ...(newTarget !== 'claude' && { target: newTarget }),
     };
     saveCompositeVariantUnified(name, compositeConfig);
 
@@ -468,6 +492,7 @@ export function updateCompositeVariant(
         tiers: mergedTiers,
         port: existing.port,
         settings: settingsRef,
+        target: newTarget,
       },
     };
   } catch (error) {
