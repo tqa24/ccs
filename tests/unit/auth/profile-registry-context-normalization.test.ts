@@ -58,6 +58,7 @@ describe('profile-registry context normalization', () => {
 
     expect(profile.context_mode).toBe('shared');
     expect(profile.context_group).toBeUndefined();
+    expect(profile.continuity_mode).toBe('standard');
   });
 
   it('drops non-string unified context_group values without throwing', () => {
@@ -88,5 +89,6 @@ describe('profile-registry context normalization', () => {
 
     expect(accounts.work.context_mode).toBe('shared');
     expect(accounts.work.context_group).toBeUndefined();
+    expect(accounts.work.continuity_mode).toBe('standard');
   });
 });

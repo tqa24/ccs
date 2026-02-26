@@ -13,7 +13,10 @@ export interface AuthAccountsView {
   default: string | null;
   cliproxyCount: number;
   legacyContextCount: number;
+  legacyContinuityCount: number;
   sharedCount: number;
+  sharedStandardCount: number;
+  deeperSharedCount: number;
   isolatedCount: number;
 }
 
@@ -27,8 +30,18 @@ export function useAccounts() {
       const sharedCount = authAccounts.filter(
         (account) => account.context_mode === 'shared'
       ).length;
+      const deeperSharedCount = authAccounts.filter(
+        (account) => account.context_mode === 'shared' && account.continuity_mode === 'deeper'
+      ).length;
+      const sharedStandardCount = Math.max(sharedCount - deeperSharedCount, 0);
       const isolatedCount = authAccounts.length - sharedCount;
       const legacyContextCount = authAccounts.filter((account) => account.context_inferred).length;
+      const legacyContinuityCount = authAccounts.filter(
+        (account) =>
+          account.context_mode === 'shared' &&
+          account.continuity_mode !== 'deeper' &&
+          account.continuity_inferred
+      ).length;
       const defaultAccount = authAccounts.some((account) => account.name === data.default)
         ? data.default
         : null;
@@ -38,7 +51,10 @@ export function useAccounts() {
         default: defaultAccount,
         cliproxyCount,
         legacyContextCount,
+        legacyContinuityCount,
         sharedCount,
+        sharedStandardCount,
+        deeperSharedCount,
         isolatedCount,
       };
     },
@@ -98,16 +114,20 @@ export function useUpdateAccountContext() {
       name,
       context_mode,
       context_group,
+      continuity_mode,
     }: {
       name: string;
       context_mode: 'isolated' | 'shared';
       context_group?: string;
-    }) => api.accounts.updateContext(name, { context_mode, context_group }),
+      continuity_mode?: 'standard' | 'deeper';
+    }) => api.accounts.updateContext(name, { context_mode, context_group, continuity_mode }),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       const contextSummary =
         vars.context_mode === 'shared'
-          ? `shared (${(vars.context_group || 'default').trim().toLowerCase().replace(/\s+/g, '-')})`
+          ? vars.continuity_mode === 'deeper'
+            ? `shared (${(vars.context_group || 'default').trim().toLowerCase().replace(/\s+/g, '-')}, deeper continuity)`
+            : `shared (${(vars.context_group || 'default').trim().toLowerCase().replace(/\s+/g, '-')}, standard)`
           : 'isolated';
       toast.success(`Updated "${vars.name}" context to ${contextSummary}`);
     },

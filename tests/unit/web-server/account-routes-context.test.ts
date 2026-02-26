@@ -108,6 +108,7 @@ describe('web-server account-routes context normalization', () => {
         name: string;
         context_mode?: string;
         context_group?: string;
+        continuity_mode?: string;
         context_inferred?: boolean;
       }>;
     }>(baseUrl, '/api/accounts');
@@ -117,6 +118,7 @@ describe('web-server account-routes context normalization', () => {
     expect(work?.context_mode).toBe('isolated');
     expect(work?.context_inferred).toBe(true);
     expect(work && 'context_group' in work).toBe(false);
+    expect(work && 'continuity_mode' in work).toBe(false);
   });
 
   it('falls back shared accounts with invalid groups to default shared group', async () => {
@@ -147,7 +149,9 @@ describe('web-server account-routes context normalization', () => {
         name: string;
         context_mode?: string;
         context_group?: string;
+        continuity_mode?: string;
         context_inferred?: boolean;
+        continuity_inferred?: boolean;
       }>;
     }>(baseUrl, '/api/accounts');
 
@@ -155,7 +159,9 @@ describe('web-server account-routes context normalization', () => {
     expect(work).toBeTruthy();
     expect(work?.context_mode).toBe('shared');
     expect(work?.context_group).toBe('default');
+    expect(work?.continuity_mode).toBe('standard');
     expect(work?.context_inferred).toBe(false);
+    expect(work?.continuity_inferred).toBe(true);
   });
 
   it('does not delete metadata when instance deletion fails', async () => {
@@ -220,23 +226,34 @@ describe('web-server account-routes context normalization', () => {
     const response = await putJson(baseUrl, '/api/accounts/work/context', {
       context_mode: 'shared',
       context_group: ' Team Alpha ',
+      continuity_mode: 'deeper',
     });
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
       context_mode: string;
       context_group: string | null;
+      continuity_mode?: string | null;
       context_inferred?: boolean;
+      continuity_inferred?: boolean;
     };
     expect(payload.context_mode).toBe('shared');
     expect(payload.context_group).toBe('team-alpha');
+    expect(payload.continuity_mode).toBe('deeper');
     expect(payload.context_inferred).toBe(false);
+    expect(payload.continuity_inferred).toBe(false);
 
     const accountsPayload = await getJson<{
-      accounts: Array<{ name: string; context_mode?: string; context_group?: string }>;
+      accounts: Array<{
+        name: string;
+        context_mode?: string;
+        context_group?: string;
+        continuity_mode?: string;
+      }>;
     }>(baseUrl, '/api/accounts');
     const work = accountsPayload.accounts.find((account) => account.name === 'work');
     expect(work?.context_mode).toBe('shared');
     expect(work?.context_group).toBe('team-alpha');
+    expect(work?.continuity_mode).toBe('deeper');
   });
 
   it('rejects shared mode updates without context_group', async () => {
@@ -273,10 +290,43 @@ describe('web-server account-routes context normalization', () => {
     const response = await putJson(baseUrl, '/api/accounts/gemini:test/context', {
       context_mode: 'shared',
       context_group: 'default',
+      continuity_mode: 'deeper',
     });
     expect(response.status).toBe(400);
 
     const payload = (await response.json()) as { error: string };
     expect(payload.error).toContain('CLIProxy');
+  });
+
+  it('rejects invalid continuity mode updates', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 8',
+        'accounts:',
+        '  work:',
+        '    created: "2026-02-01T00:00:00.000Z"',
+        '    last_used: null',
+        'profiles: {}',
+        'cliproxy:',
+        '  oauth_accounts: {}',
+        '  providers: {}',
+        '  variants: {}',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const response = await putJson(baseUrl, '/api/accounts/work/context', {
+      context_mode: 'shared',
+      context_group: 'default',
+      continuity_mode: 'extreme',
+    });
+
+    expect(response.status).toBe(400);
+    const payload = (await response.json()) as { error: string };
+    expect(payload.error).toContain('continuity_mode');
   });
 });

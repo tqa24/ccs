@@ -77,13 +77,19 @@ describe('auth list context metadata', () => {
     }
 
     const payload = JSON.parse(lines.join('\n')) as {
-      profiles: Array<{ name: string; context_mode?: string; context_group?: string | null }>;
+      profiles: Array<{
+        name: string;
+        context_mode?: string;
+        context_group?: string | null;
+        continuity_mode?: string | null;
+      }>;
     };
     const work = payload.profiles.find((profile) => profile.name === 'work');
 
     expect(work).toBeTruthy();
     expect(work?.context_mode).toBe('shared');
     expect(work?.context_group).toBe('sprint-a');
+    expect(work?.continuity_mode).toBe('standard');
   });
 
   it('prefers unified context metadata over legacy when profile names overlap', async () => {
@@ -151,12 +157,18 @@ describe('auth list context metadata', () => {
     }
 
     const payload = JSON.parse(lines.join('\n')) as {
-      profiles: Array<{ name: string; context_mode?: string; context_group?: string | null }>;
+      profiles: Array<{
+        name: string;
+        context_mode?: string;
+        context_group?: string | null;
+        continuity_mode?: string | null;
+      }>;
     };
     const work = payload.profiles.find((profile) => profile.name === 'work');
 
     expect(work).toBeTruthy();
     expect(work?.context_mode).toBe('shared');
     expect(work?.context_group).toBe('sprint-a');
+    expect(work?.continuity_mode).toBe('standard');
   });
 });

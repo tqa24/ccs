@@ -27,6 +27,12 @@ class SharedManager {
   private readonly claudeDir: string;
   private readonly instancesDir: string;
   private readonly sharedItems: SharedItem[];
+  private readonly advancedContinuityItems: readonly string[] = [
+    'session-env',
+    'file-history',
+    'shell-snapshots',
+    'todos',
+  ];
 
   constructor() {
     this.homeDir = os.homedir();
@@ -312,6 +318,133 @@ class SharedManager {
 
     await fs.promises.rm(projectsPath, { force: true });
     await this.ensureDirectory(projectsPath);
+  }
+
+  /**
+   * Sync advanced continuity artifacts for shared deeper mode.
+   *
+   * - shared + deeper: artifacts are linked per context group.
+   * - shared + standard / isolated: artifacts stay local to instance.
+   */
+  async syncAdvancedContinuityArtifacts(
+    instancePath: string,
+    policy: AccountContextPolicy
+  ): Promise<void> {
+    const instanceName = path.basename(instancePath);
+    const useSharedContinuity = policy.mode === 'shared' && policy.continuityMode === 'deeper';
+    const contextGroup = policy.group || DEFAULT_ACCOUNT_CONTEXT_GROUP;
+
+    for (const artifactName of this.advancedContinuityItems) {
+      const instanceArtifactPath = path.join(instancePath, artifactName);
+
+      if (useSharedContinuity) {
+        const sharedArtifactPath = path.join(
+          this.sharedDir,
+          'context-groups',
+          contextGroup,
+          'continuity',
+          artifactName
+        );
+
+        await this.ensureDirectory(sharedArtifactPath);
+        await this.ensureDirectory(path.dirname(instanceArtifactPath));
+
+        const currentStats = await this.getLstat(instanceArtifactPath);
+        if (!currentStats) {
+          await this.linkDirectoryWithFallback(sharedArtifactPath, instanceArtifactPath);
+          continue;
+        }
+
+        if (currentStats.isSymbolicLink()) {
+          if (await this.isSymlinkTarget(instanceArtifactPath, sharedArtifactPath)) {
+            continue;
+          }
+
+          const currentTarget = await this.resolveSymlinkTargetPath(instanceArtifactPath);
+          if (
+            currentTarget &&
+            path.resolve(currentTarget) !== path.resolve(sharedArtifactPath) &&
+            this.isSafeContinuityMergeSource(currentTarget, instanceName, artifactName) &&
+            (await this.pathExists(currentTarget))
+          ) {
+            await this.mergeDirectoryWithConflictCopies(
+              currentTarget,
+              sharedArtifactPath,
+              instanceName
+            );
+          } else if (
+            currentTarget &&
+            !this.isSafeContinuityMergeSource(currentTarget, instanceName, artifactName)
+          ) {
+            console.log(
+              warn(
+                `Skipping unsafe ${artifactName} merge source outside CCS roots: ${currentTarget}`
+              )
+            );
+          }
+
+          await fs.promises.unlink(instanceArtifactPath);
+          await this.linkDirectoryWithFallback(sharedArtifactPath, instanceArtifactPath);
+          continue;
+        }
+
+        if (currentStats.isDirectory()) {
+          await this.mergeDirectoryWithConflictCopies(
+            instanceArtifactPath,
+            sharedArtifactPath,
+            instanceName
+          );
+          await fs.promises.rm(instanceArtifactPath, { recursive: true, force: true });
+          await this.linkDirectoryWithFallback(sharedArtifactPath, instanceArtifactPath);
+          continue;
+        }
+
+        await fs.promises.rm(instanceArtifactPath, { force: true });
+        await this.linkDirectoryWithFallback(sharedArtifactPath, instanceArtifactPath);
+        continue;
+      }
+
+      const currentStats = await this.getLstat(instanceArtifactPath);
+      if (!currentStats) {
+        await this.ensureDirectory(instanceArtifactPath);
+        continue;
+      }
+
+      if (currentStats.isDirectory()) {
+        continue;
+      }
+
+      if (currentStats.isSymbolicLink()) {
+        const currentTarget = await this.resolveSymlinkTargetPath(instanceArtifactPath);
+        await fs.promises.unlink(instanceArtifactPath);
+        await this.ensureDirectory(instanceArtifactPath);
+
+        if (
+          currentTarget &&
+          path.resolve(currentTarget) !== path.resolve(instanceArtifactPath) &&
+          this.isSafeContinuityMergeSource(currentTarget, instanceName, artifactName) &&
+          (await this.pathExists(currentTarget))
+        ) {
+          await this.mergeDirectoryWithConflictCopies(
+            currentTarget,
+            instanceArtifactPath,
+            instanceName
+          );
+        } else if (
+          currentTarget &&
+          !this.isSafeContinuityMergeSource(currentTarget, instanceName, artifactName)
+        ) {
+          console.log(
+            warn(`Skipping unsafe ${artifactName} merge source outside CCS roots: ${currentTarget}`)
+          );
+        }
+
+        continue;
+      }
+
+      await fs.promises.rm(instanceArtifactPath, { force: true });
+      await this.ensureDirectory(instanceArtifactPath);
+    }
   }
 
   /**
@@ -709,6 +842,38 @@ class SharedManager {
     return (
       this.isPathWithinDirectory(resolvedSource, sharedContextRoot) ||
       this.isPathWithinDirectory(resolvedSource, instanceProjectsRoot)
+    );
+  }
+
+  /**
+   * Guard advanced continuity merge operations to known CCS-managed roots only.
+   */
+  private isSafeContinuityMergeSource(
+    sourcePath: string,
+    instanceName: string,
+    artifactName: string
+  ): boolean {
+    const resolvedSource = this.resolveCanonicalPath(sourcePath);
+    const sharedContextRoot = this.resolveCanonicalPath(
+      path.join(this.sharedDir, 'context-groups')
+    );
+    const instanceArtifactRoot = this.resolveCanonicalPath(
+      path.join(this.instancesDir, instanceName, artifactName)
+    );
+
+    const normalizedSource =
+      process.platform === 'win32' ? resolvedSource.toLowerCase() : resolvedSource;
+    const continuitySegment =
+      process.platform === 'win32'
+        ? `${path.sep}continuity${path.sep}`.toLowerCase()
+        : `${path.sep}continuity${path.sep}`;
+
+    const withinSharedContinuity =
+      this.isPathWithinDirectory(resolvedSource, sharedContextRoot) &&
+      normalizedSource.includes(continuitySegment);
+
+    return (
+      withinSharedContinuity || this.isPathWithinDirectory(resolvedSource, instanceArtifactRoot)
     );
   }
 

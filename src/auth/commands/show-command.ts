@@ -60,6 +60,7 @@ export async function handleShow(ctx: CommandContext, args: string[]): Promise<v
         last_used: profile.last_used || null,
         context_mode: contextPolicy.mode,
         context_group: contextPolicy.group || null,
+        continuity_mode: contextPolicy.mode === 'shared' ? contextPolicy.continuityMode : null,
         instance_path: instancePath,
         session_count: sessionCount,
       };

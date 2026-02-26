@@ -64,6 +64,20 @@ describe('SharedManager context policy', () => {
     return { instancePath, ccsDir };
   }
 
+  async function applyPolicyWithContinuity(
+    policy: AccountContextPolicy
+  ): Promise<{ instancePath: string; ccsDir: string }> {
+    const ccsDir = getTestCcsDir();
+    const instancePath = path.join(ccsDir, 'instances', 'work');
+    fs.mkdirSync(instancePath, { recursive: true });
+
+    const manager = new SharedManager();
+    await manager.syncProjectContext(instancePath, policy);
+    await manager.syncAdvancedContinuityArtifacts(instancePath, policy);
+
+    return { instancePath, ccsDir };
+  }
+
   it('keeps projects isolated by default', async () => {
     const { instancePath } = await applyPolicy({ mode: 'isolated' });
     const projectsPath = path.join(instancePath, 'projects');
@@ -139,6 +153,62 @@ describe('SharedManager context policy', () => {
     const stats = fs.lstatSync(projectsPath);
 
     expect(stats.isDirectory() || stats.isSymbolicLink()).toBe(true);
+  });
+
+  it('links advanced continuity artifacts for shared deeper mode', async () => {
+    const { instancePath, ccsDir } = await applyPolicyWithContinuity({
+      mode: 'shared',
+      group: 'sprint-a',
+      continuityMode: 'deeper',
+    });
+
+    const artifactPath = path.join(instancePath, 'session-env');
+    const targetFile = path.join(
+      ccsDir,
+      'shared',
+      'context-groups',
+      'sprint-a',
+      'continuity',
+      'session-env',
+      'session.json'
+    );
+
+    fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+    fs.writeFileSync(targetFile, '{"id":"shared"}', 'utf8');
+
+    expect(fs.lstatSync(artifactPath).isSymbolicLink()).toBe(true);
+    expect(fs.readFileSync(path.join(artifactPath, 'session.json'), 'utf8')).toContain('shared');
+  });
+
+  it('detaches advanced continuity artifacts when moving from deeper to standard shared mode', async () => {
+    const { instancePath, ccsDir } = await applyPolicyWithContinuity({
+      mode: 'shared',
+      group: 'sprint-a',
+      continuityMode: 'deeper',
+    });
+
+    const sharedTodo = path.join(
+      ccsDir,
+      'shared',
+      'context-groups',
+      'sprint-a',
+      'continuity',
+      'todos',
+      'todo.md'
+    );
+    fs.mkdirSync(path.dirname(sharedTodo), { recursive: true });
+    fs.writeFileSync(sharedTodo, '- shared todo', 'utf8');
+
+    const manager = new SharedManager();
+    await manager.syncAdvancedContinuityArtifacts(instancePath, {
+      mode: 'shared',
+      group: 'sprint-a',
+      continuityMode: 'standard',
+    });
+
+    const localTodoDir = path.join(instancePath, 'todos');
+    expect(fs.lstatSync(localTodoDir).isDirectory()).toBe(true);
+    expect(fs.readFileSync(path.join(localTodoDir, 'todo.md'), 'utf8')).toContain('shared todo');
   });
 
   it('skips merge when projects symlink target is outside canonical CCS roots', async () => {

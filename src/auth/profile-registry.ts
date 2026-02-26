@@ -23,6 +23,7 @@ import { isValidContextGroupName, normalizeContextGroupName } from './account-co
  *   last_used: <ISO timestamp or null> // Last usage time
  *   context_mode?: 'isolated' | 'shared' // Workspace context policy
  *   context_group?: <string> // Shared context group when mode=shared
+ *   continuity_mode?: 'standard' | 'deeper' // Shared continuity depth
  * }
  *
  * Removed fields from v2.x:
@@ -43,6 +44,7 @@ interface CreateMetadata {
   last_used?: string | null;
   context_mode?: 'isolated' | 'shared';
   context_group?: string;
+  continuity_mode?: 'standard' | 'deeper';
 }
 
 export class ProfileRegistry {
@@ -70,6 +72,7 @@ export class ProfileRegistry {
 
     if (normalized.context_mode !== 'shared') {
       delete normalized.context_group;
+      delete normalized.continuity_mode;
     } else {
       const normalizedGroup = this.normalizeContextGroupValue(normalized.context_group);
       if (normalizedGroup) {
@@ -77,6 +80,8 @@ export class ProfileRegistry {
       } else {
         delete normalized.context_group;
       }
+
+      normalized.continuity_mode = normalized.continuity_mode === 'deeper' ? 'deeper' : 'standard';
     }
 
     return normalized;
@@ -87,6 +92,7 @@ export class ProfileRegistry {
 
     if (normalized.context_mode !== 'shared') {
       delete normalized.context_group;
+      delete normalized.continuity_mode;
     } else {
       const normalizedGroup = this.normalizeContextGroupValue(normalized.context_group);
       if (normalizedGroup) {
@@ -94,6 +100,8 @@ export class ProfileRegistry {
       } else {
         delete normalized.context_group;
       }
+
+      normalized.continuity_mode = normalized.continuity_mode === 'deeper' ? 'deeper' : 'standard';
     }
 
     return normalized;
@@ -164,6 +172,7 @@ export class ProfileRegistry {
       last_used: metadata.last_used || null,
       context_mode: metadata.context_mode,
       context_group: metadata.context_group,
+      continuity_mode: metadata.continuity_mode,
     });
 
     // Note: No longer auto-set as default
@@ -311,6 +320,7 @@ export class ProfileRegistry {
       last_used: null,
       context_mode: metadata.context_mode,
       context_group: metadata.context_group,
+      continuity_mode: metadata.continuity_mode,
     });
     saveUnifiedConfig(config);
   }
@@ -438,6 +448,7 @@ export class ProfileRegistry {
         last_used: account.last_used,
         context_mode: account.context_mode,
         context_group: account.context_group,
+        continuity_mode: account.continuity_mode,
       };
     }
 

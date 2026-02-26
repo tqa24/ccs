@@ -96,6 +96,8 @@ export interface ProfileMetadata {
   context_mode?: 'isolated' | 'shared';
   /** Context-sharing group when context_mode='shared' */
   context_group?: string;
+  /** Shared continuity depth when context_mode='shared' */
+  continuity_mode?: 'standard' | 'deeper';
 }
 
 export interface ProfilesRegistry {

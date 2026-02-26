@@ -90,7 +90,7 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
     },
     {
       id: 'context',
-      header: 'Context',
+      header: 'History Sync',
       size: 170,
       cell: ({ row }) => {
         if (row.original.type === 'cliproxy') {
@@ -100,7 +100,19 @@ export function AccountsTable({ data, defaultAccount }: AccountsTableProps) {
         const mode = row.original.context_mode || 'isolated';
         if (mode === 'shared') {
           const group = row.original.context_group || 'default';
-          return <span className="text-muted-foreground">shared ({group})</span>;
+          if (row.original.continuity_mode === 'deeper') {
+            return <span className="text-muted-foreground">shared ({group}, deeper)</span>;
+          }
+
+          if (row.original.continuity_inferred) {
+            return (
+              <span className="text-amber-700 dark:text-amber-400">
+                shared ({group}, standard legacy)
+              </span>
+            );
+          }
+
+          return <span className="text-muted-foreground">shared ({group}, standard)</span>;
         }
 
         if (row.original.context_inferred) {

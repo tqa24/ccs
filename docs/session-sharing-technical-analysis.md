@@ -9,7 +9,8 @@ CCS supports practical cross-account continuity by sharing workspace context fil
 This is implemented as a context policy per account:
 
 - `isolated` (default): account keeps its own workspace context
-- `shared`: account workspace context is linked to a shared context group
+- `shared` + `standard` (default): account workspace context is linked to a shared context group
+- `shared` + `deeper` (advanced opt-in): account also shares continuity artifacts
 
 ## Why This Is Safe Enough
 
@@ -28,15 +29,26 @@ accounts:
     last_used: null
     context_mode: "shared"
     context_group: "team-alpha"
+    continuity_mode: "deeper"
 ```
 
 Rules:
 
 - `context_mode` must be `isolated` or `shared`
 - `context_group` is required when `context_mode=shared`
+- `continuity_mode` is valid only when `context_mode=shared` (`standard` or `deeper`)
 - group normalization: trim, lowercase, internal spaces -> `-`
 - group must start with a letter and only include `[a-zA-Z0-9_-]`
 - max length: `64`
+
+Deeper continuity links these directories per context group:
+
+- `session-env`
+- `file-history`
+- `shell-snapshots`
+- `todos`
+
+`.anthropic` and account credentials remain isolated.
 
 ## User Workflows
 
@@ -45,14 +57,15 @@ Rules:
 ```bash
 ccs auth create work2 --share-context
 ccs auth create backup --context-group sprint-a
+ccs auth create backup2 --context-group sprint-a --deeper-continuity
 ```
 
 ### Existing account
 
 - Open `ccs config`
 - Go to `Accounts`
-- Click the pencil icon (`Edit Context`)
-- Choose `isolated` or `shared` and set group
+- Click the pencil icon (`Edit History Sync`)
+- Choose `isolated` or `shared`, set group, and (optionally) choose deeper continuity
 
 No account recreation required for this workflow.
 
@@ -62,9 +75,15 @@ No account recreation required for this workflow.
 - Session continuity still depends on what the upstream tool/provider stores and allows.
 - Context sharing should only be enabled for accounts you intentionally trust to share workspace history.
 
+## Alternative: CLIProxy Claude Pool
+
+For users who prefer lower manual account switching, use CLIProxy Claude pool instead:
+
+- Authenticate pool accounts via `ccs cliproxy auth claude`
+- Manage account pool behavior in `ccs config` -> `CLIProxy Plus`
+
 ## Validation Checklist
 
 - Confirm account row shows `shared (<group>)` in Dashboard Accounts table
 - Switch between accounts in the same group and verify workspace continuity
 - Run `ccs doctor` if symlink/context health looks inconsistent
-

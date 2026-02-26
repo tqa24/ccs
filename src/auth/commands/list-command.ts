@@ -32,6 +32,7 @@ export async function handleList(ctx: CommandContext, args: string[]): Promise<v
         last_used: account.last_used,
         context_mode: account.context_mode,
         context_group: account.context_group,
+        continuity_mode: account.continuity_mode,
       };
     }
 
@@ -56,6 +57,7 @@ export async function handleList(ctx: CommandContext, args: string[]): Promise<v
             last_used: profile.last_used || null,
             context_mode: contextPolicy.mode,
             context_group: contextPolicy.group || null,
+            continuity_mode: contextPolicy.mode === 'shared' ? contextPolicy.continuityMode : null,
             instance_path: instancePath,
           };
         }),
@@ -134,7 +136,7 @@ export async function handleList(ctx: CommandContext, args: string[]): Promise<v
     console.log(
       table(rows, {
         head: headers,
-        colWidths: verbose ? [15, 12, 15, 12, 18] : [15, 12, 15],
+        colWidths: verbose ? [15, 12, 15, 12, 34] : [15, 12, 15],
       })
     );
     console.log('');

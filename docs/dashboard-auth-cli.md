@@ -24,6 +24,11 @@ Account context is isolation-first:
 | `isolated` | Yes | No `context_group` required |
 | `shared` | No (opt-in) | Valid non-empty `context_group` |
 
+Shared continuity depth:
+
+- `standard` (default): shares project workspace context only
+- `deeper` (advanced opt-in): also syncs `session-env`, `file-history`, `shell-snapshots`, `todos`
+
 `context_group` normalization and validation:
 
 - trim + lowercase + collapse internal whitespace to `-`
@@ -31,17 +36,21 @@ Account context is isolation-first:
 - must start with a letter
 - max length: 64
 - shared mode requires non-empty value after normalization
+- `continuity_mode` is only valid when mode is `shared`
 
 `PUT /api/config` behavior for account context:
 
 - rejects invalid unified payloads
 - rejects explicit `context_mode: shared` with invalid/empty `context_group`
+- rejects invalid `continuity_mode` values
 - normalizes valid shared `context_group` before save
+- defaults missing shared `continuity_mode` to `standard`
 - rejects `context_group` when mode is not `shared`
+- rejects `continuity_mode` when mode is not `shared`
 
 Dashboard accounts context editing:
 
-- `PUT /api/accounts/:name/context` updates context mode/group for existing auth accounts
+- `PUT /api/accounts/:name/context` updates context mode/group/continuity for existing auth accounts
 - rejects CLIProxy OAuth account keys for this route
 - applies normalization/validation rules above
 

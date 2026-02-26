@@ -20,6 +20,7 @@ import {
 } from '../../cliproxy/account-manager';
 import { isCLIProxyProvider } from '../../cliproxy/provider-capabilities';
 import {
+  DEFAULT_ACCOUNT_CONTINUITY_MODE,
   isValidContextGroupName,
   normalizeContextGroupName,
   resolveAccountContextPolicy,
@@ -58,13 +59,18 @@ router.get('/', (_req: Request, res: Response): void => {
       const contextPolicy = resolveAccountContextPolicy(meta);
       const hasExplicitContextMode =
         meta.context_mode === 'isolated' || meta.context_mode === 'shared';
+      const hasExplicitContinuityMode =
+        meta.continuity_mode === 'standard' || meta.continuity_mode === 'deeper';
       merged[name] = {
         type: meta.type || 'account',
         created: meta.created,
         last_used: meta.last_used || null,
         context_mode: contextPolicy.mode,
         context_group: contextPolicy.group,
+        continuity_mode: contextPolicy.mode === 'shared' ? contextPolicy.continuityMode : undefined,
         context_inferred: !hasExplicitContextMode,
+        continuity_inferred:
+          contextPolicy.mode === 'shared' ? !hasExplicitContinuityMode : undefined,
       };
     }
 
@@ -73,13 +79,18 @@ router.get('/', (_req: Request, res: Response): void => {
       const contextPolicy = resolveAccountContextPolicy(account);
       const hasExplicitContextMode =
         account.context_mode === 'isolated' || account.context_mode === 'shared';
+      const hasExplicitContinuityMode =
+        account.continuity_mode === 'standard' || account.continuity_mode === 'deeper';
       merged[name] = {
         type: 'account',
         created: account.created,
         last_used: account.last_used,
         context_mode: contextPolicy.mode,
         context_group: contextPolicy.group,
+        continuity_mode: contextPolicy.mode === 'shared' ? contextPolicy.continuityMode : undefined,
         context_inferred: !hasExplicitContextMode,
+        continuity_inferred:
+          contextPolicy.mode === 'shared' ? !hasExplicitContinuityMode : undefined,
       };
     }
 
@@ -189,6 +200,7 @@ router.put('/:name/context', async (req: Request, res: Response): Promise<void> 
 
     const mode = req.body?.context_mode;
     const rawGroup = req.body?.context_group;
+    const rawContinuityMode = req.body?.continuity_mode;
 
     if (mode !== 'isolated' && mode !== 'shared') {
       res.status(400).json({ error: 'Missing or invalid context_mode: expected isolated|shared' });
@@ -202,7 +214,15 @@ router.put('/:name/context', async (req: Request, res: Response): Promise<void> 
       return;
     }
 
+    if (mode !== 'shared' && rawContinuityMode !== undefined) {
+      res
+        .status(400)
+        .json({ error: 'Invalid payload: continuity_mode requires context_mode=shared' });
+      return;
+    }
+
     let normalizedGroup: string | undefined;
+    let continuityMode: 'standard' | 'deeper' | undefined;
     if (mode === 'shared') {
       if (typeof rawGroup !== 'string' || rawGroup.trim().length === 0) {
         res
@@ -219,6 +239,19 @@ router.put('/:name/context', async (req: Request, res: Response): Promise<void> 
         });
         return;
       }
+
+      if (
+        rawContinuityMode !== undefined &&
+        rawContinuityMode !== 'standard' &&
+        rawContinuityMode !== 'deeper'
+      ) {
+        res.status(400).json({
+          error: 'Invalid continuity_mode: expected standard|deeper',
+        });
+        return;
+      }
+
+      continuityMode = rawContinuityMode === 'deeper' ? 'deeper' : DEFAULT_ACCOUNT_CONTINUITY_MODE;
     }
 
     const metadata =
@@ -226,6 +259,7 @@ router.put('/:name/context', async (req: Request, res: Response): Promise<void> 
         ? {
             context_mode: 'shared' as const,
             context_group: normalizedGroup,
+            continuity_mode: continuityMode,
           }
         : {
             context_mode: 'isolated' as const,
@@ -258,7 +292,12 @@ router.put('/:name/context', async (req: Request, res: Response): Promise<void> 
       name,
       context_mode: policy.mode,
       context_group: policy.group ?? null,
+      continuity_mode:
+        policy.mode === 'shared'
+          ? (policy.continuityMode ?? DEFAULT_ACCOUNT_CONTINUITY_MODE)
+          : null,
       context_inferred: false,
+      continuity_inferred: false,
     });
   } catch (error) {
     res.status(500).json({ error: (error as Error).message });
