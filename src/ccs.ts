@@ -62,6 +62,7 @@ import {
   DroidReasoningFlagError,
   resolveDroidReasoningRuntime,
 } from './targets/droid-reasoning-runtime';
+import { routeDroidCommandArgs } from './targets/droid-command-router';
 
 // Version and Update check utilities
 import { getVersion } from './utils/version';
@@ -718,26 +719,35 @@ async function main(): Promise<void> {
     let targetRemainingArgs = remainingArgs;
     let droidReasoningOverride: string | number | undefined;
     if (resolvedTarget === 'droid') {
-      try {
-        const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
-        targetRemainingArgs = runtime.argsWithoutReasoningFlags;
-        droidReasoningOverride = runtime.reasoningOverride;
+      const droidRoute = routeDroidCommandArgs(remainingArgs);
+      targetRemainingArgs = droidRoute.argsForDroid;
 
-        if (runtime.duplicateDisplays.length > 0) {
-          console.error(
-            warn(
-              `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
-            )
-          );
+      if (droidRoute.mode === 'interactive') {
+        try {
+          const runtime = resolveDroidReasoningRuntime(remainingArgs, process.env.CCS_THINKING);
+          targetRemainingArgs = runtime.argsWithoutReasoningFlags;
+          droidReasoningOverride = runtime.reasoningOverride;
+
+          if (runtime.duplicateDisplays.length > 0) {
+            console.error(
+              warn(
+                `[!] Multiple reasoning flags detected. Using first occurrence: ${runtime.sourceDisplay || '<first-flag>'}`
+              )
+            );
+          }
+        } catch (error) {
+          if (error instanceof DroidReasoningFlagError) {
+            console.error(fail(error.message));
+            console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
+            console.error('    Codex alias: --effort medium|high|xhigh');
+            process.exit(1);
+          }
+          throw error;
         }
-      } catch (error) {
-        if (error instanceof DroidReasoningFlagError) {
-          console.error(fail(error.message));
-          console.error('    Examples: --thinking low, --thinking 8192, --thinking off');
-          console.error('    Codex alias: --effort medium|high|xhigh');
-          process.exit(1);
-        }
-        throw error;
+      } else if (droidRoute.autoPrependedExec && process.stdout.isTTY) {
+        console.error(
+          info('Detected Droid exec-only flags. Routing as: droid exec <flags> [prompt]')
+        );
       }
     }
 
