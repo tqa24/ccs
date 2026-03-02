@@ -12,6 +12,7 @@ import { MaskedInput } from '@/components/ui/masked-input';
 import { Plus } from 'lucide-react';
 import { isSensitiveKey } from './utils';
 import type { Settings } from './types';
+import { useTranslation } from 'react-i18next';
 
 interface EnvEditorSectionProps {
   currentSettings: Settings | undefined;
@@ -32,6 +33,7 @@ export function EnvEditorSection({
   onEnvValueChange,
   onAddEnvVar,
 }: EnvEditorSectionProps) {
+  const { t } = useTranslation();
   return (
     <>
       {/* Scrollable Environment Variables List */}
@@ -45,7 +47,7 @@ export function EnvEditorSection({
                     {key}
                     {isSensitiveKey(key) && (
                       <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4">
-                        sensitive
+                        {t('envEditor.sensitive')}
                       </Badge>
                     )}
                   </Label>
@@ -67,10 +69,8 @@ export function EnvEditorSection({
             </>
           ) : (
             <div className="py-8 text-center text-muted-foreground bg-muted/30 rounded-lg border border-dashed text-sm">
-              <p>No environment variables configured.</p>
-              <p className="text-xs mt-1 opacity-70">
-                Add variables using the input below or edit the JSON directly.
-              </p>
+              <p>{t('envEditor.none')}</p>
+              <p className="text-xs mt-1 opacity-70">{t('envEditor.noneHint')}</p>
             </div>
           )}
         </div>
@@ -79,18 +79,18 @@ export function EnvEditorSection({
       {/* Fixed Add Input at Bottom */}
       <div className="p-4 border-t bg-background shrink-0">
         <Label className="text-xs font-medium text-muted-foreground">
-          Add Environment Variable
+          {t('envEditor.addVariable')}
         </Label>
         <div className="flex gap-2 mt-2">
           <Input
-            placeholder="VARIABLE_NAME"
+            placeholder={t('envEditor.keyPlaceholder')}
             value={newEnvKey}
             onChange={(e) => onNewEnvKeyChange(e.target.value.toUpperCase())}
             className="font-mono text-sm h-8 w-2/5"
             onKeyDown={(e) => e.key === 'Enter' && newEnvKey.trim() && onAddEnvVar()}
           />
           <Input
-            placeholder="value"
+            placeholder={t('envEditor.valuePlaceholder')}
             value={newEnvValue}
             onChange={(e) => onNewEnvValueChange(e.target.value)}
             className="font-mono text-sm h-8 flex-1"

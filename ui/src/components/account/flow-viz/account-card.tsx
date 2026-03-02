@@ -17,6 +17,7 @@ import { useAccountQuota, QUOTA_SUPPORTED_PROVIDERS } from '@/hooks/use-cliproxy
 import type { QuotaSupportedProvider } from '@/hooks/use-cliproxy-stats';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from 'react-i18next';
 import { QuotaTooltipContent } from '@/components/shared/quota-tooltip-content';
 
 import type { AccountData, DragOffset } from './types';
@@ -94,6 +95,7 @@ export function AccountCard({
   onPauseToggle,
   isPausingAccount,
 }: AccountCardProps) {
+  const { t } = useTranslation();
   const borderSide = BORDER_SIDE_MAP[zone];
   const borderColor = getBorderColorStyle(zone, account.color);
   const connectorPosition = CONNECTOR_POSITION_MAP[zone];
@@ -245,7 +247,7 @@ export function AccountCard({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
-                {account.paused ? 'Resume account' : 'Pause account'}
+                {account.paused ? t('accountCard.resumeAccount') : t('accountCard.pauseAccount')}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -266,7 +268,7 @@ export function AccountCard({
           {quotaLoading ? (
             <div className="flex items-center gap-1 text-[8px] text-muted-foreground">
               <Loader2 className="w-2.5 h-2.5 animate-spin" />
-              <span>Quota...</span>
+              <span>{t('accountCard.quotaLoading')}</span>
             </div>
           ) : minQuotaValue !== null ? (
             <TooltipProvider>
@@ -275,7 +277,7 @@ export function AccountCard({
                   <div className="space-y-0.5 cursor-help">
                     <div className="flex items-center justify-between">
                       <span className="text-[8px] text-muted-foreground/70 uppercase font-bold tracking-tight">
-                        Quota
+                        {t('accountCard.quota')}
                       </span>
                       <span
                         className={cn(
@@ -320,21 +322,23 @@ export function AccountCard({
               </Tooltip>
             </TooltipProvider>
           ) : quota?.success ? (
-            <div className="text-[8px] text-muted-foreground/60">Quota limits unavailable</div>
+            <div className="text-[8px] text-muted-foreground/60">
+              {t('accountCard.quotaUnavailable')}
+            </div>
           ) : quota?.needsReauth ? (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <div className="flex items-center gap-1 text-[8px] text-amber-600 dark:text-amber-400">
                     <KeyRound className="w-2.5 h-2.5" />
-                    <span>Reauth needed</span>
+                    <span>{t('accountCard.reauthNeeded')}</span>
                   </div>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="max-w-[200px]">
                   <p className="text-xs">
                     {quota.error?.includes('No refresh token')
-                      ? 'Remove and re-add account'
-                      : quota.error || 'Auto-refresh failed'}
+                      ? t('accountCard.removeAndReadd')
+                      : quota.error || t('accountCard.autoRefreshFailed')}
                   </p>
                 </TooltipContent>
               </Tooltip>

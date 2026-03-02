@@ -3,6 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import { RISK_ACK_PHRASE } from '@/components/account/antigravity-responsibility-constants';
 
 interface AccountSafetyWarningCardProps {
@@ -24,21 +25,14 @@ export function AccountSafetyWarningCard({
   disabled = false,
   showProxySettingsLink = false,
 }: AccountSafetyWarningCardProps) {
-  const title = 'OAuth Account Safety Warning';
-  const subtitle = 'Issue #509 · Gemini + AGY OAuth risk';
-  const firstLine = (
-    <>
-      Issue #509 documents suspension/ban reports tied to <code className="font-mono">ccs agy</code>{' '}
-      and shared-account usage between <code className="font-mono">ccs gemini</code> and{' '}
-      <code className="font-mono">ccs agy</code>.
-    </>
-  );
-  const secondLine = (
-    <>Continue only if you accept full responsibility for OAuth and account-access risk.</>
-  );
+  const { t } = useTranslation();
+  const title = t('accountSafetyWarning.title');
+  const subtitle = t('accountSafetyWarning.subtitle');
+  const firstLine = t('accountSafetyWarning.firstLine');
+  const secondLine = t('accountSafetyWarning.secondLine');
   const issueUrl = 'https://github.com/kaitranntt/ccs/issues/509';
-  const issueLabel = 'Read issue #509';
-  const proxySettingsLabel = 'Gemini + AGY controls: Settings > Proxy';
+  const issueLabel = t('accountSafetyWarning.issueLabel');
+  const proxySettingsLabel = t('accountSafetyWarning.proxySettingsLabel');
 
   return (
     <section

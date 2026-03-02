@@ -19,6 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, AlertCircle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getCodexEffortDisplay } from '@/lib/codex-effort';
+import { useTranslation } from 'react-i18next';
 
 /** Model entry from catalog */
 export interface ModelEntry {
@@ -72,9 +73,12 @@ export function ProviderModelSelector({
   value,
   onChange,
   disabled,
-  placeholder = 'Select a model',
+  placeholder,
   className,
 }: ProviderModelSelectorProps) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t('providerModelSelector.selectModel');
+
   // Group models by tier
   const groupedModels = useMemo(() => {
     if (!catalog?.models) return { free: [], paid: [] };
@@ -95,7 +99,7 @@ export function ProviderModelSelector({
   if (!catalog || catalog.models.length === 0) {
     return (
       <div className={cn('text-sm text-muted-foreground py-2', className)}>
-        No models available for this provider
+        {t('providerModelSelector.noModelsForProvider')}
       </div>
     );
   }
@@ -110,12 +114,12 @@ export function ProviderModelSelector({
         <span className="truncate">{model.name}</span>
         {model.broken && (
           <Badge variant="destructive" className="text-[9px] h-4 px-1">
-            BROKEN
+            {t('providerModelSelector.broken')}
           </Badge>
         )}
         {model.deprecated && (
           <Badge variant="secondary" className="text-[9px] h-4 px-1">
-            DEPRECATED
+            {t('providerModelSelector.deprecated')}
           </Badge>
         )}
         {value === model.id && <Check className="w-3 h-3 text-primary ml-auto" />}
@@ -127,13 +131,13 @@ export function ProviderModelSelector({
     <div className={cn('space-y-2', className)}>
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="w-full">
-          <SelectValue placeholder={placeholder}>
+          <SelectValue placeholder={resolvedPlaceholder}>
             {selectedModel && (
               <div className="flex items-center gap-2">
                 <span className="truncate">{selectedModel.name}</span>
                 {selectedModel.tier === 'paid' && (
                   <Badge variant="outline" className="text-[9px] h-4 px-1">
-                    PAID
+                    {t('providerModelSelector.paid')}
                   </Badge>
                 )}
               </div>
@@ -143,13 +147,17 @@ export function ProviderModelSelector({
         <SelectContent>
           {groupedModels.free.length > 0 && (
             <SelectGroup>
-              <SelectLabel className="text-xs text-muted-foreground">Free Tier</SelectLabel>
+              <SelectLabel className="text-xs text-muted-foreground">
+                {t('providerModelSelector.freeTier')}
+              </SelectLabel>
               {groupedModels.free.map(renderModelItem)}
             </SelectGroup>
           )}
           {groupedModels.paid.length > 0 && (
             <SelectGroup>
-              <SelectLabel className="text-xs text-amber-600">Paid Tier</SelectLabel>
+              <SelectLabel className="text-xs text-amber-600">
+                {t('providerModelSelector.paidTier')}
+              </SelectLabel>
               {groupedModels.paid.map(renderModelItem)}
             </SelectGroup>
           )}
@@ -161,7 +169,7 @@ export function ProviderModelSelector({
         <div className="flex items-start gap-2 p-2 bg-destructive/10 rounded-md text-xs text-destructive">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">This model has known issues</p>
+            <p className="font-medium">{t('providerModelSelector.modelKnownIssues')}</p>
             {selectedModel.issueUrl && (
               <a
                 href={selectedModel.issueUrl}
@@ -169,7 +177,7 @@ export function ProviderModelSelector({
                 rel="noopener noreferrer"
                 className="underline hover:no-underline"
               >
-                View issue details
+                {t('providerModelSelector.viewIssueDetails')}
               </a>
             )}
           </div>
@@ -180,7 +188,7 @@ export function ProviderModelSelector({
         <div className="flex items-start gap-2 p-2 bg-amber-500/10 rounded-md text-xs text-amber-700">
           <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
           <div>
-            <p className="font-medium">This model is deprecated</p>
+            <p className="font-medium">{t('providerModelSelector.modelDeprecated')}</p>
             {selectedModel.deprecationReason && (
               <p className="opacity-80">{selectedModel.deprecationReason}</p>
             )}
@@ -212,6 +220,7 @@ export function ModelMappingSelector({
   onChange,
   disabled,
 }: ModelMappingSelectorProps) {
+  const { t } = useTranslation();
   if (!catalog) return null;
 
   return (
@@ -219,7 +228,7 @@ export function ModelMappingSelector({
       <label className="text-xs font-medium text-muted-foreground">{label}</label>
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-8 text-sm">
-          <SelectValue placeholder="Select model">
+          <SelectValue placeholder={t('providerModelSelector.selectModel')}>
             {value && <span className="truncate font-mono text-xs">{value}</span>}
           </SelectValue>
         </SelectTrigger>
@@ -230,7 +239,7 @@ export function ModelMappingSelector({
                 <span className="truncate text-sm">{model.name}</span>
                 {model.tier === 'paid' && (
                   <Badge variant="outline" className="text-[9px] h-4 px-1">
-                    PAID
+                    {t('providerModelSelector.paid')}
                   </Badge>
                 )}
               </div>
@@ -262,6 +271,7 @@ export function FlexibleModelSelector({
   allModels,
   disabled,
 }: FlexibleModelSelectorProps) {
+  const { t } = useTranslation();
   // Combine catalog models (recommended) with all available models
   const catalogModelIds = new Set(catalog?.models.map((m) => m.id) || []);
   const isCodexProvider = catalog?.provider === 'codex';
@@ -275,7 +285,7 @@ export function FlexibleModelSelector({
       </div>
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-9">
-          <SelectValue placeholder="Select model">
+          <SelectValue placeholder={t('providerModelSelector.selectModel')}>
             {value && (
               <div className="flex items-center gap-2">
                 <span className="truncate font-mono text-xs">{value}</span>
@@ -295,7 +305,9 @@ export function FlexibleModelSelector({
           {/* Recommended models from catalog */}
           {catalog && catalog.models.length > 0 && (
             <SelectGroup>
-              <SelectLabel className="text-xs text-primary">Recommended</SelectLabel>
+              <SelectLabel className="text-xs text-primary">
+                {t('providerModelSelector.recommended')}
+              </SelectLabel>
               {catalog.models.map((model) => {
                 const codexEffort = isCodexProvider ? getCodexEffortDisplay(model.id) : null;
                 return (
@@ -304,7 +316,7 @@ export function FlexibleModelSelector({
                       <span className="truncate font-mono text-xs">{model.id}</span>
                       {model.tier === 'paid' && (
                         <Badge variant="outline" className="text-[9px] h-4 px-1">
-                          PAID
+                          {t('providerModelSelector.paid')}
                         </Badge>
                       )}
                       {codexEffort && (
@@ -327,7 +339,7 @@ export function FlexibleModelSelector({
           {allModels.length > 0 && (
             <SelectGroup>
               <SelectLabel className="text-xs text-muted-foreground">
-                All Models ({allModels.length})
+                {t('providerModelSelector.allModelsCount', { count: allModels.length })}
               </SelectLabel>
               {allModels
                 .filter((m) => !catalogModelIds.has(m.id))
@@ -355,7 +367,9 @@ export function FlexibleModelSelector({
 
           {/* Fallback if no models available */}
           {(!catalog || catalog.models.length === 0) && allModels.length === 0 && (
-            <div className="py-2 px-3 text-xs text-muted-foreground">No models available</div>
+            <div className="py-2 px-3 text-xs text-muted-foreground">
+              {t('providerModelSelector.noModelsAvailable')}
+            </div>
           )}
         </SelectContent>
       </Select>

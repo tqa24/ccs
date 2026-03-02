@@ -3,6 +3,7 @@
  * Displays profile information and usage commands
  */
 
+import { useTranslation } from 'react-i18next';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Label } from '@/components/ui/label';
 import { CopyButton } from '@/components/ui/copy-button';
@@ -17,6 +18,7 @@ interface InfoSectionProps {
 }
 
 export function InfoSection({ profileName, target, data }: InfoSectionProps) {
+  const { t } = useTranslation();
   const isDroidTarget = target === 'droid';
 
   return (
@@ -26,17 +28,21 @@ export function InfoSection({ profileName, target, data }: InfoSectionProps) {
         <div>
           <h3 className="text-sm font-medium flex items-center gap-2 mb-3">
             <Info className="w-4 h-4" />
-            Profile Information
+            {t('profileEditor.profileInfo')}
           </h3>
           <div className="space-y-3 bg-card rounded-lg border p-4 shadow-sm">
             {data && (
               <>
                 <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
-                  <span className="font-medium text-muted-foreground">Profile Name</span>
+                  <span className="font-medium text-muted-foreground">
+                    {t('profileEditor.profileName')}
+                  </span>
                   <span className="font-mono">{data.profile}</span>
                 </div>
                 <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
-                  <span className="font-medium text-muted-foreground">File Path</span>
+                  <span className="font-medium text-muted-foreground">
+                    {t('profileEditor.filePath')}
+                  </span>
                   <div className="flex items-center gap-2 min-w-0">
                     <code className="bg-muted px-1.5 py-0.5 rounded text-xs break-all">
                       {data.path}
@@ -45,11 +51,15 @@ export function InfoSection({ profileName, target, data }: InfoSectionProps) {
                   </div>
                 </div>
                 <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
-                  <span className="font-medium text-muted-foreground">Last Modified</span>
+                  <span className="font-medium text-muted-foreground">
+                    {t('profileEditor.lastModified')}
+                  </span>
                   <span className="text-xs">{new Date(data.mtime).toLocaleString()}</span>
                 </div>
                 <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
-                  <span className="font-medium text-muted-foreground">Default Target</span>
+                  <span className="font-medium text-muted-foreground">
+                    {t('profileEditor.defaultTarget')}
+                  </span>
                   <span className="font-mono">{target}</span>
                 </div>
               </>
@@ -59,10 +69,12 @@ export function InfoSection({ profileName, target, data }: InfoSectionProps) {
 
         {/* Usage */}
         <div>
-          <h3 className="text-sm font-medium mb-3">Quick Usage</h3>
+          <h3 className="text-sm font-medium mb-3">{t('profileEditor.quickUsage')}</h3>
           <div className="space-y-3 bg-card rounded-lg border p-4 shadow-sm">
             <div>
-              <Label className="text-xs text-muted-foreground">Run with profile</Label>
+              <Label className="text-xs text-muted-foreground">
+                {t('profileEditor.runWithProfile')}
+              </Label>
               <div className="mt-1 flex gap-2">
                 <code className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono truncate">
                   ccs {profileName} "prompt"
@@ -72,7 +84,9 @@ export function InfoSection({ profileName, target, data }: InfoSectionProps) {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">
-                {isDroidTarget ? 'Droid alias (explicit)' : 'Run on Droid'}
+                {isDroidTarget
+                  ? t('profileEditor.droidAliasExplicit')
+                  : t('profileEditor.runOnDroid')}
               </Label>
               <div className="mt-1 flex gap-2">
                 <code className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono truncate">
@@ -93,7 +107,9 @@ export function InfoSection({ profileName, target, data }: InfoSectionProps) {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">
-                {isDroidTarget ? 'Override to Claude' : 'Override to Claude (explicit)'}
+                {isDroidTarget
+                  ? t('profileEditor.overrideToClaude')
+                  : t('profileEditor.overrideToClaudeExplicit')}
               </Label>
               <div className="mt-1 flex gap-2">
                 <code className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono truncate">
@@ -107,7 +123,9 @@ export function InfoSection({ profileName, target, data }: InfoSectionProps) {
               </div>
             </div>
             <div>
-              <Label className="text-xs text-muted-foreground">Set as default</Label>
+              <Label className="text-xs text-muted-foreground">
+                {t('profileEditor.setAsDefault')}
+              </Label>
               <div className="mt-1 flex gap-2">
                 <code className="flex-1 px-2 py-1.5 bg-muted rounded text-xs font-mono truncate">
                   ccs default {profileName}

@@ -17,8 +17,10 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAccounts, useConfirmLegacyAccountPolicies } from '@/hooks/use-accounts';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 export function AccountsPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { data, isLoading } = useAccounts();
   const confirmLegacyMutation = useConfirmLegacyAccountPolicies();
@@ -59,12 +61,12 @@ export function AccountsPage() {
           <div className="p-4 border-b bg-background space-y-2">
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
-              <h1 className="font-semibold">Accounts</h1>
+              <h1 className="font-semibold">{t('accountsPage.title')}</h1>
             </div>
             <p className="text-xs text-muted-foreground">
-              Manage
+              {t('accountsPage.managePrefix')}
               <code className="mx-1 rounded bg-muted px-1 py-0.5">ccs auth</code>
-              accounts and pool onboarding from one panel.
+              {t('accountsPage.manageSuffix')}
             </p>
           </div>
 
@@ -72,7 +74,7 @@ export function AccountsPage() {
             <div className="p-4 space-y-3">
               <div className="space-y-2">
                 <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  Primary Actions
+                  {t('accountsPage.primaryActions')}
                 </p>
                 <Button
                   size="sm"
@@ -80,7 +82,7 @@ export function AccountsPage() {
                   onClick={() => setCreateDialogOpen(true)}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Create Account
+                  {t('accountsPage.createAccount')}
                 </Button>
                 <Button
                   size="sm"
@@ -88,7 +90,7 @@ export function AccountsPage() {
                   onClick={handleOpenClaudePoolAuth}
                 >
                   <Zap className="w-4 h-4 mr-2" />
-                  Authenticate Claude in Pool
+                  {t('accountsPage.authClaudeInPool')}
                 </Button>
                 <Button
                   variant="outline"
@@ -96,7 +98,7 @@ export function AccountsPage() {
                   className="w-full justify-start"
                   onClick={handleOpenClaudePool}
                 >
-                  Open Claude Pool Settings
+                  {t('accountsPage.openClaudePoolSettings')}
                   <ArrowRight className="w-4 h-4 ml-auto" />
                 </Button>
               </div>
@@ -104,7 +106,7 @@ export function AccountsPage() {
               {hasLegacyFollowUp ? (
                 <section className="space-y-2">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    Migration Follow-up
+                    {t('accountsPage.migrationFollowup')}
                   </p>
                   <div className="rounded-md border border-amber-500/50 bg-amber-500/10 p-3 space-y-3">
                     <div className="flex items-start gap-2">
@@ -112,16 +114,14 @@ export function AccountsPage() {
                       <div className="space-y-1 text-xs">
                         {legacyContextCount > 0 && (
                           <p className="text-amber-800 dark:text-amber-300">
-                            {legacyContextCount} account
-                            {legacyContextCount > 1 ? 's still need' : ' still needs'} first-time
-                            mode confirmation.
+                            {t('accountsPage.legacyContextPending', { count: legacyContextCount })}
                           </p>
                         )}
                         {legacyContinuityCount > 0 && (
                           <p className="text-amber-800 dark:text-amber-300">
-                            {legacyContinuityCount} shared account
-                            {legacyContinuityCount > 1 ? 's remain' : ' remains'} on standard legacy
-                            continuity depth.
+                            {t('accountsPage.legacyContinuityPending', {
+                              count: legacyContinuityCount,
+                            })}
                           </p>
                         )}
                       </div>
@@ -134,14 +134,14 @@ export function AccountsPage() {
                       disabled={confirmLegacyMutation.isPending || legacyTargetCount === 0}
                     >
                       {confirmLegacyMutation.isPending
-                        ? 'Confirming Legacy Policies...'
-                        : `Confirm Legacy Policies (${legacyTargetCount})`}
+                        ? t('accountsPage.confirmingLegacy')
+                        : t('accountsPage.confirmLegacy', { count: legacyTargetCount })}
                     </Button>
                   </div>
                 </section>
               ) : (
                 <div className="rounded-md border bg-background px-3 py-2 text-xs text-muted-foreground">
-                  No legacy follow-up pending.
+                  {t('accountsPage.noLegacyFollowup')}
                 </div>
               )}
 
@@ -151,9 +151,11 @@ export function AccountsPage() {
                     <CollapsibleTrigger asChild>
                       <Button variant="ghost" className="h-auto w-full justify-between px-0 py-0">
                         <div className="text-left">
-                          <CardTitle className="text-sm">Continuity Guide</CardTitle>
+                          <CardTitle className="text-sm">
+                            {t('accountsPage.continuityGuide')}
+                          </CardTitle>
                           <CardDescription className="mt-1">
-                            Expand only when needed.
+                            {t('accountsPage.expandWhenNeeded')}
                           </CardDescription>
                         </div>
                         <ChevronDown
@@ -165,21 +167,26 @@ export function AccountsPage() {
                   <CollapsibleContent>
                     <CardContent className="space-y-3 text-xs text-muted-foreground">
                       <div className="rounded-md border p-2.5">
-                        <p className="font-semibold text-foreground">Shared Standard</p>
+                        <p className="font-semibold text-foreground">
+                          {t('accountsPage.sharedStandard')}
+                        </p>
+                        <p className="mt-1">{t('accountsPage.sharedStandardDesc')}</p>
+                      </div>
+                      <div className="rounded-md border p-2.5">
+                        <p className="font-semibold text-foreground">
+                          {t('accountsPage.sharedDeeper')}
+                        </p>
                         <p className="mt-1">
-                          Project workspace sync only. Best default for most teams.
+                          {t('accountsPage.sharedDeeperPrefix')} <code>session-env</code>,{' '}
+                          <code>file-history</code>, <code>shell-snapshots</code>,{' '}
+                          <code>todos</code>.
                         </p>
                       </div>
                       <div className="rounded-md border p-2.5">
-                        <p className="font-semibold text-foreground">Shared Deeper</p>
-                        <p className="mt-1">
-                          Adds <code>session-env</code>, <code>file-history</code>,{' '}
-                          <code>shell-snapshots</code>, <code>todos</code>.
+                        <p className="font-semibold text-foreground">
+                          {t('accountsPage.isolated')}
                         </p>
-                      </div>
-                      <div className="rounded-md border p-2.5">
-                        <p className="font-semibold text-foreground">Isolated</p>
-                        <p className="mt-1">No link. Best for strict separation.</p>
+                        <p className="mt-1">{t('accountsPage.isolatedDesc')}</p>
                       </div>
                     </CardContent>
                   </CollapsibleContent>
@@ -188,8 +195,8 @@ export function AccountsPage() {
 
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">Quick Commands</CardTitle>
-                  <CardDescription>Copy and run in terminal.</CardDescription>
+                  <CardTitle className="text-sm">{t('accountsPage.quickCommands')}</CardTitle>
+                  <CardDescription>{t('accountsPage.quickCommandsDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="rounded-md border bg-background px-2 py-2 font-mono text-[11px] flex items-start gap-2">
@@ -215,16 +222,18 @@ export function AccountsPage() {
         <div className="flex-1 min-w-0 flex flex-col bg-background">
           <div className="px-5 py-4 border-b bg-background">
             <div className="flex items-center gap-2">
-              <Badge variant="outline">ccs auth Workspace</Badge>
-              <Badge variant="secondary">History Sync Controls</Badge>
+              <Badge variant="outline">{t('accountsPage.workspaceBadge')}</Badge>
+              <Badge variant="secondary">{t('accountsPage.historySyncBadge')}</Badge>
             </div>
-            <h2 className="mt-2 text-xl font-semibold tracking-tight">Auth Accounts</h2>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight">
+              {t('accountsPage.authAccounts')}
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              This table is intentionally scoped to
+              {t('accountsPage.tableScopePrefix')}
               <code className="mx-1 rounded bg-muted px-1 py-0.5">ccs auth</code>
-              accounts. Use
+              {t('accountsPage.tableScopeMiddle')}
               <code className="mx-1 rounded bg-muted px-1 py-0.5">Sync</code>
-              for mode/group/depth changes.
+              {t('accountsPage.tableScopeSuffix')}
             </p>
           </div>
 
@@ -240,15 +249,14 @@ export function AccountsPage() {
 
             <Card className="flex flex-col">
               <CardHeader className="pb-3">
-                <CardTitle className="text-lg">Account Matrix</CardTitle>
+                <CardTitle className="text-lg">{t('accountsPage.accountMatrix')}</CardTitle>
                 <CardDescription>
-                  Shared total: {sharedCount}. Actions include Sync settings and legacy
-                  confirmation.
+                  {t('accountsPage.sharedTotalDesc', { count: sharedCount })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 {isLoading ? (
-                  <div className="text-muted-foreground">Loading accounts...</div>
+                  <div className="text-muted-foreground">{t('accountsPage.loadingAccounts')}</div>
                 ) : (
                   <AccountsTable data={authAccounts} defaultAccount={data?.default ?? null} />
                 )}
@@ -262,24 +270,24 @@ export function AccountsPage() {
       <div className="p-4 space-y-4 lg:hidden">
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Accounts</CardTitle>
+            <CardTitle className="text-lg">{t('accountsPage.title')}</CardTitle>
             <CardDescription>
-              Manage
+              {t('accountsPage.managePrefix')}
               <code className="mx-1 rounded bg-muted px-1 py-0.5">ccs auth</code>
-              continuity per account.
+              {t('accountsPage.mobileManageSuffix')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             <Button className="w-full" onClick={() => setCreateDialogOpen(true)}>
               <Plus className="w-4 h-4 mr-2" />
-              Create Account
+              {t('accountsPage.createAccount')}
             </Button>
             <Button variant="outline" className="w-full" onClick={handleOpenClaudePool}>
-              Open CLIProxy Claude Pool
+              {t('accountsPage.openCliProxyClaudePool')}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
             <Button variant="outline" className="w-full" onClick={handleOpenClaudePoolAuth}>
-              Authenticate Claude in Pool
+              {t('accountsPage.authClaudeInPool')}
               <Zap className="w-4 h-4 ml-2" />
             </Button>
             <Button
@@ -289,8 +297,8 @@ export function AccountsPage() {
               disabled={confirmLegacyMutation.isPending || legacyTargetCount === 0}
             >
               {confirmLegacyMutation.isPending
-                ? 'Confirming Legacy Policies...'
-                : `Confirm Legacy Policies (${legacyTargetCount})`}
+                ? t('accountsPage.confirmingLegacy')
+                : t('accountsPage.confirmLegacy', { count: legacyTargetCount })}
             </Button>
           </CardContent>
         </Card>
@@ -306,11 +314,11 @@ export function AccountsPage() {
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Account Matrix</CardTitle>
+            <CardTitle className="text-base">{t('accountsPage.accountMatrix')}</CardTitle>
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <div className="text-muted-foreground">Loading accounts...</div>
+              <div className="text-muted-foreground">{t('accountsPage.loadingAccounts')}</div>
             ) : (
               <AccountsTable data={authAccounts} defaultAccount={data?.default ?? null} />
             )}

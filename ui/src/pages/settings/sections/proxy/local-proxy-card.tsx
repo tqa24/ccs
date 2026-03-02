@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import type { CliproxyServerConfig } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 interface LocalProxyCardProps {
   config: CliproxyServerConfig;
@@ -25,15 +26,16 @@ export function LocalProxyCard({
   onSaveLocalPort,
   onSaveConfig,
 }: LocalProxyCardProps) {
+  const { t } = useTranslation();
   const localConfig = config.local;
 
   return (
     <div className="space-y-3">
-      <h3 className="text-base font-medium">Local Proxy</h3>
+      <h3 className="text-base font-medium">{t('settingsProxy.localProxy')}</h3>
       <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
         {/* Port */}
         <div className="flex items-center gap-2">
-          <label className="text-sm text-muted-foreground">Port</label>
+          <label className="text-sm text-muted-foreground">{t('settingsProxy.port')}</label>
           <Input
             type="text"
             inputMode="numeric"
@@ -49,10 +51,8 @@ export function LocalProxyCard({
         {/* Auto-start */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="font-medium text-sm">Auto-start</p>
-            <p className="text-xs text-muted-foreground">
-              Start local proxy automatically when needed
-            </p>
+            <p className="font-medium text-sm">{t('settingsProxy.autoStart')}</p>
+            <p className="text-xs text-muted-foreground">{t('settingsProxy.localAutoStartDesc')}</p>
           </div>
           <Switch
             checked={localConfig.auto_start ?? true}

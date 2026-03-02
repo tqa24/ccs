@@ -15,6 +15,7 @@ import {
 import { Cloud, RefreshCw, Wifi, WifiOff, CheckCircle2 } from 'lucide-react';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import type { CliproxyServerConfig, RemoteProxyStatus } from '../../types';
+import { useTranslation } from 'react-i18next';
 
 interface RemoteProxyCardProps {
   config: CliproxyServerConfig;
@@ -57,6 +58,7 @@ export function RemoteProxyCard({
   onSaveConfig,
   onTestConnection,
 }: RemoteProxyCardProps) {
+  const { t } = useTranslation();
   const remoteConfig = config.remote;
 
   // HTTP defaults to 8317 (CLIProxyAPI default), HTTPS to 443 (standard SSL)
@@ -67,17 +69,17 @@ export function RemoteProxyCard({
     <div className="space-y-4 p-4 rounded-lg border bg-muted/30">
       <h4 className="text-sm font-medium flex items-center gap-2">
         <Cloud className="w-4 h-4" />
-        Remote Server Configuration
+        {t('settingsProxy.remoteConfigTitle')}
       </h4>
 
       {/* Host */}
       <div className="space-y-1">
-        <label className="text-sm text-muted-foreground">Host</label>
+        <label className="text-sm text-muted-foreground">{t('settingsProxy.host')}</label>
         <Input
           value={displayHost}
           onChange={(e) => setEditedHost(e.target.value)}
           onBlur={onSaveHost}
-          placeholder="192.168.1.100 or proxy.example.com"
+          placeholder={t('settingsProxy.hostPlaceholder')}
           className="font-mono"
           disabled={saving}
         />
@@ -87,9 +89,13 @@ export function RemoteProxyCard({
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-sm text-muted-foreground">
-            Port{' '}
+            {t('settingsProxy.port')}{' '}
             <span className="text-xs opacity-70">
-              (default: {getDefaultPort(config.remote.protocol || 'http')})
+              (
+              {t('settingsProxy.defaultPort', {
+                value: getDefaultPort(config.remote.protocol || 'http'),
+              })}
+              )
             </span>
           </label>
           <Input
@@ -98,13 +104,15 @@ export function RemoteProxyCard({
             value={displayPort}
             onChange={(e) => setEditedPort(e.target.value.replace(/\D/g, ''))}
             onBlur={onSavePort}
-            placeholder={`Leave empty for ${getDefaultPort(config.remote.protocol || 'http')}`}
+            placeholder={t('settingsProxy.portPlaceholder', {
+              value: getDefaultPort(config.remote.protocol || 'http'),
+            })}
             className="font-mono"
             disabled={saving}
           />
         </div>
         <div className="space-y-1">
-          <label className="text-sm text-muted-foreground">Protocol</label>
+          <label className="text-sm text-muted-foreground">{t('settingsProxy.protocol')}</label>
           <Select
             value={config.remote.protocol || 'http'}
             onValueChange={(value: 'http' | 'https') =>
@@ -116,8 +124,8 @@ export function RemoteProxyCard({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="http">HTTP</SelectItem>
-              <SelectItem value="https">HTTPS</SelectItem>
+              <SelectItem value="http">{t('settingsProxy.http')}</SelectItem>
+              <SelectItem value="https">{t('settingsProxy.https')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -125,36 +133,34 @@ export function RemoteProxyCard({
 
       {/* Auth Token (API Key) */}
       <div className="space-y-1">
-        <label className="text-sm text-muted-foreground">API Key (optional)</label>
+        <label className="text-sm text-muted-foreground">{t('settingsProxy.apiKeyOptional')}</label>
         <Input
           type="password"
           value={displayAuthToken}
           onChange={(e) => setEditedAuthToken(e.target.value)}
           onBlur={onSaveAuthToken}
-          placeholder="For /v1/* API endpoints"
+          placeholder={t('settingsProxy.apiKeyPlaceholder')}
           className="font-mono"
           disabled={saving}
         />
-        <p className="text-xs text-muted-foreground">
-          Used for API requests to /v1/chat/completions
-        </p>
+        <p className="text-xs text-muted-foreground">{t('settingsProxy.apiKeyDesc')}</p>
       </div>
 
       {/* Management Key */}
       <div className="space-y-1">
-        <label className="text-sm text-muted-foreground">Management Key (optional)</label>
+        <label className="text-sm text-muted-foreground">
+          {t('settingsProxy.managementKeyOptional')}
+        </label>
         <Input
           type="password"
           value={displayManagementKey}
           onChange={(e) => setEditedManagementKey(e.target.value)}
           onBlur={onSaveManagementKey}
-          placeholder="For /v0/management/* endpoints"
+          placeholder={t('settingsProxy.managementKeyPlaceholder')}
           className="font-mono"
           disabled={saving}
         />
-        <p className="text-xs text-muted-foreground">
-          Used for dashboard management APIs. Falls back to API Key if not set.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('settingsProxy.managementKeyDesc')}</p>
       </div>
 
       {/* Test Connection */}
@@ -168,12 +174,12 @@ export function RemoteProxyCard({
           {testing ? (
             <>
               <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-              Testing...
+              {t('settingsProxy.testing')}
             </>
           ) : (
             <>
               <Wifi className="w-4 h-4 mr-2" />
-              Test Connection
+              {t('settingsProxy.testConnection')}
             </>
           )}
         </Button>
@@ -192,14 +198,14 @@ export function RemoteProxyCard({
                 <>
                   <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
                   <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                    Connected ({testResult.latencyMs}ms)
+                    {t('settingsProxy.connectedLatency', { value: testResult.latencyMs })}
                   </span>
                 </>
               ) : (
                 <>
                   <WifiOff className="w-4 h-4 text-red-600 dark:text-red-400" />
                   <span className="text-sm font-medium text-red-700 dark:text-red-300">
-                    {testResult.error || 'Connection failed'}
+                    {testResult.error || t('settingsProxy.connectionFailed')}
                   </span>
                 </>
               )}

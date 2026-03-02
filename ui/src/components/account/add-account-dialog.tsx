@@ -45,6 +45,7 @@ import {
   KIRO_AUTH_METHOD_OPTIONS,
 } from '@/lib/provider-config';
 import type { KiroAuthMethod } from '@/lib/provider-config';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 interface AddAccountDialogProps {
@@ -76,6 +77,7 @@ export function AddAccountDialog({
   const [agyAckBypassEnabled, setAgyAckBypassEnabled] = useState(false);
   const [agyAckBypassLoading, setAgyAckBypassLoading] = useState(false);
   const [kiroAuthMethod, setKiroAuthMethod] = useState<KiroAuthMethod>(DEFAULT_KIRO_AUTH_METHOD);
+  const { t } = useTranslation();
   const wasAuthenticatingRef = useRef(false);
   const authFlow = useCliproxyAuthFlow();
   const kiroImportMutation = useKiroImport();
@@ -318,13 +320,13 @@ export function AddAccountDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Add {displayName} Account</DialogTitle>
+          <DialogTitle>{t('addAccountDialog.title', { displayName })}</DialogTitle>
           <DialogDescription>
             {isKiro
-              ? 'Choose a Kiro auth method, then authenticate via browser or import from Kiro IDE.'
+              ? t('addAccountDialog.descKiro')
               : isDeviceCode
-                ? 'Click Authenticate. A verification code will appear for you to enter on the provider website.'
-                : 'Click Authenticate to get an OAuth URL. Open it in any browser to sign in.'}
+                ? t('addAccountDialog.descDeviceCode')
+                : t('addAccountDialog.descOauth')}
           </DialogDescription>
         </DialogHeader>
 
@@ -344,10 +346,9 @@ export function AddAccountDialog({
             <div className="rounded-lg border border-amber-400/35 bg-amber-50/70 p-3 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/25 dark:text-amber-100">
               <div className="mb-1.5 flex items-center gap-1.5 font-semibold">
                 <ShieldAlert className="h-3.5 w-3.5" />
-                Power user mode enabled
+                {t('addAccountDialog.powerUserEnabled')}
               </div>
-              AGY responsibility checklist is skipped from Settings {'>'} Proxy. You accept full
-              responsibility for OAuth/account risk.
+              {t('addAccountDialog.powerUserSkipped')}
             </div>
           )}
 
@@ -367,7 +368,7 @@ export function AddAccountDialog({
           {/* Kiro auth method */}
           {isKiro && !showAuthUI && (
             <div className="space-y-2">
-              <Label htmlFor="kiro-auth-method">Auth Method</Label>
+              <Label htmlFor="kiro-auth-method">{t('addAccountDialog.authMethod')}</Label>
               <Select
                 value={kiroAuthMethod}
                 onValueChange={(value) => {
@@ -376,7 +377,7 @@ export function AddAccountDialog({
                 }}
               >
                 <SelectTrigger id="kiro-auth-method">
-                  <SelectValue placeholder="Select Kiro auth method" />
+                  <SelectValue placeholder={t('addAccountDialog.selectKiroAuthMethod')} />
                 </SelectTrigger>
                 <SelectContent>
                   {KIRO_AUTH_METHOD_OPTIONS.map((option) => (
@@ -394,7 +395,9 @@ export function AddAccountDialog({
           {!showAuthUI && (
             <div className="space-y-2">
               <Label htmlFor="nickname">
-                {requiresNickname ? 'Nickname (required)' : 'Nickname (optional)'}
+                {requiresNickname
+                  ? t('addAccountDialog.nicknameRequired')
+                  : t('addAccountDialog.nicknameOptional')}
               </Label>
               <div className="flex items-center gap-2">
                 <User className="w-4 h-4 text-muted-foreground" />
@@ -405,15 +408,15 @@ export function AddAccountDialog({
                     setNickname(e.target.value);
                     setLocalError(null);
                   }}
-                  placeholder="e.g., work, personal"
+                  placeholder={t('addAccountDialog.nicknamePlaceholder')}
                   disabled={isPending}
                   className="flex-1"
                 />
               </div>
               <p className="text-xs text-muted-foreground">
                 {requiresNickname
-                  ? 'Required for this provider. Use a unique friendly name (e.g., work, personal).'
-                  : 'A friendly name to identify this account. Auto-generated from email if left empty.'}
+                  ? t('addAccountDialog.nicknameRequiredHint')
+                  : t('addAccountDialog.nicknameOptionalHint')}
               </p>
             </div>
           )}
@@ -425,12 +428,12 @@ export function AddAccountDialog({
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">
                   <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
-                  Waiting for authentication...
+                  {t('addAccountDialog.waitingForAuth')}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {authFlow.isDeviceCodeFlow
-                    ? 'A verification code dialog will appear shortly. Enter the code on the provider website.'
-                    : 'Complete the authentication in your browser. This dialog closes automatically.'}
+                    ? t('addAccountDialog.deviceCodeHint')
+                    : t('addAccountDialog.browserHint')}
                 </p>
               </div>
 
@@ -438,7 +441,7 @@ export function AddAccountDialog({
               {authFlow.authUrl && !authFlow.isDeviceCodeFlow && (
                 <div className="space-y-3">
                   <div className="space-y-2">
-                    <Label className="text-xs">Open this URL in any browser to sign in:</Label>
+                    <Label className="text-xs">{t('addAccountDialog.openUrlLabel')}</Label>
                     <div className="p-3 bg-muted rounded-md">
                       <p className="text-xs text-muted-foreground break-all font-mono line-clamp-3">
                         {authFlow.authUrl}
@@ -448,12 +451,12 @@ export function AddAccountDialog({
                           {copied ? (
                             <>
                               <Check className="w-3 h-3 mr-1" />
-                              Copied
+                              {t('addAccountDialog.copied')}
                             </>
                           ) : (
                             <>
                               <Copy className="w-3 h-3 mr-1" />
-                              Copy
+                              {t('addAccountDialog.copy')}
                             </>
                           )}
                         </Button>
@@ -464,15 +467,12 @@ export function AddAccountDialog({
                             if (!authFlow.authUrl) return;
                             const popup = window.open(authFlow.authUrl, '_blank');
                             if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-                              toast.warning(
-                                'Popup blocked. Copy the URL above and open it manually in your browser.',
-                                { duration: 5000 }
-                              );
+                              toast.warning(t('addAccountDialog.popupBlocked'), { duration: 5000 });
                             }
                           }}
                         >
                           <ExternalLink className="w-3 h-3 mr-1" />
-                          Open
+                          {t('addAccountDialog.open')}
                         </Button>
                       </div>
                     </div>
@@ -481,13 +481,13 @@ export function AddAccountDialog({
                   {/* Callback paste field */}
                   <div className="space-y-2">
                     <Label htmlFor="callback-url" className="text-xs">
-                      Redirect didn&apos;t work? Paste the callback URL:
+                      {t('addAccountDialog.redirectPasteLabel')}
                     </Label>
                     <Input
                       id="callback-url"
                       value={callbackUrl}
                       onChange={(e) => setCallbackUrl(e.target.value)}
-                      placeholder="Paste the redirect URL here..."
+                      placeholder={t('addAccountDialog.callbackPlaceholder')}
                       className="font-mono text-xs"
                     />
                     <Button
@@ -499,10 +499,10 @@ export function AddAccountDialog({
                       {authFlow.isSubmittingCallback ? (
                         <>
                           <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                          Submitting...
+                          {t('addAccountDialog.submitting')}
                         </>
                       ) : (
-                        'Submit Callback'
+                        t('addAccountDialog.submitCallback')
                       )}
                     </Button>
                   </div>
@@ -511,7 +511,7 @@ export function AddAccountDialog({
 
               {!authFlow.authUrl && !authFlow.isDeviceCodeFlow && (
                 <p className="text-xs text-center text-muted-foreground">
-                  Preparing sign-in URL...
+                  {t('addAccountDialog.preparingUrl')}
                 </p>
               )}
             </div>
@@ -524,26 +524,26 @@ export function AddAccountDialog({
           {kiroImportMutation.isPending && (
             <p className="text-sm text-center text-muted-foreground">
               <Loader2 className="w-4 h-4 inline mr-2 animate-spin" />
-              Importing token from Kiro IDE...
+              {t('addAccountDialog.importingToken')}
             </p>
           )}
 
           {/* Action buttons */}
           <div className="flex items-center justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={handleCancel}>
-              Cancel
+              {t('addAccountDialog.cancel')}
             </Button>
             {isKiro && !showAuthUI && (
               <Button variant="outline" onClick={handleKiroImport} disabled={isPending}>
                 {kiroImportMutation.isPending ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Importing...
+                    {t('addAccountDialog.importing')}
                   </>
                 ) : (
                   <>
                     <Download className="w-4 h-4 mr-2" />
-                    Import from IDE
+                    {t('addAccountDialog.importFromIde')}
                   </>
                 )}
               </Button>
@@ -560,7 +560,7 @@ export function AddAccountDialog({
                 }
               >
                 <ExternalLink className="w-4 h-4 mr-2" />
-                Authenticate
+                {t('addAccountDialog.authenticate')}
               </Button>
             )}
           </div>

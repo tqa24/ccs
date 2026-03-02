@@ -15,6 +15,7 @@ import {
   type SupportNotice,
 } from '@/lib/support-updates-catalog';
 import { type NoticeProgressState } from '@/lib/updates-notice-state';
+import { useTranslation } from 'react-i18next';
 
 type UpdatableNoticeProgress = 'new' | 'seen' | 'done' | 'dismissed';
 
@@ -29,10 +30,11 @@ export function UpdatesDetailsPanel({
   relatedEntries: CliSupportEntry[];
   onUpdateProgress: (nextState: UpdatableNoticeProgress) => void;
 }) {
+  const { t } = useTranslation();
   if (!notice) {
     return (
       <div className="flex h-full items-center justify-center rounded-lg border border-dashed bg-muted/20 p-6">
-        <p className="text-sm text-muted-foreground">No updates available.</p>
+        <p className="text-sm text-muted-foreground">{t('updates.noUpdates')}</p>
       </div>
     );
   }
@@ -53,21 +55,21 @@ export function UpdatesDetailsPanel({
 
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <CalendarClock className="h-3.5 w-3.5" />
-          <span>Published {formatCatalogDate(notice.publishedAt)}</span>
+          <span>{t('updates.published', { date: formatCatalogDate(notice.publishedAt) })}</span>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => onUpdateProgress('done')}>
             <CheckCircle2 className="h-4 w-4" />
-            Mark done
+            {t('updates.markDone')}
           </Button>
           <Button size="sm" variant="outline" onClick={() => onUpdateProgress('dismissed')}>
             <EyeOff className="h-4 w-4" />
-            Dismiss
+            {t('updates.dismiss')}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => onUpdateProgress('new')}>
             <RotateCcw className="h-4 w-4" />
-            Reopen
+            {t('updates.reopen')}
           </Button>
         </div>
       </div>
@@ -78,7 +80,7 @@ export function UpdatesDetailsPanel({
             <CardHeader className="pb-3">
               <div className="flex items-center gap-2">
                 <Sparkles className="h-4 w-4 text-primary" />
-                <CardTitle className="text-base">Do Next</CardTitle>
+                <CardTitle className="text-base">{t('updates.doNext')}</CardTitle>
               </div>
               <CardDescription>{notice.primaryAction}</CardDescription>
             </CardHeader>
@@ -96,8 +98,8 @@ export function UpdatesDetailsPanel({
           <div className="grid h-full grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-4 overflow-hidden">
             <Card className="overflow-hidden">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Impacted Integrations</CardTitle>
-                <CardDescription>Related areas based on update scope and routing.</CardDescription>
+                <CardTitle className="text-base">{t('updates.impactedIntegrations')}</CardTitle>
+                <CardDescription>{t('updates.impactedDesc')}</CardDescription>
               </CardHeader>
               <CardContent className="min-h-0">
                 <ScrollArea className="h-full pr-2">
@@ -134,10 +136,8 @@ export function UpdatesDetailsPanel({
 
             <Card className="overflow-hidden">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Why It Matters</CardTitle>
-                <CardDescription>
-                  Short context only, no wall-of-text release notes.
-                </CardDescription>
+                <CardTitle className="text-base">{t('updates.whyMatters')}</CardTitle>
+                <CardDescription>{t('updates.whyMattersDesc')}</CardDescription>
               </CardHeader>
               <CardContent className="min-h-0">
                 <ScrollArea className="h-full pr-2">

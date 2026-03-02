@@ -5,6 +5,7 @@
  */
 
 import { useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { STATUS_COLORS } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AccountFlowViz } from '@/components/account-flow-viz';
@@ -20,6 +21,7 @@ import { SummaryCard } from './components/summary-card';
 const STORAGE_KEY = 'auth-monitor-selected-provider';
 
 export function AuthMonitor() {
+  const { t } = useTranslation();
   const {
     accounts,
     totalSuccess,
@@ -117,7 +119,7 @@ export function AuthMonitor() {
             <span>Updated {timeSinceUpdate || 'now'}</span>
           </div>
           <span className="text-muted-foreground/50">|</span>
-          <span>{accounts.length} accounts</span>
+          <span>{t('authMonitor.accountsCount', { count: accounts.length })}</span>
           <span className="font-mono">{totalRequests.toLocaleString()} req</span>
         </div>
       </div>
@@ -126,25 +128,25 @@ export function AuthMonitor() {
       <div className="grid grid-cols-4 gap-3 p-4 border-b border-border bg-muted/20 dark:bg-zinc-900/30">
         <SummaryCard
           icon={<Activity className="w-4 h-4" />}
-          label="Accounts"
+          label={t('authMonitor.accounts')}
           value={accounts.length}
           color="var(--accent)"
         />
         <SummaryCard
           icon={<CheckCircle2 className="w-4 h-4" />}
-          label="Success"
+          label={t('authMonitor.success')}
           value={totalSuccess.toLocaleString()}
           color={STATUS_COLORS.success}
         />
         <SummaryCard
           icon={<XCircle className="w-4 h-4" />}
-          label="Failed"
+          label={t('authMonitor.failed')}
           value={totalFailure.toLocaleString()}
           color={totalFailure > 0 ? STATUS_COLORS.failed : undefined}
         />
         <SummaryCard
           icon={<Activity className="w-4 h-4" />}
-          label="Success Rate"
+          label={t('authMonitor.successRate')}
           value={`${overallSuccessRate}%`}
           color={
             overallSuccessRate === 100

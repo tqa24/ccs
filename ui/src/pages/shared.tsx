@@ -8,6 +8,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useSharedItemContent, useSharedItems, useSharedSummary } from '@/hooks/use-shared';
 import { cn } from '@/lib/utils';
+import '@/lib/i18n';
+import { useTranslation } from 'react-i18next';
 import {
   AlertCircle,
   AlertTriangle,
@@ -21,14 +23,15 @@ import {
 
 type TabType = 'commands' | 'skills' | 'agents';
 
-const tabLabels: Record<TabType, string> = {
-  commands: 'Commands',
-  skills: 'Skills',
-  agents: 'Agents',
-};
-
 export function SharedPage() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<TabType>('commands');
+  const tabLabels: Record<TabType, string> = {
+    commands: t('sharedPage.commands'),
+    skills: t('sharedPage.skills'),
+    agents: t('sharedPage.agents'),
+  };
+
   const [query, setQuery] = useState('');
   const [selectedItemPath, setSelectedItemPath] = useState<string | null>(null);
 
@@ -105,10 +108,8 @@ export function SharedPage() {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <div>
-              <h1 className="text-2xl font-bold">Shared Data</h1>
-              <p className="text-muted-foreground">
-                Commands, skills, and agents shared across Claude instances
-              </p>
+              <h1 className="text-2xl font-bold">{t('sharedPage.title')}</h1>
+              <p className="text-muted-foreground">{t('sharedPage.subtitle')}</p>
             </div>
 
             <Tabs
@@ -133,14 +134,18 @@ export function SharedPage() {
 
           <div className="flex flex-col gap-2 lg:items-end">
             <div className="grid w-full gap-2 sm:w-auto sm:min-w-[340px] sm:grid-cols-3">
-              <HeaderMetricCard label="Total Shared" value={totalSharedItems} />
+              <HeaderMetricCard label={t('sharedPage.totalShared')} value={totalSharedItems} />
               <HeaderMetricCard label={tabLabels[tab]} value={allItems.length} />
-              <HeaderMetricCard label="Visible" value={filteredItems.length} />
+              <HeaderMetricCard label={t('sharedPage.visible')} value={filteredItems.length} />
             </div>
 
             <div className="flex items-center gap-2 text-xs">
-              <Badge variant="secondary">Markdown detail view</Badge>
-              {activeQuery ? <Badge variant="outline">Filter: {activeQuery}</Badge> : null}
+              <Badge variant="secondary">{t('sharedPage.markdownDetail')}</Badge>
+              {activeQuery ? (
+                <Badge variant="outline">
+                  {t('sharedPage.filterPrefix')} {activeQuery}
+                </Badge>
+              ) : null}
             </div>
           </div>
         </div>
@@ -148,7 +153,7 @@ export function SharedPage() {
         {summary && !summary.symlinkStatus.valid && (
           <Alert variant="warning">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Configuration Required</AlertTitle>
+            <AlertTitle>{t('sharedPage.configurationRequired')}</AlertTitle>
             <AlertDescription>
               {summary.symlinkStatus.message}. Run `ccs sync` to configure.
             </AlertDescription>
@@ -158,7 +163,7 @@ export function SharedPage() {
         {isSummaryError && (
           <Alert variant="info">
             <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Counts unavailable</AlertTitle>
+            <AlertTitle>{t('sharedPage.countsUnavailable')}</AlertTitle>
             <AlertDescription>
               <p>{summaryErrorMessage}</p>
               <div className="mt-3">
@@ -170,7 +175,7 @@ export function SharedPage() {
                   }}
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
-                  Retry counts
+                  {t('sharedPage.retryCounts')}
                 </Button>
               </div>
             </AlertDescription>
@@ -200,30 +205,38 @@ export function SharedPage() {
                   <Input
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
-                    placeholder={`Filter ${tab} by name, description, or path`}
-                    aria-label={`Filter ${tab} by name, description, or path`}
+                    placeholder={t('sharedPage.filterPlaceholder', { tab })}
+                    aria-label={t('sharedPage.filterPlaceholder', { tab })}
                     className="pl-8 h-9"
                   />
                 </div>
 
                 {!isLoading && !isError && (
                   <p className="text-xs text-muted-foreground">
-                    Showing {filteredItems.length} of {allItems.length} {tab}
-                    {activeQuery ? ` for "${activeQuery}"` : ''}
-                    {isFetching ? ' (refreshing...)' : ''}
+                    {t('sharedPage.showing', {
+                      visible: filteredItems.length,
+                      total: allItems.length,
+                      tab,
+                    })}
+                    {activeQuery ? t('sharedPage.showingQuery', { query: activeQuery }) : ''}
+                    {isFetching ? t('sharedPage.refreshing') : ''}
                   </p>
                 )}
               </div>
 
               <ScrollArea className="flex-1 min-h-0">
                 {isLoading ? (
-                  <div className="p-4 text-sm text-muted-foreground">Loading shared {tab}...</div>
+                  <div className="p-4 text-sm text-muted-foreground">
+                    {t('sharedPage.loadingShared', { tab })}
+                  </div>
                 ) : isError ? (
                   <div className="p-4 text-center">
                     <div className="space-y-3 py-8">
                       <AlertCircle className="w-10 h-10 mx-auto text-destructive/50" />
                       <div>
-                        <p className="text-sm font-medium">Failed to load shared {tab}</p>
+                        <p className="text-sm font-medium">
+                          {t('sharedPage.failedLoadShared', { tab })}
+                        </p>
                         <p className="text-xs text-muted-foreground mt-1">{itemsErrorMessage}</p>
                       </div>
                       <Button
@@ -234,17 +247,17 @@ export function SharedPage() {
                         }}
                       >
                         <RefreshCw className="w-4 h-4 mr-2" />
-                        Retry
+                        {t('sharedPage.retry')}
                       </Button>
                     </div>
                   </div>
                 ) : hasNoItems ? (
                   <div className="p-4 text-sm text-muted-foreground">
-                    No shared {tab} found. Run `ccs sync` or add items in your shared directory.
+                    {t('sharedPage.noSharedFound', { tab })}
                   </div>
                 ) : hasNoMatches ? (
                   <div className="p-4 text-sm text-muted-foreground">
-                    No {tab} match "{activeQuery}".
+                    {t('sharedPage.noMatch', { tab, query: activeQuery })}
                   </div>
                 ) : (
                   <div className="p-2 space-y-1">
@@ -277,7 +290,7 @@ export function SharedPage() {
             <div className="min-w-0 min-h-0 flex flex-col bg-muted/20">
               {!selectedItem ? (
                 <div className="min-h-[320px] flex items-center justify-center p-6 text-center text-muted-foreground">
-                  Select a {tab.slice(0, -1)} to view full content.
+                  {t('sharedPage.selectOne', { tab: tab.slice(0, -1) })}
                 </div>
               ) : (
                 <>
@@ -293,11 +306,15 @@ export function SharedPage() {
                   <div className="p-4 space-y-4 min-h-0 flex-1 flex flex-col">
                     <div className="rounded-md border bg-muted/35 p-3">
                       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                        <MetadataField label="Path" value={selectedItem.path} mono />
+                        <MetadataField
+                          label={t('sharedPage.pathLabel')}
+                          value={selectedItem.path}
+                          mono
+                        />
                         {selectedItemContent?.contentPath &&
                           selectedItemContent.contentPath !== selectedItem.path && (
                             <MetadataField
-                              label="Resolved Source"
+                              label={t('sharedPage.resolvedSource')}
                               value={selectedItemContent.contentPath}
                               mono
                             />
@@ -310,12 +327,12 @@ export function SharedPage() {
                         <ScrollArea className="h-full px-5 py-4">
                           {isContentLoading ? (
                             <p className="text-sm text-muted-foreground">
-                              Loading markdown content...
+                              {t('sharedPage.loadingMarkdown')}
                             </p>
                           ) : isContentError ? (
                             <Alert variant="destructive" className="max-w-2xl">
                               <AlertTriangle className="h-4 w-4" />
-                              <AlertTitle>Failed to load content</AlertTitle>
+                              <AlertTitle>{t('sharedPage.failedLoadContent')}</AlertTitle>
                               <AlertDescription>
                                 <p>{contentErrorMessage}</p>
                                 <div className="mt-3">
@@ -327,7 +344,7 @@ export function SharedPage() {
                                     }}
                                   >
                                     <RefreshCw className="w-4 h-4 mr-2" />
-                                    Retry content
+                                    {t('sharedPage.retryContent')}
                                   </Button>
                                 </div>
                               </AlertDescription>
@@ -433,10 +450,11 @@ interface ParsedMarkdownDocument {
 }
 
 function MarkdownViewer({ content }: { content: string }) {
+  const { t } = useTranslation();
   const parsedDocument = useMemo(() => parseMarkdownDocument(content), [content]);
 
   if (parsedDocument.blocks.length === 0 && parsedDocument.frontmatter.length === 0) {
-    return <p className="text-sm text-muted-foreground">No markdown content available.</p>;
+    return <p className="text-sm text-muted-foreground">{t('sharedPage.noMarkdown')}</p>;
   }
 
   return (

@@ -4,6 +4,7 @@ import { Copy, FileCode2, Loader2, RefreshCw, Save } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CodeEditor } from '@/components/shared/code-editor';
+import i18n from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 
 interface RawJsonSettingsEditorPanelProps {
@@ -39,7 +40,7 @@ export function RawJsonSettingsEditorPanel({
     if (!value) return;
     await navigator.clipboard.writeText(value);
     setCopied(true);
-    toast.success('Settings copied to clipboard');
+    toast.success(i18n.t('commonToast.settingsCopied'));
     window.setTimeout(() => setCopied(false), 1500);
   };
 

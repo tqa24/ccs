@@ -17,6 +17,7 @@ import {
   useDeletePreset,
 } from '@/hooks/use-cliproxy';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
+import i18n from '@/lib/i18n';
 import { usePrivacy } from '@/contexts/privacy-context';
 import { useProviderEditor } from './use-provider-editor';
 import { CustomPresetDialog } from './custom-preset-dialog';
@@ -155,7 +156,7 @@ export function ProviderEditor({
 
   const handleCustomPresetSave = (values: ModelMappingValues, presetName?: string) => {
     if (!presetName) {
-      toast.error('Please enter a preset name to save');
+      toast.error(i18n.t('commonToast.enterPresetName'));
       return;
     }
     createPresetMutation.mutate({ profile: provider, data: { name: presetName, ...values } });

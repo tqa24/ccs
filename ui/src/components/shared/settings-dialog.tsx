@@ -20,6 +20,7 @@ import { MaskedInput } from '@/components/ui/masked-input';
 import { ConfirmDialog } from './confirm-dialog';
 import { Save, X, Loader2, Code2 } from 'lucide-react';
 import { toast } from 'sonner';
+import i18n from '@/lib/i18n';
 
 // Lazy load CodeEditor to reduce initial bundle size
 const CodeEditor = lazy(() => import('./code-editor').then((m) => ({ default: m.CodeEditor })));
@@ -154,7 +155,7 @@ function SettingsDialogContent({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['settings', profileName] });
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
-      toast.success('Settings saved');
+      toast.success(i18n.t('commonToast.settingsSaved'));
       onClose();
     },
     onError: (error: Error) => {

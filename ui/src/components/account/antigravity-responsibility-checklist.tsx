@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import { ANTIGRAVITY_ACK_PHRASE } from '@/components/account/antigravity-responsibility-constants';
 import type { AntigravityRiskChecklistValue } from '@/components/account/antigravity-responsibility-constants';
 
@@ -21,6 +22,7 @@ export function AntigravityResponsibilityChecklist({
   onChange,
   disabled = false,
 }: AntigravityResponsibilityChecklistProps) {
+  const { t } = useTranslation();
   const completedSteps = [
     value.reviewedIssue509,
     value.understandsBanRisk,
@@ -50,21 +52,19 @@ export function AntigravityResponsibilityChecklist({
               <AlertTriangle className="h-4 w-4" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-semibold leading-5">Antigravity OAuth Responsibility</p>
-              <p className="text-xs text-muted-foreground">
-                Complete all 4 steps before you can authenticate.
-              </p>
+              <p className="text-sm font-semibold leading-5">{t('antigravityChecklist.title')}</p>
+              <p className="text-xs text-muted-foreground">{t('antigravityChecklist.subtitle')}</p>
             </div>
           </div>
           <Badge variant="outline" className="border-rose-500/40 text-rose-700 dark:text-rose-300">
-            Mandatory
+            {t('antigravityChecklist.mandatory')}
           </Badge>
         </div>
 
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Completion</span>
-            <span>{completedSteps}/4 steps</span>
+            <span>{t('antigravityChecklist.completion')}</span>
+            <span>{t('antigravityChecklist.stepsCount', { current: completedSteps })}</span>
           </div>
           <Progress value={progressValue} className="h-2" />
         </div>

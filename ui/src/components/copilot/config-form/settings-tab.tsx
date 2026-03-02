@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useTranslation } from 'react-i18next';
 
 interface SettingsTabProps {
   enabled: boolean;
@@ -46,6 +47,8 @@ export function SettingsTab({
   onUpdateRateLimit,
   onUpdateWaitOnLimit,
 }: SettingsTabProps) {
+  const { t } = useTranslation();
+
   return (
     <TabsContent
       value="settings"
@@ -57,10 +60,10 @@ export function SettingsTab({
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
               <Label htmlFor="enabled" className="text-sm font-medium">
-                Enable Copilot
+                {t('copilotSettings.enableCopilot')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                Allow using GitHub Copilot subscription
+                {t('copilotSettings.enableCopilotDesc')}
               </p>
             </div>
             <Switch id="enabled" checked={enabled} onCheckedChange={onUpdateEnabled} />
@@ -68,12 +71,12 @@ export function SettingsTab({
 
           {/* Basic Settings */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Basic Settings</h3>
+            <h3 className="text-sm font-medium">{t('copilotSettings.basicSettings')}</h3>
 
             {/* Port */}
             <div className="space-y-2">
               <Label htmlFor="port" className="text-xs">
-                Port
+                {t('copilotPage.port')}
               </Label>
               <Input
                 id="port"
@@ -89,16 +92,22 @@ export function SettingsTab({
             {/* Account Type */}
             <div className="space-y-2">
               <Label htmlFor="account-type" className="text-xs">
-                Account Type
+                {t('copilotSettings.accountType')}
               </Label>
               <Select value={accountType} onValueChange={onUpdateAccountType}>
                 <SelectTrigger id="account-type" className="max-w-[150px] h-8">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="business">Business</SelectItem>
-                  <SelectItem value="enterprise">Enterprise</SelectItem>
+                  <SelectItem value="individual">
+                    {t('copilotSettings.accountTypeIndividual')}
+                  </SelectItem>
+                  <SelectItem value="business">
+                    {t('copilotSettings.accountTypeBusiness')}
+                  </SelectItem>
+                  <SelectItem value="enterprise">
+                    {t('copilotSettings.accountTypeEnterprise')}
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -108,18 +117,18 @@ export function SettingsTab({
 
           {/* Rate Limiting */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Rate Limiting</h3>
+            <h3 className="text-sm font-medium">{t('copilotSettings.rateLimiting')}</h3>
 
             <div className="space-y-2">
               <Label htmlFor="rate-limit" className="text-xs">
-                Rate Limit (seconds)
+                {t('copilotSettings.rateLimitSeconds')}
               </Label>
               <Input
                 id="rate-limit"
                 type="number"
                 value={rateLimit}
                 onChange={(e) => onUpdateRateLimit(e.target.value)}
-                placeholder="No limit"
+                placeholder={t('copilotSettings.noLimit')}
                 min={0}
                 className="max-w-[150px] h-8"
               />
@@ -128,10 +137,10 @@ export function SettingsTab({
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
                 <Label htmlFor="wait-on-limit" className="text-xs">
-                  Wait on Rate Limit
+                  {t('copilotSettings.waitOnRateLimit')}
                 </Label>
                 <p className="text-[10px] text-muted-foreground">
-                  Wait instead of error when limit hit
+                  {t('copilotSettings.waitOnRateLimitDesc')}
                 </p>
               </div>
               <Switch
@@ -146,15 +155,15 @@ export function SettingsTab({
 
           {/* Daemon Settings */}
           <div className="space-y-4">
-            <h3 className="text-sm font-medium">Daemon Settings</h3>
+            <h3 className="text-sm font-medium">{t('copilotSettings.daemonSettings')}</h3>
 
             <div className="flex items-center justify-between rounded-lg border p-3">
               <div className="space-y-0.5">
                 <Label htmlFor="auto-start" className="text-xs">
-                  Auto-start Daemon
+                  {t('copilotSettings.autoStartDaemon')}
                 </Label>
                 <p className="text-[10px] text-muted-foreground">
-                  Start copilot-api when using profile
+                  {t('copilotSettings.autoStartDaemonDesc')}
                 </p>
               </div>
               <Switch id="auto-start" checked={autoStart} onCheckedChange={onUpdateAutoStart} />

@@ -5,6 +5,7 @@ import { useFixHealth, type HealthCheck } from '@/hooks/use-health';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 const statusConfig = {
   ok: { dot: 'bg-green-500', label: 'OK', labelColor: 'text-green-500' },
@@ -14,6 +15,7 @@ const statusConfig = {
 };
 
 export function HealthCheckItem({ check }: { check: HealthCheck }) {
+  const { t } = useTranslation();
   const fixMutation = useFixHealth();
   const config = statusConfig[check.status];
   const [isOpen, setIsOpen] = useState(false);
@@ -21,7 +23,7 @@ export function HealthCheckItem({ check }: { check: HealthCheck }) {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success('Copied to clipboard');
+    toast.success(t('health.copied'));
   };
 
   // Compact single-line display for items without expandable content
@@ -62,7 +64,7 @@ export function HealthCheckItem({ check }: { check: HealthCheck }) {
             className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
           >
             <Wrench className="w-3 h-3 mr-1" />
-            Fix
+            {t('health.fix')}
           </Button>
         )}
       </div>
@@ -149,7 +151,7 @@ export function HealthCheckItem({ check }: { check: HealthCheck }) {
                     className="h-7 px-3 text-xs"
                   >
                     <Wrench className="w-3 h-3 mr-1" />
-                    Apply Fix
+                    {t('health.applyFix')}
                   </Button>
                 )}
               </div>

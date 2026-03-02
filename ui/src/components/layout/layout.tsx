@@ -14,6 +14,7 @@ import { SponsorButton } from '@/components/shared/sponsor-button';
 import { ProjectSelectionDialog } from '@/components/shared/project-selection-dialog';
 import { DeviceCodeDialog } from '@/components/shared/device-code-dialog';
 import { UserMenu } from '@/components/auth/user-menu';
+import { LanguageSwitcher } from './language-switcher';
 import { useProjectSelection } from '@/hooks/use-project-selection';
 import { useDeviceCode } from '@/hooks/use-device-code';
 import { storeLastRoute } from '@/lib/last-route';
@@ -47,6 +48,7 @@ export function Layout() {
           </div>
           <div className="flex items-center gap-2">
             <ConnectionIndicator />
+            <LanguageSwitcher />
             <DocsLink />
             <GitHubLink />
             <PrivacyToggle />

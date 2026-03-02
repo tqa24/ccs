@@ -17,14 +17,9 @@ import {
   writeNoticeProgressMap,
   type NoticeProgressMap,
 } from '@/lib/updates-notice-state';
+import { useTranslation } from 'react-i18next';
 
 type NoticeViewMode = 'inbox' | 'done' | 'all';
-
-const NOTICE_VIEW_MODES: { id: NoticeViewMode; label: string }[] = [
-  { id: 'inbox', label: 'Action Required' },
-  { id: 'done', label: 'Done' },
-  { id: 'all', label: 'All' },
-];
 
 function noticeMatchesQuery(notice: SupportNotice, queryValue: string): boolean {
   if (!queryValue) {
@@ -49,6 +44,7 @@ function noticeMatchesQuery(notice: SupportNotice, queryValue: string): boolean 
 }
 
 export function UpdatesPage() {
+  const { t } = useTranslation();
   const notices = useMemo(
     () => [...SUPPORT_NOTICES].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt)),
     []
@@ -112,20 +108,18 @@ export function UpdatesPage() {
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Megaphone className="h-5 w-5 text-primary" />
-              <h1 className="font-semibold">Updates Inbox</h1>
+              <h1 className="font-semibold">{t('updates.inboxTitle')}</h1>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Focus on actions, then mark updates done or dismissed.
-            </p>
+            <p className="text-xs text-muted-foreground">{t('updates.inboxSubtitle')}</p>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md border bg-background px-2 py-1.5">
-              <p className="text-muted-foreground">Needs Action</p>
+              <p className="text-muted-foreground">{t('updates.needsAction')}</p>
               <p className="text-base font-semibold">{pendingCount}</p>
             </div>
             <div className="rounded-md border bg-background px-2 py-1.5">
-              <p className="text-muted-foreground">Done</p>
+              <p className="text-muted-foreground">{t('updates.doneCount')}</p>
               <p className="text-base font-semibold">{doneCount}</p>
             </div>
           </div>
@@ -135,13 +129,17 @@ export function UpdatesPage() {
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search actions or commands"
+              placeholder={t('updates.searchPlaceholder')}
               className="h-9 pl-8"
             />
           </div>
 
           <div className="flex flex-wrap gap-1.5">
-            {NOTICE_VIEW_MODES.map((mode) => (
+            {[
+              { id: 'inbox' as const, label: t('updates.actionRequired') },
+              { id: 'done' as const, label: t('updates.done') },
+              { id: 'all' as const, label: t('updates.all') },
+            ].map((mode) => (
               <Button
                 key={mode.id}
                 size="sm"
@@ -158,7 +156,7 @@ export function UpdatesPage() {
           <div className="space-y-2 p-2">
             {visibleNotices.length === 0 ? (
               <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                No notices match this view.
+                {t('updates.noNotices')}
               </div>
             ) : (
               visibleNotices.map((notice) => (

@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Loader2, Upload, CheckCircle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { useSyncPreview, useExecuteSync } from '@/hooks/use-cliproxy-sync';
 
@@ -23,6 +24,7 @@ interface SyncDialogProps {
 }
 
 export function SyncDialog({ open, onOpenChange }: SyncDialogProps) {
+  const { t } = useTranslation();
   const { data: preview, isLoading: previewLoading } = useSyncPreview();
   const { mutate: executeSync, isPending: isSyncing, isSuccess, reset } = useExecuteSync();
 
@@ -45,11 +47,9 @@ export function SyncDialog({ open, onOpenChange }: SyncDialogProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Sync Profiles to Local CLIProxy
+            {t('syncDialog.title')}
           </DialogTitle>
-          <DialogDescription>
-            Sync your CCS API profiles to the local CLIProxy config.yaml.
-          </DialogDescription>
+          <DialogDescription>{t('syncDialog.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="mt-4">
@@ -59,8 +59,8 @@ export function SyncDialog({ open, onOpenChange }: SyncDialogProps) {
             </div>
           ) : preview?.count === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>No profiles configured to sync.</p>
-              <p className="text-sm mt-2">Create API profiles first using the Profiles tab.</p>
+              <p>{t('syncDialog.noProfiles')}</p>
+              <p className="text-sm mt-2">{t('syncDialog.createProfilesFirst')}</p>
             </div>
           ) : (
             <ScrollArea className="h-[300px] pr-4">
@@ -74,7 +74,7 @@ export function SyncDialog({ open, onOpenChange }: SyncDialogProps) {
                       <div className="font-medium">{profile.name}</div>
                       {profile.modelName && (
                         <div className="text-xs text-muted-foreground truncate max-w-[300px]">
-                          Model: {profile.modelName}
+                          {t('syncDialog.modelLabel')} {profile.modelName}
                         </div>
                       )}
                       {profile.baseUrl && (
@@ -84,7 +84,7 @@ export function SyncDialog({ open, onOpenChange }: SyncDialogProps) {
                       )}
                     </div>
                     <Badge variant="outline" className="text-xs">
-                      Ready
+                      {t('syncDialog.ready')}
                     </Badge>
                   </div>
                 ))}
@@ -94,11 +94,11 @@ export function SyncDialog({ open, onOpenChange }: SyncDialogProps) {
 
           <div className="flex items-center justify-between mt-6 pt-4 border-t">
             <div className="text-sm text-muted-foreground">
-              {preview?.count ?? 0} profile{(preview?.count ?? 0) !== 1 ? 's' : ''} to sync
+              {t('syncDialog.profilesToSync', { count: preview?.count ?? 0 })}
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleClose}>
-                Cancel
+                {t('syncDialog.cancel')}
               </Button>
               <Button
                 onClick={handleSync}
@@ -108,17 +108,17 @@ export function SyncDialog({ open, onOpenChange }: SyncDialogProps) {
                 {isSyncing ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Syncing...
+                    {t('syncDialog.syncing')}
                   </>
                 ) : isSuccess ? (
                   <>
                     <CheckCircle className="w-4 h-4" />
-                    Synced!
+                    {t('syncDialog.synced')}
                   </>
                 ) : (
                   <>
                     <Upload className="w-4 h-4" />
-                    Sync Now
+                    {t('syncDialog.syncNow')}
                   </>
                 )}
               </Button>

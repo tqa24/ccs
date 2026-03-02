@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Copy, Check, Terminal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface CreateAuthProfileDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ interface CreateAuthProfileDialogProps {
 const MAX_CONTEXT_GROUP_LENGTH = 64;
 
 export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDialogProps) {
+  const { t } = useTranslation();
   const [profileName, setProfileName] = useState('');
   const [shareContext, setShareContext] = useState(false);
   const [contextGroup, setContextGroup] = useState('');
@@ -52,7 +54,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
         ]
           .filter(Boolean)
           .join(' ')
-      : 'ccs auth create <name>';
+      : t('createAuthProfileDialog.commandFallback');
 
   const handleCopy = async () => {
     if (!isValidName || (shareContext && !isValidContextGroup)) return;
@@ -74,27 +76,23 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && handleClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Create New Account</DialogTitle>
-          <DialogDescription>
-            Auth profiles require Claude CLI login. Run the command below in your terminal. You can
-            edit sync mode, group, and continuity depth later from the Accounts table.
-          </DialogDescription>
+          <DialogTitle>{t('createAuthProfileDialog.title')}</DialogTitle>
+          <DialogDescription>{t('createAuthProfileDialog.description')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="profile-name">Profile Name</Label>
+            <Label htmlFor="profile-name">{t('createAuthProfileDialog.profileName')}</Label>
             <Input
               id="profile-name"
               value={profileName}
               onChange={(e) => setProfileName(e.target.value)}
-              placeholder="e.g., work, personal, client"
+              placeholder={t('createAuthProfileDialog.profileNamePlaceholder')}
               autoComplete="off"
             />
             {profileName && !isValidName && (
               <p className="text-xs text-destructive">
-                Name must start with a letter and contain only letters, numbers, dashes, or
-                underscores.
+                {t('createAuthProfileDialog.invalidProfileName')}
               </p>
             )}
           </div>
@@ -107,22 +105,24 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
                 onCheckedChange={(checked) => setShareContext(checked === true)}
               />
               <Label htmlFor="share-context" className="cursor-pointer">
-                Enable shared history sync with other ccs auth accounts
+                {t('createAuthProfileDialog.enableSharedHistory')}
               </Label>
             </div>
 
             {shareContext && (
               <div className="space-y-2 pl-6">
-                <Label htmlFor="context-group">History Sync Group (optional)</Label>
+                <Label htmlFor="context-group">
+                  {t('createAuthProfileDialog.historySyncGroupOptional')}
+                </Label>
                 <Input
                   id="context-group"
                   value={contextGroup}
                   onChange={(e) => setContextGroup(e.target.value)}
-                  placeholder="default, sprint-a, client-x"
+                  placeholder={t('createAuthProfileDialog.historySyncGroupPlaceholder')}
                   autoComplete="off"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Leave empty to use the default shared group. Spaces are normalized to dashes.
+                  {t('createAuthProfileDialog.historySyncGroupHint')}
                 </p>
                 <div className="flex items-center gap-2 pt-1">
                   <Checkbox
@@ -131,17 +131,17 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
                     onCheckedChange={(checked) => setDeeperContinuity(checked === true)}
                   />
                   <Label htmlFor="deeper-continuity" className="cursor-pointer">
-                    Advanced: deeper continuity mode
+                    {t('createAuthProfileDialog.deeperContinuity')}
                   </Label>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Adds sync for <code>session-env</code>, <code>file-history</code>,{' '}
-                  <code>shell-snapshots</code>, and <code>todos</code>. Credentials stay isolated.
+                  {t('createAuthProfileDialog.deeperContinuityHint')}
                 </p>
                 {contextGroup.trim().length > 0 && !isValidContextGroup && (
                   <p className="text-xs text-destructive">
-                    Group must start with a letter and use only letters, numbers, dashes, or
-                    underscores (max {MAX_CONTEXT_GROUP_LENGTH} chars).
+                    {t('createAuthProfileDialog.invalidContextGroup', {
+                      max: MAX_CONTEXT_GROUP_LENGTH,
+                    })}
                   </p>
                 )}
               </div>
@@ -149,7 +149,7 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
           </div>
 
           <div className="space-y-2">
-            <Label>Command</Label>
+            <Label>{t('createAuthProfileDialog.command')}</Label>
             <div className="flex items-center gap-2 p-3 bg-muted rounded-md font-mono text-sm">
               <Terminal className="w-4 h-4 text-muted-foreground shrink-0" />
               <code className="flex-1 break-all">{command}</code>
@@ -170,20 +170,17 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
           </div>
 
           <div className="text-sm text-muted-foreground space-y-1">
-            <p>After running the command:</p>
+            <p>{t('createAuthProfileDialog.afterRunPrefix')}</p>
             <ol className="list-decimal list-inside pl-2 space-y-0.5">
-              <li>Complete the Claude login in your browser</li>
-              <li>Return here and refresh to see the new account</li>
+              <li>{t('createAuthProfileDialog.afterRunStep1')}</li>
+              <li>{t('createAuthProfileDialog.afterRunStep2')}</li>
             </ol>
-            <p className="pt-1">
-              Prefer pooled Claude OAuth routing instead? Use CLIProxy Claude pool from the Accounts
-              page action button.
-            </p>
+            <p className="pt-1">{t('createAuthProfileDialog.poolingHint')}</p>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={handleClose}>
-              Close
+              {t('createAuthProfileDialog.close')}
             </Button>
             <Button
               onClick={handleCopy}
@@ -192,12 +189,12 @@ export function CreateAuthProfileDialog({ open, onClose }: CreateAuthProfileDial
               {copied ? (
                 <>
                   <Check className="w-4 h-4 mr-2" />
-                  Copied!
+                  {t('createAuthProfileDialog.copied')}
                 </>
               ) : (
                 <>
                   <Copy className="w-4 h-4 mr-2" />
-                  Copy Command
+                  {t('createAuthProfileDialog.copyCommand')}
                 </>
               )}
             </Button>

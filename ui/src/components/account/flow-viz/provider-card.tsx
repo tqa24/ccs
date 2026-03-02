@@ -2,6 +2,7 @@
  * Provider Card Component for Flow Visualization
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { ProviderIcon } from '@/components/shared/provider-icon';
 import { GripVertical } from 'lucide-react';
@@ -39,6 +40,7 @@ export function ProviderCard({
   onPointerMove,
   onPointerUp,
 }: ProviderCardProps) {
+  const { t } = useTranslation();
   const { accounts } = providerData;
 
   return (
@@ -115,17 +117,19 @@ export function ProviderCard({
           <h3 className="text-sm font-semibold text-foreground tracking-tight">
             {providerData.displayName}
           </h3>
-          <p className="text-[10px] text-muted-foreground font-medium uppercase">Provider</p>
+          <p className="text-[10px] text-muted-foreground font-medium uppercase">
+            {t('flowViz.provider')}
+          </p>
         </div>
       </div>
 
       <div className="space-y-2 relative z-10">
         <div className="flex justify-between items-center text-xs">
-          <span className="text-muted-foreground">Total Requests</span>
+          <span className="text-muted-foreground">{t('flowViz.totalRequests')}</span>
           <span className="text-foreground font-mono">{totalRequests.toLocaleString()}</span>
         </div>
         <div className="flex justify-between items-center text-xs">
-          <span className="text-muted-foreground">Accounts</span>
+          <span className="text-muted-foreground">{t('flowViz.accounts')}</span>
           <span className="text-foreground font-mono">{accounts.length}</span>
         </div>
         <div className="w-full bg-muted dark:bg-zinc-800/50 h-1 rounded-full mt-2 overflow-hidden">

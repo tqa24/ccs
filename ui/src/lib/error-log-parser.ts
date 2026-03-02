@@ -1,3 +1,5 @@
+import { getFormattingLocale } from '@/lib/locales';
+
 /**
  * Error Log Parser Utility
  *
@@ -394,7 +396,9 @@ function getStatusText(code: number): string {
 /**
  * Format Unix timestamp (seconds) to relative time string
  */
-export function formatRelativeTime(modifiedSeconds: number): string {
+export function formatRelativeTime(modifiedSeconds: number, locale?: string): string {
+  const formatLocale = getFormattingLocale(locale);
+  const isZh = formatLocale === 'zh-CN';
   const now = Date.now();
   const modified = modifiedSeconds * 1000; // Convert to milliseconds
   const diff = now - modified;
@@ -404,14 +408,14 @@ export function formatRelativeTime(modifiedSeconds: number): string {
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
 
-  if (seconds < 60) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  if (days < 7) return `${days}d ago`;
+  if (seconds < 60) return isZh ? '刚刚' : 'just now';
+  if (minutes < 60) return isZh ? `${minutes} 分钟前` : `${minutes}m ago`;
+  if (hours < 24) return isZh ? `${hours} 小时前` : `${hours}h ago`;
+  if (days < 7) return isZh ? `${days} 天前` : `${days}d ago`;
 
   // Format as date for older logs
   const date = new Date(modified);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString(formatLocale, { month: 'short', day: 'numeric' });
 }
 
 /**
@@ -436,16 +440,26 @@ export function getStatusColor(code: number): string {
 /**
  * Get error type label
  */
-export function getErrorTypeLabel(type: ParsedErrorLog['errorType']): string {
-  const labels: Record<string, string> = {
-    rate_limit: 'Rate Limited',
-    auth: 'Auth Error',
-    not_found: 'Not Found',
-    server: 'Server Error',
-    timeout: 'Timeout',
-    unknown: 'Error',
-  };
-  return labels[type] || 'Error';
+export function getErrorTypeLabel(type: ParsedErrorLog['errorType'], locale?: string): string {
+  const isZh = getFormattingLocale(locale) === 'zh-CN';
+  const labels: Record<string, string> = isZh
+    ? {
+        rate_limit: '限流',
+        auth: '认证错误',
+        not_found: '未找到',
+        server: '服务错误',
+        timeout: '超时',
+        unknown: '错误',
+      }
+    : {
+        rate_limit: 'Rate Limited',
+        auth: 'Auth Error',
+        not_found: 'Not Found',
+        server: 'Server Error',
+        timeout: 'Timeout',
+        unknown: 'Error',
+      };
+  return labels[type] || (isZh ? '错误' : 'Error');
 }
 
 /**
@@ -467,22 +481,27 @@ export function formatQuotaResetDelay(seconds: number | null): string | null {
 /**
  * Format quota reset timestamp as relative time
  */
-export function formatQuotaResetTimestamp(timestamp: string | null): string | null {
+export function formatQuotaResetTimestamp(
+  timestamp: string | null,
+  locale?: string
+): string | null {
   if (!timestamp) return null;
+  const isZh = getFormattingLocale(locale) === 'zh-CN';
   try {
     const resetDate = new Date(timestamp);
     const now = new Date();
     const diff = resetDate.getTime() - now.getTime();
-    if (diff <= 0) return 'now';
+    if (diff <= 0) return isZh ? '现在' : 'now';
 
     const seconds = Math.floor(diff / 1000);
-    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 60) return isZh ? `${seconds}秒` : `${seconds}s`;
     if (seconds < 3600) {
       const mins = Math.floor(seconds / 60);
-      return `${mins}m`;
+      return isZh ? `${mins}分钟` : `${mins}m`;
     }
     const hours = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
+    if (isZh) return mins > 0 ? `${hours}小时 ${mins}分钟` : `${hours}小时`;
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   } catch {
     return null;

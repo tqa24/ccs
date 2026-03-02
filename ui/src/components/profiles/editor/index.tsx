@@ -16,6 +16,7 @@ import { FriendlyUISection } from './friendly-ui-section';
 import { RawEditorSection } from './raw-editor-section';
 import type { ProfileEditorProps, Settings, SettingsResponse } from './types';
 import { api, type CliTarget } from '@/lib/api-client';
+import i18n from '@/lib/i18n';
 
 export function ProfileEditor({
   profileName,
@@ -143,7 +144,7 @@ export function ProfileEditor({
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
       setLocalEdits({});
       setRawJsonEdits(null);
-      toast.success('Settings saved');
+      toast.success(i18n.t('commonToast.settingsSaved'));
     },
     onError: (error: Error) => {
       if (error.message === 'CONFLICT') setConflictDialog(true);
@@ -158,12 +159,12 @@ export function ProfileEditor({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profiles'] });
-      toast.success('Default target updated');
+      toast.success(i18n.t('commonToast.defaultTargetUpdated'));
     },
     onError: (error: Error, target: CliTarget) => {
       const targetLabel = target === 'droid' ? 'Factory Droid' : 'Claude Code';
       const suffix = error.message.trim() ? `: ${error.message}` : '';
-      toast.error(`Failed to update default target to ${targetLabel}${suffix}`);
+      toast.error(i18n.t('commonToast.failedUpdateDefaultTarget', { target: targetLabel, suffix }));
     },
   });
 

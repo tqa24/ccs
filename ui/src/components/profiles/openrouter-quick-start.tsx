@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useOpenRouterReady } from '@/hooks/use-openrouter-models';
 import { Sparkles, ExternalLink, ArrowRight, Zap } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface OpenRouterQuickStartProps {
   onOpenRouterClick: () => void;
@@ -19,6 +20,7 @@ export function OpenRouterQuickStart({
   onOpenRouterClick,
   onCustomClick,
 }: OpenRouterQuickStartProps) {
+  const { t } = useTranslation();
   const { modelCount, isLoading } = useOpenRouterReady();
 
   return (
@@ -35,13 +37,14 @@ export function OpenRouterQuickStart({
                 variant="secondary"
                 className="bg-accent/10 text-accent dark:bg-accent/20 dark:text-accent-foreground"
               >
-                Recommended
+                {t('openrouterQuickStart.recommended')}
               </Badge>
             </div>
-            <CardTitle className="text-xl">Start with OpenRouter</CardTitle>
+            <CardTitle className="text-xl">{t('openrouterQuickStart.title')}</CardTitle>
             <CardDescription className="text-base">
-              Access {isLoading ? '300+' : `${modelCount}+`} models from OpenAI, Anthropic, Google,
-              Meta and more - all through one API.
+              {t('openrouterQuickStart.description', {
+                modelCountLabel: isLoading ? '300+' : `${modelCount}+`,
+              })}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -49,11 +52,11 @@ export function OpenRouterQuickStart({
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Zap className="w-4 h-4 text-accent" />
-                <span>One API, all providers</span>
+                <span>{t('openrouterQuickStart.featureOneApi')}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Sparkles className="w-4 h-4 text-accent" />
-                <span>Model tier mapping</span>
+                <span>{t('openrouterQuickStart.featureTierMapping')}</span>
               </div>
             </div>
 
@@ -62,12 +65,12 @@ export function OpenRouterQuickStart({
               className="w-full bg-accent hover:bg-accent/90 text-white"
               size="lg"
             >
-              Create OpenRouter Profile
+              {t('openrouterQuickStart.createOpenRouterProfile')}
               <ArrowRight className="w-4 h-4 ml-2" />
             </Button>
 
             <p className="text-xs text-center text-muted-foreground">
-              Get your API key at{' '}
+              {t('openrouterQuickStart.getApiKeyAt')}{' '}
               <a
                 href="https://openrouter.ai/keys"
                 target="_blank"
@@ -84,13 +87,13 @@ export function OpenRouterQuickStart({
         {/* Divider */}
         <div className="flex items-center gap-4">
           <Separator className="flex-1" />
-          <span className="text-xs text-muted-foreground">or</span>
+          <span className="text-xs text-muted-foreground">{t('openrouterQuickStart.or')}</span>
           <Separator className="flex-1" />
         </div>
 
         {/* Custom Option */}
         <Button variant="outline" onClick={onCustomClick} className="w-full">
-          Create Custom API Profile
+          {t('openrouterQuickStart.createCustomProfile')}
         </Button>
       </div>
     </div>

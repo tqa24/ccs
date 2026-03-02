@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useTranslation } from 'react-i18next';
 import type { Account } from '@/lib/api-client';
 import { useUpdateAccountContext } from '@/hooks/use-accounts';
 
@@ -32,6 +33,7 @@ interface EditAccountContextDialogProps {
 }
 
 export function EditAccountContextDialog({ account, onClose }: EditAccountContextDialogProps) {
+  const { t } = useTranslation();
   const updateContextMutation = useUpdateAccountContext();
   const [mode, setMode] = useState<ContextMode>(
     account.context_mode === 'shared' ? 'shared' : 'isolated'
@@ -78,89 +80,86 @@ export function EditAccountContextDialog({ account, onClose }: EditAccountContex
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Edit History Sync</DialogTitle>
+          <DialogTitle>{t('editAccountContext.title')}</DialogTitle>
           <DialogDescription>
-            Configure how "{account.name}" shares history and continuity with other
-            <code className="mx-1 rounded bg-muted px-1 py-0.5">ccs auth</code>
-            accounts.
+            {t('editAccountContext.description', { name: account.name })}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="context-mode">Sync Mode</Label>
+            <Label htmlFor="context-mode">{t('editAccountContext.syncMode')}</Label>
             <Select value={mode} onValueChange={(value) => setMode(value as ContextMode)}>
               <SelectTrigger id="context-mode">
-                <SelectValue placeholder="Select context mode" />
+                <SelectValue placeholder={t('editAccountContext.selectContextMode')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="isolated">isolated (no sync)</SelectItem>
-                <SelectItem value="shared">shared (sync enabled)</SelectItem>
+                <SelectItem value="isolated">{t('editAccountContext.isolatedOption')}</SelectItem>
+                <SelectItem value="shared">{t('editAccountContext.sharedOption')}</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
               {mode === 'shared'
-                ? 'Shared mode reuses workspace context for accounts in the same history sync group.'
-                : 'Isolated mode keeps this account fully separate from other ccs auth accounts.'}
+                ? t('editAccountContext.sharedModeHint')
+                : t('editAccountContext.isolatedModeHint')}
             </p>
           </div>
 
           {mode === 'shared' && (
             <div className="space-y-2">
-              <Label htmlFor="context-group">History Sync Group</Label>
+              <Label htmlFor="context-group">{t('editAccountContext.historySyncGroup')}</Label>
               <Input
                 id="context-group"
                 value={group}
                 onChange={(event) => setGroup(event.target.value)}
-                placeholder="default"
+                placeholder={t('editAccountContext.groupPlaceholder')}
                 autoComplete="off"
               />
               <p className="text-xs text-muted-foreground">
-                Normalized to lowercase (spaces become dashes). Allowed: letters, numbers, `_`, `-`
-                (max {MAX_CONTEXT_GROUP_LENGTH} chars).
+                {t('editAccountContext.groupHint', { max: MAX_CONTEXT_GROUP_LENGTH })}
               </p>
               {!isSharedGroupValid && (
-                <p className="text-xs text-destructive">
-                  Enter a valid group name that starts with a letter.
-                </p>
+                <p className="text-xs text-destructive">{t('editAccountContext.invalidGroup')}</p>
               )}
             </div>
           )}
 
           {mode === 'shared' && (
             <div className="space-y-2">
-              <Label htmlFor="continuity-mode">Continuity Depth</Label>
+              <Label htmlFor="continuity-mode">{t('editAccountContext.continuityDepth')}</Label>
               <Select
                 value={continuityMode}
                 onValueChange={(value) => setContinuityMode(value as ContinuityMode)}
               >
                 <SelectTrigger id="continuity-mode">
-                  <SelectValue placeholder="Select continuity depth" />
+                  <SelectValue placeholder={t('editAccountContext.selectContinuityDepth')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="standard">standard (projects only)</SelectItem>
-                  <SelectItem value="deeper">deeper continuity (advanced)</SelectItem>
+                  <SelectItem value="standard">{t('editAccountContext.standardOption')}</SelectItem>
+                  <SelectItem value="deeper">{t('editAccountContext.deeperOption')}</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
                 {continuityMode === 'deeper'
-                  ? 'Advanced mode also syncs session-env, file-history, shell-snapshots, and todos.'
-                  : 'Standard mode syncs project workspace context only.'}
+                  ? t('editAccountContext.deeperHint')
+                  : t('editAccountContext.standardHint')}
               </p>
             </div>
           )}
 
           <p className="text-xs text-muted-foreground">
-            Credentials and `.anthropic` remain isolated per account in all modes.
+            {t('editAccountContext.credentialsIsolated')}
           </p>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={updateContextMutation.isPending}>
-            Cancel
+            {t('editAccountContext.cancel')}
           </Button>
           <Button onClick={handleSave} disabled={!canSubmit || updateContextMutation.isPending}>
-            {updateContextMutation.isPending ? 'Saving...' : 'Save'}
+            {updateContextMutation.isPending
+              ? t('editAccountContext.saving')
+              : t('editAccountContext.save')}
           </Button>
         </DialogFooter>
       </DialogContent>

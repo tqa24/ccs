@@ -27,6 +27,7 @@ import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import {
   applyAnthropicBudgetTokensToDroidByokModel,
   applyReasoningEffortToDroidByokModel,
@@ -166,6 +167,7 @@ function DetailRow({
 }
 
 export function DroidPage() {
+  const { t } = useTranslation();
   const {
     diagnostics,
     diagnosticsLoading,
@@ -201,7 +203,7 @@ export function DroidPage() {
 
   const updateSettingsField = (key: string, value: unknown | null) => {
     if (!rawEditorParsed.valid) {
-      toast.error('Fix JSON syntax before using quick settings controls.');
+      toast.error(t('droidPage.fixJsonBeforeQuickSettings'));
       return;
     }
 
@@ -248,7 +250,7 @@ export function DroidPage() {
 
   const handleSaveRawSettings = async () => {
     if (!rawEditorValidation.valid) {
-      toast.error(`Invalid JSON: ${rawEditorValidation.error}`);
+      toast.error(t('droidPage.invalidJson', { value: rawEditorValidation.error }));
       return;
     }
 
@@ -258,12 +260,12 @@ export function DroidPage() {
         expectedMtime: rawSettings?.exists ? rawSettings.mtime : undefined,
       });
       setRawDraftText(null);
-      toast.success('Droid settings saved');
+      toast.success(t('droidPage.saved'));
     } catch (error) {
       if (isApiConflictError(error)) {
-        toast.error('Droid settings changed externally. Refresh and retry.');
+        toast.error(t('droidPage.changedExternally'));
       } else {
-        toast.error((error as Error).message || 'Failed to save Droid settings');
+        toast.error((error as Error).message || t('droidPage.failedSave'));
       }
     }
   };
@@ -279,7 +281,7 @@ export function DroidPage() {
       return (
         <div className="flex h-full items-center justify-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin mr-2" />
-          Loading Droid diagnostics...
+          {t('droidPage.loadingDiagnostics')}
         </div>
       );
     }
@@ -287,7 +289,7 @@ export function DroidPage() {
     if (diagnosticsError || !diagnostics) {
       return (
         <div className="flex h-full items-center justify-center text-destructive px-6 text-center">
-          Failed to load Droid diagnostics.
+          {t('droidPage.failedDiagnostics')}
         </div>
       );
     }
@@ -314,9 +316,9 @@ export function DroidPage() {
       <Tabs defaultValue="byok" className="h-full flex flex-col">
         <div className="px-4 pt-4 shrink-0">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="byok">BYOK</TabsTrigger>
-            <TabsTrigger value="docs">Docs</TabsTrigger>
+            <TabsTrigger value="overview">{t('droidPage.overview')}</TabsTrigger>
+            <TabsTrigger value="byok">{t('droidPage.byok')}</TabsTrigger>
+            <TabsTrigger value="docs">{t('droidPage.docs')}</TabsTrigger>
           </TabsList>
         </div>
 
@@ -328,34 +330,40 @@ export function DroidPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       <TerminalSquare className="h-4 w-4" />
-                      Runtime & Installation
+                      {t('droidPage.runtimeInstall')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Status</span>
+                      <span className="text-sm text-muted-foreground">{t('droidPage.status')}</span>
                       <Badge variant={diagnostics.binary.installed ? 'default' : 'secondary'}>
-                        {diagnostics.binary.installed ? 'Detected' : 'Not Found'}
+                        {diagnostics.binary.installed
+                          ? t('droidPage.detected')
+                          : t('droidPage.notFound')}
                       </Badge>
                     </div>
-                    <DetailRow label="Detection source" value={diagnostics.binary.source} mono />
                     <DetailRow
-                      label="Binary path"
-                      value={diagnostics.binary.path || 'Not detected'}
+                      label={t('droidPage.detectionSource')}
+                      value={diagnostics.binary.source}
                       mono
                     />
                     <DetailRow
-                      label="Install directory"
+                      label={t('droidPage.binaryPath')}
+                      value={diagnostics.binary.path || t('droidPage.notFound')}
+                      mono
+                    />
+                    <DetailRow
+                      label={t('droidPage.installDirectory')}
                       value={diagnostics.binary.installDir || 'N/A'}
                       mono
                     />
                     <DetailRow
-                      label="Version"
+                      label={t('droidPage.version')}
                       value={diagnostics.binary.version || 'Unknown'}
                       mono
                     />
                     <DetailRow
-                      label="Override (CCS_DROID_PATH)"
+                      label={t('droidPage.overridePath')}
                       value={diagnostics.binary.overridePath || 'Not set'}
                       mono
                     />
@@ -366,7 +374,7 @@ export function DroidPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Folder className="h-4 w-4" />
-                      Config Files
+                      {t('droidPage.configFiles')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-3">
@@ -380,15 +388,25 @@ export function DroidPage() {
                             <XCircle className="h-4 w-4 text-muted-foreground" />
                           )}
                         </div>
-                        <DetailRow label="Path" value={file.path} mono />
-                        <DetailRow label="Resolved" value={file.resolvedPath} mono />
-                        <DetailRow label="Size" value={formatBytes(file.sizeBytes)} />
-                        <DetailRow label="Last modified" value={formatTimestamp(file.mtimeMs)} />
+                        <DetailRow label={t('droidPage.path')} value={file.path} mono />
+                        <DetailRow label={t('droidPage.resolved')} value={file.resolvedPath} mono />
+                        <DetailRow
+                          label={t('droidPage.size')}
+                          value={formatBytes(file.sizeBytes)}
+                        />
+                        <DetailRow
+                          label={t('droidPage.lastModified')}
+                          value={formatTimestamp(file.mtimeMs)}
+                        />
                         {file.parseError && (
-                          <p className="text-xs text-amber-600">Parse warning: {file.parseError}</p>
+                          <p className="text-xs text-amber-600">
+                            {t('droidPage.parseWarning', { value: file.parseError })}
+                          </p>
                         )}
                         {file.readError && (
-                          <p className="text-xs text-destructive">Read warning: {file.readError}</p>
+                          <p className="text-xs text-destructive">
+                            {t('droidPage.readWarning', { value: file.readError })}
+                          </p>
                         )}
                       </div>
                     ))}
@@ -400,7 +418,7 @@ export function DroidPage() {
                     <CardHeader className="pb-2">
                       <CardTitle className="text-base flex items-center gap-2">
                         <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        Warnings
+                        {t('droidPage.warnings')}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1.5">
@@ -444,11 +462,11 @@ export function DroidPage() {
                   disabledReason={
                     rawEditorParsed.valid
                       ? null
-                      : `BYOK reasoning controls disabled: ${rawEditorParsed.error}`
+                      : `${t('droidPage.byok')}: ${rawEditorParsed.error}`
                   }
                   onEffortChange={(modelId, effort) => {
                     if (!rawEditorParsed.valid) {
-                      toast.error('Fix JSON syntax before updating BYOK reasoning settings.');
+                      toast.error(t('droidPage.fixJsonBeforeReasoning'));
                       return;
                     }
 
@@ -458,7 +476,7 @@ export function DroidPage() {
                       effort
                     );
                     if (!nextSettings) {
-                      toast.error('Unable to update selected BYOK model reasoning setting.');
+                      toast.error(t('droidPage.unableUpdateReasoning'));
                       return;
                     }
 
@@ -466,7 +484,7 @@ export function DroidPage() {
                   }}
                   onAnthropicBudgetChange={(modelId, budgetTokens) => {
                     if (!rawEditorParsed.valid) {
-                      toast.error('Fix JSON syntax before updating thinking budget.');
+                      toast.error(t('droidPage.fixJsonBeforeBudget'));
                       return;
                     }
 
@@ -476,7 +494,7 @@ export function DroidPage() {
                       budgetTokens
                     );
                     if (!nextSettings) {
-                      toast.error('Thinking budget is only available for Anthropic BYOK models.');
+                      toast.error(t('droidPage.anthropicOnlyBudget'));
                       return;
                     }
 
@@ -488,38 +506,38 @@ export function DroidPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       <Server className="h-4 w-4" />
-                      BYOK Summary
+                      {t('droidPage.byokSummary')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <DetailRow
-                      label="Active model selector"
+                      label={t('droidPage.activeModelSelector')}
                       value={diagnostics.byok.activeModelSelector || 'Not set'}
                       mono
                     />
                     <DetailRow
-                      label="Custom models"
+                      label={t('droidPage.customModels')}
                       value={String(diagnostics.byok.customModelCount)}
                     />
                     <DetailRow
-                      label="CCS-managed"
+                      label={t('droidPage.ccsManaged')}
                       value={String(diagnostics.byok.ccsManagedCount)}
                     />
                     <DetailRow
-                      label="User-managed"
+                      label={t('droidPage.userManaged')}
                       value={String(diagnostics.byok.userManagedCount)}
                     />
                     <DetailRow
-                      label="Malformed entries"
+                      label={t('droidPage.malformedEntries')}
                       value={String(diagnostics.byok.invalidModelEntryCount)}
                     />
                     <Separator />
                     <div className="space-y-1">
-                      <p className="text-xs text-muted-foreground">Providers</p>
+                      <p className="text-xs text-muted-foreground">{t('droidPage.providers')}</p>
                       <div className="flex flex-wrap gap-1.5">
                         {providerRows.length === 0 && (
                           <Badge variant="secondary" className="font-mono">
-                            none
+                            {t('droidPage.none')}
                           </Badge>
                         )}
                         {providerRows.map(([provider, count]) => (
@@ -534,20 +552,20 @@ export function DroidPage() {
 
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Custom Models</CardTitle>
+                    <CardTitle className="text-base">{t('droidPage.customModelsTitle')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="rounded-md border overflow-hidden">
                       <div className="grid grid-cols-[2fr_1fr_2fr] bg-muted/40 px-3 py-2 text-xs font-medium">
-                        <span>Name / Model</span>
-                        <span>Provider</span>
-                        <span>Base URL</span>
+                        <span>{t('droidPage.modelName')}</span>
+                        <span>{t('droidPage.provider')}</span>
+                        <span>{t('droidPage.baseUrl')}</span>
                       </div>
                       <ScrollArea className="h-52">
                         <div className="divide-y">
                           {customModels.length === 0 && (
                             <div className="px-3 py-4 text-xs text-muted-foreground">
-                              No custom models
+                              {t('droidPage.noCustomModels')}
                             </div>
                           )}
                           {customModels.map((model) => (
@@ -593,7 +611,7 @@ export function DroidPage() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base flex items-center gap-2">
                       <ShieldCheck className="h-4 w-4" />
-                      Docs-Aligned Notes
+                      {t('droidPage.docsAlignedNotes')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2 text-sm">
@@ -605,7 +623,7 @@ export function DroidPage() {
                     <Separator />
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                        Factory Docs
+                        {t('droidPage.factoryDocs')}
                       </p>
                       <div className="space-y-1.5">
                         {docsLinks.map((link) => (
@@ -633,7 +651,7 @@ export function DroidPage() {
                     <Separator />
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">
-                        Provider Fact-Check Docs
+                        {t('droidPage.providerFactCheckDocs')}
                       </p>
                       <div className="space-y-1.5">
                         {providerDocs.map((providerDoc) => (
@@ -660,10 +678,10 @@ export function DroidPage() {
                     </div>
                     <Separator />
                     <p className="text-xs text-muted-foreground">
-                      Provider values: {providerValues.join(', ')}
+                      {t('droidPage.providerValues', { value: providerValues.join(', ') })}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Settings hierarchy: {settingsHierarchy.join(' -> ')}
+                      {t('droidPage.settingsHierarchy', { value: settingsHierarchy.join(' -> ') })}
                     </p>
                   </CardContent>
                 </Card>
@@ -686,7 +704,7 @@ export function DroidPage() {
         </PanelResizeHandle>
         <Panel defaultSize={55} minSize={35}>
           <RawJsonSettingsEditorPanel
-            title="Droid BYOK Settings"
+            title={t('droidPage.settingsTitle')}
             pathLabel={rawSettings?.path || '~/.factory/settings.json'}
             loading={rawSettingsLoading}
             parseWarning={rawSettings?.parseError}

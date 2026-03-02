@@ -12,6 +12,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useOpenRouterCatalog } from '@/hooks/use-openrouter-models';
 import { suggestTierMappings } from '@/lib/openrouter-utils';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 export interface TierMapping {
   opus?: string;
@@ -32,6 +33,7 @@ export function ModelTierMapping({
   onChange,
   className,
 }: ModelTierMappingProps) {
+  const { t } = useTranslation();
   const { models } = useOpenRouterCatalog();
 
   const suggestions = useMemo(() => {
@@ -53,18 +55,18 @@ export function ModelTierMapping({
     <Collapsible className={cn('group', className)}>
       <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium hover:underline">
         <ChevronRight className="h-4 w-4 transition-transform group-data-[state=open]:rotate-90" />
-        Model Tier Mapping
-        <span className="text-muted-foreground font-normal">(Advanced)</span>
+        {t('modelTierMapping.title')}
+        <span className="text-muted-foreground font-normal">
+          ({t('modelTierMapping.advanced')})
+        </span>
       </CollapsibleTrigger>
       <CollapsibleContent className="space-y-3 pt-3">
-        <p className="text-muted-foreground text-sm">
-          Configure different models for Claude Code&apos;s opus/sonnet/haiku tiers.
-        </p>
+        <p className="text-muted-foreground text-sm">{t('modelTierMapping.description')}</p>
 
         {hasSuggestions && (
           <Button type="button" variant="outline" size="sm" onClick={handleAutoSuggest}>
             <Wand2 className="mr-1 h-4 w-4" />
-            Auto-suggest based on {selectedModel?.split('/')[0]}
+            {t('modelTierMapping.autoSuggest', { provider: selectedModel?.split('/')[0] })}
           </Button>
         )}
 
@@ -77,7 +79,7 @@ export function ModelTierMapping({
               id="tier-opus"
               value={value.opus ?? ''}
               onChange={(e) => updateTier('opus', e.target.value)}
-              placeholder="e.g., anthropic/claude-opus-4"
+              placeholder={t('modelTierMapping.opusPlaceholder')}
             />
           </div>
           <div className="grid grid-cols-[80px_1fr] items-center gap-2">
@@ -88,7 +90,7 @@ export function ModelTierMapping({
               id="tier-sonnet"
               value={value.sonnet ?? ''}
               onChange={(e) => updateTier('sonnet', e.target.value)}
-              placeholder="e.g., anthropic/claude-sonnet-4"
+              placeholder={t('modelTierMapping.sonnetPlaceholder')}
             />
           </div>
           <div className="grid grid-cols-[80px_1fr] items-center gap-2">
@@ -99,15 +101,12 @@ export function ModelTierMapping({
               id="tier-haiku"
               value={value.haiku ?? ''}
               onChange={(e) => updateTier('haiku', e.target.value)}
-              placeholder="e.g., anthropic/claude-3.5-haiku"
+              placeholder={t('modelTierMapping.haikuPlaceholder')}
             />
           </div>
         </div>
 
-        <p className="text-muted-foreground text-xs">
-          These set ANTHROPIC_DEFAULT_OPUS_MODEL, ANTHROPIC_DEFAULT_SONNET_MODEL,
-          ANTHROPIC_DEFAULT_HAIKU_MODEL.
-        </p>
+        <p className="text-muted-foreground text-xs">{t('modelTierMapping.footer')}</p>
       </CollapsibleContent>
     </Collapsible>
   );

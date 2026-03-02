@@ -2,6 +2,7 @@
  * Flow Visualization Header Component
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { ChevronRight, Eye, EyeOff, RotateCcw } from 'lucide-react';
 
@@ -20,6 +21,7 @@ export function FlowVizHeader({
   hasCustomPositions,
   onResetPositions,
 }: FlowVizHeaderProps) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center justify-between px-3 py-1.5">
       {onBack ? (
@@ -28,7 +30,7 @@ export function FlowVizHeader({
           className="group flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-all duration-200 px-3 py-1.5 rounded-md hover:bg-muted/50 border border-transparent hover:border-border/50"
         >
           <ChevronRight className="w-3.5 h-3.5 rotate-180 transition-transform group-hover:-translate-x-0.5" />
-          <span>Back to providers</span>
+          <span>{t('flowViz.backToProviders')}</span>
         </button>
       ) : (
         <div />
@@ -44,7 +46,7 @@ export function FlowVizHeader({
           )}
         >
           {showDetails ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-          <span>{showDetails ? 'Hide Details' : 'Show Details'}</span>
+          <span>{showDetails ? t('flowViz.hideDetails') : t('flowViz.showDetails')}</span>
         </button>
         {hasCustomPositions && (
           <button
@@ -52,7 +54,7 @@ export function FlowVizHeader({
             className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-all duration-200 px-3 py-1.5 rounded-md border border-border/60 hover:border-border bg-background hover:bg-muted/50 shadow-sm"
           >
             <RotateCcw className="w-3.5 h-3.5" />
-            <span>Reset layout</span>
+            <span>{t('flowViz.resetLayout')}</span>
           </button>
         )}
       </div>

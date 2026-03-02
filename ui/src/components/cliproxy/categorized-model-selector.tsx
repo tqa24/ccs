@@ -18,21 +18,22 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Cpu } from 'lucide-react';
 import type { CliproxyModelsResponse } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 /** Provider display configuration */
-const CATEGORY_CONFIG: Record<string, { name: string; color: string }> = {
-  google: { name: 'Google (Gemini)', color: 'text-blue-600' },
-  openai: { name: 'OpenAI (GPT)', color: 'text-green-600' },
-  anthropic: { name: 'Anthropic (Claude)', color: 'text-orange-600' },
-  antigravity: { name: 'Antigravity', color: 'text-purple-600' },
-  other: { name: 'Other', color: 'text-gray-600' },
+const CATEGORY_CONFIG: Record<string, { key: string; color: string }> = {
+  google: { key: 'google', color: 'text-blue-600' },
+  openai: { key: 'openai', color: 'text-green-600' },
+  anthropic: { key: 'anthropic', color: 'text-orange-600' },
+  antigravity: { key: 'antigravity', color: 'text-purple-600' },
+  other: { key: 'other', color: 'text-gray-600' },
 };
 
 /** Get display name for category */
 function getCategoryDisplay(category: string) {
   return (
     CATEGORY_CONFIG[category.toLowerCase()] || {
-      name: category.charAt(0).toUpperCase() + category.slice(1),
+      key: 'other',
       color: 'text-gray-600',
     }
   );
@@ -61,9 +62,12 @@ export function CategorizedModelSelector({
   value,
   onChange,
   disabled,
-  placeholder = 'Select a model',
+  placeholder,
   className,
 }: CategorizedModelSelectorProps) {
+  const { t } = useTranslation();
+  const resolvedPlaceholder = placeholder ?? t('categorizedModelSelector.selectModel');
+
   // Sort categories by model count (descending)
   const sortedCategories = useMemo(() => {
     if (!modelsData?.byCategory) return [];
@@ -84,7 +88,7 @@ export function CategorizedModelSelector({
     return (
       <div className={cn('flex items-center gap-2 text-sm text-muted-foreground', className)}>
         <Cpu className="w-4 h-4" />
-        <span>No models available</span>
+        <span>{t('categorizedModelSelector.noModelsAvailable')}</span>
       </div>
     );
   }
@@ -92,7 +96,7 @@ export function CategorizedModelSelector({
   return (
     <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
       <SelectTrigger className={cn('w-[320px]', className)}>
-        <SelectValue placeholder={placeholder}>
+        <SelectValue placeholder={resolvedPlaceholder}>
           {value && (
             <div className="flex items-center gap-2">
               <span className="truncate">{value}</span>
@@ -104,7 +108,9 @@ export function CategorizedModelSelector({
         {sortedCategories.map(({ category, display, models }) => (
           <SelectGroup key={category}>
             <SelectLabel className="flex items-center justify-between px-2 py-1.5">
-              <span className={cn('font-semibold', display.color)}>{display.name}</span>
+              <span className={cn('font-semibold', display.color)}>
+                {t(`cliproxyModelCategory.${display.key}`)}
+              </span>
               <Badge variant="secondary" className="text-[10px] h-4 px-1.5 ml-2">
                 {models.length}
               </Badge>
@@ -129,6 +135,8 @@ export function CategorizedModelSelectorCompact({
   onChange,
   disabled,
 }: Omit<CategorizedModelSelectorProps, 'placeholder' | 'className'>) {
+  const { t } = useTranslation();
+
   return (
     <CategorizedModelSelector
       modelsData={modelsData}
@@ -136,7 +144,7 @@ export function CategorizedModelSelectorCompact({
       value={value}
       onChange={onChange}
       disabled={disabled}
-      placeholder="Model..."
+      placeholder={t('categorizedModelSelector.modelPlaceholder')}
       className="w-[200px]"
     />
   );

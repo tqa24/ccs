@@ -9,6 +9,7 @@ import { useHealth, type HealthGroup } from '@/hooks/use-health';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 function getOverallStatus(summary: { passed: number; warnings: number; errors: number }) {
   if (summary.errors > 0) return 'error';
@@ -16,14 +17,17 @@ function getOverallStatus(summary: { passed: number; warnings: number; errors: n
   return 'ok';
 }
 
-function formatRelativeTime(timestamp: number): string {
+function formatRelativeTime(
+  timestamp: number,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   const seconds = Math.floor((Date.now() - timestamp) / 1000);
-  if (seconds < 5) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
+  if (seconds < 5) return t('health.justNow');
+  if (seconds < 60) return t('health.secondsAgo', { count: seconds });
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 60) return t('health.minutesAgo', { count: minutes });
   const hours = Math.floor(minutes / 60);
-  return `${hours}h ago`;
+  return t('health.hoursAgo', { count: hours });
 }
 
 function sortGroupsByIssues(groups: HealthGroup[]): HealthGroup[] {
@@ -75,6 +79,7 @@ function LoadingSkeleton() {
 }
 
 export function HealthPage() {
+  const { t } = useTranslation();
   const { data, isLoading, refetch, dataUpdatedAt } = useHealth();
 
   // Use dataUpdatedAt directly instead of storing in state
@@ -91,12 +96,12 @@ export function HealthPage() {
 
   const copyDoctorCommand = () => {
     navigator.clipboard.writeText('ccs doctor');
-    toast.success('Copied to clipboard');
+    toast.success(t('health.copied'));
   };
 
   const handleRefresh = () => {
     refetch();
-    toast.info('Refreshing health checks...');
+    toast.info(t('health.refreshing'));
   };
 
   if (isLoading && !data) {
@@ -154,10 +159,12 @@ export function HealthPage() {
 
             {/* Main title */}
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl font-bold font-mono tracking-tight">System Health</h1>
+              <h1 className="text-2xl font-bold font-mono tracking-tight">
+                {t('health.systemHealth')}
+              </h1>
               {data?.version && (
                 <Badge variant="outline" className="font-mono text-xs bg-muted/50">
-                  build {data.version}
+                  {t('health.build', { version: data.version })}
                 </Badge>
               )}
             </div>
@@ -165,12 +172,12 @@ export function HealthPage() {
             {/* Status message */}
             <div className="flex items-center gap-2 text-sm">
               <Cpu className="w-4 h-4 text-muted-foreground" />
-              <span className="text-muted-foreground">Last scan:</span>
+              <span className="text-muted-foreground">{t('health.lastScan')}</span>
               <span className="font-mono">
-                {lastRefresh ? formatRelativeTime(lastRefresh) : '--'}
+                {lastRefresh ? formatRelativeTime(lastRefresh, t) : '--'}
               </span>
               <span className="text-muted-foreground">|</span>
-              <span className="text-muted-foreground">Auto-refresh:</span>
+              <span className="text-muted-foreground">{t('health.autoRefresh')}</span>
               <span className="font-mono text-green-500">30s</span>
             </div>
           </div>
@@ -195,7 +202,7 @@ export function HealthPage() {
               className="gap-2"
             >
               <RefreshCw className={cn('w-4 h-4', isLoading && 'animate-spin')} />
-              <span className="hidden sm:inline">Refresh</span>
+              <span className="hidden sm:inline">{t('health.refresh')}</span>
               <kbd className="hidden md:inline-flex h-5 items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
                 R
               </kbd>
@@ -237,10 +244,10 @@ export function HealthPage() {
       <div className="flex items-center justify-between text-xs text-muted-foreground border-t pt-4">
         <div className="flex items-center gap-4">
           <span>
-            Version <span className="font-mono">{data?.version ?? '--'}</span>
+            {t('health.version')} <span className="font-mono">{data?.version ?? '--'}</span>
           </span>
           <span>
-            Platform{' '}
+            {t('health.platform')}{' '}
             <span className="font-mono">
               {typeof navigator !== 'undefined' ? navigator.platform : 'linux'}
             </span>
@@ -248,7 +255,7 @@ export function HealthPage() {
         </div>
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span>Live monitoring active</span>
+          <span>{t('health.liveMonitoring')}</span>
         </div>
       </div>
     </div>

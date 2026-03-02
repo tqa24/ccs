@@ -19,6 +19,7 @@ import { ChevronRight, Settings2, Plus } from 'lucide-react';
 import { isOpenRouterProfile, extractTierMapping, applyTierMapping } from './utils';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import i18n from '@/lib/i18n';
 import type { Settings, SettingsResponse } from './types';
 import type { CliTarget } from '@/lib/api-client';
 
@@ -81,7 +82,7 @@ export function FriendlyUISection({
       onEnvValueChange('ANTHROPIC_DEFAULT_HAIKU_MODEL', modelId);
     }
     // Show feedback toast
-    toast.success('Applied model to all tiers', { duration: 2000 });
+    toast.success(i18n.t('commonToast.appliedModelAllTiers'), { duration: 2000 });
   };
 
   // Handle tier mapping change

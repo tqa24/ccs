@@ -3,8 +3,10 @@ import { ArrowUpRight, Terminal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { type SupportNoticeAction } from '@/lib/support-updates-catalog';
+import { useTranslation } from 'react-i18next';
 
 export function UpdatesNoticeActionRow({ action }: { action: SupportNoticeAction }) {
+  const { t } = useTranslation();
   return (
     <div className="rounded-md border bg-muted/20 p-3">
       <div className="flex items-start justify-between gap-3">
@@ -16,7 +18,7 @@ export function UpdatesNoticeActionRow({ action }: { action: SupportNoticeAction
         {action.type === 'route' && action.path && (
           <Button size="sm" asChild>
             <Link to={action.path}>
-              Open
+              {t('updates.open')}
               <ArrowUpRight className="h-3.5 w-3.5" />
             </Link>
           </Button>

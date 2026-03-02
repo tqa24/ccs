@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface HealthStatsBarProps {
   total: number;
@@ -28,6 +29,7 @@ function StatItem({ label, value, color, bgColor }: StatItemProps) {
 }
 
 export function HealthStatsBar({ total, passed, warnings, errors, info }: HealthStatsBarProps) {
+  const { t } = useTranslation();
   // Calculate percentages for the progress bar
   const passedPct = (passed / total) * 100;
   const warningPct = (warnings / total) * 100;
@@ -68,7 +70,7 @@ export function HealthStatsBar({ total, passed, warnings, errors, info }: Health
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            Checks
+            {t('health.checks')}
           </span>
           <span className="font-mono font-bold text-lg">{total}</span>
         </div>

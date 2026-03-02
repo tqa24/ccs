@@ -9,6 +9,7 @@ import { subDays, startOfMonth } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { DateRangeFilter } from '@/components/analytics/date-range-filter';
 import { RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface AnalyticsHeaderProps {
   dateRange: DateRange | undefined;
@@ -29,11 +30,13 @@ export function AnalyticsHeader({
   lastUpdatedText,
   viewMode,
 }: AnalyticsHeaderProps) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex flex-col gap-3 shrink-0 xl:flex-row xl:items-center xl:justify-between">
       <div>
-        <h1 className="text-xl font-semibold">Analytics</h1>
-        <p className="text-sm text-muted-foreground">Track usage & insights</p>
+        <h1 className="text-xl font-semibold">{t('analytics.title')}</h1>
+        <p className="text-sm text-muted-foreground">{t('analytics.subtitle')}</p>
       </div>
       <div className="flex flex-wrap items-center gap-2 xl:justify-end">
         <Button
@@ -51,14 +54,17 @@ export function AnalyticsHeader({
           presets={[
             { label: '7D', range: { from: subDays(new Date(), 7), to: new Date() } },
             { label: '30D', range: { from: subDays(new Date(), 30), to: new Date() } },
-            { label: 'Month', range: { from: startOfMonth(new Date()), to: new Date() } },
-            { label: 'All Time', range: { from: undefined, to: new Date() } },
+            {
+              label: t('analytics.month'),
+              range: { from: startOfMonth(new Date()), to: new Date() },
+            },
+            { label: t('analytics.allTime'), range: { from: undefined, to: new Date() } },
           ]}
         />
 
         {lastUpdatedText && (
           <span className="text-xs text-muted-foreground whitespace-nowrap">
-            Updated {lastUpdatedText}
+            {t('analytics.updated', { value: lastUpdatedText })}
           </span>
         )}
         <Button

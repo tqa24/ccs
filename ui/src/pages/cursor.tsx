@@ -52,6 +52,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useTranslation } from 'react-i18next';
 
 interface CursorConfigDraft {
   port: string;
@@ -156,6 +157,7 @@ function CursorModelSelector({
   allowDefaultFallback?: boolean;
   onChange: (value: string) => void;
 }) {
+  const { t } = useTranslation();
   const selectorValue = value || (allowDefaultFallback ? '__default' : '');
   const selected = models.find((model) => model.id === value);
 
@@ -177,12 +179,12 @@ function CursorModelSelector({
         disabled={disabled}
       >
         <SelectTrigger className="h-9">
-          <SelectValue placeholder="Select model">
+          <SelectValue placeholder={t('cursorPage.selectModel')}>
             {selectorValue && (
               <div className="flex items-center gap-2 min-w-0">
                 <span className="truncate font-mono text-xs">
                   {allowDefaultFallback && selectorValue === '__default'
-                    ? 'Use Default Model'
+                    ? t('cursorPage.useDefaultModel')
                     : selected?.name || selectorValue}
                 </span>
                 {selected?.provider && (
@@ -197,9 +199,11 @@ function CursorModelSelector({
         <SelectContent className="max-h-[300px]">
           <SelectGroup>
             <SelectLabel className="text-xs text-muted-foreground">
-              Available Models ({models.length})
+              {t('cursorPage.availableModelCount', { count: models.length })}
             </SelectLabel>
-            {allowDefaultFallback && <SelectItem value="__default">Use Default Model</SelectItem>}
+            {allowDefaultFallback && (
+              <SelectItem value="__default">{t('cursorPage.useDefaultModel')}</SelectItem>
+            )}
             {models.map((model) => (
               <SelectItem key={model.id} value={model.id}>
                 <div className="flex items-center gap-2 min-w-0">
@@ -252,6 +256,7 @@ function StatusItem({
 }
 
 export function CursorPage() {
+  const { t } = useTranslation();
   const {
     status,
     statusLoading,
@@ -342,8 +347,13 @@ export function CursorPage() {
 
   const canStart = Boolean(status?.enabled && status?.authenticated && !status?.token_expired);
   const integrationBadge = useMemo(
-    () => (status?.enabled ? <Badge>Enabled</Badge> : <Badge variant="secondary">Disabled</Badge>),
-    [status?.enabled]
+    () =>
+      status?.enabled ? (
+        <Badge>{t('cursorPage.enabled')}</Badge>
+      ) : (
+        <Badge variant="secondary">{t('cursorPage.disabled')}</Badge>
+      ),
+    [status?.enabled, t]
   );
 
   const handleSaveConfig = async ({
@@ -351,11 +361,11 @@ export function CursorPage() {
   }: { suppressSuccessToast?: boolean } = {}) => {
     const parsedPort = Number(effectivePort);
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-      toast.error('Port must be an integer between 1 and 65535');
+      toast.error(t('cursorPage.invalidPort'));
       return false;
     }
     if (!effectiveModel.trim()) {
-      toast.error('Default model is required');
+      toast.error(t('cursorPage.defaultModelRequired'));
       return false;
     }
 
@@ -382,23 +392,23 @@ export function CursorPage() {
         })
       );
       if (!suppressSuccessToast) {
-        toast.success('Cursor config and model mapping saved');
+        toast.success(t('cursorPage.savedConfig'));
       }
       return true;
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to save config');
+      toast.error((error as Error).message || t('cursorPage.failedSaveConfig'));
       return false;
     }
   };
 
   const applyPreset = (preset: 'codex53' | 'claude46' | 'gemini3') => {
     if (modelsLoading) {
-      toast.error('Models are still loading. Please wait before applying a preset.');
+      toast.error(t('cursorPage.modelsLoadingWait'));
       return;
     }
 
     if (models.length === 0) {
-      toast.error('No models available yet. Start the daemon and refresh first.');
+      toast.error(t('cursorPage.noModelsAvailable'));
       return;
     }
 
@@ -457,7 +467,7 @@ export function CursorPage() {
         sonnet_model: codex53,
         haiku_model: codexMini,
       }));
-      toast.success('Applied GPT-5.3 Codex preset');
+      toast.success(t('cursorPage.appliedCodexPreset'));
       return;
     }
 
@@ -469,7 +479,7 @@ export function CursorPage() {
         sonnet_model: sonnet45,
         haiku_model: haiku45,
       }));
-      toast.success('Applied Claude 4.6 preset');
+      toast.success(t('cursorPage.appliedClaudePreset'));
       return;
     }
 
@@ -480,30 +490,32 @@ export function CursorPage() {
       sonnet_model: gemini3Pro,
       haiku_model: gemini3Flash,
     }));
-    toast.success('Applied Gemini 3 preset');
+    toast.success(t('cursorPage.appliedGeminiPreset'));
   };
 
   const handleToggleEnabled = async (enabled: boolean) => {
     try {
       await updateConfigAsync({ enabled });
-      toast.success(enabled ? 'Cursor integration enabled' : 'Cursor integration disabled');
+      toast.success(
+        enabled ? t('cursorPage.integrationEnabled') : t('cursorPage.integrationDisabled')
+      );
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to update integration state');
+      toast.error((error as Error).message || t('cursorPage.failedUpdateIntegration'));
     }
   };
 
   const handleAutoDetectAuth = async () => {
     try {
       await autoDetectAuthAsync();
-      toast.success('Cursor credentials imported');
+      toast.success(t('cursorPage.credentialsImported'));
     } catch (error) {
-      toast.error((error as Error).message || 'Auto-detect failed');
+      toast.error((error as Error).message || t('cursorPage.autoDetectFailed'));
     }
   };
 
   const handleManualAuthImport = async () => {
     if (!manualToken.trim() || !manualMachineId.trim()) {
-      toast.error('Token and machine ID are required');
+      toast.error(t('cursorPage.manualRequired'));
       return;
     }
 
@@ -512,12 +524,12 @@ export function CursorPage() {
         accessToken: manualToken.trim(),
         machineId: manualMachineId.trim(),
       });
-      toast.success('Cursor credentials imported');
+      toast.success(t('cursorPage.credentialsImported'));
       setManualAuthOpen(false);
       setManualToken('');
       setManualMachineId('');
     } catch (error) {
-      toast.error((error as Error).message || 'Manual import failed');
+      toast.error((error as Error).message || t('cursorPage.manualImportFailed'));
     }
   };
 
@@ -525,12 +537,16 @@ export function CursorPage() {
     try {
       const result = await startDaemonAsync();
       if (!result.success) {
-        toast.error(result.error || 'Failed to start daemon');
+        toast.error(result.error || t('cursorPage.failedStartDaemon'));
         return;
       }
-      toast.success(`Daemon started${result.pid ? ` (PID: ${result.pid})` : ''}`);
+      toast.success(
+        result.pid
+          ? t('cursorPage.daemonStartedWithPid', { pid: result.pid })
+          : t('cursorPage.daemonStarted')
+      );
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to start daemon');
+      toast.error((error as Error).message || t('cursorPage.failedStartDaemon'));
     }
   };
 
@@ -538,12 +554,12 @@ export function CursorPage() {
     try {
       const result = await stopDaemonAsync();
       if (!result.success) {
-        toast.error(result.error || 'Failed to stop daemon');
+        toast.error(result.error || t('cursorPage.failedStopDaemon'));
         return;
       }
-      toast.success('Daemon stopped');
+      toast.success(t('cursorPage.daemonStopped'));
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to stop daemon');
+      toast.error((error as Error).message || t('cursorPage.failedStopDaemon'));
     }
   };
 
@@ -551,12 +567,12 @@ export function CursorPage() {
     suppressSuccessToast = false,
   }: { suppressSuccessToast?: boolean } = {}) => {
     if (!rawSettingsReady) {
-      toast.error('Raw settings are still loading. Please wait and try again.');
+      toast.error(t('cursorPage.rawLoading'));
       return false;
     }
 
     if (!rawParseResult.isValid || !rawParseResult.settings) {
-      toast.error(rawParseResult.error || 'Invalid JSON');
+      toast.error(rawParseResult.error || t('cursorPage.invalidJson'));
       return false;
     }
 
@@ -567,14 +583,14 @@ export function CursorPage() {
       });
       setRawConfigDirty(false);
       if (!suppressSuccessToast) {
-        toast.success('Raw settings saved');
+        toast.success(t('cursorPage.rawSaved'));
       }
       return true;
     } catch (error) {
       if (isApiConflictError(error)) {
-        toast.error('Raw settings changed externally. Refresh and retry.');
+        toast.error(t('cursorPage.rawChanged'));
       } else {
-        toast.error((error as Error).message || 'Failed to save raw settings');
+        toast.error((error as Error).message || t('cursorPage.failedSaveRaw'));
       }
       return false;
     }
@@ -601,7 +617,7 @@ export function CursorPage() {
     }
 
     if (saveConfig && saveRawSettings) {
-      toast.success('Cursor configuration saved');
+      toast.success(t('cursorPage.savedAll'));
     }
   };
 
@@ -623,12 +639,12 @@ export function CursorPage() {
                   alt=""
                   className="w-5 h-5 object-contain shrink-0"
                 />
-                <h1 className="font-semibold">Cursor</h1>
+                <h1 className="font-semibold">{t('cursorPage.title')}</h1>
                 <Badge
                   variant="outline"
                   className="h-5 border-amber-500/60 bg-amber-500/10 px-1.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-300"
                 >
-                  Beta
+                  {t('cursorPage.beta')}
                 </Badge>
                 {integrationBadge}
               </div>
@@ -642,7 +658,7 @@ export function CursorPage() {
                 <RefreshCw className={cn('w-4 h-4', statusLoading && 'animate-spin')} />
               </Button>
             </div>
-            <p className="text-xs text-muted-foreground">Dedicated Cursor integration controls</p>
+            <p className="text-xs text-muted-foreground">{t('cursorPage.subtitle')}</p>
           </div>
 
           <ScrollArea className="flex-1">
@@ -651,46 +667,48 @@ export function CursorPage() {
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 shrink-0" />
                   <span className="text-xs font-semibold text-yellow-800 dark:text-yellow-200">
-                    Unofficial API - Use at Your Own Risk
+                    {t('cursorPage.unofficialTitle')}
                   </span>
                 </div>
                 <ul className="text-[11px] text-yellow-700 dark:text-yellow-300 space-y-0.5 pl-6 list-disc">
-                  <li>Reverse-engineered integration may break anytime</li>
-                  <li>Abuse or excessive usage may risk account restrictions</li>
-                  <li>No warranty, no responsibility from CCS</li>
+                  <li>{t('cursorPage.unofficialItem1')}</li>
+                  <li>{t('cursorPage.unofficialItem2')}</li>
+                  <li>{t('cursorPage.unofficialItem3')}</li>
                 </ul>
               </div>
 
               <div className="space-y-2">
                 <StatusItem
                   icon={ShieldCheck}
-                  label="Integration"
+                  label={t('cursorPage.integration')}
                   ok={Boolean(status?.enabled)}
-                  detail={status?.enabled ? 'Enabled' : 'Disabled'}
+                  detail={status?.enabled ? t('cursorPage.enabled') : t('cursorPage.disabled')}
                 />
                 <StatusItem
                   icon={Key}
-                  label="Authentication"
+                  label={t('cursorPage.authentication')}
                   ok={Boolean(status?.authenticated && !status?.token_expired)}
                   detail={
                     status?.authenticated
                       ? status?.token_expired
-                        ? 'Expired'
-                        : (status.auth_method ?? 'Connected')
-                      : 'Not connected'
+                        ? t('cursorPage.expired')
+                        : (status.auth_method ?? t('cursorPage.connected'))
+                      : t('cursorPage.notConnected')
                   }
                 />
                 <StatusItem
                   icon={Server}
-                  label="Daemon"
+                  label={t('cursorPage.daemon')}
                   ok={Boolean(status?.daemon_running)}
-                  detail={status?.daemon_running ? 'Running' : 'Stopped'}
+                  detail={
+                    status?.daemon_running ? t('cursorPage.running') : t('cursorPage.stopped')
+                  }
                 />
               </div>
 
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                  Actions
+                  {t('cursorPage.actions')}
                 </p>
 
                 {status?.enabled ? (
@@ -702,7 +720,7 @@ export function CursorPage() {
                     disabled={isUpdatingConfig}
                   >
                     <PowerOff className="w-3.5 h-3.5 mr-1.5" />
-                    Disable Integration
+                    {t('cursorPage.disableIntegration')}
                   </Button>
                 ) : (
                   <Button
@@ -712,7 +730,7 @@ export function CursorPage() {
                     disabled={isUpdatingConfig}
                   >
                     <Power className="w-3.5 h-3.5 mr-1.5" />
-                    Enable Integration
+                    {t('cursorPage.enableIntegration')}
                   </Button>
                 )}
 
@@ -728,7 +746,7 @@ export function CursorPage() {
                   ) : (
                     <Key className="w-3.5 h-3.5 mr-1.5" />
                   )}
-                  Auto-detect Auth
+                  {t('cursorPage.autoDetectAuth')}
                 </Button>
 
                 <Button
@@ -738,7 +756,7 @@ export function CursorPage() {
                   onClick={() => setManualAuthOpen(true)}
                 >
                   <Key className="w-3.5 h-3.5 mr-1.5" />
-                  Manual Auth Import
+                  {t('cursorPage.manualAuthImport')}
                 </Button>
 
                 {status?.daemon_running ? (
@@ -754,7 +772,7 @@ export function CursorPage() {
                     ) : (
                       <PowerOff className="w-3.5 h-3.5 mr-1.5" />
                     )}
-                    Stop Daemon
+                    {t('cursorPage.stopDaemon')}
                   </Button>
                 ) : (
                   <Button
@@ -768,7 +786,7 @@ export function CursorPage() {
                     ) : (
                       <Play className="w-3.5 h-3.5 mr-1.5" />
                     )}
-                    Start Daemon
+                    {t('cursorPage.startDaemon')}
                   </Button>
                 )}
               </div>
@@ -777,7 +795,7 @@ export function CursorPage() {
 
           <div className="p-3 border-t bg-background text-xs text-muted-foreground">
             <div className="flex items-center justify-between">
-              <span>Port</span>
+              <span>{t('cursorPage.port')}</span>
               <span>{status?.port ?? config?.port ?? DEFAULT_CURSOR_PORT}</span>
             </div>
           </div>
@@ -789,7 +807,7 @@ export function CursorPage() {
               <div className="flex items-center gap-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold">Cursor Configuration</h2>
+                    <h2 className="text-lg font-semibold">{t('cursorPage.configuration')}</h2>
                     {rawSettings && (
                       <Badge variant="outline" className="text-xs">
                         cursor.settings.json
@@ -798,10 +816,10 @@ export function CursorPage() {
                   </div>
                   {rawSettings && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Last modified:{' '}
+                      {t('cursorPage.lastModified')}{' '}
                       {rawSettings.exists
                         ? new Date(rawSettings.mtime).toLocaleString()
-                        : 'Never saved'}
+                        : t('cursorPage.neverSaved')}
                     </p>
                   )}
                 </div>
@@ -828,12 +846,12 @@ export function CursorPage() {
                   {isUpdatingConfig || isSavingRawSettings ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                      Saving...
+                      {t('cursorPage.saving')}
                     </>
                   ) : (
                     <>
                       <Save className="w-4 h-4 mr-1" />
-                      Save
+                      {t('cursorPage.save')}
                     </>
                   )}
                 </Button>
@@ -846,13 +864,13 @@ export function CursorPage() {
                   <div className="px-4 pt-4 shrink-0">
                     <TabsList className="w-full">
                       <TabsTrigger value="config" className="flex-1">
-                        Model Config
+                        {t('cursorPage.modelConfig')}
                       </TabsTrigger>
                       <TabsTrigger value="settings" className="flex-1">
-                        Settings
+                        {t('cursorPage.settings')}
                       </TabsTrigger>
                       <TabsTrigger value="info" className="flex-1">
-                        Info
+                        {t('cursorPage.info')}
                       </TabsTrigger>
                     </TabsList>
                   </div>
@@ -867,10 +885,10 @@ export function CursorPage() {
                           <div>
                             <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
                               <Sparkles className="w-4 h-4" />
-                              Presets
+                              {t('cursorPage.presets')}
                             </h3>
                             <p className="text-xs text-muted-foreground mb-3">
-                              Apply pre-configured model mappings
+                              {t('cursorPage.presetsDesc')}
                             </p>
                             <div className="flex flex-wrap gap-2">
                               <Button
@@ -912,14 +930,16 @@ export function CursorPage() {
                           <Separator />
 
                           <div>
-                            <h3 className="text-sm font-medium mb-2">Model Mapping</h3>
+                            <h3 className="text-sm font-medium mb-2">
+                              {t('cursorPage.modelMapping')}
+                            </h3>
                             <p className="text-xs text-muted-foreground mb-4">
-                              Configure which models to use for each tier
+                              {t('cursorPage.modelMappingDesc')}
                             </p>
                             <div className="space-y-4">
                               <CursorModelSelector
-                                label="Default Model"
-                                description="Used when no specific tier is requested."
+                                label={t('cursorPage.defaultModel')}
+                                description={t('cursorPage.defaultModelDesc')}
                                 value={effectiveModel}
                                 models={orderedModels}
                                 disabled={modelsLoading}
@@ -928,8 +948,8 @@ export function CursorPage() {
                                 }}
                               />
                               <CursorModelSelector
-                                label="Opus (Most capable)"
-                                description="Complex reasoning and highest quality responses."
+                                label={t('cursorPage.opusModel')}
+                                description={t('cursorPage.opusModelDesc')}
                                 value={effectiveOpusModel}
                                 models={orderedModels}
                                 disabled={modelsLoading}
@@ -939,8 +959,8 @@ export function CursorPage() {
                                 }}
                               />
                               <CursorModelSelector
-                                label="Sonnet (Balanced)"
-                                description="General coding and day-to-day chat workloads."
+                                label={t('cursorPage.sonnetModel')}
+                                description={t('cursorPage.sonnetModelDesc')}
                                 value={effectiveSonnetModel}
                                 models={orderedModels}
                                 disabled={modelsLoading}
@@ -950,8 +970,8 @@ export function CursorPage() {
                                 }}
                               />
                               <CursorModelSelector
-                                label="Haiku (Fast)"
-                                description="Low-latency and lightweight request paths."
+                                label={t('cursorPage.haikuModel')}
+                                description={t('cursorPage.haikuModelDesc')}
                                 value={effectiveHaikuModel}
                                 models={orderedModels}
                                 disabled={modelsLoading}
@@ -973,7 +993,9 @@ export function CursorPage() {
                       <ScrollArea className="flex-1">
                         <div className="p-4 space-y-6">
                           <div className="space-y-4">
-                            <h3 className="text-sm font-medium">Runtime Settings</h3>
+                            <h3 className="text-sm font-medium">
+                              {t('cursorPage.runtimeSettings')}
+                            </h3>
 
                             <div className="space-y-2">
                               <Label htmlFor="cursor-port" className="text-xs">
@@ -998,10 +1020,10 @@ export function CursorPage() {
                             <div className="flex items-center justify-between rounded-lg border p-3">
                               <div className="space-y-0.5">
                                 <Label htmlFor="cursor-auto-start" className="text-xs">
-                                  Auto-start Daemon
+                                  {t('cursorPage.autoStartDaemon')}
                                 </Label>
                                 <p className="text-[10px] text-muted-foreground">
-                                  Start Cursor daemon automatically when integration is used.
+                                  {t('cursorPage.autoStartDesc')}
                                 </p>
                               </div>
                               <Switch
@@ -1016,10 +1038,10 @@ export function CursorPage() {
                             <div className="flex items-center justify-between rounded-lg border p-3">
                               <div className="space-y-0.5">
                                 <Label htmlFor="cursor-ghost-mode" className="text-xs">
-                                  Ghost Mode
+                                  {t('cursorPage.ghostMode')}
                                 </Label>
                                 <p className="text-[10px] text-muted-foreground">
-                                  Request `x-ghost-mode` to reduce telemetry.
+                                  {t('cursorPage.ghostModeDesc')}
                                 </p>
                               </div>
                               <Switch
@@ -1043,11 +1065,15 @@ export function CursorPage() {
                         <div className="p-4 space-y-6">
                           <div className="space-y-3 bg-card rounded-lg border p-4 shadow-sm">
                             <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
-                              <span className="font-medium text-muted-foreground">Provider</span>
+                              <span className="font-medium text-muted-foreground">
+                                {t('cursorPage.provider')}
+                              </span>
                               <span className="font-mono">Cursor IDE</span>
                             </div>
                             <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-center">
-                              <span className="font-medium text-muted-foreground">File Path</span>
+                              <span className="font-medium text-muted-foreground">
+                                {t('cursorPage.filePath')}
+                              </span>
                               <code className="bg-muted px-1.5 py-0.5 rounded text-xs break-all">
                                 {rawSettings?.path ?? '~/.ccs/cursor.settings.json'}
                               </code>
@@ -1060,15 +1086,17 @@ export function CursorPage() {
                           </div>
 
                           <div>
-                            <h3 className="text-sm font-medium mb-3">Available Models</h3>
+                            <h3 className="text-sm font-medium mb-3">
+                              {t('cursorPage.availableModels')}
+                            </h3>
                             {modelsLoading ? (
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Loader2 className="w-4 h-4 animate-spin" />
-                                Loading models...
+                                {t('cursorPage.loadingModels')}
                               </div>
                             ) : models.length === 0 ? (
                               <p className="text-sm text-muted-foreground">
-                                No model metadata available yet. Start daemon and refresh.
+                                {t('cursorPage.noModels')}
                               </p>
                             ) : (
                               <div className="space-y-2">
@@ -1083,7 +1111,9 @@ export function CursorPage() {
                                         {model.name} • {model.provider}
                                       </p>
                                     </div>
-                                    {model.id === currentModel && <Badge>Default</Badge>}
+                                    {model.id === currentModel && (
+                                      <Badge>{t('cursorPage.default')}</Badge>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -1100,7 +1130,7 @@ export function CursorPage() {
                 <div className="px-6 py-2 bg-muted/30 border-b flex items-center gap-2 shrink-0 h-[45px]">
                   <Code2 className="w-4 h-4 text-muted-foreground" />
                   <span className="text-sm font-medium text-muted-foreground">
-                    Raw Configuration (JSON)
+                    {t('cursorPage.rawConfiguration')}
                   </span>
                 </div>
                 <RawEditorSection
@@ -1122,36 +1152,34 @@ export function CursorPage() {
       <Dialog open={manualAuthOpen} onOpenChange={setManualAuthOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Manual Cursor Auth Import</DialogTitle>
-            <DialogDescription>
-              Provide Cursor access token and machine ID if auto-detect is unavailable.
-            </DialogDescription>
+            <DialogTitle>{t('cursorPage.manualImportTitle')}</DialogTitle>
+            <DialogDescription>{t('cursorPage.manualImportDesc')}</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="cursor-manual-token">Access Token</Label>
+              <Label htmlFor="cursor-manual-token">{t('cursorPage.accessToken')}</Label>
               <Input
                 id="cursor-manual-token"
                 value={manualToken}
                 onChange={(e) => setManualToken(e.target.value)}
-                placeholder="Paste Cursor access token"
+                placeholder={t('cursorPage.accessTokenPlaceholder')}
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="cursor-manual-machine-id">Machine ID</Label>
+              <Label htmlFor="cursor-manual-machine-id">{t('cursorPage.machineId')}</Label>
               <Input
                 id="cursor-manual-machine-id"
                 value={manualMachineId}
                 onChange={(e) => setManualMachineId(e.target.value)}
-                placeholder="32-char hex (UUID without hyphens)"
+                placeholder={t('cursorPage.machineIdPlaceholder')}
               />
             </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setManualAuthOpen(false)}>
-              Cancel
+              {t('cursorPage.cancel')}
             </Button>
             <Button onClick={handleManualAuthImport} disabled={isImportingManualAuth}>
               {isImportingManualAuth ? (
@@ -1159,7 +1187,7 @@ export function CursorPage() {
               ) : (
                 <Key className="w-4 h-4 mr-2" />
               )}
-              Import
+              {t('cursorPage.import')}
             </Button>
           </DialogFooter>
         </DialogContent>

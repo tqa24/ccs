@@ -11,6 +11,7 @@ import { useCliproxyAuth } from '@/hooks/use-cliproxy';
 import { useCliproxyStats } from '@/hooks/use-cliproxy-stats';
 import { cn } from '@/lib/utils';
 import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
+import { useTranslation } from 'react-i18next';
 
 type CredentialStatus = 'ready' | 'warning' | 'error' | 'disabled';
 
@@ -35,6 +36,8 @@ function CredentialRow({
   onRefresh,
   privacyMode,
 }: CredentialRowProps) {
+  const { t } = useTranslation();
+
   const statusConfig = {
     ready: {
       icon: CheckCircle2,
@@ -62,21 +65,21 @@ function CredentialRow({
   const Icon = config.icon;
 
   const formatLastUsed = (date?: string) => {
-    if (!date) return 'Never used';
+    if (!date) return t('credentialHealth.neverUsed');
     try {
       const lastUsed = new Date(date);
       const now = new Date();
       const diff = now.getTime() - lastUsed.getTime();
-      if (diff < 0) return 'Just now';
+      if (diff < 0) return t('credentialHealth.justNow');
       const minutes = Math.floor(diff / 60000);
       const hours = Math.floor(diff / 3600000);
       const days = Math.floor(diff / 86400000);
-      if (days > 0) return `${days}d ago`;
-      if (hours > 0) return `${hours}h ago`;
-      if (minutes > 0) return `${minutes}m ago`;
-      return 'Just now';
+      if (days > 0) return t('credentialHealth.daysAgo', { count: days });
+      if (hours > 0) return t('credentialHealth.hoursAgo', { count: hours });
+      if (minutes > 0) return t('credentialHealth.minutesAgo', { count: minutes });
+      return t('credentialHealth.justNow');
     } catch {
-      return 'Unknown';
+      return t('credentialHealth.unknown');
     }
   };
 
@@ -120,10 +123,12 @@ function CredentialRow({
 }
 
 function CredentialHealthSkeleton() {
+  const { t } = useTranslation();
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Credential Health</CardTitle>
+        <CardTitle className="text-base">{t('credentialHealth.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -137,6 +142,7 @@ function CredentialHealthSkeleton() {
 }
 
 export function CredentialHealthList() {
+  const { t } = useTranslation();
   const { data: authData, isLoading } = useCliproxyAuth();
   const { data: stats } = useCliproxyStats(true);
   const { privacyMode } = usePrivacy();
@@ -155,7 +161,8 @@ export function CredentialHealthList() {
           name: account.id,
           provider: status.provider,
           status: (account as { status?: CredentialStatus }).status ?? 'ready',
-          statusMessage: (account as { statusMessage?: string }).statusMessage ?? 'Ready',
+          statusMessage:
+            (account as { statusMessage?: string }).statusMessage ?? t('credentialHealth.ready'),
           email: account.email,
           lastUsedAt: runtimeLastUsed || account.lastUsedAt,
         };
@@ -166,11 +173,11 @@ export function CredentialHealthList() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Credential Health</CardTitle>
+          <CardTitle className="text-base">{t('credentialHealth.title')}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-4">
-            No credentials configured. Use the login buttons above to authenticate.
+            {t('credentialHealth.noCredentialsConfigured')}
           </p>
         </CardContent>
       </Card>
@@ -180,7 +187,7 @@ export function CredentialHealthList() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Credential Health</CardTitle>
+        <CardTitle className="text-base">{t('credentialHealth.title')}</CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {credentials.map((cred, i) => (

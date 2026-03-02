@@ -2,6 +2,7 @@
  * Connection Timeline Component - right sidebar panel
  */
 
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { STATUS_COLORS } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
@@ -16,10 +17,13 @@ interface ConnectionTimelineProps {
 }
 
 export function ConnectionTimeline({ events, privacyMode }: ConnectionTimelineProps) {
+  const { t } = useTranslation();
   if (events.length === 0) {
     return (
       <div className="h-full flex items-center justify-center rounded-xl bg-muted/20 dark:bg-zinc-900/40 border border-border/30 dark:border-white/[0.05]">
-        <div className="text-xs text-muted-foreground font-mono">No recent connections</div>
+        <div className="text-xs text-muted-foreground font-mono">
+          {t('flowViz.noRecentConnections')}
+        </div>
       </div>
     );
   }
@@ -30,7 +34,7 @@ export function ConnectionTimeline({ events, privacyMode }: ConnectionTimelinePr
       <div className="flex items-center gap-2 mb-3 px-2">
         <Activity className="w-3.5 h-3.5 text-muted-foreground" />
         <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-          Connection Timeline
+          {t('flowViz.connectionTimeline')}
         </span>
       </div>
 

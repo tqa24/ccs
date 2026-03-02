@@ -21,6 +21,7 @@ import {
   getDeviceCodeProviderDisplayName,
   getDeviceCodeProviderInstruction,
 } from '@/lib/provider-config';
+import i18n from '@/lib/i18n';
 
 interface DeviceCodeDialogProps {
   open: boolean;
@@ -72,10 +73,10 @@ export function DeviceCodeDialog({
     try {
       await navigator.clipboard.writeText(userCode);
       setHasCopied(true);
-      toast.success('Code copied to clipboard');
+      toast.success(i18n.t('commonToast.codeCopied'));
       setTimeout(() => setHasCopied(false), 2000);
     } catch {
-      toast.error('Failed to copy code');
+      toast.error(i18n.t('commonToast.copyCodeFailed'));
     }
   }, [userCode]);
 

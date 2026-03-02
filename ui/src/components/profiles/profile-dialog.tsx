@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label';
 import { useCreateProfile, useUpdateProfile } from '@/hooks/use-profiles';
 import type { Profile } from '@/lib/api-client';
 import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
 
@@ -41,6 +42,7 @@ interface ProfileDialogProps {
 }
 
 export function ProfileDialog({ open, onClose, profile }: ProfileDialogProps) {
+  const { t } = useTranslation();
   const createMutation = useCreateProfile();
   const updateMutation = useUpdateProfile();
   const [showModelMapping, setShowModelMapping] = useState(false);
@@ -115,34 +117,45 @@ export function ProfileDialog({ open, onClose, profile }: ProfileDialogProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{profile ? 'Edit Profile' : 'Create API Profile'}</DialogTitle>
+          <DialogTitle>
+            {profile ? t('profileDialog.editTitle') : t('profileDialog.createTitle')}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div>
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" {...register('name')} placeholder="my-api" disabled={!!profile} />
+            <Label htmlFor="name">{t('profileDialog.name')}</Label>
+            <Input
+              id="name"
+              {...register('name')}
+              placeholder={t('profileDialog.namePlaceholder')}
+              disabled={!!profile}
+            />
             {errors.name && <span className="text-xs text-red-500">{errors.name.message}</span>}
           </div>
 
           <div>
-            <Label htmlFor="baseUrl">Base URL</Label>
-            <Input id="baseUrl" {...register('baseUrl')} placeholder="https://api.example.com" />
+            <Label htmlFor="baseUrl">{t('profileDialog.baseUrl')}</Label>
+            <Input
+              id="baseUrl"
+              {...register('baseUrl')}
+              placeholder={t('profileDialog.baseUrlPlaceholder')}
+            />
             {errors.baseUrl && (
               <span className="text-xs text-red-500">{errors.baseUrl.message}</span>
             )}
           </div>
 
           <div>
-            <Label htmlFor="apiKey">API Key</Label>
+            <Label htmlFor="apiKey">{t('profileDialog.apiKey')}</Label>
             <Input id="apiKey" type="password" {...register('apiKey')} />
             {errors.apiKey && <span className="text-xs text-red-500">{errors.apiKey.message}</span>}
           </div>
 
           <div>
-            <Label htmlFor="model">Default Model (ANTHROPIC_MODEL)</Label>
+            <Label htmlFor="model">{t('profileDialog.defaultModel')}</Label>
             <Input id="model" {...register('model')} placeholder={DEFAULT_MODEL} />
             <p className="text-xs text-muted-foreground mt-1">
-              Leave blank to use: {DEFAULT_MODEL}
+              {t('profileDialog.defaultModelHint', { model: DEFAULT_MODEL })}
             </p>
           </div>
 
@@ -153,7 +166,7 @@ export function ProfileDialog({ open, onClose, profile }: ProfileDialogProps) {
               className="w-full flex items-center justify-between p-3 text-sm font-medium hover:bg-muted/50 transition-colors"
               onClick={() => setShowModelMapping(!showModelMapping)}
             >
-              <span>Model Mapping (Opus/Sonnet/Haiku)</span>
+              <span>{t('profileDialog.modelMappingTitle')}</span>
               {showModelMapping ? (
                 <ChevronDown className="w-4 h-4" />
               ) : (
@@ -164,13 +177,12 @@ export function ProfileDialog({ open, onClose, profile }: ProfileDialogProps) {
             {showModelMapping && (
               <div className="p-3 pt-0 space-y-3 border-t">
                 <p className="text-xs text-muted-foreground">
-                  Configure different model IDs for each tier. Useful for API proxies that route
-                  different model types to different backends.
+                  {t('profileDialog.modelMappingDesc')}
                 </p>
 
                 <div>
                   <Label htmlFor="opusModel" className="text-xs">
-                    Opus Model (ANTHROPIC_DEFAULT_OPUS_MODEL)
+                    {t('profileDialog.opusModel')}
                   </Label>
                   <Input
                     id="opusModel"
@@ -182,7 +194,7 @@ export function ProfileDialog({ open, onClose, profile }: ProfileDialogProps) {
 
                 <div>
                   <Label htmlFor="sonnetModel" className="text-xs">
-                    Sonnet Model (ANTHROPIC_DEFAULT_SONNET_MODEL)
+                    {t('profileDialog.sonnetModel')}
                   </Label>
                   <Input
                     id="sonnetModel"
@@ -194,7 +206,7 @@ export function ProfileDialog({ open, onClose, profile }: ProfileDialogProps) {
 
                 <div>
                   <Label htmlFor="haikuModel" className="text-xs">
-                    Haiku Model (ANTHROPIC_DEFAULT_HAIKU_MODEL)
+                    {t('profileDialog.haikuModel')}
                   </Label>
                   <Input
                     id="haikuModel"
@@ -209,14 +221,14 @@ export function ProfileDialog({ open, onClose, profile }: ProfileDialogProps) {
 
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={onClose}>
-              Cancel
+              {t('profileDialog.cancel')}
             </Button>
             <Button type="submit" disabled={createMutation.isPending || updateMutation.isPending}>
               {createMutation.isPending || updateMutation.isPending
-                ? 'Saving...'
+                ? t('profileDialog.saving')
                 : profile
-                  ? 'Update'
-                  : 'Create'}
+                  ? t('profileDialog.update')
+                  : t('profileDialog.create')}
             </Button>
           </div>
         </form>

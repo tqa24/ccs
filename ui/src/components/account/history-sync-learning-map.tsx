@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 interface HistorySyncLearningMapProps {
@@ -76,6 +77,7 @@ export function HistorySyncLearningMap({
   legacyTargetCount,
   cliproxyCount,
 }: HistorySyncLearningMapProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const groupsToShow = sharedGroups.length > 0 ? sharedGroups : ['default'];
 
@@ -84,33 +86,47 @@ export function HistorySyncLearningMap({
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-2">
           <div>
-            <CardTitle className="text-base">How History Sync Works</CardTitle>
+            <CardTitle className="text-base">{t('historySyncLearningMap.title')}</CardTitle>
             <CardDescription className="mt-1">
-              Isolated -&gt; Shared -&gt; Deeper. Use <code>Sync</code> per row for all changes.
+              {t('historySyncLearningMap.description')}
             </CardDescription>
           </div>
-          <Badge variant="outline">Learning Map</Badge>
+          <Badge variant="outline">{t('historySyncLearningMap.learningMap')}</Badge>
         </div>
       </CardHeader>
 
       <CardContent className="space-y-3">
         {cliproxyCount > 0 && (
           <div className="rounded-md border border-blue-300/60 bg-blue-50/40 px-3 py-2 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/10 dark:text-blue-300">
-            {cliproxyCount} CLIProxy Claude pool account{cliproxyCount > 1 ? 's are' : ' is'}
-            managed in Action Center / CLIProxy page.
+            {t('historySyncLearningMap.cliproxyManaged', { count: cliproxyCount })}
           </div>
         )}
 
         <div className="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
-          <StageTile title="Isolated" count={isolatedCount} icon={Unlink} tone="isolated" />
+          <StageTile
+            title={t('historySyncLearningMap.isolated')}
+            count={isolatedCount}
+            icon={Unlink}
+            tone="isolated"
+          />
           <div className="hidden sm:flex justify-center text-muted-foreground">
             <ArrowRight className="h-4 w-4" />
           </div>
-          <StageTile title="Shared" count={sharedStandardCount} icon={Link2} tone="shared" />
+          <StageTile
+            title={t('historySyncLearningMap.shared')}
+            count={sharedStandardCount}
+            icon={Link2}
+            tone="shared"
+          />
           <div className="hidden sm:flex justify-center text-muted-foreground">
             <ArrowRight className="h-4 w-4" />
           </div>
-          <StageTile title="Deeper" count={deeperSharedCount} icon={Waves} tone="deeper" />
+          <StageTile
+            title={t('historySyncLearningMap.deeper')}
+            count={deeperSharedCount}
+            icon={Waves}
+            tone="deeper"
+          />
         </div>
 
         <Collapsible open={open} onOpenChange={setOpen}>
@@ -119,7 +135,7 @@ export function HistorySyncLearningMap({
               variant="ghost"
               className="h-8 w-full justify-between rounded-md px-2 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             >
-              <span>Show details: groups, switching, and legacy policy</span>
+              <span>{t('historySyncLearningMap.showDetails')}</span>
               <ChevronDown className={cn('h-4 w-4 transition-transform', open && 'rotate-180')} />
             </Button>
           </CollapsibleTrigger>
@@ -128,21 +144,20 @@ export function HistorySyncLearningMap({
               <div className="rounded-md border bg-muted/20 p-2.5 text-xs">
                 <div className="flex items-center gap-2">
                   <ArrowRightLeft className="h-3.5 w-3.5 text-muted-foreground" />
-                  <p className="font-semibold">Mode Switch</p>
+                  <p className="font-semibold">{t('historySyncLearningMap.modeSwitch')}</p>
                 </div>
                 <p className="mt-1 text-muted-foreground">
-                  Sync dialog lets users move between isolated/shared and choose deeper continuity.
+                  {t('historySyncLearningMap.modeSwitchDesc')}
                 </p>
               </div>
 
               <div className="rounded-md border bg-muted/20 p-2.5 text-xs">
                 <div className="flex items-center gap-2">
                   <Layers3 className="h-3.5 w-3.5 text-muted-foreground" />
-                  <p className="font-semibold">History Sync Group</p>
+                  <p className="font-semibold">{t('historySyncLearningMap.historySyncGroup')}</p>
                 </div>
                 <p className="mt-1 text-muted-foreground">
-                  Same group means shared project context lane. Default fallback is{' '}
-                  <code>default</code>.
+                  {t('historySyncLearningMap.historySyncGroupDesc')}
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {groupsToShow.map((group) => (

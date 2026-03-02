@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { MODEL_CATALOGS } from '@/lib/model-catalogs';
 import type { VariantStepProps } from '../types';
+import { useTranslation } from 'react-i18next';
 
 const CUSTOM_MODEL_VALUE = '__custom__';
 
@@ -34,6 +35,7 @@ export function VariantStep({
   onSkip,
   onCreate,
 }: VariantStepProps) {
+  const { t } = useTranslation();
   // Track if user selected custom model option
   const catalogModels = MODEL_CATALOGS[selectedProvider]?.models || [];
   const isCustomModel = modelName && !catalogModels.some((m) => m.id === modelName);
@@ -55,7 +57,7 @@ export function VariantStep({
         <div className="flex items-center gap-2 p-2 bg-muted/50 rounded-md text-sm">
           <User className="w-4 h-4" />
           <span>
-            Using:{' '}
+            {t('setupVariant.using')}{' '}
             <span className={cn(privacyMode && PRIVACY_BLUR_CLASS)}>
               {selectedAccount.email || selectedAccount.id}
             </span>
@@ -64,33 +66,33 @@ export function VariantStep({
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="variant-name">Variant Name *</Label>
+        <Label htmlFor="variant-name">{t('setupVariant.variantNameRequired')}</Label>
         <Input
           id="variant-name"
           value={variantName}
           onChange={(e) => onVariantNameChange(e.target.value)}
-          placeholder="e.g., my-gemini, g3, flash"
+          placeholder={t('setupVariant.variantNamePlaceholder')}
         />
         <div className="text-xs text-muted-foreground">
-          Use this name to invoke: ccs {variantName || '<name>'} "prompt"
+          {t('setupVariant.invokeHintPrefix')} ccs {variantName || '<name>'} "prompt"
         </div>
       </div>
 
       <div className="space-y-2">
-        <Label>Model</Label>
+        <Label>{t('setupVariant.model')}</Label>
         {showCustomInput ? (
           <div className="space-y-2">
             <Input
               value={modelName}
               onChange={(e) => onModelChange(e.target.value)}
-              placeholder="e.g., gemini-2.5-pro, claude-opus-4-5"
+              placeholder={t('setupVariant.modelPlaceholder')}
             />
             <button
               type="button"
               className="text-xs text-primary hover:underline"
               onClick={() => setShowCustomInput(false)}
             >
-              Choose from presets instead
+              {t('setupVariant.choosePresetInstead')}
             </button>
           </div>
         ) : (
@@ -99,7 +101,7 @@ export function VariantStep({
             onValueChange={handleModelSelect}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Select a model" />
+              <SelectValue placeholder={t('setupVariant.selectModel')} />
             </SelectTrigger>
             <SelectContent>
               {catalogModels.map((m) => (
@@ -113,35 +115,37 @@ export function VariantStep({
                 </SelectItem>
               ))}
               <SelectItem value={CUSTOM_MODEL_VALUE}>
-                <span className="text-primary">Custom model name...</span>
+                <span className="text-primary">{t('setupVariant.customModelName')}</span>
               </SelectItem>
             </SelectContent>
           </Select>
         )}
         <div className="text-xs text-muted-foreground">
           {showCustomInput
-            ? 'Enter any model name supported by CLIProxy'
-            : `Default: ${MODEL_CATALOGS[selectedProvider]?.defaultModel || 'provider default'}`}
+            ? t('setupVariant.enterAnyModel')
+            : t('setupVariant.defaultModel', {
+                model:
+                  MODEL_CATALOGS[selectedProvider]?.defaultModel ||
+                  t('setupVariant.providerDefault'),
+              })}
         </div>
       </div>
 
       <div className="flex items-center justify-between pt-2">
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
+          {t('setupVariant.back')}
         </Button>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={onSkip}>
-            Skip
+            {t('setupVariant.skip')}
           </Button>
           <Button onClick={onCreate} disabled={!variantName || isPending}>
-            {isPending ? 'Creating...' : 'Create Variant'}
+            {isPending ? t('setupVariant.creating') : t('setupVariant.createVariant')}
           </Button>
         </div>
       </div>
-      <p className="text-xs text-center text-muted-foreground">
-        Skip if you just wanted to add an account without creating a variant
-      </p>
+      <p className="text-xs text-center text-muted-foreground">{t('setupVariant.skipHint')}</p>
     </div>
   );
 }

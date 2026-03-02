@@ -5,6 +5,7 @@
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Info, Clock, Cpu, AlertTriangle } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import {
   getErrorTypeLabel,
@@ -16,9 +17,11 @@ import { StatusBadge } from './ui-primitives';
 
 /** Overview tab content */
 export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
+  const { t } = useTranslation();
   const quotaResetDisplay =
     formatQuotaResetDelay(parsed.quotaResetDelay) ||
     formatQuotaResetTimestamp(parsed.quotaResetTimestamp);
+  const na = t('errorLogs.na');
 
   return (
     <ScrollArea className="h-full">
@@ -37,7 +40,7 @@ export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
           <div className="flex items-center gap-2.5 p-3 rounded-lg bg-violet-500/10 border border-violet-500/20">
             <Cpu className="w-4 h-4 text-violet-500 shrink-0" />
             <div className="text-sm">
-              <span className="text-muted-foreground">Model: </span>
+              <span className="text-muted-foreground">{t('errorLogs.modelLabel')}</span>
               <span className="font-semibold text-violet-600 dark:text-violet-400">
                 {parsed.model}
               </span>
@@ -50,7 +53,7 @@ export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
           <div className="flex items-center gap-2.5 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
             <Clock className="w-4 h-4 text-amber-500 shrink-0" />
             <div className="text-sm">
-              <span className="text-muted-foreground">Quota resets in </span>
+              <span className="text-muted-foreground">{t('errorLogs.quotaResetsIn')}</span>
               <span className="font-semibold text-amber-600 dark:text-amber-400">
                 {quotaResetDisplay}
               </span>
@@ -61,37 +64,37 @@ export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
         {/* Key metrics grid */}
         <div className="grid grid-cols-4 gap-3 text-xs">
           <div className="p-2.5 rounded bg-muted/30 border border-border/50">
-            <div className="text-muted-foreground mb-1">Method</div>
-            <div className="font-medium">{parsed.method || 'N/A'}</div>
+            <div className="text-muted-foreground mb-1">{t('errorLogs.method')}</div>
+            <div className="font-medium">{parsed.method || na}</div>
           </div>
           <div className="p-2.5 rounded bg-muted/30 border border-border/50">
-            <div className="text-muted-foreground mb-1">Provider</div>
-            <div className="font-medium">{parsed.provider || 'N/A'}</div>
+            <div className="text-muted-foreground mb-1">{t('errorLogs.provider')}</div>
+            <div className="font-medium">{parsed.provider || na}</div>
           </div>
           <div className="p-2.5 rounded bg-muted/30 border border-border/50">
-            <div className="text-muted-foreground mb-1">Version</div>
-            <div className="font-medium">{parsed.version || 'N/A'}</div>
+            <div className="text-muted-foreground mb-1">{t('errorLogs.version')}</div>
+            <div className="font-medium">{parsed.version || na}</div>
           </div>
           <div className="p-2.5 rounded bg-muted/30 border border-border/50">
-            <div className="text-muted-foreground mb-1">Endpoint</div>
+            <div className="text-muted-foreground mb-1">{t('errorLogs.endpoint')}</div>
             <div className="font-medium truncate" title={parsed.endpoint}>
-              {parsed.endpoint || 'N/A'}
+              {parsed.endpoint || na}
             </div>
           </div>
         </div>
 
         {/* URL */}
         <div className="text-xs">
-          <div className="text-muted-foreground mb-1.5">URL</div>
+          <div className="text-muted-foreground mb-1.5">{t('errorLogs.url')}</div>
           <div className="font-mono p-2.5 rounded bg-muted/30 border border-border/50 break-all leading-relaxed">
-            {parsed.url || 'N/A'}
+            {parsed.url || na}
           </div>
         </div>
 
         {/* Timestamp */}
         <div className="text-xs">
-          <div className="text-muted-foreground mb-1.5">Timestamp</div>
-          <div className="font-mono">{parsed.timestamp || 'N/A'}</div>
+          <div className="text-muted-foreground mb-1.5">{t('errorLogs.timestamp')}</div>
+          <div className="font-mono">{parsed.timestamp || na}</div>
         </div>
 
         {/* Actionable suggestion based on error type */}
@@ -123,27 +126,14 @@ export function OverviewTab({ parsed }: { parsed: ParsedErrorLog }) {
                     : 'text-blue-600 dark:text-blue-400'
               )}
             >
-              {parsed.errorType === 'rate_limit' && (
-                <>
-                  <strong>Rate Limited.</strong> Switch to a different account or wait for quota
-                  reset.
-                  {parsed.model && (
-                    <>
-                      {' '}
-                      Model <code className="font-mono text-[11px]">{parsed.model}</code> has
-                      exhausted quota.
-                    </>
-                  )}
-                </>
-              )}
-              {parsed.errorType === 'auth' &&
-                'Authentication failed. Re-authenticate via CLIProxy Settings or check API key.'}
-              {parsed.errorType === 'not_found' &&
-                'Endpoint not found. This endpoint may not exist on this provider.'}
-              {parsed.errorType === 'server' &&
-                'Server error from upstream. Retry later or check provider status page.'}
-              {parsed.errorType === 'timeout' &&
-                'Request timed out. Check network connection or increase timeout settings.'}
+              {parsed.errorType === 'rate_limit' &&
+                (parsed.model
+                  ? t('errorLogs.rateLimitedMsg', { model: parsed.model })
+                  : t('errorLogs.rateLimitedMsgNoModel'))}
+              {parsed.errorType === 'auth' && t('errorLogs.authFailedMsg')}
+              {parsed.errorType === 'not_found' && t('errorLogs.notFoundMsg')}
+              {parsed.errorType === 'server' && t('errorLogs.serverErrorMsg')}
+              {parsed.errorType === 'timeout' && t('errorLogs.timeoutMsg')}
             </div>
           </div>
         )}
@@ -178,8 +168,10 @@ export function HeadersTab({ headers }: { headers: Record<string, string> }) {
 
 /** JSON/Body tab content */
 export function BodyTab({ content, label }: { content: string; label: string }) {
+  const { t } = useTranslation();
   if (!content || content.trim() === '') {
-    return <div className="p-4 text-xs text-muted-foreground">No {label.toLowerCase()} body</div>;
+    const key = label === 'Request' ? 'errorLogs.noRequestBody' : 'errorLogs.noResponseBody';
+    return <div className="p-4 text-xs text-muted-foreground">{t(key)}</div>;
   }
 
   // Try to format as JSON

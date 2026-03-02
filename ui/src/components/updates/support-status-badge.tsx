@@ -1,12 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { SupportStatus } from '@/lib/support-updates-catalog';
-
-const STATUS_LABELS: Record<SupportStatus, string> = {
-  new: 'New',
-  stable: 'Stable',
-  planned: 'Planned',
-};
+import { useTranslation } from 'react-i18next';
 
 const STATUS_STYLES: Record<SupportStatus, string> = {
   new: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300',
@@ -23,9 +18,16 @@ export function SupportStatusBadge({
   status: SupportStatus;
   className?: string;
 }) {
+  const { t } = useTranslation();
+  const labels: Record<SupportStatus, string> = {
+    new: t('updates.statusNew'),
+    stable: t('updates.statusStable'),
+    planned: t('updates.statusPlanned'),
+  };
+
   return (
     <Badge variant="outline" className={cn('font-medium', STATUS_STYLES[status], className)}>
-      {STATUS_LABELS[status]}
+      {labels[status]}
     </Badge>
   );
 }

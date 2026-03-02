@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { RefreshCw, CheckCircle2, AlertCircle, RotateCcw, Clock, Archive } from 'lucide-react';
 import { useRawConfig } from '../hooks';
+import { useTranslation } from 'react-i18next';
 
 /** Duration in ms before success toast auto-dismisses */
 const SUCCESS_DISPLAY_DURATION_MS = 3000;
@@ -39,6 +40,7 @@ interface BackupsResponse {
 }
 
 export default function BackupsSection() {
+  const { t } = useTranslation();
   const { fetchRawConfig } = useRawConfig();
 
   // AbortController refs for cleanup
@@ -66,18 +68,18 @@ export default function BackupsSection() {
         signal: abortControllerRef.current.signal,
       });
       if (!response.ok) {
-        throw new Error('Failed to fetch backups');
+        throw new Error(t('settingsBackups.failedFetch'));
       }
       const data: BackupsResponse = await response.json();
       setBackups(data.backups || []);
     } catch (err) {
       // Ignore abort errors
       if (err instanceof Error && err.name === 'AbortError') return;
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('settings.unknownError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Restore backup (wrapped in useCallback for callback stability)
   const restoreBackup = useCallback(
@@ -98,21 +100,21 @@ export default function BackupsSection() {
 
         if (!response.ok) {
           const data = await response.json();
-          throw new Error(data.error || 'Failed to restore backup');
+          throw new Error(data.error || t('settingsBackups.failedRestore'));
         }
 
-        setSuccess('Backup restored successfully');
+        setSuccess(t('settingsBackups.restoreSuccess'));
         await fetchBackups();
         await fetchRawConfig();
       } catch (err) {
         // Ignore abort errors
         if (err instanceof Error && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Unknown error');
+        setError(err instanceof Error ? err.message : t('settings.unknownError'));
       } finally {
         setRestoring(null);
       }
     },
-    [fetchBackups, fetchRawConfig]
+    [fetchBackups, fetchRawConfig, t]
   );
 
   // Load on mount
@@ -205,12 +207,9 @@ export default function BackupsSection() {
           <div>
             <div className="flex items-center gap-2 mb-2">
               <Archive className="w-5 h-5 text-primary" />
-              <h2 className="text-lg font-semibold">Settings Backups</h2>
+              <h2 className="text-lg font-semibold">{t('settingsBackups.title')}</h2>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Restore previous versions of your settings.json file. Backups are created
-              automatically when settings are modified.
-            </p>
+            <p className="text-sm text-muted-foreground">{t('settingsBackups.description')}</p>
           </div>
 
           {/* Backups List */}
@@ -218,9 +217,9 @@ export default function BackupsSection() {
             <Card className="p-8">
               <div className="text-center">
                 <Archive className="w-12 h-12 mx-auto mb-3 opacity-30 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">No backups available</p>
+                <p className="text-sm text-muted-foreground">{t('settingsBackups.none')}</p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Backups will appear here when you modify settings
+                  {t('settingsBackups.noneHint')}
                 </p>
               </div>
             </Card>
@@ -236,7 +235,7 @@ export default function BackupsSection() {
                           <p className="text-sm font-medium font-mono">{backup.timestamp}</p>
                           {index === 0 && (
                             <Badge variant="secondary" className="text-xs">
-                              Latest
+                              {t('settingsBackups.latest')}
                             </Badge>
                           )}
                         </div>
@@ -253,7 +252,9 @@ export default function BackupsSection() {
                       <RotateCcw
                         className={`w-4 h-4 ${restoring === backup.timestamp ? 'animate-spin' : ''}`}
                       />
-                      {restoring === backup.timestamp ? 'Restoring...' : 'Restore'}
+                      {restoring === backup.timestamp
+                        ? t('settingsBackups.restoring')
+                        : t('settingsBackups.restore')}
                     </Button>
                   </div>
                 </Card>
@@ -276,7 +277,7 @@ export default function BackupsSection() {
           className="w-full"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('settings.refresh')}
         </Button>
       </div>
 
@@ -284,17 +285,17 @@ export default function BackupsSection() {
       <AlertDialog open={!!confirmRestore} onOpenChange={() => setConfirmRestore(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Restore Backup?</AlertDialogTitle>
+            <AlertDialogTitle>{t('settingsBackups.restoreConfirmTitle')}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will replace your current settings with backup from{' '}
+              {t('settingsBackups.restoreConfirmPrefix')}{' '}
               <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-foreground">
                 {confirmRestore}
               </code>
-              . This action cannot be undone.
+              . {t('settingsBackups.restoreConfirmSuffix')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('settingsBackups.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (confirmRestore) {
@@ -303,7 +304,7 @@ export default function BackupsSection() {
                 setConfirmRestore(null);
               }}
             >
-              Restore
+              {t('settingsBackups.restore')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

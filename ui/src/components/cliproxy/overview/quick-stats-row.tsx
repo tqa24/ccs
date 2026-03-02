@@ -4,6 +4,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent } from '@/components/ui/card';
 import { Activity, CheckCircle2, Coins, Cpu } from 'lucide-react';
 import { useCliproxyStats } from '@/hooks/use-cliproxy';
@@ -45,6 +46,7 @@ function StatsSkeleton() {
 }
 
 export function QuickStatsRow() {
+  const { t } = useTranslation();
   const { data: stats, isLoading } = useCliproxyStats();
 
   if (isLoading) {
@@ -71,16 +73,24 @@ export function QuickStatsRow() {
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
       <StatCard
         icon={<Activity className="w-4 h-4" />}
-        label="Total Requests"
+        label={t('quickStats.totalRequests')}
         value={totalRequests}
       />
       <StatCard
         icon={<CheckCircle2 className="w-4 h-4" />}
-        label="Success Rate"
+        label={t('quickStats.successRate')}
         value={`${successRate}%`}
       />
-      <StatCard icon={<Coins className="w-4 h-4" />} label="Total Tokens" value={tokenDisplay} />
-      <StatCard icon={<Cpu className="w-4 h-4" />} label="Active Models" value={modelCount} />
+      <StatCard
+        icon={<Coins className="w-4 h-4" />}
+        label={t('quickStats.totalTokens')}
+        value={tokenDisplay}
+      />
+      <StatCard
+        icon={<Cpu className="w-4 h-4" />}
+        label={t('quickStats.activeModels')}
+        value={modelCount}
+      />
     </div>
   );
 }

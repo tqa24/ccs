@@ -11,8 +11,10 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { RefreshCw, CheckCircle2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 import { useGlobalEnvConfig, useRawConfig } from '../hooks';
+import { useTranslation } from 'react-i18next';
 
 export default function GlobalEnvSection() {
+  const { t } = useTranslation();
   const {
     config,
     loading,
@@ -46,7 +48,7 @@ export default function GlobalEnvSection() {
       <div className="flex-1 flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <RefreshCw className="w-5 h-5 animate-spin" />
-          <span>Loading...</span>
+          <span>{t('settings.loading')}</span>
         </div>
       </div>
     );
@@ -71,7 +73,7 @@ export default function GlobalEnvSection() {
         {success && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-green-200 bg-green-50 text-green-700 shadow-lg dark:border-green-900/50 dark:bg-green-900/90 dark:text-green-300">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span className="text-sm font-medium">Saved</span>
+            <span className="text-sm font-medium">{t('settings.saved')}</span>
           </div>
         )}
       </div>
@@ -79,21 +81,18 @@ export default function GlobalEnvSection() {
       {/* Scrollable Content */}
       <ScrollArea className="flex-1">
         <div className="p-5 space-y-6">
-          <p className="text-sm text-muted-foreground">
-            Environment variables injected into all non-Claude subscription profiles (gemini, codex,
-            agy, ghcp, etc.)
-          </p>
+          <p className="text-sm text-muted-foreground">{t('settingsGlobalEnv.description')}</p>
 
           {/* Enable/Disable Toggle */}
           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
             <div>
               <p className="font-medium">
-                {config?.enabled ? 'Global Env enabled' : 'Global Env disabled'}
+                {config?.enabled ? t('settingsGlobalEnv.enabled') : t('settingsGlobalEnv.disabled')}
               </p>
               <p className="text-sm text-muted-foreground">
                 {config?.enabled
-                  ? 'Env vars will be injected into third-party profiles'
-                  : 'Env vars will not be injected'}
+                  ? t('settingsGlobalEnv.enabledDesc')
+                  : t('settingsGlobalEnv.disabledDesc')}
               </p>
             </div>
             <Switch checked={config?.enabled ?? true} onCheckedChange={toggleGlobalEnv} />
@@ -101,7 +100,7 @@ export default function GlobalEnvSection() {
 
           {/* Current Environment Variables */}
           <div className="space-y-3">
-            <h3 className="text-base font-medium">Environment Variables</h3>
+            <h3 className="text-base font-medium">{t('settingsGlobalEnv.envVars')}</h3>
 
             {config?.env && Object.keys(config.env).length > 0 ? (
               <div className="space-y-2">
@@ -127,18 +126,18 @@ export default function GlobalEnvSection() {
               </div>
             ) : (
               <div className="p-4 rounded-lg border border-dashed text-center text-muted-foreground">
-                <p>No environment variables configured</p>
+                <p>{t('settingsGlobalEnv.noneConfigured')}</p>
               </div>
             )}
 
             {/* Add New Variable */}
             <div className="p-4 rounded-lg border bg-muted/30">
-              <h4 className="text-sm font-medium mb-3">Add New Variable</h4>
+              <h4 className="text-sm font-medium mb-3">{t('settingsGlobalEnv.addNew')}</h4>
               <div className="flex gap-2">
                 <Input
                   value={newEnvKey}
                   onChange={(e) => setNewEnvKey(e.target.value.toUpperCase())}
-                  placeholder="KEY_NAME"
+                  placeholder={t('settingsGlobalEnv.keyName')}
                   className="flex-1 font-mono text-sm h-9"
                   disabled={saving}
                 />
@@ -146,7 +145,7 @@ export default function GlobalEnvSection() {
                 <Input
                   value={newEnvValue}
                   onChange={(e) => setNewEnvValue(e.target.value)}
-                  placeholder="value"
+                  placeholder={t('settingsGlobalEnv.value')}
                   className="flex-1 font-mono text-sm h-9"
                   disabled={saving}
                 />
@@ -157,14 +156,14 @@ export default function GlobalEnvSection() {
                   className="h-9"
                 >
                   <Plus className="w-4 h-4 mr-1" />
-                  Add
+                  {t('settingsGlobalEnv.add')}
                 </Button>
               </div>
             </div>
 
             {/* Common Variables Quick Add */}
             <div className="p-4 rounded-lg border bg-muted/30">
-              <h4 className="text-sm font-medium mb-3">Quick Add Common Variables</h4>
+              <h4 className="text-sm font-medium mb-3">{t('settingsGlobalEnv.quickAdd')}</h4>
               <div className="flex flex-wrap gap-2">
                 {[
                   { key: 'DISABLE_BUG_COMMAND', value: '1' },
@@ -192,7 +191,7 @@ export default function GlobalEnvSection() {
                     (k) => config.env[k]
                   ) && (
                     <span className="text-sm text-muted-foreground">
-                      All common variables are configured
+                      {t('settingsGlobalEnv.allConfigured')}
                     </span>
                   )}
               </div>
@@ -214,7 +213,7 @@ export default function GlobalEnvSection() {
           className="w-full"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('settings.refresh')}
         </Button>
       </div>
     </>

@@ -10,8 +10,10 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { RefreshCw, CheckCircle2, AlertCircle, Package } from 'lucide-react';
 import { useWebSearchConfig, useRawConfig } from '../../hooks';
 import { ProviderCard } from './provider-card';
+import { useTranslation } from 'react-i18next';
 
 export default function WebSearchSection() {
+  const { t } = useTranslation();
   const {
     config,
     status,
@@ -83,7 +85,7 @@ export default function WebSearchSection() {
       <div className="flex-1 flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <RefreshCw className="w-5 h-5 animate-spin" />
-          <span>Loading...</span>
+          <span>{t('settings.loading')}</span>
         </div>
       </div>
     );
@@ -108,7 +110,7 @@ export default function WebSearchSection() {
         {success && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-green-200 bg-green-50 text-green-700 shadow-lg dark:border-green-900/50 dark:bg-green-900/90 dark:text-green-300">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span className="text-sm font-medium">Saved</span>
+            <span className="text-sm font-medium">{t('settings.saved')}</span>
           </div>
         )}
       </div>
@@ -116,18 +118,16 @@ export default function WebSearchSection() {
       {/* Scrollable Content */}
       <ScrollArea className="flex-1">
         <div className="p-5 space-y-6">
-          <p className="text-sm text-muted-foreground">
-            CLI-based web search for third-party profiles (gemini, codex, agy, etc.)
-          </p>
+          <p className="text-sm text-muted-foreground">{t('settingsWebsearch.description')}</p>
 
           {/* Status Summary */}
           <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
             <div>
               <p className="font-medium">
-                {isGeminiEnabled ? 'WebSearch enabled' : 'WebSearch disabled'}
+                {isGeminiEnabled ? t('settingsWebsearch.enabled') : t('settingsWebsearch.disabled')}
               </p>
               {statusLoading ? (
-                <p className="text-sm text-muted-foreground">Checking status...</p>
+                <p className="text-sm text-muted-foreground">{t('settingsWebsearch.checking')}</p>
               ) : status?.readiness ? (
                 <p className="text-sm text-muted-foreground">{status.readiness.message}</p>
               ) : null}
@@ -139,19 +139,21 @@ export default function WebSearchSection() {
 
           {/* CLI Providers */}
           <div className="space-y-3">
-            <h3 className="text-base font-medium">Providers</h3>
+            <h3 className="text-base font-medium">{t('settingsWebsearch.providers')}</h3>
 
             {/* Empty state when no providers available */}
             {!status?.geminiCli && !status?.opencodeCli && !status?.grokCli && !statusLoading && (
               <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg text-center bg-muted/30">
                 <Package className="w-12 h-12 text-muted-foreground mb-3 opacity-30" />
-                <p className="font-medium text-foreground mb-1">No providers configured</p>
+                <p className="font-medium text-foreground mb-1">
+                  {t('settingsWebsearch.noneConfigured')}
+                </p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Install CLI tools to enable web search providers
+                  {t('settingsWebsearch.noneConfiguredHint')}
                 </p>
                 <Button variant="outline" size="sm" onClick={fetchStatus}>
                   <RefreshCw className="w-4 h-4 mr-2" />
-                  Check for providers
+                  {t('settingsWebsearch.checkProviders')}
                 </Button>
               </div>
             )}
@@ -233,7 +235,7 @@ export default function WebSearchSection() {
           className="w-full"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('settings.refresh')}
         </Button>
       </div>
     </>

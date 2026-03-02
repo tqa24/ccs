@@ -18,6 +18,7 @@ import {
 import { Sparkles, Loader2, Star, Zap } from 'lucide-react';
 import { FlexibleModelSelector } from '../provider-model-selector';
 import type { CustomPresetDialogProps, ModelMappingValues } from './types';
+import { useTranslation } from 'react-i18next';
 
 export function CustomPresetDialog({
   open,
@@ -29,6 +30,7 @@ export function CustomPresetDialog({
   catalog,
   allModels,
 }: CustomPresetDialogProps) {
+  const { t } = useTranslation();
   const [values, setValues] = useState<ModelMappingValues>(currentValues);
   const [presetName, setPresetName] = useState('');
 
@@ -48,54 +50,54 @@ export function CustomPresetDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-4 h-4" />
-            Custom Preset
+            {t('customPresetDialog.title')}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="preset-name">Preset Name (optional)</Label>
+            <Label htmlFor="preset-name">{t('customPresetDialog.presetNameOptional')}</Label>
             <Input
               id="preset-name"
               value={presetName}
               onChange={(e) => setPresetName(e.target.value)}
-              placeholder="e.g., My Custom Config"
+              placeholder={t('customPresetDialog.presetNamePlaceholder')}
               className="text-sm"
             />
           </div>
           <Separator />
           {catalog?.provider === 'codex' && (
             <p className="text-[11px] text-muted-foreground rounded-md border bg-muted/30 px-2.5 py-2">
-              Codex tip: suffixes <code>-medium</code>, <code>-high</code>, and <code>-xhigh</code>{' '}
-              pin effort. Unsuffixed models use Thinking settings.
+              {t('customPresetDialog.codexTipPrefix')} <code>-medium</code>, <code>-high</code>, and{' '}
+              <code>-xhigh</code> {t('customPresetDialog.codexTipSuffix')}
             </p>
           )}
           <FlexibleModelSelector
-            label="Default Model"
-            description="Used when no specific tier is requested"
+            label={t('customPresetDialog.defaultModel')}
+            description={t('customPresetDialog.defaultModelDesc')}
             value={values.default}
             onChange={(model) => setValues({ ...values, default: model })}
             catalog={catalog}
             allModels={allModels}
           />
           <FlexibleModelSelector
-            label="Opus (Most capable)"
-            description="For complex reasoning tasks"
+            label={t('customPresetDialog.opusModel')}
+            description={t('customPresetDialog.opusModelDesc')}
             value={values.opus}
             onChange={(model) => setValues({ ...values, opus: model })}
             catalog={catalog}
             allModels={allModels}
           />
           <FlexibleModelSelector
-            label="Sonnet (Balanced)"
-            description="Balance of speed and capability"
+            label={t('customPresetDialog.sonnetModel')}
+            description={t('customPresetDialog.sonnetModelDesc')}
             value={values.sonnet}
             onChange={(model) => setValues({ ...values, sonnet: model })}
             catalog={catalog}
             allModels={allModels}
           />
           <FlexibleModelSelector
-            label="Haiku (Fast)"
-            description="Quick responses for simple tasks"
+            label={t('customPresetDialog.haikuModel')}
+            description={t('customPresetDialog.haikuModelDesc')}
             value={values.haiku}
             onChange={(model) => setValues({ ...values, haiku: model })}
             catalog={catalog}
@@ -104,7 +106,7 @@ export function CustomPresetDialog({
         </div>
         <DialogFooter className="gap-2 sm:gap-0">
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {t('customPresetDialog.cancel')}
           </Button>
           {onSave && (
             <Button
@@ -117,12 +119,12 @@ export function CustomPresetDialog({
               ) : (
                 <Star className="w-4 h-4 mr-1" />
               )}
-              Save Preset
+              {t('customPresetDialog.savePreset')}
             </Button>
           )}
           <Button onClick={() => onApply(values, presetName || undefined)}>
             <Zap className="w-4 h-4 mr-1" />
-            Apply Preset
+            {t('customPresetDialog.applyPreset')}
           </Button>
         </DialogFooter>
       </DialogContent>

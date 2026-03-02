@@ -24,6 +24,7 @@ import {
 import type { AuthStatus, OAuthAccount } from '@/lib/api-client';
 import type { CLIProxyProvider } from '@/lib/provider-config';
 import { applyDefaultPreset } from '@/lib/preset-utils';
+import i18n from '@/lib/i18n';
 import { usePrivacy } from '@/contexts/privacy-context';
 import { toast } from 'sonner';
 
@@ -100,7 +101,7 @@ export function QuickSetupWizard({ open, onClose }: QuickSetupWizardProps) {
             if (result.success && result.presetName) {
               toast.success(`Applied "${result.presetName}" preset`);
             } else if (!result.success) {
-              toast.warning('Account added, but failed to apply default preset');
+              toast.warning(i18n.t('commonToast.accountAddedPresetFailed'));
             }
           }
 

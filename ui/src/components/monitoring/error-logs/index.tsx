@@ -14,10 +14,12 @@ import { useCliproxyStatus } from '@/hooks/use-cliproxy-stats';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { AlertTriangle, FileWarning, GripVertical, GripHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { ErrorLogItem } from './error-log-item';
 import { LogContentPanel } from './log-content-panel';
 
 export function ErrorLogsMonitor() {
+  const { t } = useTranslation();
   const { data: status, isLoading: isStatusLoading } = useCliproxyStatus();
   const { data: logs, isLoading, error } = useCliproxyErrorLogs(status?.running ?? false);
 
@@ -142,14 +144,14 @@ export function ErrorLogsMonitor() {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-gradient-to-r from-amber-500/10 via-transparent to-transparent dark:from-amber-500/15 shrink-0">
         <div className="flex items-center gap-2.5">
           <AlertTriangle className="w-4 h-4 text-amber-500" />
-          <span className="text-sm font-semibold tracking-tight">Error Logs</span>
+          <span className="text-sm font-semibold tracking-tight">{t('errorLogs.title')}</span>
           <span className="text-xs text-muted-foreground ml-1">
-            {errorCount} failed request{errorCount !== 1 ? 's' : ''}
+            {t('errorLogs.failedRequests', { count: errorCount })}
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <FileWarning className="w-3.5 h-3.5" />
-          <span>CLIProxy Diagnostics</span>
+          <span>{t('errorLogs.cliproxyDiagnostics')}</span>
         </div>
       </div>
 
@@ -175,7 +177,7 @@ export function ErrorLogsMonitor() {
               </div>
               {logs.length > 50 && (
                 <div className="px-3 py-3 text-center text-[10px] text-muted-foreground border-t border-border/50">
-                  Showing 50 of {logs.length} logs
+                  {t('errorLogs.showingCount', { total: logs.length })}
                 </div>
               )}
             </ScrollArea>

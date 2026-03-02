@@ -29,8 +29,10 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import type { Profile } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { CopyButton } from '@/components/ui/copy-button';
+import { useTranslation } from 'react-i18next';
 
 export function ApiPage() {
+  const { t } = useTranslation();
   const { data, isLoading, isError, refetch } = useProfiles();
   const deleteMutation = useDeleteProfile();
   const [selectedProfile, setSelectedProfile] = useState<string | null>(null);
@@ -105,7 +107,7 @@ export function ApiPage() {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
                 <Server className="w-5 h-5 text-primary" />
-                <h1 className="font-semibold">API Profiles</h1>
+                <h1 className="font-semibold">{t('apiProfiles.title')}</h1>
               </div>
               <Button
                 size="sm"
@@ -114,7 +116,7 @@ export function ApiPage() {
                 }}
               >
                 <Plus className="w-4 h-4 mr-1" />
-                New
+                {t('apiProfiles.new')}
               </Button>
             </div>
 
@@ -122,7 +124,7 @@ export function ApiPage() {
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search profiles..."
+                placeholder={t('apiProfiles.searchPlaceholder')}
                 className="pl-8 h-9"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -133,20 +135,22 @@ export function ApiPage() {
           {/* Profile List */}
           <ScrollArea className="flex-1">
             {isLoading ? (
-              <div className="p-4 text-sm text-muted-foreground">Loading profiles...</div>
+              <div className="p-4 text-sm text-muted-foreground">
+                {t('apiProfiles.loadingProfiles')}
+              </div>
             ) : isError ? (
               <div className="p-4 text-center">
                 <div className="space-y-3 py-8">
                   <AlertCircle className="w-12 h-12 mx-auto text-destructive/50" />
                   <div>
-                    <p className="text-sm font-medium">Failed to load profiles</p>
+                    <p className="text-sm font-medium">{t('apiProfiles.failedLoadTitle')}</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Unable to fetch API profiles. Please try again.
+                      {t('apiProfiles.failedLoadDesc')}
                     </p>
                   </div>
                   <Button size="sm" variant="outline" onClick={() => refetch()}>
                     <RefreshCw className="w-4 h-4 mr-1" />
-                    Retry
+                    {t('apiProfiles.retry')}
                   </Button>
                 </div>
               </div>
@@ -156,9 +160,9 @@ export function ApiPage() {
                   <div className="space-y-3 py-8">
                     <FileJson className="w-12 h-12 mx-auto text-muted-foreground/50" />
                     <div>
-                      <p className="text-sm font-medium">No API profiles yet</p>
+                      <p className="text-sm font-medium">{t('apiProfiles.noProfilesYet')}</p>
                       <p className="text-xs text-muted-foreground mt-1">
-                        Create your first profile to connect to custom API endpoints
+                        {t('apiProfiles.noProfilesDesc')}
                       </p>
                     </div>
                     <Button
@@ -169,12 +173,12 @@ export function ApiPage() {
                       }}
                     >
                       <Plus className="w-4 h-4 mr-1" />
-                      Create Profile
+                      {t('apiProfiles.createProfile')}
                     </Button>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground py-4">
-                    No profiles match "{searchQuery}"
+                    {t('apiProfiles.noProfileMatch', { query: searchQuery })}
                   </p>
                 )}
               </div>
@@ -197,12 +201,12 @@ export function ApiPage() {
           {profiles.length > 0 && (
             <div className="p-3 border-t bg-background text-xs text-muted-foreground">
               <div className="flex items-center justify-between">
-                <span>
-                  {profiles.length} profile{profiles.length !== 1 ? 's' : ''}
-                </span>
+                <span>{t('apiProfiles.profileCount', { count: profiles.length })}</span>
                 <span className="flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-green-600" />
-                  {profiles.filter((p) => p.configured).length} configured
+                  {t('apiProfiles.configuredCount', {
+                    count: profiles.filter((p) => p.configured).length,
+                  })}
                 </span>
               </div>
             </div>
@@ -253,9 +257,9 @@ export function ApiPage() {
       {/* Delete Confirmation */}
       <ConfirmDialog
         open={!!deleteConfirm}
-        title="Delete Profile"
-        description={`Are you sure you want to delete "${deleteConfirm}"? This will remove the settings file and cannot be undone.`}
-        confirmText="Delete"
+        title={t('apiProfiles.deleteProfileTitle')}
+        description={t('apiProfiles.deleteProfileDesc', { name: deleteConfirm ?? '' })}
+        confirmText={t('apiProfiles.delete')}
         variant="destructive"
         onConfirm={() => deleteConfirm && handleDelete(deleteConfirm)}
         onCancel={() => setDeleteConfirm(null)}
@@ -264,9 +268,12 @@ export function ApiPage() {
       {/* Unsaved Changes Confirmation */}
       <ConfirmDialog
         open={!!pendingSwitch}
-        title="Unsaved Changes"
-        description={`You have unsaved changes in "${selectedProfile}". Discard and switch to "${pendingSwitch}"?`}
-        confirmText="Discard & Switch"
+        title={t('apiProfiles.unsavedChangesTitle')}
+        description={t('apiProfiles.unsavedChangesDesc', {
+          current: selectedProfile ?? '',
+          next: pendingSwitch ?? '',
+        })}
+        confirmText={t('apiProfiles.discardSwitch')}
         variant="destructive"
         onConfirm={() => {
           setEditorHasChanges(false);

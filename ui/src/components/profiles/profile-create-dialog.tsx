@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge';
 import { useCreateProfile } from '@/hooks/use-profiles';
 import { useOpenRouterCatalog } from '@/hooks/use-openrouter-models';
 import { Loader2, Plus, AlertTriangle, Info, Eye, EyeOff, Settings2, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -49,6 +50,7 @@ import {
 } from '@/lib/openrouter-utils';
 import type { CategorizedModel } from '@/lib/openrouter-types';
 import type { CliTarget } from '@/lib/api-client';
+import i18n from '@/lib/i18n';
 
 const schema = z.object({
   name: z
@@ -104,6 +106,7 @@ export function ProfileCreateDialog({
   onSuccess,
   initialMode = 'openrouter',
 }: ProfileCreateDialogProps) {
+  const { t } = useTranslation();
   const createMutation = useCreateProfile();
   const [activeTab, setActiveTab] = useState('basic');
   const [urlWarning, setUrlWarning] = useState<string | null>(null);
@@ -242,7 +245,7 @@ export function ProfileCreateDialog({
   const onSubmit = async (data: FormData) => {
     // Validate API key - required unless preset has requiresApiKey: false
     if (currentPreset?.requiresApiKey !== false && !data.apiKey) {
-      toast.error('API key is required');
+      toast.error(i18n.t('commonToast.apiKeyRequired'));
       return;
     }
     // Use user-provided baseUrl (allows customization of preset URLs)
@@ -290,7 +293,9 @@ export function ProfileCreateDialog({
           <div className="px-6 py-3 border-b bg-muted/30 space-y-2">
             {/* Main Options: OpenRouter + Custom */}
             <div>
-              <Label className="text-xs text-muted-foreground mb-1.5 block">Provider</Label>
+              <Label className="text-xs text-muted-foreground mb-1.5 block">
+                {t('profileEditor.provider')}
+              </Label>
               <div className="flex gap-2">
                 {RECOMMENDED_PRESETS.map((preset) => (
                   <CompactPresetCard
@@ -312,7 +317,7 @@ export function ProfileCreateDialog({
                   )}
                 >
                   <Settings2 className="w-4 h-4" />
-                  <span>Custom</span>
+                  <span>{t('profileEditor.custom')}</span>
                 </button>
               </div>
             </div>

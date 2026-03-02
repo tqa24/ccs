@@ -21,6 +21,8 @@ import { useSettingsTab, useRawConfig } from './hooks';
 import { TabNavigation } from './components/tab-navigation';
 import { SectionSkeleton } from './components/section-skeleton';
 import type { SettingsTab } from './types';
+import { useTranslation } from 'react-i18next';
+import i18n from '@/lib/i18n';
 
 /**
  * Retry wrapper for dynamic imports with exponential backoff
@@ -72,15 +74,19 @@ class SectionErrorBoundary extends Component<
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
           <div className="text-center p-6 max-w-md">
             <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
-            <p className="font-medium text-foreground mb-2">Failed to load section</p>
-            <p className="text-sm mb-4">{this.state.error?.message || 'Unknown error occurred'}</p>
+            <p className="font-medium text-foreground mb-2">
+              {i18n.t('settings.sectionLoadFailed')}
+            </p>
+            <p className="text-sm mb-4">
+              {this.state.error?.message || i18n.t('settings.unknownError')}
+            </p>
             <Button
               variant="outline"
               onClick={() => window.location.reload()}
               className="inline-flex items-center gap-2"
             >
               <RefreshCw className="w-4 h-4" />
-              Reload page
+              {i18n.t('settings.reloadPage')}
             </Button>
           </div>
         </div>
@@ -93,6 +99,7 @@ class SectionErrorBoundary extends Component<
 
 // Inner component that uses context
 function SettingsPageInner() {
+  const { t } = useTranslation();
   const { activeTab, setActiveTab } = useSettingsTab();
   const {
     rawConfig,
@@ -178,12 +185,12 @@ function SettingsPageInner() {
                   {copied ? (
                     <>
                       <Check className="w-4 h-4 mr-1" />
-                      Copied
+                      {t('settings.copied')}
                     </>
                   ) : (
                     <>
                       <Copy className="w-4 h-4 mr-1" />
-                      Copy
+                      {t('settings.copy')}
                     </>
                   )}
                 </Button>
@@ -203,7 +210,7 @@ function SettingsPageInner() {
               {rawConfigLoading ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                  Loading...
+                  {t('settings.loading')}
                 </div>
               ) : rawConfig ? (
                 <CodeEditor
@@ -218,7 +225,7 @@ function SettingsPageInner() {
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
                     <FileCode className="w-12 h-12 mx-auto mb-3 opacity-30" />
-                    <p>Config file not found</p>
+                    <p>{t('settings.configFileNotFound')}</p>
                     <code className="text-sm bg-muted px-2 py-1 rounded mt-2 inline-block">
                       ccs migrate
                     </code>

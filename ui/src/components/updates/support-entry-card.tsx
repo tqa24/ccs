@@ -8,12 +8,7 @@ import {
   type SupportScope,
 } from '@/lib/support-updates-catalog';
 import { SupportStatusBadge } from './support-status-badge';
-
-const PILLAR_LABELS: { key: keyof CliSupportEntry['pillars']; label: string }[] = [
-  { key: 'baseUrl', label: 'Base URL' },
-  { key: 'auth', label: 'Auth' },
-  { key: 'model', label: 'Model' },
-];
+import { useTranslation } from 'react-i18next';
 
 const SCOPE_STYLES: Record<SupportScope, string> = {
   target:
@@ -27,6 +22,13 @@ const SCOPE_STYLES: Record<SupportScope, string> = {
 };
 
 export function SupportEntryCard({ entry }: { entry: CliSupportEntry }) {
+  const { t } = useTranslation();
+  const pillarLabels: { key: keyof CliSupportEntry['pillars']; label: string }[] = [
+    { key: 'baseUrl', label: 'Base URL' },
+    { key: 'auth', label: 'Auth' },
+    { key: 'model', label: 'Model' },
+  ];
+
   return (
     <Card className="h-full gap-4">
       <CardHeader className="gap-3">
@@ -45,7 +47,7 @@ export function SupportEntryCard({ entry }: { entry: CliSupportEntry }) {
 
       <CardContent className="space-y-4">
         <div className="grid gap-2 sm:grid-cols-3">
-          {PILLAR_LABELS.map((pillar) => (
+          {pillarLabels.map((pillar) => (
             <div key={pillar.key} className="rounded-md border bg-muted/30 p-2">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 {pillar.label}
@@ -57,7 +59,7 @@ export function SupportEntryCard({ entry }: { entry: CliSupportEntry }) {
 
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Dashboard
+            {t('updates.dashboard')}
           </p>
           <div className="flex flex-wrap gap-2">
             {entry.routes.map((route) => (
@@ -75,7 +77,7 @@ export function SupportEntryCard({ entry }: { entry: CliSupportEntry }) {
 
         <div className="space-y-1">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            CLI Usage
+            {t('updates.cliUsage')}
           </p>
           <div className="space-y-1">
             {entry.commands.slice(0, 2).map((command) => (

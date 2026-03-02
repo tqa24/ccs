@@ -30,6 +30,7 @@ import { api } from '@/lib/api-client';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import { RISK_ACK_PHRASE } from '@/components/account/antigravity-responsibility-constants';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 /** LocalStorage key for debug mode preference */
 const DEBUG_MODE_KEY = 'ccs_debug_mode';
@@ -42,6 +43,7 @@ function normalizeRiskAckPhrase(value: string): string {
 }
 
 export default function ProxySection() {
+  const { t } = useTranslation();
   const {
     config,
     loading,
@@ -98,17 +100,17 @@ export default function ProxySection() {
       setAgyAckBypassLoading(true);
       const response = await fetch('/api/settings/auth/antigravity-risk');
       if (!response.ok) {
-        throw new Error('Failed to load AGY power user mode');
+        throw new Error(t('settingsProxy.failedLoadAgyMode'));
       }
       const data = (await response.json()) as { antigravityAckBypass?: boolean };
       setAgyAckBypass(data.antigravityAckBypass === true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to load AGY power user mode');
+      toast.error(err instanceof Error ? err.message : t('settingsProxy.failedLoadAgyMode'));
       setAgyAckBypass(false);
     } finally {
       setAgyAckBypassLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const persistAgyAckBypass = useCallback(
     async (nextValue: boolean) => {
@@ -130,7 +132,7 @@ export default function ProxySection() {
         };
 
         if (!response.ok) {
-          throw new Error(payload.error || 'Failed to update AGY power user mode');
+          throw new Error(payload.error || t('settingsProxy.failedUpdateAgyMode'));
         }
 
         const persistedValue = payload.antigravityAckBypass === true;
@@ -139,29 +141,29 @@ export default function ProxySection() {
           cache: 'no-store',
         });
         if (!verifyResponse.ok) {
-          throw new Error('Failed to verify AGY power user mode persistence');
+          throw new Error(t('settingsProxy.failedVerifyAgyMode'));
         }
         const verifyData = (await verifyResponse.json()) as { antigravityAckBypass?: boolean };
         const verifiedValue = verifyData.antigravityAckBypass === true;
         if (verifiedValue !== nextValue) {
-          throw new Error(
-            'AGY power user mode was not persisted. Config may have been modified by another process.'
-          );
+          throw new Error(t('settingsProxy.notPersistedAgyMode'));
         }
 
         setAgyAckBypass(verifiedValue && persistedValue);
         setShowAgyEnableConfirm(false);
         setAgyEnableConfirmPhrase('');
-        toast.success(nextValue ? 'AGY power user mode enabled.' : 'AGY power user mode disabled.');
+        toast.success(
+          nextValue ? t('settingsProxy.agyModeEnabled') : t('settingsProxy.agyModeDisabled')
+        );
         await fetchRawConfig();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Failed to update AGY power user mode');
+        toast.error(err instanceof Error ? err.message : t('settingsProxy.failedUpdateAgyMode'));
       } finally {
         agyAckBypassSavingRef.current = false;
         setAgyAckBypassSaving(false);
       }
     },
-    [agyAckBypassSaving, fetchRawConfig, saving]
+    [agyAckBypassSaving, fetchRawConfig, saving, t]
   );
 
   const handleAgyAckBypassChange = useCallback(
@@ -182,11 +184,11 @@ export default function ProxySection() {
 
   const confirmAgyEnable = useCallback(() => {
     if (!isAgyConfirmPhraseValid) {
-      toast.error(`Type "${RISK_ACK_PHRASE}" to continue.`);
+      toast.error(t('settingsProxy.typePhraseToContinue', { value: RISK_ACK_PHRASE }));
       return;
     }
     void persistAgyAckBypass(true);
-  }, [isAgyConfirmPhraseValid, persistAgyAckBypass]);
+  }, [isAgyConfirmPhraseValid, persistAgyAckBypass, t]);
 
   // Backend state (loaded from API) + mutation hook for proper query invalidation
   const [backend, setBackend] = useState<'original' | 'plus'>('plus');
@@ -262,7 +264,7 @@ export default function ProxySection() {
       <div className="flex-1 flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <RefreshCw className="w-5 h-5 animate-spin" />
-          <span>Loading...</span>
+          <span>{t('settings.loading')}</span>
         </div>
       </div>
     );
@@ -308,7 +310,7 @@ export default function ProxySection() {
 
     const parsedPort = Number(portStr);
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-      toast.error('Port must be an integer between 1 and 65535, or empty for default');
+      toast.error(t('settingsProxy.invalidPortOrEmpty'));
       setEditedPort(null);
       return;
     }
@@ -340,7 +342,7 @@ export default function ProxySection() {
     const parsedPort = localPortStr === '' ? CLIPROXY_DEFAULT_PORT : Number(localPortStr);
 
     if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
-      toast.error('Local port must be an integer between 1 and 65535');
+      toast.error(t('settingsProxy.invalidLocalPort'));
       setEditedLocalPort(null);
       return;
     }
@@ -379,7 +381,7 @@ export default function ProxySection() {
         {success && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-md border border-green-200 bg-green-50 text-green-700 shadow-lg dark:border-green-900/50 dark:bg-green-900/90 dark:text-green-300">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span className="text-sm font-medium">Saved</span>
+            <span className="text-sm font-medium">{t('settings.saved')}</span>
           </div>
         )}
       </div>
@@ -388,21 +390,23 @@ export default function ProxySection() {
       <ScrollArea className="flex-1">
         <div className="p-5 space-y-6">
           <p className="text-sm text-muted-foreground">
-            Configure local or remote {backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy'} connection
-            for proxy-based profiles
+            {t('settingsProxy.description', {
+              backend:
+                backend === 'plus' ? t('settingsProxy.backendPlus') : t('settingsProxy.backend'),
+            })}
           </p>
 
           {/* Proxy Status Widget - Quick access to start/stop controls */}
           {!isRemoteMode && (
             <div className="space-y-3">
-              <h3 className="text-base font-medium">Instance Status</h3>
+              <h3 className="text-base font-medium">{t('settingsProxy.instanceStatus')}</h3>
               <ProxyStatusWidget />
             </div>
           )}
 
           {/* Mode Toggle - Card based selection */}
           <div className="space-y-3">
-            <h3 className="text-base font-medium">Connection Mode</h3>
+            <h3 className="text-base font-medium">{t('settingsProxy.connectionMode')}</h3>
             <div className="grid grid-cols-2 gap-3">
               {/* Local Mode Card */}
               <button
@@ -418,10 +422,15 @@ export default function ProxySection() {
                   <Laptop
                     className={`w-5 h-5 ${!isRemoteMode ? 'text-primary' : 'text-muted-foreground'}`}
                   />
-                  <span className="font-medium">Local</span>
+                  <span className="font-medium">{t('settingsProxy.local')}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Run {backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy'} binary on this machine
+                  {t('settingsProxy.localDesc', {
+                    backend:
+                      backend === 'plus'
+                        ? t('settingsProxy.backendPlus')
+                        : t('settingsProxy.backend'),
+                  })}
                 </p>
               </button>
 
@@ -439,10 +448,15 @@ export default function ProxySection() {
                   <Cloud
                     className={`w-5 h-5 ${isRemoteMode ? 'text-primary' : 'text-muted-foreground'}`}
                   />
-                  <span className="font-medium">Remote</span>
+                  <span className="font-medium">{t('settingsProxy.remote')}</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Connect to a remote {backend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy'} server
+                  {t('settingsProxy.remoteDesc', {
+                    backend:
+                      backend === 'plus'
+                        ? t('settingsProxy.backendPlus')
+                        : t('settingsProxy.backend'),
+                  })}
                 </p>
               </button>
             </div>
@@ -452,14 +466,14 @@ export default function ProxySection() {
           <div className="space-y-3">
             <h3 className="text-base font-medium flex items-center gap-2">
               <Box className="w-4 h-4" />
-              Backend Binary
+              {t('settingsProxy.backendBinary')}
             </h3>
             {/* Warning when local proxy is running - must stop to change backend (not applicable in remote mode) */}
             {!isRemoteMode && isProxyRunning && (
               <Alert className="py-2 border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20 [&>svg]:top-2.5">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-700 dark:text-amber-400">
-                  Stop the running proxy in Instance Status to switch backend.
+                  {t('settingsProxy.stopProxyToSwitch')}
                 </AlertDescription>
               </Alert>
             )}
@@ -475,14 +489,12 @@ export default function ProxySection() {
                 } ${isBackendSwitchBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="font-medium">CLIProxyAPIPlus</span>
+                  <span className="font-medium">{t('settingsProxy.backendPlusApi')}</span>
                   <span className="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400">
-                    Default
+                    {t('settingsProxy.default')}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Full provider support including Kiro and GitHub Copilot
-                </p>
+                <p className="text-xs text-muted-foreground">{t('settingsProxy.plusDesc')}</p>
               </button>
 
               {/* Original Backend Card */}
@@ -496,21 +508,16 @@ export default function ProxySection() {
                 } ${isBackendSwitchBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="font-medium">CLIProxyAPI</span>
+                  <span className="font-medium">{t('settingsProxy.backendApi')}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Original binary (Gemini, Codex, Antigravity only)
-                </p>
+                <p className="text-xs text-muted-foreground">{t('settingsProxy.originalDesc')}</p>
               </button>
             </div>
             {/* Warning when original backend selected with Kiro/ghcp variants */}
             {backend === 'original' && hasKiroGhcpVariants && (
               <Alert variant="destructive" className="py-2">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  Existing Kiro/Copilot variants will not work with CLIProxyAPI. Switch to
-                  CLIProxyAPIPlus or remove those variants.
-                </AlertDescription>
+                <AlertDescription>{t('settingsProxy.variantsIncompatible')}</AlertDescription>
               </Alert>
             )}
           </div>
@@ -519,15 +526,13 @@ export default function ProxySection() {
           <div className="space-y-3">
             <h3 className="text-base font-medium flex items-center gap-2">
               <ShieldAlert className="w-4 h-4 text-amber-700 dark:text-amber-300" />
-              Safety
+              {t('settingsProxy.safety')}
             </h3>
             <div className="space-y-3 rounded-lg border border-amber-400/35 bg-amber-50/70 p-4 dark:border-amber-800/60 dark:bg-amber-950/25">
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-1">
-                  <p className="font-medium text-sm">Antigravity Power User Mode</p>
-                  <p className="text-xs text-muted-foreground">
-                    Skip AGY responsibility checklist in Add Account and `ccs agy` flows.
-                  </p>
+                  <p className="font-medium text-sm">{t('settingsProxy.agyModeTitle')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settingsProxy.agyModeDesc')}</p>
                 </div>
                 <Switch
                   aria-labelledby="agy-power-user-mode-label"
@@ -541,24 +546,22 @@ export default function ProxySection() {
                 id="agy-power-user-mode-description"
                 className="text-xs text-amber-800/90 dark:text-amber-200/90"
               >
-                Use only if you fully understand the OAuth suspension/ban risk pattern (#509). CCS
-                cannot assume responsibility for account loss.
+                {t('settingsProxy.agyWarning')}
               </p>
               {showAgyEnableConfirm && (
                 <div className="space-y-3 rounded-lg border border-rose-500/40 bg-rose-500/[0.08] p-3.5">
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold tracking-wide text-rose-900 dark:text-rose-200">
-                      Final confirmation required
+                      {t('settingsProxy.finalConfirm')}
                     </p>
                     <p className="text-xs leading-relaxed text-rose-800/95 dark:text-rose-200/90">
-                      Enabling this will skip AGY safety checkpoints in both dashboard and CLI.
-                      Review issue #509 and type the exact phrase to proceed.
+                      {t('settingsProxy.finalConfirmDesc')}
                     </p>
                   </div>
                   <div className="grid gap-2 md:grid-cols-2">
                     <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-2.5">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-900 dark:text-rose-200">
-                        Step 1
+                        {t('settingsProxy.step1')}
                       </p>
                       <a
                         href="https://github.com/kaitranntt/ccs/issues/509"
@@ -566,20 +569,20 @@ export default function ProxySection() {
                         rel="noreferrer"
                         className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-rose-800 underline decoration-rose-500/60 underline-offset-2 transition-colors hover:text-rose-700 dark:text-rose-200"
                       >
-                        Read issue #509
+                        {t('settingsProxy.readIssue')}
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
                     </div>
                     <div className="rounded-md border border-rose-400/30 bg-rose-500/10 p-2.5">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-900 dark:text-rose-200">
-                        Step 2
+                        {t('settingsProxy.step2')}
                       </p>
                       <p className="mt-1 text-xs text-rose-800/95 dark:text-rose-200/90">
-                        Type{' '}
+                        {t('settingsProxy.typePrefix')}{' '}
                         <code className="rounded bg-background/80 px-1 py-0.5 font-mono">
                           {RISK_ACK_PHRASE}
                         </code>{' '}
-                        to enable.
+                        {t('settingsProxy.typeSuffix')}
                       </p>
                     </div>
                   </div>
@@ -590,10 +593,10 @@ export default function ProxySection() {
                       placeholder={RISK_ACK_PHRASE}
                       disabled={agyAckBypassSaving || saving}
                       className="font-mono text-xs"
-                      aria-label="Type I ACCEPT RISK to enable Antigravity power user mode"
+                      aria-label={t('settingsProxy.typePhraseAria')}
                     />
                     <p className="text-[11px] text-rose-800/90 dark:text-rose-200/80">
-                      Exact phrase required.
+                      {t('settingsProxy.exactPhrase')}
                     </p>
                   </div>
                   <div className="flex items-center justify-end gap-2">
@@ -606,7 +609,7 @@ export default function ProxySection() {
                       }}
                       disabled={agyAckBypassSaving || saving}
                     >
-                      Cancel
+                      {t('settingsBackups.cancel')}
                     </Button>
                     <Button
                       size="sm"
@@ -614,13 +617,13 @@ export default function ProxySection() {
                       onClick={confirmAgyEnable}
                       disabled={!isAgyConfirmPhraseValid || agyAckBypassSaving || saving}
                     >
-                      Enable Power User Mode
+                      {t('settingsProxy.enableAgyMode')}
                     </Button>
                   </div>
                 </div>
               )}
               <span id="agy-power-user-mode-label" className="sr-only">
-                Toggle AGY power user mode
+                {t('settingsProxy.toggleAgyMode')}
               </span>
             </div>
           </div>
@@ -651,14 +654,14 @@ export default function ProxySection() {
 
           {/* Fallback Settings */}
           <div className="space-y-3">
-            <h3 className="text-base font-medium">Fallback Settings</h3>
+            <h3 className="text-base font-medium">{t('settingsProxy.fallbackSettings')}</h3>
             <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
               {/* Enable Fallback */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-sm">Enable fallback to local</p>
+                  <p className="font-medium text-sm">{t('settingsProxy.enableFallback')}</p>
                   <p className="text-xs text-muted-foreground">
-                    Use local proxy if remote is unreachable
+                    {t('settingsProxy.enableFallbackDesc')}
                   </p>
                 </div>
                 <Switch
@@ -673,9 +676,9 @@ export default function ProxySection() {
               {/* Auto-start on fallback */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-sm">Auto-start local proxy</p>
+                  <p className="font-medium text-sm">{t('settingsProxy.autoStartLocal')}</p>
                   <p className="text-xs text-muted-foreground">
-                    Automatically start local proxy on fallback
+                    {t('settingsProxy.autoStartLocalDesc')}
                   </p>
                 </div>
                 <Switch
@@ -693,15 +696,15 @@ export default function ProxySection() {
           <div className="space-y-3">
             <h3 className="text-base font-medium flex items-center gap-2">
               <Bug className="w-4 h-4" />
-              Advanced
+              {t('settingsProxy.advanced')}
             </h3>
             <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
               {/* Debug Mode Toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-sm">Debug Mode</p>
+                  <p className="font-medium text-sm">{t('settingsProxy.debugMode')}</p>
                   <p className="text-xs text-muted-foreground">
-                    Enable developer diagnostics in browser console
+                    {t('settingsProxy.debugModeDesc')}
                   </p>
                 </div>
                 <Switch
@@ -712,7 +715,7 @@ export default function ProxySection() {
               </div>
               {debugMode && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 pl-0.5">
-                  Debug mode enabled. Check browser console for detailed logs.
+                  {t('settingsProxy.debugModeEnabled')}
                 </p>
               )}
             </div>
@@ -748,7 +751,7 @@ export default function ProxySection() {
           className="w-full"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('settings.refresh')}
         </Button>
       </div>
     </>

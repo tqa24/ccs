@@ -34,6 +34,7 @@ import type { AuthStatus, Variant } from '@/lib/api-client';
 import { MODEL_CATALOGS } from '@/lib/model-catalogs';
 import { getProviderDisplayName, isValidProvider } from '@/lib/provider-config';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 // Sidebar provider item
 function ProviderSidebarItem({
@@ -45,6 +46,7 @@ function ProviderSidebarItem({
   isSelected: boolean;
   onSelect: () => void;
 }) {
+  const { t } = useTranslation();
   const accountCount = status.accounts?.length || 0;
 
   return (
@@ -71,12 +73,14 @@ function ProviderSidebarItem({
           {status.authenticated ? (
             <>
               <Check className="w-3 h-3 text-green-600" />
-              <span className="text-xs text-green-600">Connected</span>
+              <span className="text-xs text-green-600">{t('cliproxyPage.connected')}</span>
             </>
           ) : (
             <>
               <X className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Not connected</span>
+              <span className="text-xs text-muted-foreground">
+                {t('cliproxyPage.notConnected')}
+              </span>
             </>
           )}
         </div>
@@ -101,6 +105,7 @@ function VariantSidebarItem({
   onDelete: () => void;
   isDeleting?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       className={cn(
@@ -119,7 +124,7 @@ function VariantSidebarItem({
         <div className="flex items-center gap-2">
           <span className="font-medium text-sm truncate">{variant.name}</span>
           <Badge variant="outline" className="text-[9px] h-4 px-1">
-            variant
+            {t('cliproxyPage.variant')}
           </Badge>
           <Badge variant="outline" className="text-[9px] h-4 px-1 uppercase">
             {variant.target || 'claude'}
@@ -129,12 +134,16 @@ function VariantSidebarItem({
           {parentAuth?.authenticated ? (
             <>
               <Check className="w-3 h-3 text-green-600" />
-              <span className="text-xs text-muted-foreground truncate">via {variant.provider}</span>
+              <span className="text-xs text-muted-foreground truncate">
+                {t('cliproxyPage.viaProvider', { provider: variant.provider })}
+              </span>
             </>
           ) : (
             <>
               <X className="w-3 h-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">Parent not connected</span>
+              <span className="text-xs text-muted-foreground">
+                {t('cliproxyPage.parentNotConnected')}
+              </span>
             </>
           )}
         </div>
@@ -157,27 +166,25 @@ function VariantSidebarItem({
 
 // Empty state for right panel
 function EmptyProviderState({ onSetup }: { onSetup: () => void }) {
+  const { t } = useTranslation();
   return (
     <div className="flex-1 flex items-center justify-center bg-muted/20">
       <div className="text-center max-w-md px-8">
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center mx-auto mb-6">
           <Zap className="w-8 h-8 text-muted-foreground" />
         </div>
-        <h2 className="text-xl font-semibold mb-2">CCS Profile Manager</h2>
-        <p className="text-muted-foreground mb-4">
-          Manage OAuth authentication, account preferences, and model selection for CLIProxy
-          providers. Configure how CCS routes requests to different AI backends.
-        </p>
+        <h2 className="text-xl font-semibold mb-2">{t('cliproxyPage.emptyTitle')}</h2>
+        <p className="text-muted-foreground mb-4">{t('cliproxyPage.emptyDesc')}</p>
         <p className="text-xs text-muted-foreground mb-6">
-          For live usage stats and real-time monitoring, visit the{' '}
+          {t('cliproxyPage.emptyControlPanelPrefix')}{' '}
           <a href="/cliproxy/control-panel" className="text-primary hover:underline">
-            Control Panel
+            {t('cliproxyPage.controlPanel')}
           </a>
           .
         </p>
         <Button onClick={onSetup} className="gap-2">
           <Sparkles className="w-4 h-4" />
-          Quick Setup
+          {t('cliproxyPage.quickSetup')}
         </Button>
       </div>
     </div>
@@ -185,6 +192,7 @@ function EmptyProviderState({ onSetup }: { onSetup: () => void }) {
 }
 
 export function CliproxyPage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: authData, isLoading: authLoading } = useCliproxyAuth();
   const { data: variantsData, isFetching } = useCliproxy();
@@ -337,7 +345,9 @@ export function CliproxyPage() {
               <RefreshCw className={cn('w-4 h-4', isFetching && 'animate-spin')} />
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mb-3">CCS-level account management</p>
+          <p className="text-xs text-muted-foreground mb-3">
+            {t('cliproxyPage.accountManagement')}
+          </p>
 
           <Button
             variant="default"
@@ -346,7 +356,7 @@ export function CliproxyPage() {
             onClick={() => setWizardOpen(true)}
           >
             <Sparkles className="w-4 h-4" />
-            Quick Setup
+            {t('cliproxyPage.quickSetup')}
           </Button>
         </div>
 
@@ -354,7 +364,7 @@ export function CliproxyPage() {
         <ScrollArea className="flex-1">
           <div className="p-2">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-3 py-2">
-              Providers
+              {t('cliproxyPage.providers')}
             </div>
             {authLoading ? (
               <div className="space-y-2 px-2">
@@ -380,7 +390,7 @@ export function CliproxyPage() {
               <>
                 <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide px-3 py-2 mt-4 flex items-center gap-1.5">
                   <GitBranch className="w-3 h-3" />
-                  Variants
+                  {t('cliproxyPage.variants')}
                 </div>
                 <div className="space-y-1">
                   {variants.map((variant) => (
@@ -408,12 +418,12 @@ export function CliproxyPage() {
         {/* Footer Stats */}
         <div className="p-3 border-t bg-background text-xs text-muted-foreground">
           <div className="flex items-center justify-between">
-            <span>
-              {providers.length} provider{providers.length !== 1 ? 's' : ''}
-            </span>
+            <span>{t('cliproxyPage.providerCount', { count: providers.length })}</span>
             <span className="flex items-center gap-1">
               <Check className="w-3 h-3 text-green-600" />
-              {providers.filter((p) => p.authenticated).length} connected
+              {t('cliproxyPage.connectedCount', {
+                count: providers.filter((p) => p.authenticated).length,
+              })}
             </span>
           </div>
         </div>
@@ -429,7 +439,10 @@ export function CliproxyPage() {
           // Variant selected - show ProviderEditor with variant profile name
           <ProviderEditor
             provider={selectedVariantData.name}
-            displayName={`${selectedVariantData.name} (${selectedVariantData.provider} variant)`}
+            displayName={t('cliproxyPage.variantDisplay', {
+              name: selectedVariantData.name,
+              provider: selectedVariantData.provider,
+            })}
             authStatus={parentAuthForVariant}
             catalog={MODEL_CATALOGS[selectedVariantData.provider]}
             logoProvider={selectedVariantData.provider}

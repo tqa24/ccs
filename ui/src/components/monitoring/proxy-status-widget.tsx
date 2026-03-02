@@ -51,6 +51,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useQuery, useIsMutating } from '@tanstack/react-query';
 import { api, type CliproxyServerConfig } from '@/lib/api-client';
+import { useTranslation } from 'react-i18next';
 import {
   useProxyStatus,
   useStartProxy,
@@ -89,15 +90,17 @@ function formatUptime(startedAt?: string): string {
   return `${minutes}m`;
 }
 
-function formatTimeAgo(timestamp?: number): string {
+function formatTimeAgo(
+  timestamp: number | undefined,
+  t: (key: string, opts?: { count?: number }) => string
+): string {
   if (!timestamp) return '';
   const diff = Date.now() - timestamp;
   const minutes = Math.floor(diff / (1000 * 60));
   const hours = Math.floor(diff / (1000 * 60 * 60));
-
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  return `${hours}h ago`;
+  if (minutes < 1) return t('proxyStatusWidget.justNow');
+  if (minutes < 60) return t('proxyStatusWidget.minutesAgo', { count: minutes });
+  return t('proxyStatusWidget.hoursAgo', { count: hours });
 }
 
 /** Icon button with tooltip wrapper */
@@ -148,6 +151,7 @@ function IconButton({
 }
 
 export function ProxyStatusWidget() {
+  const { t } = useTranslation();
   const { data: status, isLoading } = useProxyStatus();
   const { data: updateCheck } = useCliproxyUpdateCheck();
   const { data: versionsData, isLoading: versionsLoading } = useCliproxyVersions();
@@ -196,7 +200,9 @@ export function ProxyStatusWidget() {
 
   // Sync status
   const isSyncConfigured = syncStatus?.configured ?? false;
-  const syncStatusText = isSyncConfigured ? 'Sync Ready' : 'No Config';
+  const syncStatusText = isSyncConfigured
+    ? t('proxyStatusWidget.syncReady')
+    : t('proxyStatusWidget.noConfig');
 
   // Target version for update/downgrade badge
   const targetVersion = isUnstable
@@ -257,12 +263,12 @@ export function ProxyStatusWidget() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Globe className="w-4 h-4 text-blue-500" />
-            <span className="text-sm font-medium">Remote Proxy</span>
+            <span className="text-sm font-medium">{t('proxyStatusWidget.remoteProxy')}</span>
             <Badge
               variant="secondary"
               className="text-[10px] h-4 px-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
             >
-              Active
+              {t('proxyStatusWidget.active')}
             </Badge>
           </div>
           <Activity className="w-3 h-3 text-blue-600" />
@@ -273,7 +279,7 @@ export function ProxyStatusWidget() {
             <span className="font-mono">{remoteDisplayHost}</span>
           </div>
           <p className="text-[10px] text-muted-foreground/70 leading-tight">
-            Traffic auto-routed to remote server
+            {t('proxyStatusWidget.trafficAutoRouted')}
           </p>
         </div>
       </div>
@@ -310,21 +316,21 @@ export function ProxyStatusWidget() {
               <>
                 <IconButton
                   icon={isSyncing ? RefreshCw : FileDown}
-                  tooltip="Sync profiles to CLIProxy"
+                  tooltip={t('proxyStatusWidget.tooltipSync')}
                   onClick={() => executeSync()}
                   disabled={!isSyncConfigured || isActioning}
                   isPending={isSyncing}
                 />
                 <IconButton
                   icon={RotateCw}
-                  tooltip="Restart"
+                  tooltip={t('proxyStatusWidget.tooltipRestart')}
                   onClick={() => restartProxy.mutate()}
                   disabled={isActioning}
                   isPending={restartProxy.isPending}
                 />
                 <IconButton
                   icon={Square}
-                  tooltip="Stop"
+                  tooltip={t('proxyStatusWidget.tooltipStop')}
                   onClick={() => stopProxy.mutate()}
                   disabled={isActioning}
                   isPending={stopProxy.isPending}
@@ -335,7 +341,11 @@ export function ProxyStatusWidget() {
             {/* Settings button always visible */}
             <IconButton
               icon={isExpanded ? X : Settings}
-              tooltip={isExpanded ? 'Close' : 'Version settings'}
+              tooltip={
+                isExpanded
+                  ? t('proxyStatusWidget.tooltipClose')
+                  : t('proxyStatusWidget.tooltipVersionSettings')
+              }
               onClick={() => setIsExpanded(!isExpanded)}
               className={isExpanded ? 'bg-muted' : undefined}
             />
@@ -363,7 +373,11 @@ export function ProxyStatusWidget() {
                     : 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50'
                 )}
                 onClick={() => handleInstallVersion(targetVersion)}
-                title={`Click to ${isUnstable ? 'downgrade' : 'update'}`}
+                title={
+                  isUnstable
+                    ? t('proxyStatusWidget.clickToDowngrade')
+                    : t('proxyStatusWidget.clickToUpdate')
+                }
               >
                 {isUnstable ? (
                   <ArrowDown className="w-2.5 h-2.5" />
@@ -379,11 +393,13 @@ export function ProxyStatusWidget() {
         {/* Stats row when running */}
         {isRunning && status && (
           <div className="mt-2 flex items-center gap-4 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1">Port {status.port}</span>
+            <span className="flex items-center gap-1">
+              {t('proxyStatusWidget.port', { port: status.port })}
+            </span>
             {status.sessionCount !== undefined && status.sessionCount > 0 && (
               <span className="flex items-center gap-1">
                 <Users className="w-3 h-3" />
-                {status.sessionCount} session{status.sessionCount !== 1 ? 's' : ''}
+                {t('proxyStatusWidget.sessionCount', { count: status.sessionCount })}
               </span>
             )}
             {status.startedAt && (
@@ -416,7 +432,9 @@ export function ProxyStatusWidget() {
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CollapsibleContent className="mt-3 pt-3 border-t border-muted">
             {/* Section header */}
-            <h4 className="text-xs font-medium text-muted-foreground mb-3">Version Management</h4>
+            <h4 className="text-xs font-medium text-muted-foreground mb-3">
+              {t('proxyStatusWidget.versionManagement')}
+            </h4>
 
             {/* Version picker row */}
             <div className="flex items-center gap-2">
@@ -427,7 +445,7 @@ export function ProxyStatusWidget() {
                 disabled={versionsLoading}
               >
                 <SelectTrigger className="h-8 text-xs flex-1">
-                  <SelectValue placeholder="Select version to install..." />
+                  <SelectValue placeholder={t('proxyStatusWidget.selectVersionPlaceholder')} />
                 </SelectTrigger>
                 <SelectContent>
                   {versionsData?.versions.slice(0, 20).map((v) => {
@@ -439,7 +457,9 @@ export function ProxyStatusWidget() {
                         <span className="flex items-center gap-2">
                           v{v}
                           {v === versionsData.latestStable && (
-                            <span className="text-green-600 dark:text-green-400">(stable)</span>
+                            <span className="text-green-600 dark:text-green-400">
+                              {t('proxyStatusWidget.stable')}
+                            </span>
                           )}
                           {vIsUnstable && (
                             <span className="text-amber-600 dark:text-amber-400">⚠</span>
@@ -464,7 +484,7 @@ export function ProxyStatusWidget() {
                 ) : (
                   <Download className="w-3.5 h-3.5" />
                 )}
-                Install
+                {t('proxyStatusWidget.install')}
               </Button>
             </div>
 
@@ -474,14 +494,20 @@ export function ProxyStatusWidget() {
               isNewerVersionClient(selectedVersion, versionsData.maxStableVersion) && (
                 <div className="mt-2 flex items-center gap-1.5 text-[11px] text-amber-600 dark:text-amber-400">
                   <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-                  <span>Versions above {versionsData.maxStableVersion} have known issues</span>
+                  <span>
+                    {t('proxyStatusWidget.versionsAboveUnstable', {
+                      version: versionsData.maxStableVersion,
+                    })}
+                  </span>
                 </div>
               )}
 
             {/* Sync time */}
             {updateCheck?.checkedAt && (
               <div className="mt-2 text-[10px] text-muted-foreground/60">
-                Last checked {formatTimeAgo(updateCheck.checkedAt)}
+                {t('proxyStatusWidget.lastChecked', {
+                  time: formatTimeAgo(updateCheck.checkedAt, t),
+                })}
               </div>
             )}
           </CollapsibleContent>
@@ -490,7 +516,9 @@ export function ProxyStatusWidget() {
         {/* Not running state */}
         {!isRunning && (
           <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-muted-foreground">Not running</span>
+            <span className="text-xs text-muted-foreground">
+              {t('proxyStatusWidget.notRunning')}
+            </span>
             <Button
               variant="outline"
               size="sm"
@@ -503,7 +531,7 @@ export function ProxyStatusWidget() {
               ) : (
                 <Power className="w-3 h-3" />
               )}
-              Start
+              {t('proxyStatusWidget.start')}
             </Button>
           </div>
         )}
@@ -514,27 +542,32 @@ export function ProxyStatusWidget() {
             <AlertDialogHeader>
               <AlertDialogTitle className="flex items-center gap-2">
                 <AlertTriangle className="w-5 h-5 text-amber-500" />
-                Install Unstable Version?
+                {t('proxyStatusWidget.installUnstableTitle')}
               </AlertDialogTitle>
               <AlertDialogDescription className="space-y-2">
-                <p>
-                  You are about to install <strong>v{pendingInstallVersion}</strong>, which is above
-                  the maximum stable version{' '}
-                  <strong>v{versionsData?.maxStableVersion || '6.6.80'}</strong>.
-                </p>
+                <p
+                  dangerouslySetInnerHTML={{
+                    __html: t('proxyStatusWidget.installUnstableDesc', {
+                      version: pendingInstallVersion ?? '',
+                      maxStable: versionsData?.maxStableVersion || '6.6.80',
+                    }),
+                  }}
+                />
                 <p className="text-amber-600 dark:text-amber-400">
-                  This version has known stability issues and may cause unexpected behavior.
+                  {t('proxyStatusWidget.installUnstableWarning')}
                 </p>
-                <p>Are you sure you want to proceed?</p>
+                <p>{t('proxyStatusWidget.installUnstableConfirm')}</p>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleCancelUnstableInstall}>Cancel</AlertDialogCancel>
+              <AlertDialogCancel onClick={handleCancelUnstableInstall}>
+                {t('proxyStatusWidget.cancel')}
+              </AlertDialogCancel>
               <AlertDialogAction
                 onClick={handleConfirmUnstableInstall}
                 className="bg-amber-500 hover:bg-amber-600 text-white"
               >
-                Install Anyway
+                {t('proxyStatusWidget.installAnyway')}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

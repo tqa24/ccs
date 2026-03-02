@@ -12,6 +12,7 @@ import { DollarSign, Database, FileText, ArrowDownRight, ArrowUpRight } from 'lu
 import { cn } from '@/lib/utils';
 import type { UsageSummary } from '@/hooks/use-usage';
 import { usePrivacy, PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
+import { useTranslation } from 'react-i18next';
 
 interface UsageSummaryCardsProps {
   data?: UsageSummary;
@@ -20,6 +21,7 @@ interface UsageSummaryCardsProps {
 
 export function UsageSummaryCards({ data, isLoading }: UsageSummaryCardsProps) {
   const { privacyMode } = usePrivacy();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
@@ -48,49 +50,61 @@ export function UsageSummaryCards({ data, isLoading }: UsageSummaryCardsProps) {
 
   const cards = [
     {
-      title: 'Total Tokens',
+      title: t('analyticsSummary.totalTokens'),
       value: data?.totalTokens ?? 0,
       icon: FileText,
       format: (v: number) => formatNumber(v),
       color: 'text-blue-600',
       bgColor: 'bg-blue-100 dark:bg-blue-900/20',
-      subtitle: `${formatNumber(data?.totalInputTokens ?? 0)} in / ${formatNumber(data?.totalOutputTokens ?? 0)} out`,
+      subtitle: t('analyticsSummary.totalTokensSubtitle', {
+        input: formatNumber(data?.totalInputTokens ?? 0),
+        output: formatNumber(data?.totalOutputTokens ?? 0),
+      }),
     },
     {
-      title: 'Total Cost',
+      title: t('analyticsSummary.totalCost'),
       value: data?.totalCost ?? 0,
       icon: DollarSign,
       format: (v: number) => `$${v.toFixed(2)}`,
       color: 'text-green-600',
       bgColor: 'bg-green-100 dark:bg-green-900/20',
-      subtitle: `$${data?.averageCostPerDay?.toFixed(2) ?? '0.00'}/day avg`,
+      subtitle: t('analyticsSummary.totalCostSubtitle', {
+        value: data?.averageCostPerDay?.toFixed(2) ?? '0.00',
+      }),
     },
     {
-      title: 'Cache Tokens',
+      title: t('analyticsSummary.cacheTokens'),
       value: data?.totalCacheTokens ?? 0,
       icon: Database,
       format: (v: number) => formatNumber(v),
       color: 'text-cyan-600',
       bgColor: 'bg-cyan-100 dark:bg-cyan-900/20',
-      subtitle: `$${cacheCost.toFixed(2)} (${cacheCostPercent}% of cost)`,
+      subtitle: t('analyticsSummary.cacheTokensSubtitle', {
+        cost: cacheCost.toFixed(2),
+        percent: cacheCostPercent,
+      }),
     },
     {
-      title: 'Input Cost',
+      title: t('analyticsSummary.inputCost'),
       value: data?.tokenBreakdown?.input?.cost ?? 0,
       icon: ArrowDownRight,
       format: (v: number) => `$${v.toFixed(2)}`,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100 dark:bg-purple-900/20',
-      subtitle: `${formatNumber(data?.tokenBreakdown?.input?.tokens ?? 0)} tokens`,
+      subtitle: t('analyticsSummary.tokensSubtitle', {
+        value: formatNumber(data?.tokenBreakdown?.input?.tokens ?? 0),
+      }),
     },
     {
-      title: 'Output Cost',
+      title: t('analyticsSummary.outputCost'),
       value: data?.tokenBreakdown?.output?.cost ?? 0,
       icon: ArrowUpRight,
       format: (v: number) => `$${v.toFixed(2)}`,
       color: 'text-orange-600',
       bgColor: 'bg-orange-100 dark:bg-orange-900/20',
-      subtitle: `${formatNumber(data?.tokenBreakdown?.output?.tokens ?? 0)} tokens`,
+      subtitle: t('analyticsSummary.tokensSubtitle', {
+        value: formatNumber(data?.tokenBreakdown?.output?.tokens ?? 0),
+      }),
     },
   ];
 

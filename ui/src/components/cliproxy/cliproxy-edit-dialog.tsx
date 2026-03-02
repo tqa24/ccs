@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { useTranslation } from 'react-i18next';
 import { useUpdateVariant } from '@/hooks/use-cliproxy';
 import { CLIPROXY_PROVIDERS, getProviderDisplayName } from '@/lib/provider-config';
 import type { UpdateVariant, Variant } from '@/lib/api-client';
@@ -117,6 +118,7 @@ function isCompositeVariantOnlyTargetChange(variant: Variant, data: CompositeFor
 }
 
 export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEditDialogProps) {
+  const { t } = useTranslation();
   const updateMutation = useUpdateVariant();
   const isComposite = variant?.type === 'composite';
 
@@ -264,24 +266,28 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            Edit {isComposite ? 'Composite' : 'Single'} Variant: {variant.name}
+            {isComposite
+              ? t('cliproxyDialog.editCompositeTitle', { name: variant.name })
+              : t('cliproxyDialog.editSingleTitle', { name: variant.name })}
           </DialogTitle>
         </DialogHeader>
 
         {isComposite ? (
           <form onSubmit={compositeForm.handleSubmit(onSubmitComposite)} className="space-y-4">
             <div>
-              <Label>Tier Configuration</Label>
+              <Label>{t('cliproxyDialog.tierConfig')}</Label>
               <Tabs defaultValue="opus" className="w-full">
                 <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="opus">Opus</TabsTrigger>
-                  <TabsTrigger value="sonnet">Sonnet</TabsTrigger>
-                  <TabsTrigger value="haiku">Haiku</TabsTrigger>
+                  <TabsTrigger value="opus">{t('cliproxyDialog.opus')}</TabsTrigger>
+                  <TabsTrigger value="sonnet">{t('cliproxyDialog.sonnet')}</TabsTrigger>
+                  <TabsTrigger value="haiku">{t('cliproxyDialog.haiku')}</TabsTrigger>
                 </TabsList>
                 {(['opus', 'sonnet', 'haiku'] as const).map((tier) => (
                   <TabsContent key={tier} value={tier} className="space-y-3">
                     <div>
-                      <Label htmlFor={`edit-${tier}-provider`}>Provider</Label>
+                      <Label htmlFor={`edit-${tier}-provider`}>
+                        {t('cliproxyDialog.provider')}
+                      </Label>
                       <select
                         id={`edit-${tier}-provider`}
                         {...compositeForm.register(`tiers.${tier}.provider`)}
@@ -295,11 +301,11 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
                       </select>
                     </div>
                     <div>
-                      <Label htmlFor={`edit-${tier}-model`}>Model</Label>
+                      <Label htmlFor={`edit-${tier}-model`}>{t('cliproxyDialog.model')}</Label>
                       <Input
                         id={`edit-${tier}-model`}
                         {...compositeForm.register(`tiers.${tier}.model`)}
-                        placeholder="model-id"
+                        placeholder={t('cliproxyDialog.placeholderModelId')}
                       />
                       {compositeForm.formState.errors.tiers?.[tier]?.model && (
                         <span className="text-xs text-red-500">
@@ -308,11 +314,13 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
                       )}
                     </div>
                     <div>
-                      <Label htmlFor={`edit-${tier}-account`}>Account (optional)</Label>
+                      <Label htmlFor={`edit-${tier}-account`}>
+                        {t('cliproxyDialog.accountOptional')}
+                      </Label>
                       <Input
                         id={`edit-${tier}-account`}
                         {...compositeForm.register(`tiers.${tier}.account`)}
-                        placeholder="account-id"
+                        placeholder={t('cliproxyDialog.placeholderAccountId')}
                       />
                     </div>
                   </TabsContent>
@@ -321,43 +329,45 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
             </div>
 
             <div>
-              <Label htmlFor="edit-default-tier">Default Tier</Label>
+              <Label htmlFor="edit-default-tier">{t('cliproxyDialog.defaultTier')}</Label>
               <select
                 id="edit-default-tier"
                 {...compositeForm.register('default_tier')}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="opus">Opus</option>
-                <option value="sonnet">Sonnet</option>
-                <option value="haiku">Haiku</option>
+                <option value="opus">{t('cliproxyDialog.opus')}</option>
+                <option value="sonnet">{t('cliproxyDialog.sonnet')}</option>
+                <option value="haiku">{t('cliproxyDialog.haiku')}</option>
               </select>
             </div>
 
             <div>
-              <Label htmlFor="edit-composite-target">Default Target</Label>
+              <Label htmlFor="edit-composite-target">{t('cliproxyDialog.defaultTarget')}</Label>
               <select
                 id="edit-composite-target"
                 {...compositeForm.register('target')}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="claude">Claude Code</option>
-                <option value="droid">Factory Droid</option>
+                <option value="claude">{t('cliproxyDialog.claudeCode')}</option>
+                <option value="droid">{t('cliproxyDialog.factoryDroid')}</option>
               </select>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {t('cliproxyDialog.cancel')}
               </Button>
               <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                {updateMutation.isPending
+                  ? t('cliproxyDialog.saving')
+                  : t('cliproxyDialog.saveChanges')}
               </Button>
             </div>
           </form>
         ) : (
           <form onSubmit={singleForm.handleSubmit(onSubmitSingle)} className="space-y-4">
             <div>
-              <Label htmlFor="edit-provider">Provider</Label>
+              <Label htmlFor="edit-provider">{t('cliproxyDialog.provider')}</Label>
               <select
                 id="edit-provider"
                 {...singleForm.register('provider')}
@@ -372,37 +382,43 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
             </div>
 
             <div>
-              <Label htmlFor="edit-model">Model</Label>
-              <Input id="edit-model" {...singleForm.register('model')} placeholder="model-id" />
-            </div>
-
-            <div>
-              <Label htmlFor="edit-account">Account (optional)</Label>
+              <Label htmlFor="edit-model">{t('cliproxyDialog.model')}</Label>
               <Input
-                id="edit-account"
-                {...singleForm.register('account')}
-                placeholder="account-id"
+                id="edit-model"
+                {...singleForm.register('model')}
+                placeholder={t('cliproxyDialog.placeholderModelId')}
               />
             </div>
 
             <div>
-              <Label htmlFor="edit-target">Default Target</Label>
+              <Label htmlFor="edit-account">{t('cliproxyDialog.accountOptional')}</Label>
+              <Input
+                id="edit-account"
+                {...singleForm.register('account')}
+                placeholder={t('cliproxyDialog.placeholderAccountId')}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-target">{t('cliproxyDialog.defaultTarget')}</Label>
               <select
                 id="edit-target"
                 {...singleForm.register('target')}
                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               >
-                <option value="claude">Claude Code</option>
-                <option value="droid">Factory Droid</option>
+                <option value="claude">{t('cliproxyDialog.claudeCode')}</option>
+                <option value="droid">{t('cliproxyDialog.factoryDroid')}</option>
               </select>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {t('cliproxyDialog.cancel')}
               </Button>
               <Button type="submit" disabled={updateMutation.isPending}>
-                {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                {updateMutation.isPending
+                  ? t('cliproxyDialog.saving')
+                  : t('cliproxyDialog.saveChanges')}
               </Button>
             </div>
           </form>

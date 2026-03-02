@@ -9,6 +9,7 @@ import { useOverview } from '@/hooks/use-overview';
 import { useSharedSummary } from '@/hooks/use-shared';
 import { cn } from '@/lib/utils';
 import type { LucideIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const HEALTH_VARIANTS = {
   ok: 'success',
@@ -62,6 +63,7 @@ function InlineStat({
 }
 
 export function HomePage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: overview, isLoading: isOverviewLoading } = useOverview();
   const { data: shared, isLoading: isSharedLoading } = useSharedSummary();
@@ -134,28 +136,28 @@ export function HomePage() {
           {/* Right: Inline Stats */}
           <div className="flex flex-wrap items-center gap-3">
             <InlineStat
-              title="Profiles"
+              title={t('home.profiles')}
               value={overview?.profiles ?? 0}
               icon={Key}
               variant="accent"
               onClick={() => navigate('/providers')}
             />
             <InlineStat
-              title="CLIProxy"
+              title={t('home.cliproxy')}
               value={overview?.cliproxy ?? 0}
               icon={Zap}
               variant="accent"
               onClick={() => navigate('/cliproxy')}
             />
             <InlineStat
-              title="Accounts"
+              title={t('home.accounts')}
               value={overview?.accounts ?? 0}
               icon={Users}
               variant="default"
               onClick={() => navigate('/accounts')}
             />
             <InlineStat
-              title="Health"
+              title={t('home.health')}
               value={overview?.health ? `${overview.health.passed}/${overview.health.total}` : '-'}
               icon={Activity}
               variant={healthVariant}
@@ -169,7 +171,7 @@ export function HomePage() {
       {shared?.symlinkStatus && !shared.symlinkStatus.valid && (
         <Alert variant="warning">
           <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Configuration Required</AlertTitle>
+          <AlertTitle>{t('home.configurationRequired')}</AlertTitle>
           <AlertDescription>{shared.symlinkStatus.message}</AlertDescription>
         </Alert>
       )}

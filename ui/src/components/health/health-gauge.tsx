@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface HealthGaugeProps {
   passed: number;
@@ -20,6 +21,7 @@ const statusColors = {
 };
 
 export function HealthGauge({ passed, total, status, size = 'md' }: HealthGaugeProps) {
+  const { t } = useTranslation();
   const config = sizeConfig[size];
   const colors = statusColors[status];
   const percentage = total > 0 ? Math.round((passed / total) * 100) : 0;
@@ -83,7 +85,7 @@ export function HealthGauge({ passed, total, status, size = 'md' }: HealthGaugeP
             config.labelSize
           )}
         >
-          health
+          {t('health.healthLabel')}
         </span>
       </div>
     </div>

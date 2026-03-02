@@ -6,6 +6,7 @@
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Terminal, ExternalLink, ChevronDown, ChevronUp, Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export interface ProviderCardProps {
   name: string;
@@ -50,6 +51,7 @@ export function ProviderCard({
   docsUrl,
   hintColor,
 }: ProviderCardProps) {
+  const { t } = useTranslation();
   const badgeClass =
     badgeColor === 'green'
       ? 'bg-green-500/10 text-green-600'
@@ -98,11 +100,11 @@ export function ProviderCard({
               </span>
               {installed ? (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/10 text-green-600 font-medium">
-                  installed
+                  {t('settingsWebsearch.installed')}
                 </span>
               ) : (
                 <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 font-medium">
-                  not installed
+                  {t('settingsWebsearch.notInstalled')}
                 </span>
               )}
             </div>
@@ -116,7 +118,9 @@ export function ProviderCard({
       {enabled && modelInput !== undefined && setModelInput && onModelBlur && (
         <div className="px-4 pb-4 pt-0">
           <div className="flex items-center gap-2">
-            <label className="text-sm text-muted-foreground whitespace-nowrap">Model:</label>
+            <label className="text-sm text-muted-foreground whitespace-nowrap">
+              {t('settingsWebsearch.model')}
+            </label>
             <Input
               value={modelInput}
               onChange={(e) => setModelInput(e.target.value)}
@@ -128,7 +132,7 @@ export function ProviderCard({
             {modelSaved && (
               <span className="flex items-center gap-1 text-green-600 dark:text-green-400 text-xs animate-in fade-in duration-200">
                 <Check className="w-3.5 h-3.5" />
-                Saved
+                {t('settings.saved')}
               </span>
             )}
           </div>
@@ -143,13 +147,16 @@ export function ProviderCard({
             className={`flex items-center gap-2 text-sm hover:underline w-full py-2 ${hintTextClass}`}
           >
             {showHint ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            How to install {displayName} CLI
+            {t('settingsWebsearch.howInstall', { name: displayName })}
           </button>
           {showHint && (
             <div className={`mt-2 p-3 rounded-md text-sm ${hintBgClass}`}>
               <p className="mb-2">
-                Install globally{' '}
-                {badge === 'GROK_API_KEY' ? '(requires xAI API key)' : '(FREE tier available)'}:
+                {t('settingsWebsearch.installGlobally')}{' '}
+                {badge === 'GROK_API_KEY'
+                  ? t('settingsWebsearch.requiresKey')
+                  : t('settingsWebsearch.freeTier')}
+                :
               </p>
               <code className={`text-sm px-2 py-1 rounded font-mono block mb-2 ${hintCodeClass}`}>
                 {installCmd}
@@ -161,7 +168,7 @@ export function ProviderCard({
                 className="hover:underline inline-flex items-center gap-1"
               >
                 <ExternalLink className="w-3 h-3" />
-                View documentation
+                {t('settingsWebsearch.viewDocs')}
               </a>
             </div>
           )}

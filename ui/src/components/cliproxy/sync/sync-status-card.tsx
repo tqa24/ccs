@@ -9,10 +9,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, RefreshCw, FileDown, Check, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 import { SyncDialog } from './sync-dialog';
 import { useSyncStatus, useExecuteSync } from '@/hooks/use-cliproxy-sync';
 
 export function SyncStatusCard() {
+  const { t } = useTranslation();
   const [dialogOpen, setDialogOpen] = useState(false);
   const { data: status, isLoading, refetch } = useSyncStatus();
   const { mutate: executeSync, isPending: isSyncing } = useExecuteSync();
@@ -31,7 +33,7 @@ export function SyncStatusCard() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <FileDown className="w-4 h-4" />
-            Profile Sync
+            {t('syncStatusCard.profileSync')}
           </CardTitle>
         </CardHeader>
         <CardContent className="flex items-center justify-center py-6">
@@ -50,7 +52,7 @@ export function SyncStatusCard() {
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <FileDown className="w-4 h-4" />
-              Profile Sync
+              {t('syncStatusCard.profileSync')}
             </CardTitle>
             <Badge
               variant={isConfigured ? 'default' : 'secondary'}
@@ -62,22 +64,24 @@ export function SyncStatusCard() {
               )}
             >
               {isConfigured ? <Check className="w-3 h-3" /> : <AlertCircle className="w-3 h-3" />}
-              {isConfigured ? 'Ready' : 'No Config'}
+              {isConfigured ? t('syncStatusCard.ready') : t('syncStatusCard.noConfig')}
             </Badge>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {isConfigured && (
             <div className="text-xs text-muted-foreground">
-              Syncs API profiles to local CLIProxy config
+              {t('syncStatusCard.syncsProfilesDesc')}
             </div>
           )}
 
           {!isConfigured && (
-            <p className="text-xs text-muted-foreground">
-              Run <code className="bg-muted px-1 rounded">ccs doctor --fix</code> to generate
-              config.
-            </p>
+            <p
+              className="text-xs text-muted-foreground"
+              dangerouslySetInnerHTML={{
+                __html: t('syncStatusCard.runDoctorHint'),
+              }}
+            />
           )}
 
           {status?.error && <p className="text-xs text-red-500">{status.error}</p>}
@@ -89,7 +93,7 @@ export function SyncStatusCard() {
               className="flex-1"
               onClick={() => setDialogOpen(true)}
             >
-              Details
+              {t('syncStatusCard.details')}
             </Button>
             <Button
               variant="default"
@@ -103,7 +107,7 @@ export function SyncStatusCard() {
               ) : (
                 <RefreshCw className="w-3 h-3" />
               )}
-              Sync Now
+              {t('syncStatusCard.syncNow')}
             </Button>
           </div>
         </CardContent>

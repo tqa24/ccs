@@ -16,6 +16,7 @@ import {
 import { Check } from 'lucide-react';
 import type { FlexibleModelSelectorProps } from './types';
 import { getPlanBadgeStyle, getMultiplierDisplay } from './utils';
+import { useTranslation } from 'react-i18next';
 
 export function FlexibleModelSelector({
   label,
@@ -25,6 +26,7 @@ export function FlexibleModelSelector({
   models,
   disabled,
 }: FlexibleModelSelectorProps) {
+  const { t } = useTranslation();
   // Find current model for display
   const currentModel = models.find((m) => m.id === value);
 
@@ -36,7 +38,7 @@ export function FlexibleModelSelector({
       </div>
       <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
         <SelectTrigger className="h-9">
-          <SelectValue placeholder="Select model">
+          <SelectValue placeholder={t('componentModelSelector.selectModel')}>
             {value && (
               <div className="flex items-center gap-2">
                 <span className="truncate font-mono text-xs">{value}</span>
@@ -55,7 +57,7 @@ export function FlexibleModelSelector({
         <SelectContent className="max-h-[300px]">
           <SelectGroup>
             <SelectLabel className="text-xs text-muted-foreground">
-              Available Models ({models.length})
+              {t('componentModelSelector.availableModelsCount', { count: models.length })}
             </SelectLabel>
             {models.map((model) => (
               <SelectItem key={model.id} value={model.id}>
@@ -76,7 +78,7 @@ export function FlexibleModelSelector({
                   )}
                   {model.preview && (
                     <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">
-                      Preview
+                      {t('componentModelSelector.preview')}
                     </Badge>
                   )}
                   {value === model.id && <Check className="w-3 h-3 text-primary ml-auto" />}

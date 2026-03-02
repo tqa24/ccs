@@ -8,12 +8,14 @@ import { useCliproxyErrorLogContent } from '@/hooks/use-cliproxy-stats';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Terminal, Info, Code, ArrowUpRight, ArrowDownLeft, FileText } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { parseErrorLog } from '@/lib/error-log-parser';
 import type { TabType, LogContentPanelProps } from './types';
 import { TabButton, StatusBadge } from './ui-primitives';
 import { OverviewTab, HeadersTab, BodyTab, RawTab } from './tab-components';
 
 export function LogContentPanel({ name, absolutePath }: LogContentPanelProps) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const { data: content, isLoading, error } = useCliproxyErrorLogContent(name);
 
@@ -29,7 +31,7 @@ export function LogContentPanel({ name, absolutePath }: LogContentPanelProps) {
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
         <div className="text-center space-y-3">
           <Terminal className="w-10 h-10 mx-auto opacity-40" />
-          <p className="text-sm">Select a log to view details</p>
+          <p className="text-sm">{t('errorLogs.selectLog')}</p>
         </div>
       </div>
     );
@@ -51,7 +53,7 @@ export function LogContentPanel({ name, absolutePath }: LogContentPanelProps) {
   if (error || !content || !parsed) {
     return (
       <div className="flex-1 flex items-center justify-center text-muted-foreground">
-        <p className="text-sm">Failed to load log content</p>
+        <p className="text-sm">{t('errorLogs.failedLoadContent')}</p>
       </div>
     );
   }
@@ -69,7 +71,7 @@ export function LogContentPanel({ name, absolutePath }: LogContentPanelProps) {
           {name && (
             <CopyButton
               value={absolutePath || name}
-              label="Copy absolute path"
+              label={t('errorLogs.copyAbsolutePath')}
               size="icon-sm"
               className="ml-1 text-muted-foreground hover:text-foreground opacity-50 hover:opacity-100 transition-opacity"
             />
@@ -80,7 +82,7 @@ export function LogContentPanel({ name, absolutePath }: LogContentPanelProps) {
           {content && (
             <CopyButton
               value={content}
-              label="Copy raw log content"
+              label={t('errorLogs.copyRawContent')}
               variant="ghost"
               size="icon-sm"
               className="text-muted-foreground hover:text-foreground"
@@ -99,31 +101,31 @@ export function LogContentPanel({ name, absolutePath }: LogContentPanelProps) {
           onClick={() => setActiveTab('overview')}
           icon={Info}
         >
-          Overview
+          {t('errorLogs.tabOverview')}
         </TabButton>
         <TabButton
           active={activeTab === 'headers'}
           onClick={() => setActiveTab('headers')}
           icon={Code}
         >
-          Headers
+          {t('errorLogs.tabHeaders')}
         </TabButton>
         <TabButton
           active={activeTab === 'request'}
           onClick={() => setActiveTab('request')}
           icon={ArrowUpRight}
         >
-          Request
+          {t('errorLogs.tabRequest')}
         </TabButton>
         <TabButton
           active={activeTab === 'response'}
           onClick={() => setActiveTab('response')}
           icon={ArrowDownLeft}
         >
-          Response
+          {t('errorLogs.tabResponse')}
         </TabButton>
         <TabButton active={activeTab === 'raw'} onClick={() => setActiveTab('raw')} icon={FileText}>
-          Raw
+          {t('errorLogs.tabRaw')}
         </TabButton>
       </div>
 

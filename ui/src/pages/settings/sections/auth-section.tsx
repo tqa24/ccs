@@ -23,6 +23,7 @@ import {
   Save,
 } from 'lucide-react';
 import { useRawConfig } from '../hooks';
+import { useTranslation } from 'react-i18next';
 
 interface TokenInfo {
   value: string;
@@ -35,6 +36,7 @@ interface AuthTokens {
 }
 
 export default function AuthSection() {
+  const { t } = useTranslation();
   const { fetchRawConfig } = useRawConfig();
 
   // State
@@ -60,16 +62,16 @@ export default function AuthSection() {
       // Use /raw to get unmasked values for editing
       const response = await fetch('/api/settings/auth/tokens/raw');
       if (!response.ok) {
-        throw new Error('Failed to fetch auth tokens');
+        throw new Error(t('settingsAuth.failedFetchTokens'));
       }
       const data = await response.json();
       setTokens(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('settings.unknownError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Load on mount
   useEffect(() => {
@@ -117,16 +119,16 @@ export default function AuthSection() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to save tokens');
+        throw new Error(data.error || t('settingsAuth.failedSaveTokens'));
       }
 
-      setSuccess('Tokens updated. Restart CLIProxy to apply.');
+      setSuccess(t('settingsAuth.tokensUpdated'));
       setEditedApiKey(null);
       setEditedSecret(null);
       await fetchTokens();
       await fetchRawConfig();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('settings.unknownError'));
     } finally {
       setSaving(false);
     }
@@ -143,14 +145,14 @@ export default function AuthSection() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to regenerate secret');
+        throw new Error(data.error || t('settingsAuth.failedRegenerate'));
       }
 
-      setSuccess('New management secret generated. Restart CLIProxy to apply.');
+      setSuccess(t('settingsAuth.secretRegenerated'));
       await fetchTokens();
       await fetchRawConfig();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('settings.unknownError'));
     } finally {
       setSaving(false);
     }
@@ -167,16 +169,16 @@ export default function AuthSection() {
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.error || 'Failed to reset tokens');
+        throw new Error(data.error || t('settingsAuth.failedReset'));
       }
 
-      setSuccess('Tokens reset to defaults. Restart CLIProxy to apply.');
+      setSuccess(t('settingsAuth.tokensReset'));
       setEditedApiKey(null);
       setEditedSecret(null);
       await fetchTokens();
       await fetchRawConfig();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unknown error');
+      setError(err instanceof Error ? err.message : t('settings.unknownError'));
     } finally {
       setSaving(false);
     }
@@ -209,7 +211,7 @@ export default function AuthSection() {
       <div className="flex-1 flex items-center justify-center">
         <div className="flex items-center gap-3 text-muted-foreground">
           <RefreshCw className="w-5 h-5 animate-spin" />
-          <span>Loading...</span>
+          <span>{t('settings.loading')}</span>
         </div>
       </div>
     );
@@ -251,31 +253,27 @@ export default function AuthSection() {
       {/* Scrollable Content */}
       <ScrollArea className="flex-1">
         <div className="p-5 space-y-6">
-          <p className="text-sm text-muted-foreground">
-            Configure CLIProxy authentication tokens. Changes require CLIProxy restart.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('settingsAuth.description')}</p>
 
           {/* API Key Section */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <KeyRound className="w-4 h-4 text-primary" />
-              <h3 className="text-base font-medium">API Key</h3>
+              <h3 className="text-base font-medium">{t('settingsAuth.apiKey')}</h3>
               {tokens.apiKey.isCustom && (
                 <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-                  Custom
+                  {t('settingsAuth.custom')}
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Used by Claude Code to authenticate with CLIProxy
-            </p>
+            <p className="text-xs text-muted-foreground">{t('settingsAuth.apiKeyDesc')}</p>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input
                   type={showApiKey ? 'text' : 'password'}
                   value={displayApiKey}
                   onChange={(e) => setEditedApiKey(e.target.value)}
-                  placeholder="API key"
+                  placeholder={t('settingsAuth.apiKeyPlaceholder')}
                   disabled={saving}
                   className="pr-20 font-mono text-sm"
                 />
@@ -310,15 +308,15 @@ export default function AuthSection() {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-primary" />
-              <h3 className="text-base font-medium">Management Secret</h3>
+              <h3 className="text-base font-medium">{t('settingsAuth.managementSecret')}</h3>
               {tokens.managementSecret.isCustom && (
                 <span className="text-xs px-2 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
-                  Custom
+                  {t('settingsAuth.custom')}
                 </span>
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Used by CCS dashboard to access CLIProxy management APIs
+              {t('settingsAuth.managementSecretDesc')}
             </p>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -326,7 +324,7 @@ export default function AuthSection() {
                   type={showSecret ? 'text' : 'password'}
                   value={displaySecret}
                   onChange={(e) => setEditedSecret(e.target.value)}
-                  placeholder="Management secret"
+                  placeholder={t('settingsAuth.managementSecretPlaceholder')}
                   disabled={saving}
                   className="pr-20 font-mono text-sm"
                 />
@@ -359,7 +357,7 @@ export default function AuthSection() {
                 size="sm"
                 onClick={regenerateSecret}
                 disabled={saving}
-                title="Generate new secure secret"
+                title={t('settingsAuth.generateSecret')}
               >
                 <Sparkles className="w-4 h-4" />
               </Button>
@@ -375,11 +373,9 @@ export default function AuthSection() {
               className="gap-2"
             >
               <RotateCcw className="w-4 h-4" />
-              Reset to Defaults
+              {t('settingsAuth.resetDefaults')}
             </Button>
-            <p className="text-xs text-muted-foreground mt-2">
-              Resets both API key and management secret to their default values.
-            </p>
+            <p className="text-xs text-muted-foreground mt-2">{t('settingsAuth.resetDesc')}</p>
           </div>
         </div>
       </ScrollArea>
@@ -394,7 +390,7 @@ export default function AuthSection() {
           className="flex-1"
         >
           <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
+          {t('settings.refresh')}
         </Button>
         <Button
           variant="default"
@@ -404,7 +400,7 @@ export default function AuthSection() {
           className="flex-1"
         >
           <Save className={`w-4 h-4 mr-2 ${saving ? 'animate-pulse' : ''}`} />
-          {saving ? 'Saving...' : 'Save'}
+          {saving ? t('settingsAuth.saving') : t('settingsAuth.save')}
         </Button>
       </div>
     </>

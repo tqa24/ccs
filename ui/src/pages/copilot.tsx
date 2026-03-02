@@ -24,6 +24,7 @@ import {
 import { useCopilot } from '@/hooks/use-copilot';
 import { CopilotConfigForm } from '@/components/copilot/copilot-config-form';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 // Status section component
 function StatusSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -99,6 +100,7 @@ function LoadingSidebar() {
 }
 
 export function CopilotPage() {
+  const { t } = useTranslation();
   const {
     status,
     statusLoading,
@@ -122,7 +124,7 @@ export function CopilotPage() {
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <Github className="w-5 h-5 text-primary" />
-              <h1 className="font-semibold">Copilot</h1>
+              <h1 className="font-semibold">{t('copilotPage.title')}</h1>
             </div>
             <Button
               variant="ghost"
@@ -134,7 +136,7 @@ export function CopilotPage() {
               <RefreshCw className={cn('w-4 h-4', statusLoading && 'animate-spin')} />
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">GitHub Copilot proxy</p>
+          <p className="text-xs text-muted-foreground">{t('copilotPage.subtitle')}</p>
         </div>
 
         {/* Status Overview */}
@@ -148,18 +150,18 @@ export function CopilotPage() {
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 shrink-0" />
                   <span className="text-xs font-semibold text-yellow-800 dark:text-yellow-200">
-                    Unofficial API - Use at Your Own Risk
+                    {t('copilotPage.unofficialTitle')}
                   </span>
                 </div>
                 <ul className="text-[11px] text-yellow-700 dark:text-yellow-300 space-y-0.5 pl-6 list-disc">
-                  <li>Reverse-engineered API - may break anytime</li>
-                  <li>Excessive use may trigger account restrictions</li>
-                  <li>No warranty, no responsibility from CCS</li>
+                  <li>{t('copilotPage.unofficialItem1')}</li>
+                  <li>{t('copilotPage.unofficialItem2')}</li>
+                  <li>{t('copilotPage.unofficialItem3')}</li>
                 </ul>
               </div>
 
               {/* Setup - Binary first, then enabled status */}
-              <StatusSection title="Setup">
+              <StatusSection title={t('copilotPage.setup')}>
                 <StatusItem
                   icon={Server}
                   label="copilot-api"
@@ -168,8 +170,8 @@ export function CopilotPage() {
                     status?.installed
                       ? status.version
                         ? `v${status.version}`
-                        : 'Installed'
-                      : 'Missing'
+                        : t('copilotPage.installed')
+                      : t('copilotPage.missing')
                   }
                 />
                 {!status?.installed && (
@@ -182,12 +184,12 @@ export function CopilotPage() {
                     {isInstalling ? (
                       <>
                         <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                        Installing...
+                        {t('copilotPage.installing')}
                       </>
                     ) : (
                       <>
                         <Download className="w-3.5 h-3.5 mr-1.5" />
-                        Install copilot-api
+                        {t('copilotPage.installCopilotApi')}
                       </>
                     )}
                   </Button>
@@ -195,21 +197,27 @@ export function CopilotPage() {
                 {status?.installed && (
                   <StatusItem
                     icon={Power}
-                    label="Integration"
+                    label={t('copilotPage.integration')}
                     status={status?.enabled ?? false}
-                    statusText={status?.enabled ? 'Enabled' : 'Disabled'}
+                    statusText={
+                      status?.enabled ? t('copilotPage.enabled') : t('copilotPage.disabled')
+                    }
                   />
                 )}
               </StatusSection>
 
               {/* Authentication - only show after binary installed */}
               {status?.installed && (
-                <StatusSection title="Auth">
+                <StatusSection title={t('copilotPage.auth')}>
                   <StatusItem
                     icon={Key}
-                    label="GitHub"
+                    label={t('copilotPage.github')}
                     status={status?.authenticated ?? false}
-                    statusText={status?.authenticated ? 'Connected' : 'Not Connected'}
+                    statusText={
+                      status?.authenticated
+                        ? t('copilotPage.connected')
+                        : t('copilotPage.notConnected')
+                    }
                   />
                   {!status?.authenticated && (
                     <Button
@@ -218,7 +226,9 @@ export function CopilotPage() {
                       onClick={() => startAuth()}
                       disabled={isAuthenticating}
                     >
-                      {isAuthenticating ? 'Authenticating...' : 'Authenticate'}
+                      {isAuthenticating
+                        ? t('copilotPage.authenticating')
+                        : t('copilotPage.authenticate')}
                     </Button>
                   )}
                 </StatusSection>
@@ -226,15 +236,17 @@ export function CopilotPage() {
 
               {/* Daemon - only show after authenticated */}
               {status?.authenticated && (
-                <StatusSection title="Daemon">
+                <StatusSection title={t('copilotPage.daemon')}>
                   <StatusItem
                     icon={Cpu}
-                    label="Status"
+                    label={t('copilotPage.status')}
                     status={status?.daemon_running ?? false}
-                    statusText={status?.daemon_running ? 'Running' : 'Stopped'}
+                    statusText={
+                      status?.daemon_running ? t('copilotPage.running') : t('copilotPage.stopped')
+                    }
                   />
                   <div className="px-3 py-1 text-xs text-muted-foreground">
-                    Port: {status?.port ?? 4141}
+                    {t('copilotPage.port')}: {status?.port ?? 4141}
                   </div>
                   <div className="px-1">
                     {status?.daemon_running ? (
@@ -246,7 +258,7 @@ export function CopilotPage() {
                         disabled={isStoppingDaemon}
                       >
                         <PowerOff className="w-3.5 h-3.5 mr-1.5" />
-                        {isStoppingDaemon ? 'Stopping...' : 'Stop'}
+                        {isStoppingDaemon ? t('copilotPage.stopping') : t('copilotPage.stop')}
                       </Button>
                     ) : (
                       <Button
@@ -257,7 +269,7 @@ export function CopilotPage() {
                         disabled={isStartingDaemon}
                       >
                         <Power className="w-3.5 h-3.5 mr-1.5" />
-                        {isStartingDaemon ? 'Starting...' : 'Start'}
+                        {isStartingDaemon ? t('copilotPage.starting') : t('copilotPage.start')}
                       </Button>
                     )}
                   </div>
@@ -270,16 +282,16 @@ export function CopilotPage() {
         {/* Footer */}
         <div className="p-3 border-t bg-background text-xs text-muted-foreground">
           <div className="flex items-center justify-between">
-            <span>Proxy</span>
+            <span>{t('copilotPage.proxy')}</span>
             {status?.daemon_running ? (
               <span className="flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3 text-green-500" />
-                Active
+                {t('copilotPage.active')}
               </span>
             ) : (
               <span className="flex items-center gap-1">
                 <XCircle className="w-3 h-3 text-muted-foreground" />
-                Inactive
+                {t('copilotPage.inactive')}
               </span>
             )}
           </div>
