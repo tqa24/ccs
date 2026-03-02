@@ -280,6 +280,38 @@ describe('resolveProfileContinuityInheritance', () => {
     expect(ensureInstanceSpy).not.toHaveBeenCalled();
   });
 
+  it('does not apply km settings alias mapping to kimi cliproxy profile in legacy mode', async () => {
+    spyOn(configLoader, 'loadOrCreateUnifiedConfig').mockReturnValue({
+      version: 8,
+    } as ReturnType<typeof configLoader.loadOrCreateUnifiedConfig>);
+    spyOn(configLoader, 'isUnifiedMode').mockReturnValue(false);
+    spyOn(configLoader, 'getConfigJsonPath').mockReturnValue('/tmp/ccs-test-config.json');
+    spyOn(fs, 'existsSync').mockImplementation((filePath) => {
+      return filePath === '/tmp/ccs-test-config.json';
+    });
+    spyOn(fs, 'readFileSync').mockImplementation((filePath) => {
+      if (filePath === '/tmp/ccs-test-config.json') {
+        return JSON.stringify({
+          continuity_inherit_from_account: {
+            km: 'pro',
+          },
+        });
+      }
+      return '';
+    });
+
+    const ensureInstanceSpy = spyOn(InstanceManager.prototype, 'ensureInstance');
+
+    const result = await resolveProfileContinuityInheritance({
+      profileName: 'kimi',
+      profileType: 'cliproxy',
+      target: 'claude',
+    });
+
+    expect(result).toEqual({});
+    expect(ensureInstanceSpy).not.toHaveBeenCalled();
+  });
+
   it('fails open when source account instance initialization throws', async () => {
     spyOn(configLoader, 'loadOrCreateUnifiedConfig').mockReturnValue({
       version: 8,
