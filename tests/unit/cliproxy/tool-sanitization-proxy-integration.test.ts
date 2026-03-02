@@ -253,6 +253,31 @@ describe('ToolSanitizationProxy Integration', () => {
       }
     });
 
+    it('rejects denylisted AGY 4.5 model IDs on antigravity provider route', async () => {
+      const proxy = new ToolSanitizationProxy({
+        upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,
+      });
+      const port = await proxy.start();
+
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/provider/agy/v1/messages`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4.5',
+            messages: [{ role: 'user', content: 'test' }],
+          }),
+        });
+
+        expect(response.status).toBe(400);
+        const body = (await response.json()) as { error: string };
+        expect(body.error).toContain('denylist');
+        expect(lastRequest).toBeNull();
+      } finally {
+        proxy.stop();
+      }
+    });
+
     it('does not rewrite AGY legacy aliases on non-AGY provider routes', async () => {
       const proxy = new ToolSanitizationProxy({
         upstreamBaseUrl: `http://127.0.0.1:${mockUpstreamPort}`,

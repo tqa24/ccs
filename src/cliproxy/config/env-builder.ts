@@ -23,6 +23,7 @@ import { getProviderSettingsPath } from './path-resolver';
 import {
   canonicalizeModelIdForProvider,
   MODEL_ENV_VAR_KEYS,
+  migrateDeniedAntigravityModelAliases,
   normalizeModelEnvVarsForProvider,
   normalizeModelIdForProvider,
 } from '../model-id-normalizer';
@@ -79,6 +80,9 @@ function migrateDeprecatedModelNames(
       canonical = UPSTREAM_MODEL_PREFIX + canonical.slice(DEPRECATED_MODEL_PREFIX.length);
     }
     canonical = normalizeModelIdForProvider(canonical, provider);
+    if (provider === 'agy') {
+      canonical = migrateDeniedAntigravityModelAliases(canonical);
+    }
 
     if (canonical !== value) {
       settings.env[key] = canonical;
@@ -94,7 +98,8 @@ function migrateDeprecatedModelNames(
       for (const key of PRESET_MODEL_KEYS) {
         const value = presetRecord[key];
         if (typeof value !== 'string') continue;
-        const canonical = normalizeModelIdForProvider(value, provider);
+        let canonical = normalizeModelIdForProvider(value, provider);
+        canonical = migrateDeniedAntigravityModelAliases(canonical);
         if (canonical !== value) {
           presetRecord[key] = canonical;
           migrated = true;
@@ -564,7 +569,10 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
   for (const key of MODEL_ENV_VAR_KEYS) {
     const current = mergedEnv[key];
     if (typeof current !== 'string' || current.trim().length === 0) continue;
-    const canonical = canonicalizeModelIdForProvider(current, provider);
+    let canonical = canonicalizeModelIdForProvider(current, provider);
+    if (provider === 'agy') {
+      canonical = migrateDeniedAntigravityModelAliases(canonical);
+    }
     if (canonical !== current) {
       mergedEnv[key] = canonical;
       mutated = true;
@@ -579,7 +587,10 @@ export function ensureProviderSettings(provider: CLIProxyProvider): void {
       for (const key of PRESET_MODEL_KEYS) {
         const value = presetRecord[key];
         if (typeof value !== 'string') continue;
-        const canonical = canonicalizeModelIdForProvider(value, provider);
+        let canonical = canonicalizeModelIdForProvider(value, provider);
+        if (provider === 'agy') {
+          canonical = migrateDeniedAntigravityModelAliases(canonical);
+        }
         if (canonical !== value) {
           presetRecord[key] = canonical;
           mutated = true;

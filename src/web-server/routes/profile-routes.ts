@@ -19,6 +19,10 @@ import { updateSettingsFile } from './route-helpers';
 
 const router = Router();
 
+function isDenylistError(message: string | undefined): boolean {
+  return typeof message === 'string' && message.toLowerCase().includes('denylist');
+}
+
 export function parseTarget(rawTarget: unknown): TargetType | null {
   if (rawTarget === undefined || rawTarget === null || rawTarget === '') {
     return null;
@@ -113,7 +117,8 @@ router.post('/', (req: Request, res: Response): void => {
   );
 
   if (!result.success) {
-    res.status(500).json({ error: result.error || 'Failed to create profile' });
+    const errorMessage = result.error || 'Failed to create profile';
+    res.status(isDenylistError(errorMessage) ? 400 : 500).json({ error: errorMessage });
     return;
   }
 
@@ -203,7 +208,8 @@ router.put('/:name', (req: Request, res: Response): void => {
       ...(hasTargetUpdate && parsedTarget && { target: parsedTarget }),
     });
   } catch (error) {
-    res.status(500).json({ error: (error as Error).message });
+    const errorMessage = (error as Error).message;
+    res.status(isDenylistError(errorMessage) ? 400 : 500).json({ error: errorMessage });
   }
 });
 

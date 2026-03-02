@@ -2,7 +2,10 @@ import { describe, it, expect } from 'bun:test';
 import {
   canonicalizeModelIdForProvider,
   extractProviderFromPathname,
+  getDeniedModelIdReasonForProvider,
+  isDeniedAntigravityModelId,
   isAntigravityProvider,
+  migrateDeniedAntigravityModelAliases,
   normalizeClaudeDottedMajorMinor,
   normalizeClaudeDottedThinkingMajorMinor,
   normalizeModelIdForProvider,
@@ -65,12 +68,12 @@ describe('model-id-normalizer', () => {
         'claude-opus-4-6-thinking'
       );
       expect(normalizeModelIdForProvider('claude-opus-4.5-thinking', 'agy')).toBe(
-        'claude-opus-4-6-thinking'
+        'claude-opus-4-5-thinking'
       );
       expect(normalizeModelIdForProvider('claude-sonnet-4.5-thinking', 'agy')).toBe(
-        'claude-sonnet-4-6'
+        'claude-sonnet-4-5-thinking'
       );
-      expect(normalizeModelIdForProvider('claude-sonnet-4.5', 'agy')).toBe('claude-sonnet-4-6');
+      expect(normalizeModelIdForProvider('claude-sonnet-4.5', 'agy')).toBe('claude-sonnet-4-5');
       expect(normalizeModelIdForProvider('claude-opus-4.6-thinking', 'gemini')).toBe(
         'claude-opus-4.6-thinking'
       );
@@ -113,15 +116,33 @@ describe('model-id-normalizer', () => {
       };
 
       const normalized = normalizeModelEnvVarsForProvider(input, 'agy');
-      expect(normalized.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6');
-      expect(normalized.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
-      expect(normalized.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6');
+      expect(normalized.ANTHROPIC_MODEL).toBe('claude-sonnet-4-5-thinking');
+      expect(normalized.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-5-thinking');
+      expect(normalized.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-5');
       expect(normalized.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-haiku-4-5');
       expect(normalized.UNRELATED).toBe('keep-me');
 
       const unchanged = normalizeModelEnvVarsForProvider(input, 'gemini');
       expect(unchanged.ANTHROPIC_MODEL).toBe('claude-sonnet-4.5-thinking');
       expect(unchanged.UNRELATED).toBe('keep-me');
+    });
+
+    it('flags denylisted antigravity models', () => {
+      expect(isDeniedAntigravityModelId('claude-opus-4-5-thinking')).toBe(true);
+      expect(isDeniedAntigravityModelId('claude-sonnet-4.5')).toBe(true);
+      expect(getDeniedModelIdReasonForProvider('claude-sonnet-4.5', 'agy')).toContain('denylist');
+      expect(getDeniedModelIdReasonForProvider('claude-sonnet-4.5', 'gemini')).toBeNull();
+      expect(getDeniedModelIdReasonForProvider('claude-haiku-4.5', 'agy')).toBeNull();
+    });
+
+    it('migrates denylisted antigravity IDs to supported 4.6 fallbacks', () => {
+      expect(migrateDeniedAntigravityModelAliases('claude-opus-4.5')).toBe(
+        'claude-opus-4-6-thinking'
+      );
+      expect(migrateDeniedAntigravityModelAliases('claude-sonnet-4-5-thinking(8192)')).toBe(
+        'claude-sonnet-4-6(8192)'
+      );
+      expect(migrateDeniedAntigravityModelAliases('claude-haiku-4-5')).toBe('claude-haiku-4-5');
     });
   });
 });

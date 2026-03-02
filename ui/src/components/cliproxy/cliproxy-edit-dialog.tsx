@@ -12,10 +12,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useUpdateVariant } from '@/hooks/use-cliproxy';
 import { CLIPROXY_PROVIDERS, getProviderDisplayName } from '@/lib/provider-config';
 import type { UpdateVariant, Variant } from '@/lib/api-client';
+import { isDeniedAgyModelId } from '@/lib/utils';
 
 const singleProviderSchema = z.object({
   provider: z.enum(CLIPROXY_PROVIDERS, { message: 'Provider is required' }),
@@ -61,10 +63,16 @@ const providerOptions = CLIPROXY_PROVIDERS.map((id) => ({
 }));
 
 const COMPOSITE_TIERS = ['opus', 'sonnet', 'haiku'] as const;
+const AGY_DENYLIST_MESSAGE =
+  'Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.';
 
 function normalizeOptionalValue(value?: string): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
+}
+
+function isDeniedAgyModelForProvider(provider: string, modelId: string | undefined): boolean {
+  return provider === 'agy' && typeof modelId === 'string' && isDeniedAgyModelId(modelId);
 }
 
 function isSingleVariantOnlyTargetChange(variant: Variant, data: SingleProviderFormData): boolean {
@@ -190,6 +198,14 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
       }
     }
 
+    const nextProvider = payload.provider || data.provider || variant.provider;
+    const nextModelForValidation = payload.model ?? normalizeOptionalValue(data.model);
+    if (isDeniedAgyModelForProvider(nextProvider, nextModelForValidation)) {
+      singleForm.setError('model', { message: AGY_DENYLIST_MESSAGE });
+      toast.error(AGY_DENYLIST_MESSAGE);
+      return;
+    }
+
     if (Object.keys(payload).length === 0) {
       onOpenChange(false);
       return;
@@ -241,6 +257,15 @@ export function CliproxyEditDialog({ variant, open, onOpenChange }: CliproxyEdit
       if (tiersChanged) {
         payload.tiers = normalizedTiers;
       }
+    }
+
+    const tiersToValidate = payload.tiers ?? data.tiers;
+    for (const tier of COMPOSITE_TIERS) {
+      const tierConfig = tiersToValidate[tier];
+      if (!isDeniedAgyModelForProvider(tierConfig.provider, tierConfig.model)) continue;
+      compositeForm.setError(`tiers.${tier}.model`, { message: AGY_DENYLIST_MESSAGE });
+      toast.error(AGY_DENYLIST_MESSAGE);
+      return;
     }
 
     if (Object.keys(payload).length === 0) {

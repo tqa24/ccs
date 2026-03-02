@@ -54,6 +54,7 @@ import { CLIPROXY_DEFAULT_PORT } from '../../cliproxy/config/port-manager';
 import {
   MODEL_ENV_VAR_KEYS,
   canonicalizeModelIdForProvider,
+  getDeniedModelIdReasonForProvider,
 } from '../../cliproxy/model-id-normalizer';
 
 const router = Router();
@@ -587,6 +588,12 @@ router.put('/models/:provider', async (req: Request, res: Response): Promise<voi
 
     if (!model || typeof model !== 'string') {
       res.status(400).json({ error: 'Missing required field: model' });
+      return;
+    }
+
+    const deniedReason = getDeniedModelIdReasonForProvider(model, provider);
+    if (deniedReason) {
+      res.status(400).json({ error: deniedReason });
       return;
     }
 

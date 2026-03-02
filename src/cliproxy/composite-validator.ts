@@ -5,6 +5,7 @@
 
 import { CLIPROXY_SUPPORTED_PROVIDERS, CompositeTierConfig } from '../config/unified-config-types';
 import type { CLIProxyProvider } from './types';
+import { getDeniedModelIdReasonForProvider } from './model-id-normalizer';
 
 export const VALID_COMPOSITE_TIERS = ['opus', 'sonnet', 'haiku'] as const;
 export type CompositeTierName = (typeof VALID_COMPOSITE_TIERS)[number];
@@ -90,6 +91,11 @@ export function validateCompositeTiers(
       return `Invalid provider '${provider}' for tier '${tier}': must be one of ${CLIPROXY_SUPPORTED_PROVIDERS.join(', ')}`;
     }
 
+    const deniedTierModelReason = getDeniedModelIdReasonForProvider(model, provider);
+    if (deniedTierModelReason) {
+      return `Invalid model for tier '${tier}': ${deniedTierModelReason}`;
+    }
+
     if (tierValue.fallback !== undefined) {
       const fallback = tierValue.fallback;
       if (!isRecord(fallback)) {
@@ -106,6 +112,14 @@ export function validateCompositeTiers(
 
       if (!isValidProvider(fallback.provider)) {
         return `Invalid fallback provider '${fallback.provider}' for tier '${tier}': must be one of ${CLIPROXY_SUPPORTED_PROVIDERS.join(', ')}`;
+      }
+
+      const deniedFallbackReason = getDeniedModelIdReasonForProvider(
+        fallback.model,
+        fallback.provider
+      );
+      if (deniedFallbackReason) {
+        return `Invalid fallback model for tier '${tier}': ${deniedFallbackReason}`;
       }
 
       if (fallback.provider === provider && fallback.model === model) {

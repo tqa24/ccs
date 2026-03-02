@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { ArrowLeft, User } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, isDeniedAgyModelId } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import { MODEL_CATALOGS } from '@/lib/model-catalogs';
 import type { VariantStepProps } from '../types';
@@ -40,6 +40,10 @@ export function VariantStep({
   const catalogModels = MODEL_CATALOGS[selectedProvider]?.models || [];
   const isCustomModel = modelName && !catalogModels.some((m) => m.id === modelName);
   const [showCustomInput, setShowCustomInput] = useState(isCustomModel);
+  const deniedCustomModel =
+    selectedProvider === 'agy' && modelName.trim().length > 0
+      ? isDeniedAgyModelId(modelName)
+      : false;
 
   const handleModelSelect = (value: string) => {
     if (value === CUSTOM_MODEL_VALUE) {
@@ -87,10 +91,20 @@ export function VariantStep({
               onChange={(e) => onModelChange(e.target.value)}
               placeholder={t('setupVariant.modelPlaceholder')}
             />
+            {deniedCustomModel && (
+              <p className="text-xs text-destructive">
+                Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.
+              </p>
+            )}
             <button
               type="button"
               className="text-xs text-primary hover:underline"
-              onClick={() => setShowCustomInput(false)}
+              onClick={() => {
+                setShowCustomInput(false);
+                if (selectedProvider === 'agy' && isDeniedAgyModelId(modelName)) {
+                  onModelChange('');
+                }
+              }}
             >
               {t('setupVariant.choosePresetInstead')}
             </button>
@@ -140,7 +154,7 @@ export function VariantStep({
           <Button variant="ghost" onClick={onSkip}>
             {t('setupVariant.skip')}
           </Button>
-          <Button onClick={onCreate} disabled={!variantName || isPending}>
+          <Button onClick={onCreate} disabled={!variantName || isPending || deniedCustomModel}>
             {isPending ? t('setupVariant.creating') : t('setupVariant.createVariant')}
           </Button>
         </div>

@@ -27,7 +27,11 @@ import {
 import type { Settings } from '../../types/config';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
-import { canonicalizeModelIdForProvider } from '../../cliproxy/model-id-normalizer';
+import {
+  canonicalizeModelIdForProvider,
+  extractProviderFromPathname,
+  getDeniedModelIdReasonForProvider,
+} from '../../cliproxy/model-id-normalizer';
 
 const router = Router();
 const MODEL_ENV_KEYS = [
@@ -139,14 +143,89 @@ function resolveProviderForProfile(profileOrVariant: string): CLIProxyProvider |
   return null;
 }
 
-function canonicalizeProfileModelId(profileOrVariant: string, modelId: string): string {
-  const provider = resolveProviderForProfile(profileOrVariant);
+function resolveProviderFromBaseUrl(baseUrl: unknown): CLIProxyProvider | null {
+  if (typeof baseUrl !== 'string' || baseUrl.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(baseUrl);
+    const extracted = extractProviderFromPathname(parsed.pathname);
+    return extracted ? mapExternalProviderName(extracted) : null;
+  } catch {
+    const extracted = extractProviderFromPathname(baseUrl);
+    return extracted ? mapExternalProviderName(extracted) : null;
+  }
+}
+
+function resolveProviderForSettings(
+  profileOrVariant: string,
+  settings?: Pick<Settings, 'env'>
+): CLIProxyProvider | null {
+  const providerFromProfile = resolveProviderForProfile(profileOrVariant);
+  if (providerFromProfile) {
+    return providerFromProfile;
+  }
+
+  const baseUrl =
+    settings?.env && typeof settings.env === 'object' ? settings.env.ANTHROPIC_BASE_URL : undefined;
+  return resolveProviderFromBaseUrl(baseUrl);
+}
+
+function canonicalizeProfileModelId(
+  profileOrVariant: string,
+  modelId: string,
+  settings?: Settings
+): string {
+  const provider = resolveProviderForSettings(profileOrVariant, settings);
   if (!provider) return modelId;
   return canonicalizeModelIdForProvider(modelId, provider);
 }
 
+function findDeniedProfileModel(
+  profileOrVariant: string,
+  modelId: string,
+  settings?: Settings
+): string | null {
+  const provider = resolveProviderForSettings(profileOrVariant, settings);
+  if (!provider) return null;
+  return getDeniedModelIdReasonForProvider(modelId, provider);
+}
+
+function validateProfileSettingsModelDenylist(
+  profileOrVariant: string,
+  settings: Settings
+): string | null {
+  if (settings.env && typeof settings.env === 'object') {
+    for (const key of MODEL_ENV_KEYS) {
+      const value = settings.env[key];
+      if (typeof value !== 'string') continue;
+      const deniedReason = findDeniedProfileModel(profileOrVariant, value, settings);
+      if (deniedReason) {
+        return `${key}: ${deniedReason}`;
+      }
+    }
+  }
+
+  if (!Array.isArray(settings.presets)) return null;
+
+  for (const preset of settings.presets) {
+    for (const key of PRESET_MODEL_KEYS) {
+      const value = preset[key];
+      if (typeof value !== 'string') continue;
+      const deniedReason = findDeniedProfileModel(profileOrVariant, value, settings);
+      if (deniedReason) {
+        const presetName = typeof preset.name === 'string' ? preset.name : 'unnamed';
+        return `Preset '${presetName}' (${key}): ${deniedReason}`;
+      }
+    }
+  }
+
+  return null;
+}
+
 function canonicalizeProfileSettings(profileOrVariant: string, settings: Settings): Settings {
-  const provider = resolveProviderForProfile(profileOrVariant);
+  const provider = resolveProviderForSettings(profileOrVariant, settings);
   if (!provider) return settings;
 
   let changed = false;
@@ -167,13 +246,18 @@ function canonicalizeProfileSettings(profileOrVariant: string, settings: Setting
   }
 
   if (Array.isArray(settings.presets)) {
-    const normalizedPresets = settings.presets.map((preset) => {
+    const normalizedPresets = settings.presets.flatMap((preset) => {
       const normalizedPreset = { ...preset };
       let presetChanged = false;
 
       for (const key of PRESET_MODEL_KEYS) {
         const value = normalizedPreset[key];
         if (typeof value !== 'string') continue;
+        const deniedReason = getDeniedModelIdReasonForProvider(value, provider);
+        if (deniedReason) {
+          changed = true;
+          return [];
+        }
         const canonical = canonicalizeModelIdForProvider(value, provider);
         if (canonical !== value) {
           normalizedPreset[key] = canonical;
@@ -314,6 +398,12 @@ router.put('/:profile', (req: Request, res: Response): void => {
       return;
     }
 
+    const deniedModelReason = validateProfileSettingsModelDenylist(profile, settings as Settings);
+    if (deniedModelReason) {
+      res.status(400).json({ error: deniedModelReason });
+      return;
+    }
+
     const normalizedSettings = canonicalizeProfileSettings(profile, settings as Settings);
 
     // Deduplicate CCS hooks to prevent accumulation (fixes #450)
@@ -437,7 +527,20 @@ router.post('/:profile/presets', (req: Request, res: Response): void => {
     }
 
     const normalizePresetModel = (modelId: string): string =>
-      canonicalizeProfileModelId(profile, modelId);
+      canonicalizeProfileModelId(profile, modelId, settings);
+
+    for (const modelId of [
+      defaultModel,
+      opus || defaultModel,
+      sonnet || defaultModel,
+      haiku || defaultModel,
+    ]) {
+      const deniedReason = findDeniedProfileModel(profile, modelId, settings);
+      if (deniedReason) {
+        res.status(400).json({ error: deniedReason });
+        return;
+      }
+    }
 
     const normalizedDefaultModel = normalizePresetModel(defaultModel);
     const normalizedOpusModel = normalizePresetModel(opus || defaultModel);

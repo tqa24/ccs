@@ -118,6 +118,50 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
     expect(persisted.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6');
   });
 
+  it('migrates denylisted AGY 4.5 model IDs to supported 4.6 fallbacks', () => {
+    writeSettings(
+      settingsPath,
+      {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+        ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+        ANTHROPIC_MODEL: 'claude-opus-4.5',
+        ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-5-thinking',
+        ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4.5-thinking',
+        ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-sonnet-4-5',
+      },
+      {
+        presets: [
+          {
+            name: 'legacy-45',
+            default: 'claude-opus-4.5',
+            opus: 'claude-opus-4-5-thinking',
+            sonnet: 'claude-sonnet-4.5-thinking',
+            haiku: 'claude-sonnet-4-5',
+          },
+        ],
+      }
+    );
+
+    const env = getEffectiveEnvVars('agy', 8317, settingsPath);
+    expect(env.ANTHROPIC_MODEL).toBe('claude-opus-4-6-thinking');
+    expect(env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
+    expect(env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6');
+    expect(env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-sonnet-4-6');
+
+    const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as {
+      env: Record<string, string>;
+      presets?: Array<Record<string, string>>;
+    };
+    expect(persisted.env.ANTHROPIC_MODEL).toBe('claude-opus-4-6-thinking');
+    expect(persisted.env.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
+    expect(persisted.env.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6');
+    expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-sonnet-4-6');
+    expect(persisted.presets?.[0]?.default).toBe('claude-opus-4-6-thinking');
+    expect(persisted.presets?.[0]?.opus).toBe('claude-opus-4-6-thinking');
+    expect(persisted.presets?.[0]?.sonnet).toBe('claude-sonnet-4-6');
+    expect(persisted.presets?.[0]?.haiku).toBe('claude-sonnet-4-6');
+  });
+
   it('migrates codex preset model mappings to canonical IDs', () => {
     writeSettings(
       settingsPath,
@@ -269,11 +313,11 @@ describe('getEffectiveEnvVars local provider URL normalization', () => {
     expect(repaired.env?.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6(8192)');
     expect(repaired.env?.ANTHROPIC_DEFAULT_OPUS_MODEL).toBe('claude-opus-4-6-thinking');
     expect(repaired.env?.ANTHROPIC_DEFAULT_SONNET_MODEL).toBe('claude-sonnet-4-6');
-    expect(repaired.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-sonnet-4-5');
+    expect(repaired.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-sonnet-4-6');
     expect(repaired.presets?.[0]?.default).toBe('claude-sonnet-4-6');
     expect(repaired.presets?.[0]?.opus).toBe('claude-opus-4-6-thinking');
     expect(repaired.presets?.[0]?.sonnet).toBe('claude-sonnet-4-6');
-    expect(repaired.presets?.[0]?.haiku).toBe('claude-sonnet-4-5');
+    expect(repaired.presets?.[0]?.haiku).toBe('claude-sonnet-4-6');
   });
 
   it('migrates codex effort-suffixed preset IDs during ensureProviderSettings', () => {

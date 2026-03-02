@@ -10,7 +10,7 @@ import {
 
 const validTier = {
   provider: 'agy',
-  model: 'claude-sonnet-4-5-thinking',
+  model: 'claude-sonnet-4-6',
 };
 
 describe('validateCompositeDefaultTier', () => {
@@ -76,5 +76,18 @@ describe('validateCompositeTiers', () => {
     );
 
     expect(error).toContain("Circular fallback in tier 'opus'");
+  });
+
+  it('rejects denylisted agy 4.5 models', () => {
+    const error = validateCompositeTiers(
+      {
+        opus: { provider: 'agy', model: 'claude-opus-4.5-thinking' },
+        sonnet: { provider: 'gemini', model: 'gemini-2.5-pro' },
+        haiku: { provider: 'gemini', model: 'gemini-2.5-flash' },
+      },
+      { defaultTier: 'opus', requireAllTiers: true }
+    );
+
+    expect(error).toContain('denylist');
   });
 });

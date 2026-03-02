@@ -8,6 +8,12 @@ import { getCcsDir, getConfigPath, loadConfigSafe, loadSettings } from '../../ut
 import { expandPath } from '../../utils/helpers';
 import { getClaudeSettingsPath } from '../../utils/claude-config-path';
 import { resolveDroidProvider } from '../../targets/droid-provider';
+import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
+import {
+  extractProviderFromPathname,
+  getDeniedModelIdReasonForProvider,
+} from '../../cliproxy/model-id-normalizer';
+import type { CLIProxyProvider } from '../../cliproxy/types';
 import type { Config, Settings } from '../../types/config';
 
 /** Model mapping for API profiles */
@@ -16,6 +22,34 @@ export interface ModelMapping {
   opusModel?: string;
   sonnetModel?: string;
   haikuModel?: string;
+}
+
+function resolveProviderFromBaseUrl(baseUrl: unknown): CLIProxyProvider | null {
+  if (typeof baseUrl !== 'string' || baseUrl.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(baseUrl);
+    const extracted = extractProviderFromPathname(parsed.pathname);
+    return extracted ? mapExternalProviderName(extracted) : null;
+  } catch {
+    const extracted = extractProviderFromPathname(baseUrl);
+    return extracted ? mapExternalProviderName(extracted) : null;
+  }
+}
+
+function getDeniedModelReasonForProvider(
+  provider: CLIProxyProvider | null,
+  values: Array<string | undefined>
+): string | null {
+  if (!provider) return null;
+  for (const value of values) {
+    if (typeof value !== 'string' || value.trim().length === 0) continue;
+    const deniedReason = getDeniedModelIdReasonForProvider(value, provider);
+    if (deniedReason) return deniedReason;
+  }
+  return null;
 }
 
 /**
@@ -70,6 +104,16 @@ export function createSettingsFile(
 ): string {
   const settingsPath = path.join(getCcsDir(), `${name}.settings.json`);
   const { model, opusModel, sonnetModel, haikuModel } = models;
+  const providerFromBaseUrl = resolveProviderFromBaseUrl(baseUrl);
+  const deniedReason = getDeniedModelReasonForProvider(providerFromBaseUrl, [
+    model,
+    opusModel,
+    sonnetModel,
+    haikuModel,
+  ]);
+  if (deniedReason) {
+    throw new Error(deniedReason);
+  }
   const droidProvider = resolveDroidProvider({
     provider,
     baseUrl,
@@ -114,6 +158,24 @@ export function updateSettingsFile(
   }
 
   const settings = loadSettings(settingsPath);
+  const providerForValidation =
+    resolveProviderFromBaseUrl(updates.baseUrl) ??
+    resolveProviderFromBaseUrl(settings.env?.ANTHROPIC_BASE_URL);
+  const deniedReason = getDeniedModelReasonForProvider(providerForValidation, [
+    updates.model !== undefined ? updates.model : settings.env?.ANTHROPIC_MODEL,
+    updates.opusModel !== undefined
+      ? updates.opusModel
+      : settings.env?.ANTHROPIC_DEFAULT_OPUS_MODEL,
+    updates.sonnetModel !== undefined
+      ? updates.sonnetModel
+      : settings.env?.ANTHROPIC_DEFAULT_SONNET_MODEL,
+    updates.haikuModel !== undefined
+      ? updates.haikuModel
+      : settings.env?.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+  ]);
+  if (deniedReason) {
+    throw new Error(deniedReason);
+  }
 
   if (updates.baseUrl) {
     settings.env = settings.env || {};

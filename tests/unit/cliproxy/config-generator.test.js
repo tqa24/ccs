@@ -584,9 +584,16 @@ auth-dir: "${cliproxyDir.replace(/\\/g, '/')}/auth"
       const config = fs.readFileSync(path.join(cliproxyDir, 'config.yaml'), 'utf-8');
 
       // Claude aliases should have fork: true
-      assert(config.includes('claude-sonnet-4-5'), 'Should include Claude sonnet model');
       assert(config.includes('claude-sonnet-4-6'), 'Should include Claude Sonnet 4.6 model');
       assert(config.includes('fork: true'), 'Should include fork: true for Claude aliases');
+      assert(
+        !config.includes('claude-sonnet-4-5'),
+        'Should not include denylisted Claude Sonnet 4.5 aliases'
+      );
+      assert(
+        !config.includes('claude-opus-4-5'),
+        'Should not include denylisted Claude Opus 4.5 aliases'
+      );
       assert(
         !config.includes('alias: gemini-claude-'),
         'Should not emit deprecated gemini-claude aliases'

@@ -14,6 +14,12 @@ import {
 import { ensureProfileHooks } from '../../utils/websearch/profile-hook-injector';
 import type { TargetType } from '../../targets/target-adapter';
 import { resolveDroidProvider } from '../../targets/droid-provider';
+import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
+import {
+  extractProviderFromPathname,
+  getDeniedModelIdReasonForProvider,
+} from '../../cliproxy/model-id-normalizer';
+import type { CLIProxyProvider } from '../../cliproxy/types';
 import type {
   ModelMapping,
   CreateApiProfileResult,
@@ -24,6 +30,34 @@ import type {
 /** Check if URL is an OpenRouter endpoint */
 function isOpenRouterUrl(baseUrl: string): boolean {
   return baseUrl.toLowerCase().includes('openrouter.ai');
+}
+
+function resolveProviderFromBaseUrl(baseUrl: string): CLIProxyProvider | null {
+  if (baseUrl.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(baseUrl);
+    const extracted = extractProviderFromPathname(parsed.pathname);
+    return extracted ? mapExternalProviderName(extracted) : null;
+  } catch {
+    const extracted = extractProviderFromPathname(baseUrl);
+    return extracted ? mapExternalProviderName(extracted) : null;
+  }
+}
+
+function getDeniedModelReason(baseUrl: string, models: ModelMapping): string | null {
+  const provider = resolveProviderFromBaseUrl(baseUrl);
+  if (!provider) return null;
+
+  for (const modelId of [models.default, models.opus, models.sonnet, models.haiku]) {
+    if (modelId.trim().length === 0) continue;
+    const deniedReason = getDeniedModelIdReasonForProvider(modelId, provider);
+    if (deniedReason) return deniedReason;
+  }
+
+  return null;
 }
 
 /** Create settings.json file for API profile (legacy format) */
@@ -159,6 +193,11 @@ export function createApiProfile(
   provider?: string
 ): CreateApiProfileResult {
   try {
+    const deniedReason = getDeniedModelReason(baseUrl, models);
+    if (deniedReason) {
+      return { success: false, settingsFile: '', error: deniedReason };
+    }
+
     const settingsFile = `~/.ccs/${name}.settings.json`;
 
     if (isUnifiedMode()) {

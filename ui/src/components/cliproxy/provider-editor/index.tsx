@@ -17,6 +17,7 @@ import {
   useDeletePreset,
 } from '@/hooks/use-cliproxy';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
+import { isDeniedAgyModelId } from '@/lib/utils';
 import i18n from '@/lib/i18n';
 import { usePrivacy } from '@/contexts/privacy-context';
 import { useProviderEditor } from './use-provider-editor';
@@ -57,10 +58,23 @@ export function ProviderEditor({
   const { data: presetsData } = usePresets(provider);
   const createPresetMutation = useCreatePreset();
   const deletePresetMutation = useDeletePreset();
-  const savedPresets = presetsData?.presets || [];
 
   // Use baseProvider for model filtering (for variants, this is the parent provider)
   const modelFilterProvider = baseProvider || provider;
+  const isAgyProvider = modelFilterProvider.toLowerCase() === 'agy';
+
+  const savedPresets = useMemo(() => {
+    const presets = presetsData?.presets || [];
+    if (!isAgyProvider) return presets;
+
+    return presets.filter(
+      (preset) =>
+        !isDeniedAgyModelId(preset.default) &&
+        !isDeniedAgyModelId(preset.opus) &&
+        !isDeniedAgyModelId(preset.sonnet) &&
+        !isDeniedAgyModelId(preset.haiku)
+    );
+  }, [isAgyProvider, presetsData?.presets]);
 
   const providerModels = useMemo(() => {
     if (!modelsData?.models) return [];
@@ -77,10 +91,12 @@ export function ProviderEditor({
     const owners = ownerMap[modelFilterProvider.toLowerCase()] || [
       modelFilterProvider.toLowerCase(),
     ];
-    return modelsData.models.filter((m) =>
-      owners.some((o) => m.owned_by.toLowerCase().includes(o))
-    );
-  }, [modelsData, modelFilterProvider]);
+    return modelsData.models.filter((m) => {
+      if (!owners.some((o) => m.owned_by.toLowerCase().includes(o))) return false;
+      if (!isAgyProvider) return true;
+      return !isDeniedAgyModelId(m.id);
+    });
+  }, [isAgyProvider, modelsData, modelFilterProvider]);
 
   const providerRoute = (baseProvider || provider).toLowerCase();
 
@@ -131,6 +147,19 @@ export function ProviderEditor({
   const effectiveApiKey = authTokens?.apiKey?.value ?? 'ccs-internal-managed';
 
   const handleApplyPreset = (updates: Record<string, string>) => {
+    if (
+      isAgyProvider &&
+      [
+        updates.ANTHROPIC_MODEL,
+        updates.ANTHROPIC_DEFAULT_OPUS_MODEL,
+        updates.ANTHROPIC_DEFAULT_SONNET_MODEL,
+        updates.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+      ].some((modelId) => typeof modelId === 'string' && isDeniedAgyModelId(modelId))
+    ) {
+      toast.error('Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.');
+      return;
+    }
+
     const effectivePort = port ?? CLIPROXY_DEFAULT_PORT;
     updateEnvValues({
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${effectivePort}/api/provider/${providerRoute}`,
@@ -141,6 +170,16 @@ export function ProviderEditor({
   };
 
   const handleCustomPresetApply = (values: ModelMappingValues, presetName?: string) => {
+    if (
+      isAgyProvider &&
+      [values.default, values.opus, values.sonnet, values.haiku].some((modelId) =>
+        isDeniedAgyModelId(modelId)
+      )
+    ) {
+      toast.error('Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.');
+      return;
+    }
+
     const effectivePort = port ?? CLIPROXY_DEFAULT_PORT;
     updateEnvValues({
       ANTHROPIC_BASE_URL: `http://127.0.0.1:${effectivePort}/api/provider/${providerRoute}`,
@@ -157,6 +196,15 @@ export function ProviderEditor({
   const handleCustomPresetSave = (values: ModelMappingValues, presetName?: string) => {
     if (!presetName) {
       toast.error(i18n.t('commonToast.enterPresetName'));
+      return;
+    }
+    if (
+      isAgyProvider &&
+      [values.default, values.opus, values.sonnet, values.haiku].some((modelId) =>
+        isDeniedAgyModelId(modelId)
+      )
+    ) {
+      toast.error('Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.');
       return;
     }
     createPresetMutation.mutate({ profile: provider, data: { name: presetName, ...values } });

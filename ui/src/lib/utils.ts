@@ -217,10 +217,15 @@ export function getClaudeResetTime<
 }
 
 // Known primary models to show when exhausted (removed from API response)
+const AGY_DENYLIST_REGEX = /claude-(?:opus|sonnet)-4(?:[.-])5(?:-thinking)?(?=(?:$|[^a-z0-9]))/i;
+
+export function isDeniedAgyModelId(modelId: string): boolean {
+  return AGY_DENYLIST_REGEX.test((modelId || '').trim());
+}
+
 const KNOWN_PRIMARY_MODELS = [
-  { name: 'claude-opus-4-5-thinking', displayName: 'Claude Opus 4.5 (Thinking)' },
-  { name: 'claude-sonnet-4-5', displayName: 'Claude Sonnet 4.5' },
-  { name: 'claude-sonnet-4-5-thinking', displayName: 'Claude Sonnet 4.5 (Thinking)' },
+  { name: 'claude-opus-4-6-thinking', displayName: 'Claude Opus 4.6 (Thinking)' },
+  { name: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6' },
   { name: 'gpt-oss-120b', displayName: 'GPT-OSS 120B (Medium)' },
 ];
 

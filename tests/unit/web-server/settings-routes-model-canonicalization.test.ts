@@ -324,6 +324,88 @@ describe('settings-routes model canonicalization', () => {
     expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-haiku-4-5');
   });
 
+  it('rejects denylisted AGY models on PUT /:profile', async () => {
+    const settingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
+    writeSettings(settingsPath, { env: {} });
+
+    const response = await fetch(`${baseUrl}/api/settings/agy`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        settings: {
+          env: {
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+            ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+            ANTHROPIC_MODEL: 'claude-sonnet-4.5',
+            ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-6-thinking',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4.5',
+          },
+          presets: [],
+        },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toContain('denylist');
+  });
+
+  it('rejects denylisted AGY models on POST /:profile/presets', async () => {
+    const settingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
+    writeSettings(settingsPath, {
+      env: {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+        ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+      },
+      presets: [],
+    });
+
+    const response = await fetch(`${baseUrl}/api/settings/agy/presets`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'legacy',
+        default: 'claude-opus-4.5-thinking',
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error?: string };
+    expect(body.error).toContain('denylist');
+  });
+
+  it('drops denylisted AGY presets on read canonicalization', async () => {
+    const settingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
+    writeSettings(settingsPath, {
+      env: {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+        ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+        ANTHROPIC_MODEL: 'claude-sonnet-4-6',
+      },
+      presets: [
+        {
+          name: 'denylisted',
+          default: 'claude-sonnet-4.5',
+          opus: 'claude-opus-4-6-thinking',
+          sonnet: 'claude-sonnet-4-6',
+          haiku: 'claude-haiku-4.5',
+        },
+      ],
+    });
+
+    const response = await fetch(`${baseUrl}/api/settings/agy/presets`);
+    expect(response.status).toBe(200);
+
+    const body = (await response.json()) as { presets: Array<Record<string, string>> };
+    expect(body.presets.length).toBe(0);
+
+    const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
+      presets: Array<Record<string, string>>;
+    };
+    expect(persisted.presets.length).toBe(0);
+  });
+
   it('does not crash on malformed non-string preset model values', async () => {
     const settingsPath = path.join(tempHome, '.ccs', 'agy.settings.json');
     writeSettings(settingsPath, {

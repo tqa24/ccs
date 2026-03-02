@@ -73,7 +73,7 @@ cliproxy:
       default_tier: 'sonnet',
       tiers: {
         opus: { provider: 'gemini', model: 'gemini-3-pro-preview' },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       },
       settings: 'cliproxy/composite-test.settings.json',
@@ -99,7 +99,7 @@ cliproxy:
 
     expect(result.success).toBe(true);
     expect(result.variant?.tiers?.opus.model).toBe('claude-opus-4-6-thinking');
-    expect(result.variant?.tiers?.sonnet.model).toBe('claude-sonnet-4-5-thinking'); // Unchanged
+    expect(result.variant?.tiers?.sonnet.model).toBe('claude-sonnet-4-6'); // Unchanged
     expect(result.variant?.tiers?.haiku.model).toBe('claude-haiku-4-5-20251001'); // Unchanged
   });
 
@@ -110,7 +110,7 @@ cliproxy:
       default_tier: 'sonnet',
       tiers: {
         opus: { provider: 'gemini', model: 'gemini-3-pro-preview' },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       },
       settings: 'cliproxy/composite-test.settings.json',
@@ -144,7 +144,7 @@ cliproxy:
       default_tier: 'sonnet',
       tiers: {
         opus: { provider: 'gemini', model: 'gemini-3-pro-preview' },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       },
       settings: 'cliproxy/composite-test.settings.json',
@@ -188,7 +188,7 @@ cliproxy:
           thinking: 'xhigh',
           account: 'team-a',
         },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       },
       settings: 'cliproxy/composite-test.settings.json',
@@ -228,7 +228,7 @@ cliproxy:
       default_tier: 'sonnet',
       tiers: {
         opus: { provider: 'gemini', model: 'gemini-3-pro-preview' },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       },
       settings: customSettingsPath,
@@ -244,9 +244,9 @@ cliproxy:
           env: {
             ANTHROPIC_BASE_URL: 'http://127.0.0.1:8318',
             ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
-            ANTHROPIC_MODEL: 'claude-sonnet-4-5-thinking',
+            ANTHROPIC_MODEL: 'claude-sonnet-4-6',
             ANTHROPIC_DEFAULT_OPUS_MODEL: 'gemini-3-pro-preview',
-            ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-5-thinking',
+            ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
             ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5-20251001',
             CUSTOM_ENV: 'preserve-this',
           },
@@ -261,7 +261,7 @@ cliproxy:
 
     const result = updateCompositeVariant('test', {
       tiers: {
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking(high)' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6(high)' },
       },
     });
 
@@ -273,7 +273,7 @@ cliproxy:
       hooks: { PreToolUse: unknown[] };
       customPreset: boolean;
     };
-    expect(updatedSettings.env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-5-thinking(high)');
+    expect(updatedSettings.env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6(high)');
     expect(updatedSettings.env.CUSTOM_ENV).toBe('preserve-this');
     expect(updatedSettings.hooks.PreToolUse.length).toBe(1);
     expect(updatedSettings.customPreset).toBe(true);
@@ -377,7 +377,7 @@ cliproxy:
       defaultTier: 'sonnet',
       tiers: {
         opus: { provider: 'gemini', model: 'gemini-2.5-pro' },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
       } as unknown as {
         opus: { provider: 'gemini' | 'codex' | 'agy'; model: string };
         sonnet: { provider: 'gemini' | 'codex' | 'agy'; model: string };
@@ -395,7 +395,7 @@ cliproxy:
       defaultTier: 'sonnet',
       tiers: {
         opus: null,
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       } as unknown as {
         opus: { provider: 'gemini' | 'codex' | 'agy'; model: string };
@@ -414,7 +414,7 @@ cliproxy:
       defaultTier: 'sonnet',
       tiers: {
         opus: { provider: 'gemini', model: 'gemini-2.5-pro' },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       },
     });
@@ -479,7 +479,7 @@ cliproxy:
       default_tier: 'sonnet',
       tiers: {
         opus: { provider: 'gemini', model: 'gemini-3-pro-preview' },
-        sonnet: { provider: 'agy', model: 'claude-sonnet-4-5-thinking' },
+        sonnet: { provider: 'agy', model: 'claude-sonnet-4-6' },
         haiku: { provider: 'agy', model: 'claude-haiku-4-5-20251001' },
       },
       settings: 'cliproxy/composite-test.settings.json',
@@ -547,7 +547,7 @@ cliproxy:
             model: gemini-3-pro-preview
         sonnet:
           provider: agy
-          model: claude-sonnet-4-5-thinking
+          model: claude-sonnet-4-6
         haiku:
           provider: agy
           model: claude-haiku-4-5-20251001
@@ -588,7 +588,7 @@ cliproxy:
           thinking: xhigh
         sonnet:
           provider: agy
-          model: claude-sonnet-4-5-thinking
+          model: claude-sonnet-4-6
           thinking: medium
         haiku:
           provider: agy
@@ -632,7 +632,7 @@ cliproxy:
           model: claude-opus-4-6-thinking
         sonnet:
           provider: agy
-          model: claude-sonnet-4-5-thinking
+          model: claude-sonnet-4-6
         haiku:
           provider: agy
           model: claude-haiku-4-5-20251001
@@ -671,7 +671,7 @@ cliproxy:
           model: claude-opus-4-6-thinking
         sonnet:
           provider: agy
-          model: claude-sonnet-4-5-thinking
+          model: claude-sonnet-4-6
       settings: cliproxy/bad.settings.json
       port: 8318
     good:

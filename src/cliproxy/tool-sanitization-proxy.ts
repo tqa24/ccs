@@ -18,7 +18,11 @@ import * as os from 'os';
 import { URL } from 'url';
 import { ToolNameMapper, type Tool, type ContentBlock } from './tool-name-mapper';
 import { sanitizeToolSchemas } from './schema-sanitizer';
-import { extractProviderFromPathname, normalizeModelIdForRouting } from './model-id-normalizer';
+import {
+  extractProviderFromPathname,
+  getDeniedModelIdReasonForProvider,
+  normalizeModelIdForRouting,
+} from './model-id-normalizer';
 import { getCcsDir } from '../utils/config-manager';
 
 export interface ToolSanitizationProxyConfig {
@@ -211,6 +215,15 @@ export class ToolSanitizationProxy {
       let modifiedBody = parsed;
       if (isRecord(modifiedBody) && typeof modifiedBody.model === 'string') {
         const providerFromPath = extractProviderFromPathname(fullUpstreamUrl.pathname);
+        const deniedReason = getDeniedModelIdReasonForProvider(
+          modifiedBody.model,
+          providerFromPath
+        );
+        if (deniedReason) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: deniedReason }));
+          return;
+        }
         const normalizedModel = normalizeModelIdForRouting(modifiedBody.model, providerFromPath);
         if (normalizedModel !== modifiedBody.model) {
           this.writeLog(

@@ -20,6 +20,7 @@ import { hasActiveSessions, deleteSessionLockForPort } from '../session-tracker'
 import { warn } from '../../utils/ui';
 import { getCcsDir } from '../../utils/config-manager';
 import { validateCompositeTiers } from '../composite-validator';
+import { getDeniedModelIdReasonForProvider } from '../model-id-normalizer';
 import {
   createSettingsFile,
   createSettingsFileUnified,
@@ -115,6 +116,11 @@ export function createVariant(
   target: TargetType = 'claude'
 ): VariantOperationResult {
   try {
+    const deniedModelReason = getDeniedModelIdReasonForProvider(model, provider);
+    if (deniedModelReason) {
+      return { success: false, error: deniedModelReason };
+    }
+
     // Validate provider/backend compatibility (block kiro/ghcp on original backend)
     const backendError = validateProviderBackend(provider);
     if (backendError) {
@@ -253,6 +259,17 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
         success: false,
         error: 'Changing provider requires model update in the same request',
       };
+    }
+
+    if (hasModelUpdate) {
+      const providerForModelUpdate = updates.provider ?? (existing.provider as CLIProxyProfileName);
+      const deniedModelReason = getDeniedModelIdReasonForProvider(
+        updates.model?.trim() || '',
+        providerForModelUpdate
+      );
+      if (deniedModelReason) {
+        return { success: false, error: deniedModelReason };
+      }
     }
 
     // Update settings file

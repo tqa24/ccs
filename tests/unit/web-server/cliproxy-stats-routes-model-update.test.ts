@@ -91,6 +91,33 @@ describe('cliproxy-stats-routes model update canonicalization', () => {
     expect(persisted.env.ANTHROPIC_DEFAULT_HAIKU_MODEL).toBe('claude-haiku-4-5');
   });
 
+  it('rejects denylisted AGY 4.5 model updates', async () => {
+    const settingsPath = path.join(tempHome, '.ccs', 'cliproxy', 'agy.settings.json');
+    writeSettings(settingsPath, {
+      ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+      ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+      ANTHROPIC_MODEL: 'claude-sonnet-4-6',
+      ANTHROPIC_DEFAULT_OPUS_MODEL: 'claude-opus-4-6-thinking',
+      ANTHROPIC_DEFAULT_SONNET_MODEL: 'claude-sonnet-4-6',
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: 'claude-haiku-4-5',
+    });
+
+    const response = await fetch(`${baseUrl}/api/cliproxy/models/agy`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-opus-4.5' }),
+    });
+    expect(response.status).toBe(400);
+
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toContain('denylist');
+
+    const persisted = JSON.parse(fs.readFileSync(settingsPath, 'utf8')) as {
+      env: Record<string, string>;
+    };
+    expect(persisted.env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6');
+  });
+
   it('canonicalizes Codex effort suffix and syncs linked core model env vars', async () => {
     const settingsPath = path.join(tempHome, '.ccs', 'cliproxy', 'codex.settings.json');
     writeSettings(settingsPath, {

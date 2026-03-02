@@ -14,10 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { useCreateVariant, useCliproxyAuth } from '@/hooks/use-cliproxy';
 import { usePrivacy } from '@/contexts/privacy-context';
 import { CLIPROXY_PROVIDERS, getProviderDisplayName } from '@/lib/provider-config';
+import { isDeniedAgyModelId } from '@/lib/utils';
 
 const singleProviderSchema = z.object({
   name: z
@@ -68,6 +70,12 @@ const providerOptions = CLIPROXY_PROVIDERS.map((id) => ({
   value: id,
   label: getProviderDisplayName(id),
 }));
+const AGY_DENYLIST_MESSAGE =
+  'Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.';
+
+function isDeniedAgyModelForProvider(provider: string, modelId: string | undefined): boolean {
+  return provider === 'agy' && typeof modelId === 'string' && isDeniedAgyModelId(modelId);
+}
 
 export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
   const { t } = useTranslation();
@@ -99,6 +107,12 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
   const providerAccounts = providerAuth?.accounts || [];
 
   const onSubmitSingle = async (data: SingleProviderFormData) => {
+    if (isDeniedAgyModelForProvider(data.provider, data.model)) {
+      singleForm.setError('model', { message: AGY_DENYLIST_MESSAGE });
+      toast.error(AGY_DENYLIST_MESSAGE);
+      return;
+    }
+
     try {
       await createMutation.mutateAsync(data);
       singleForm.reset();
@@ -109,6 +123,14 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
   };
 
   const onSubmitComposite = async (data: CompositeFormData) => {
+    for (const tier of ['opus', 'sonnet', 'haiku'] as const) {
+      const tierConfig = data.tiers[tier];
+      if (!isDeniedAgyModelForProvider(tierConfig.provider, tierConfig.model)) continue;
+      compositeForm.setError(`tiers.${tier}.model`, { message: AGY_DENYLIST_MESSAGE });
+      toast.error(AGY_DENYLIST_MESSAGE);
+      return;
+    }
+
     try {
       await createMutation.mutateAsync({
         name: data.name,

@@ -5,6 +5,7 @@ import type { CLIProxyProvider } from './types';
 import type { ModelEntry, ProviderCatalog, ThinkingSupport } from './model-catalog';
 import { MODEL_CATALOG } from './model-catalog';
 import type { RemoteModelInfo, RemoteThinkingSupport } from './management-api-types';
+import { getDeniedModelIdReasonForProvider } from './model-id-normalizer';
 
 const CACHE_FILE_NAME = 'model-catalog-cache.json';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -143,11 +144,18 @@ export function mergeCatalog(
   provider: CLIProxyProvider,
   remoteModels: RemoteModelInfo[]
 ): ProviderCatalog | undefined {
+  const filteredRemoteModels =
+    provider === 'agy'
+      ? remoteModels.filter(
+          (remoteModel) => !getDeniedModelIdReasonForProvider(remoteModel.id, provider)
+        )
+      : remoteModels;
+
   const staticCatalog = MODEL_CATALOG[provider];
-  if (!staticCatalog && remoteModels.length === 0) return undefined;
+  if (!staticCatalog && filteredRemoteModels.length === 0) return undefined;
 
   const displayName = staticCatalog?.displayName || provider;
-  const defaultModel = staticCatalog?.defaultModel || (remoteModels[0]?.id ?? '');
+  const defaultModel = staticCatalog?.defaultModel || (filteredRemoteModels[0]?.id ?? '');
 
   // Build map of static models by lowercase ID for fast lookup
   const staticMap = new Map<string, ModelEntry>();
@@ -161,7 +169,7 @@ export function mergeCatalog(
   const mergedIds = new Set<string>();
   const mergedModels: ModelEntry[] = [];
 
-  for (const remote of remoteModels) {
+  for (const remote of filteredRemoteModels) {
     const remoteEntry = mapRemoteToModelEntry(remote);
     const staticEntry = staticMap.get(remote.id.toLowerCase());
     mergedIds.add(remote.id.toLowerCase());
@@ -185,6 +193,9 @@ export function mergeCatalog(
   // Add static-only models not in remote
   if (staticCatalog) {
     for (const model of staticCatalog.models) {
+      if (getDeniedModelIdReasonForProvider(model.id, provider)) {
+        continue;
+      }
       if (!mergedIds.has(model.id.toLowerCase())) {
         mergedModels.push(model);
       }

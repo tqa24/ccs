@@ -11,6 +11,7 @@ import { getModelMappingFromConfig } from '../base-config-loader';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { getEffectiveApiKey, getEffectiveManagementSecret } from '../auth-token-manager';
 import { getCachedCatalog } from '../catalog-cache';
+import { getDeniedModelIdReasonForProvider } from '../model-id-normalizer';
 import { getAuthDir, getProviderAuthDir, getConfigPathForPort } from './path-resolver';
 import { CLIPROXY_DEFAULT_PORT } from './port-manager';
 
@@ -33,8 +34,9 @@ export const CCS_CONTROL_PANEL_SECRET = 'ccs';
  * v9: Added resilient alias compatibility expansion and cache-assisted alias enrichment
  * v10: Migrated deprecated gemini-claude-* aliases to upstream claude-* aliases
  * v11: Migrated deprecated claude-sonnet-4-6-thinking aliases to claude-sonnet-4-6
+ * v12: Removed denylisted Antigravity Claude 4.5 aliases
  */
-export const CLIPROXY_CONFIG_VERSION = 11;
+export const CLIPROXY_CONFIG_VERSION = 12;
 
 interface OAuthModelAliasEntry {
   name: string;
@@ -63,9 +65,6 @@ const DEFAULT_ANTIGRAVITY_ALIASES: OAuthModelAliasEntry[] = [
   { name: 'claude-sonnet-4-6', alias: 'claude-sonnet-4-6', fork: true },
   // Backward compatibility: legacy sonnet thinking alias now routes to canonical model ID.
   { name: 'claude-sonnet-4-6-thinking', alias: 'claude-sonnet-4-6', fork: true },
-  { name: 'claude-sonnet-4-5', alias: 'claude-sonnet-4-5', fork: true },
-  { name: 'claude-sonnet-4-5-thinking', alias: 'claude-sonnet-4-5-thinking', fork: true },
-  { name: 'claude-opus-4-5-thinking', alias: 'claude-opus-4-5-thinking', fork: true },
   { name: 'claude-opus-4-6-thinking', alias: 'claude-opus-4-6-thinking', fork: true },
 ];
 
@@ -134,6 +133,8 @@ function addAliasEntry(
     fork: entry.fork || undefined,
   };
   if (!normalized.name || !normalized.alias) return;
+  if (getDeniedModelIdReasonForProvider(normalized.name, 'agy')) return;
+  if (getDeniedModelIdReasonForProvider(normalized.alias, 'agy')) return;
 
   const key = `${normalized.name}\u0000${normalized.alias}`;
   const existingIndex = indexByKey.get(key);

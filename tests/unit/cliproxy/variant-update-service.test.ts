@@ -83,6 +83,15 @@ cliproxy:
     expect(result.error).toContain('Changing provider requires model update');
   });
 
+  it('rejects denylisted AGY 4.5 model updates', () => {
+    const result = updateVariant('demo', {
+      provider: 'agy',
+      model: 'claude-sonnet-4.5',
+    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('denylist');
+  });
+
   it('updates provider and regenerates provider-specific core env in same settings file', () => {
     const result = updateVariant('demo', {
       provider: 'codex',

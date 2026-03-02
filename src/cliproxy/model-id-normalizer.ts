@@ -23,12 +23,13 @@ const CLAUDE_DOTTED_THINKING_REGEX =
 const DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_REGEX =
   /claude-sonnet-4(?:[.-])6-thinking(?=(?:$|-|\[|\(|\/))/gi;
 const CANONICAL_ANTIGRAVITY_SONNET_46_MODEL = 'claude-sonnet-4-6';
-const DEPRECATED_ANTIGRAVITY_OPUS_45_THINKING_REGEX =
-  /claude-opus-4(?:[.-])5-thinking(?=(?:$|-|\[|\(|\/))/gi;
-const CANONICAL_ANTIGRAVITY_OPUS_46_THINKING_MODEL = 'claude-opus-4-6-thinking';
-const DEPRECATED_ANTIGRAVITY_SONNET_45_THINKING_REGEX =
-  /claude-sonnet-4(?:[.-])5-thinking(?=(?:$|-|\[|\(|\/))/gi;
-const DEPRECATED_ANTIGRAVITY_SONNET_45_REGEX = /claude-sonnet-4(?:[.-])5(?=(?:$|-|\[|\(|\/))/gi;
+const DENIED_ANTIGRAVITY_MODEL_REGEX =
+  /claude-(?:opus|sonnet)-4(?:[.-])5(?:-thinking)?(?=(?:$|[^a-z0-9]))/i;
+const DENIED_ANTIGRAVITY_OPUS_45_REGEX =
+  /claude-opus-4(?:[.-])5(?:-thinking)?(?=(?:$|[^a-z0-9]))/gi;
+const DENIED_ANTIGRAVITY_SONNET_45_REGEX =
+  /claude-sonnet-4(?:[.-])5(?:-thinking)?(?=(?:$|[^a-z0-9]))/gi;
+const CANONICAL_ANTIGRAVITY_OPUS_46_MODEL = 'claude-opus-4-6-thinking';
 const CODEX_EFFORT_SUFFIX_REGEX = /-(xhigh|high|medium)$/i;
 
 function trimModelId(model: string): string {
@@ -92,17 +93,41 @@ export function normalizeClaudeDottedThinkingMajorMinor(model: string): string {
  * Canonicalize legacy aliases to `claude-sonnet-4-6` while preserving suffixes.
  */
 export function normalizeDeprecatedAntigravityModelAliases(model: string): string {
-  return model
-    .replace(
-      DEPRECATED_ANTIGRAVITY_OPUS_45_THINKING_REGEX,
-      CANONICAL_ANTIGRAVITY_OPUS_46_THINKING_MODEL
-    )
-    .replace(DEPRECATED_ANTIGRAVITY_SONNET_45_THINKING_REGEX, CANONICAL_ANTIGRAVITY_SONNET_46_MODEL)
-    .replace(DEPRECATED_ANTIGRAVITY_SONNET_45_REGEX, CANONICAL_ANTIGRAVITY_SONNET_46_MODEL)
-    .replace(
-      DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_REGEX,
-      CANONICAL_ANTIGRAVITY_SONNET_46_MODEL
-    );
+  return model.replace(
+    DEPRECATED_ANTIGRAVITY_SONNET_46_THINKING_REGEX,
+    CANONICAL_ANTIGRAVITY_SONNET_46_MODEL
+  );
+}
+
+/**
+ * Migrate denylisted Antigravity Claude 4.5 aliases to supported Claude 4.6 IDs.
+ * This is intended for repairing stale local settings at runtime.
+ */
+export function migrateDeniedAntigravityModelAliases(model: string): string {
+  const normalized = normalizeClaudeDottedMajorMinor(trimModelId(model));
+  return normalized
+    .replace(DENIED_ANTIGRAVITY_OPUS_45_REGEX, CANONICAL_ANTIGRAVITY_OPUS_46_MODEL)
+    .replace(DENIED_ANTIGRAVITY_SONNET_45_REGEX, CANONICAL_ANTIGRAVITY_SONNET_46_MODEL);
+}
+
+/**
+ * Deprecated Antigravity models that are denylisted and should not be used.
+ */
+export function isDeniedAntigravityModelId(model: string): boolean {
+  return DENIED_ANTIGRAVITY_MODEL_REGEX.test(trimModelId(model));
+}
+
+/**
+ * Returns deny reason when model ID is blocked for the given provider.
+ */
+export function getDeniedModelIdReasonForProvider(
+  model: string,
+  provider: ProviderLike
+): string | null {
+  if (!isAntigravityProvider(provider)) return null;
+  const normalized = normalizeClaudeDottedMajorMinor(trimModelId(model));
+  if (!isDeniedAntigravityModelId(normalized)) return null;
+  return 'Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.';
 }
 
 /**
