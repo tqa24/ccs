@@ -226,4 +226,43 @@ describe('continuity-inheritance-config', () => {
       fs.rmSync(tempHome, { recursive: true, force: true });
     }
   });
+
+  it('merges continuity.inherit_from_account with legacy continuity_inherit_from_account', () => {
+    const originalCcsHome = process.env.CCS_HOME;
+    const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-continuity-merge-home-'));
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    fs.writeFileSync(
+      path.join(ccsDir, 'config.yaml'),
+      [
+        'version: 8',
+        'continuity:',
+        '  inherit_from_account:',
+        '    glm: team-a',
+        '    copilot: work',
+        'continuity_inherit_from_account:',
+        '  glm: legacy',
+        '  km: account-kimi',
+        '',
+      ].join('\n')
+    );
+
+    process.env.CCS_HOME = tempHome;
+    try {
+      const config = loadOrCreateUnifiedConfig();
+      expect(config.continuity?.inherit_from_account).toEqual({
+        glm: 'team-a',
+        copilot: 'work',
+        km: 'account-kimi',
+      });
+    } finally {
+      if (originalCcsHome === undefined) {
+        delete process.env.CCS_HOME;
+      } else {
+        process.env.CCS_HOME = originalCcsHome;
+      }
+      fs.rmSync(tempHome, { recursive: true, force: true });
+    }
+  });
 });

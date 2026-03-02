@@ -260,20 +260,22 @@ function normalizeContinuityInheritanceMap(value: unknown): Record<string, strin
  * Supports legacy root key: continuity_inherit_from_account.
  */
 function normalizeContinuityConfig(partial: Partial<UnifiedConfig>): ContinuityConfig | undefined {
-  const continuityMap = normalizeContinuityInheritanceMap(partial.continuity?.inherit_from_account);
-  if (continuityMap) {
-    return { inherit_from_account: continuityMap };
-  }
-
   const legacyMap = normalizeContinuityInheritanceMap(
     (partial as Partial<UnifiedConfig> & { continuity_inherit_from_account?: unknown })
       .continuity_inherit_from_account
   );
-  if (legacyMap) {
-    return { inherit_from_account: legacyMap };
+  const continuityMap = normalizeContinuityInheritanceMap(partial.continuity?.inherit_from_account);
+
+  if (!legacyMap && !continuityMap) {
+    return undefined;
   }
 
-  return undefined;
+  return {
+    inherit_from_account: {
+      ...(legacyMap ?? {}),
+      ...(continuityMap ?? {}),
+    },
+  };
 }
 
 /**
