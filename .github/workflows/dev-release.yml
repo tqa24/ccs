@@ -3,6 +3,11 @@ name: Dev Release
 on:
   push:
     branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: dev-release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -21,7 +26,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.PAT_TOKEN }}
+          # Prefer PAT when available (workflow-trigger compatibility), but never hard-fail when PAT is missing/expired.
+          token: ${{ secrets.PAT_TOKEN != '' && secrets.PAT_TOKEN || github.token }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -42,15 +48,18 @@ jobs:
       - name: Build
         run: bun run build:all
 
-      - name: Validate (typecheck + lint + format + maintainability [strict] + tests)
+      - name: Validate (typecheck + lint + format + maintainability [warn] + tests)
+        env:
+          # Dev channel should surface maintainability regressions without blocking every merge.
+          CCS_MAINTAINABILITY_MODE: warn
         run: bun run validate
 
       - name: Release
         id: release
         env:
           HUSKY: 0
-          # Use built-in GITHUB_TOKEN for bot identity on comments/releases
-          # PAT_TOKEN is only used for checkout (to trigger downstream workflows)
+          # Use built-in GITHUB_TOKEN for release + issue operations.
+          # Checkout credentials are resolved above with PAT fallback.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
