@@ -79,7 +79,7 @@ function buildNavGroups(t: (key: string) => string): SidebarGroupDef[] {
           path: '/providers',
           icon: Key,
           label: t('nav.apiProfiles'),
-          badge: { text: 'OpenRouter', icon: '/icons/openrouter.svg' },
+          badge: { text: 'Featured', icon: '/icons/openrouter.svg' },
         },
         {
           path: '/cliproxy',
