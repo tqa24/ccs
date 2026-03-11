@@ -43,7 +43,7 @@ jobs:
       - name: Build package
         run: bun run build:all
 
-      - name: Validate (typecheck + lint + format + maintainability [strict] + tests)
+      - name: Validate (typecheck + lint + format + tests)
         run: bun run validate
 
       - name: Release

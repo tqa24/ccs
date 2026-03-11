@@ -48,10 +48,7 @@ jobs:
       - name: Build
         run: bun run build:all
 
-      - name: Validate (typecheck + lint + format + maintainability [warn] + tests)
-        env:
-          # Dev channel should surface maintainability regressions without blocking every merge.
-          CCS_MAINTAINABILITY_MODE: warn
+      - name: Validate (typecheck + lint + format + tests)
         run: bun run validate
 
       - name: Release
