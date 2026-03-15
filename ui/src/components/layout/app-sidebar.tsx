@@ -102,7 +102,6 @@ function buildNavGroups(t: (key: string) => string): SidebarGroupDef[] {
         },
         { path: '/copilot', icon: Github, label: t('nav.githubCopilot') },
         { path: '/cursor', iconSrc: '/assets/sidebar/cursor.svg', label: t('nav.cursorIde') },
-        { path: '/claude-extension', icon: Puzzle, label: t('nav.claudeExtension') },
         {
           path: '/accounts',
           icon: Users,
@@ -117,7 +116,10 @@ function buildNavGroups(t: (key: string) => string): SidebarGroupDef[] {
     },
     {
       title: t('nav.compatibleClis'),
-      items: [{ path: '/droid', icon: TerminalSquare, label: t('nav.factoryDroid') }],
+      items: [
+        { path: '/claude-extension', icon: Puzzle, label: t('nav.claudeExtension') },
+        { path: '/droid', icon: TerminalSquare, label: t('nav.factoryDroid') },
+      ],
     },
     {
       title: t('nav.system'),
