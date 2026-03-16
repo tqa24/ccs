@@ -1,3 +1,40 @@
+## [7.54.0](https://github.com/kaitranntt/ccs/compare/v7.53.0...v7.54.0) (2026-03-16)
+
+### Features
+
+* add proxy setup using undici and update undici version ([c542606](https://github.com/kaitranntt/ccs/commit/c54260658232215ccc6c23fc1df29db62c591ab6))
+* **ci:** harden AI review with adversarial red-team prompt ([19f7091](https://github.com/kaitranntt/ccs/commit/19f70914a987bef9278d5e5e2dc77d31ef00c0b7)), closes [#731](https://github.com/kaitranntt/ccs/issues/731)
+* **claude-extension:** add binding workflow ([a2f5310](https://github.com/kaitranntt/ccs/commit/a2f531016d29093c957c1000860fc83e2dc55cb4))
+* **config:** add Claude IDE extension setup flow ([b82f10e](https://github.com/kaitranntt/ccs/commit/b82f10e63952db82ebe2e66fc584c5da231efb1d))
+* **docker:** publish release images on stable tags ([25bb806](https://github.com/kaitranntt/ccs/commit/25bb806ecdbf7e7b3b68e20b3f0557f9503edefa))
+* **i18n:** add Japanese dashboard locale ([8b5158b](https://github.com/kaitranntt/ccs/commit/8b5158bec5574c884c2937ac804bc9cb2f977538))
+
+### Bug Fixes
+
+* add missing newline at end of fetch-proxy-setup.ts ([3324053](https://github.com/kaitranntt/ccs/commit/33240534c3927eac037c0ebc703ffd44d4a3a65e))
+* align proxy routing across fetch and downloader ([fd5d16f](https://github.com/kaitranntt/ccs/commit/fd5d16f3f3cebe9b965d30bbc5a05d73011f500e))
+* **ci:** address code review findings for hardened AI review ([b528bcb](https://github.com/kaitranntt/ccs/commit/b528bcbf35bed16bc711ad903c41788e7cf4ad52))
+* **ci:** load review prompt from base branch to prevent prompt injection ([dcb4635](https://github.com/kaitranntt/ccs/commit/dcb46356f3fb65dfe065433472d73f5707bd2ce3))
+* **ci:** remove maintainability baseline gate blocking releases ([e6ae052](https://github.com/kaitranntt/ccs/commit/e6ae0525271eb631b0c8fff9c18f570f1dcb5b14))
+* **ci:** use full path in warning and add workflows/ to deep review triggers ([7828780](https://github.com/kaitranntt/ccs/commit/78287807f8c441db74d17630b7dad3fede42e997))
+* **cliproxy:** validate tier thinking against model caps ([88d1dc1](https://github.com/kaitranntt/ccs/commit/88d1dc1ddb6dc2807edf89045b808cdb77c0bf3b))
+* **config:** guard Claude extension metadata ([56ba379](https://github.com/kaitranntt/ccs/commit/56ba37911a2fc1465c1f793614ac19e4d7bcf004))
+* **copilot:** stop mutating config on read ([7bd4049](https://github.com/kaitranntt/ccs/commit/7bd404960270fddf29e1c2129c64d033221362cc))
+* **docker:** harden release image publishing ([314053b](https://github.com/kaitranntt/ccs/commit/314053b35ce9a25ca216b711fcec5b87d0cd89fe))
+* harden global fetch proxy handling ([f50c962](https://github.com/kaitranntt/ccs/commit/f50c9625de6cc4d93c5db439af9349cb5e36f14b))
+* **i18n:** polish Japanese dashboard copy ([e28f87b](https://github.com/kaitranntt/ccs/commit/e28f87bc9c7067e4c3a8c2105c42bb9f5266f7e4))
+* normalize stale copilot raptor-mini model ([c409a45](https://github.com/kaitranntt/ccs/commit/c409a4522c21d439657026aab2b915c4817142ea))
+* **sidebar:** move claude extension to compatible ([337dd18](https://github.com/kaitranntt/ccs/commit/337dd188cc240e74ea2e434ca99280360c3f9ce1))
+
+### Documentation
+
+* **readme:** clarify copilot config save behavior ([298b591](https://github.com/kaitranntt/ccs/commit/298b591d1499ff0da16c00decbddb1e74cb5a0b2))
+* **readme:** document Claude IDE extension setup ([56db603](https://github.com/kaitranntt/ccs/commit/56db6035f51058a6ff7e3e245448b8e6fbf35f91))
+
+### Styles
+
+* **claude-extension:** apply formatter output ([6724ea5](https://github.com/kaitranntt/ccs/commit/6724ea52c2cb41ca3d71e663fafce00e040b5425))
+
 ## [7.53.0](https://github.com/kaitranntt/ccs/compare/v7.52.2...v7.53.0) (2026-03-11)
 
 ### Features
