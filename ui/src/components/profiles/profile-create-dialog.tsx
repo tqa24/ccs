@@ -116,12 +116,6 @@ const QUICK_TEMPLATE_PRESETS = PROVIDER_PRESETS.filter(
 const QUICK_TEMPLATE_PRESET_IDS = new Set<string>(
   QUICK_TEMPLATE_PRESETS.map((preset) => preset.id)
 );
-const CARD_META_CLAMP_STYLE = {
-  display: '-webkit-box',
-  WebkitLineClamp: 2,
-  WebkitBoxOrient: 'vertical',
-  overflow: 'hidden',
-} as const;
 
 export function ProfileCreateDialog({
   open,
@@ -345,6 +339,7 @@ export function ProfileCreateDialog({
                         preset={preset}
                         isSelected={selectedPreset === preset.id}
                         onClick={() => handlePresetSelect(preset.id)}
+                        density="featured"
                       />
                     ))}
                     <div className="mx-1 hidden w-px rounded-full bg-border/70 sm:block" />
@@ -383,6 +378,7 @@ export function ProfileCreateDialog({
                           preset={preset}
                           isSelected={selectedPreset === preset.id}
                           onClick={() => handlePresetSelect(preset.id)}
+                          density="compact"
                         />
                       ))}
                     </div>
@@ -694,19 +690,23 @@ function CompactPresetCard({
   preset,
   isSelected,
   onClick,
+  density = 'compact',
 }: {
   preset: ProviderPreset;
   isSelected: boolean;
   onClick: () => void;
+  density?: 'featured' | 'compact';
 }) {
   const isAnthropicDirect = preset.id === 'anthropic';
+  const isFeaturedDensity = density === 'featured';
 
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-[78px] w-[168px] flex-none items-start gap-3 rounded-xl border px-3 py-2.5 text-left transition-all',
+        'flex flex-none items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all',
+        isFeaturedDensity ? 'h-[68px] w-[236px]' : 'h-[64px] w-[168px]',
         isSelected
           ? 'border-primary bg-primary/8 shadow-sm ring-1 ring-primary/10'
           : 'border-border/60 bg-background hover:border-primary/40 hover:bg-accent/20'
@@ -726,13 +726,10 @@ function CompactPresetCard({
 
       <div className="min-w-0 flex-1 space-y-1">
         <div className="space-y-1">
-          <div
-            className="text-sm font-semibold leading-tight"
-            style={{ ...CARD_META_CLAMP_STYLE, WebkitLineClamp: 2 }}
-          >
+          <div className="truncate text-[13px] font-semibold leading-tight tracking-[-0.01em]">
             {preset.name}
           </div>
-          {preset.badge && (
+          {preset.badge && isFeaturedDensity && (
             <Badge
               variant="secondary"
               className="inline-flex bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
@@ -741,9 +738,14 @@ function CompactPresetCard({
             </Badge>
           )}
         </div>
-        <p className="text-[11px] leading-4 text-muted-foreground" style={CARD_META_CLAMP_STYLE}>
-          {preset.description}
-        </p>
+        {preset.badge && !isFeaturedDensity && (
+          <Badge
+            variant="secondary"
+            className="inline-flex w-fit bg-muted px-1.5 py-0 text-[10px] text-muted-foreground"
+          >
+            {preset.badge}
+          </Badge>
+        )}
       </div>
     </button>
   );
@@ -757,7 +759,7 @@ function CustomPresetCard({ isSelected, onClick }: { isSelected: boolean; onClic
       type="button"
       onClick={onClick}
       className={cn(
-        'flex h-[78px] w-[188px] flex-none items-start gap-3 rounded-xl border border-dashed px-3 py-2.5 text-left transition-all',
+        'flex h-[68px] w-[236px] flex-none items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 text-left transition-all',
         isSelected
           ? 'border-primary bg-primary/8 shadow-sm ring-1 ring-primary/10'
           : 'border-muted-foreground/30 bg-background hover:border-primary/40 hover:bg-accent/20'
@@ -766,13 +768,10 @@ function CustomPresetCard({ isSelected, onClick }: { isSelected: boolean; onClic
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-dashed border-current/30 bg-muted/70">
         <Settings2 className="h-4 w-4 text-muted-foreground" />
       </div>
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1">
         <div className="text-sm font-semibold leading-tight">
           {t('profileEditor.customEndpoint')}
         </div>
-        <p className="text-[11px] leading-4 text-muted-foreground" style={CARD_META_CLAMP_STYLE}>
-          {t('profileEditor.customEndpointDescription')}
-        </p>
       </div>
     </button>
   );

@@ -34,7 +34,7 @@ describe('ProfileCreateDialog', () => {
     );
 
     expect(screen.getByText('Featured Providers')).toBeInTheDocument();
-    expect(screen.getByText('Alibaba Coding Plan')).not.toHaveClass('truncate');
+    expect(screen.getByText('Alibaba Coding Plan')).toBeVisible();
     const morePresetsToggle = screen.getByRole('button', { name: /More Presets/i });
     expect(morePresetsToggle).toHaveAttribute('aria-expanded', 'false');
     expect(document.body.querySelectorAll('.overflow-x-auto')).toHaveLength(1);
