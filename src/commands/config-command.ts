@@ -14,7 +14,12 @@ import { ensureCliproxyService } from '../cliproxy/service-manager';
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config-generator';
 import { getDashboardAuthConfig } from '../config/unified-config-loader';
 import { initUI, header, ok, info, warn, fail } from '../utils/ui';
-import { isLoopbackHost, resolveDashboardUrls } from './config-dashboard-host';
+import {
+  isLoopbackHost,
+  isWildcardHost,
+  normalizeDashboardHost,
+  resolveDashboardUrls,
+} from './config-dashboard-host';
 import { parseConfigCommandArgs, showConfigCommandHelp } from './config-command-options';
 
 /**
@@ -90,16 +95,21 @@ export async function handleConfigCommand(args: string[]): Promise<void> {
 
   try {
     // Start server
-    const { server, wss, cleanup } = await startServer({
+    const serverOptions: Parameters<typeof startServer>[0] = {
       port,
-      host: options.host,
       dev: options.dev,
-    });
+    };
+    if (options.hostProvided && options.host) {
+      serverOptions.host = normalizeDashboardHost(options.host);
+    }
+
+    const { server, wss, cleanup } = await startServer(serverOptions);
 
     // Setup graceful shutdown
     setupGracefulShutdown(server, wss, cleanup);
 
-    const urls = resolveDashboardUrls(options.host, port);
+    const urls = resolveDashboardUrls(resolveServerBindHost(server) ?? options.host, port);
+    const shouldWarnAboutExposure = urls.bindHost ? !isLoopbackHost(urls.bindHost) : false;
 
     if (options.dev) {
       console.log(ok(`Dev Server: ${urls.browserUrl}`));
@@ -109,20 +119,27 @@ export async function handleConfigCommand(args: string[]): Promise<void> {
       console.log(ok(`Dashboard: ${urls.browserUrl}`));
     }
 
-    if (!isLoopbackHost(urls.bindHost)) {
+    if (shouldWarnAboutExposure && urls.bindHost) {
       console.log(info(`Bind host: ${urls.bindHost}`));
-      if (urls.networkUrl) {
-        console.log(info(`Network URL: ${urls.networkUrl}`));
+      if (urls.networkUrls?.length === 1) {
+        console.log(info(`Network URL: ${urls.networkUrls[0]}`));
+      } else if (urls.networkUrls && urls.networkUrls.length > 1) {
+        console.log(info('Network URLs:'));
+        for (const networkUrl of urls.networkUrls) {
+          console.log(info(`  ${networkUrl}`));
+        }
       }
     }
 
-    if (options.hostProvided && !isLoopbackHost(urls.bindHost)) {
+    if (shouldWarnAboutExposure && urls.bindHost) {
       const authConfig = getDashboardAuthConfig();
-      console.log(warn('Dashboard may be reachable from other devices on your network.'));
+      console.log(
+        warn('Dashboard may be reachable from other devices that can connect to this machine.')
+      );
       if (!authConfig.enabled) {
         console.log(info('Protect it before sharing: ccs config auth setup'));
       }
-      if (!urls.networkUrl) {
+      if (isWildcardHost(urls.bindHost) && !urls.networkUrls?.length) {
         console.log(info('Use your machine IP or hostname from the other device.'));
       }
     }
@@ -142,4 +159,15 @@ export async function handleConfigCommand(args: string[]): Promise<void> {
     console.error(fail(`Failed to start server: ${(error as Error).message}`));
     process.exit(1);
   }
+}
+
+function resolveServerBindHost(server: {
+  address(): string | { address: string } | null;
+}): string | undefined {
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    return undefined;
+  }
+
+  return address.address;
 }

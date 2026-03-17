@@ -1,17 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 
-import {
-  DEFAULT_DASHBOARD_HOST,
-  parseConfigCommandArgs,
-} from '../../../src/commands/config-command-options';
+import { parseConfigCommandArgs } from '../../../src/commands/config-command-options';
 
 describe('config command options parser', () => {
-  it('defaults to wildcard host without explicit override', () => {
+  it('defaults to system bind behavior without explicit host', () => {
     const result = parseConfigCommandArgs([]);
 
     expect(result.help).toBe(false);
     expect(result.error).toBeUndefined();
-    expect(result.options.host).toBe(DEFAULT_DASHBOARD_HOST);
+    expect(result.options.host).toBeUndefined();
     expect(result.options.hostProvided).toBe(false);
   });
 
@@ -28,5 +25,14 @@ describe('config command options parser', () => {
     const result = parseConfigCommandArgs(['--host']);
 
     expect(result.error).toBe('Invalid host value');
+  });
+
+  it('accepts port 65535 and rejects port 65536', () => {
+    const accepted = parseConfigCommandArgs(['--port', '65535']);
+    const rejected = parseConfigCommandArgs(['--port', '65536']);
+
+    expect(accepted.error).toBeUndefined();
+    expect(accepted.options.port).toBe(65535);
+    expect(rejected.error).toBe('Invalid port number');
   });
 });

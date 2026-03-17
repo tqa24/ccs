@@ -12,31 +12,53 @@ interface NetworkInterfaceCandidate {
 type NetworkInterfacesMap = Record<string, NetworkInterfaceCandidate[] | undefined>;
 
 export interface DashboardUrls {
-  bindHost: string;
+  bindHost?: string;
   browserUrl: string;
-  networkUrl?: string;
+  networkUrls?: string[];
 }
 
 export function isLoopbackHost(host: string): boolean {
-  return LOOPBACK_HOSTS.has(host.trim().toLowerCase());
+  return LOOPBACK_HOSTS.has(normalizeDashboardHost(host)?.toLowerCase() ?? '');
 }
 
 export function isWildcardHost(host: string): boolean {
-  return WILDCARD_HOSTS.has(host.trim().toLowerCase());
+  return WILDCARD_HOSTS.has(normalizeDashboardHost(host)?.toLowerCase() ?? '');
+}
+
+export function normalizeDashboardHost(host: string | undefined): string | undefined {
+  if (!host) {
+    return undefined;
+  }
+
+  const trimmedHost = host.trim();
+  if (!trimmedHost) {
+    return undefined;
+  }
+
+  if (trimmedHost.startsWith('[') && trimmedHost.endsWith(']') && trimmedHost.includes(':')) {
+    return trimmedHost.slice(1, -1);
+  }
+
+  return trimmedHost;
 }
 
 export function resolveDashboardUrls(
-  host: string,
+  host: string | undefined,
   port: number,
   networkInterfaces: NetworkInterfacesMap = os.networkInterfaces()
 ): DashboardUrls {
-  const bindHost = host.trim();
+  const bindHost = normalizeDashboardHost(host);
+  if (!bindHost) {
+    return {
+      browserUrl: `http://localhost:${port}`,
+    };
+  }
 
   if (isWildcardHost(bindHost)) {
     return {
       bindHost,
       browserUrl: `http://localhost:${port}`,
-      networkUrl: getFirstExternalIpv4Url(port, networkInterfaces),
+      networkUrls: getExternalIpv4Urls(port, networkInterfaces),
     };
   }
 
@@ -46,10 +68,13 @@ export function resolveDashboardUrls(
   };
 }
 
-function getFirstExternalIpv4Url(
+function getExternalIpv4Urls(
   port: number,
   networkInterfaces: NetworkInterfacesMap
-): string | undefined {
+): string[] | undefined {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+
   for (const interfaceName of Object.keys(networkInterfaces)) {
     const candidates = networkInterfaces[interfaceName];
     if (!candidates) {
@@ -60,12 +85,16 @@ function getFirstExternalIpv4Url(
       const family =
         typeof candidate.family === 'string' ? candidate.family : String(candidate.family);
       if (family === 'IPv4' && !candidate.internal) {
-        return `http://${candidate.address}:${port}`;
+        const url = `http://${candidate.address}:${port}`;
+        if (!seen.has(url)) {
+          seen.add(url);
+          urls.push(url);
+        }
       }
     }
   }
 
-  return undefined;
+  return urls.length > 0 ? urls : undefined;
 }
 
 function formatHostForUrl(host: string): string {
