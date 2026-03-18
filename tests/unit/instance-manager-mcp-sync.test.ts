@@ -159,6 +159,17 @@ describe('InstanceManager MCP sync', () => {
     expect(String(warnSpy.mock.calls[0]?.[0] || '')).toContain('MCP sync skipped');
   });
 
+  it('does not list lock housekeeping as an instance', async () => {
+    spyOn(SharedManager.prototype, 'syncProjectContext').mockResolvedValue(undefined);
+    spyOn(SharedManager.prototype, 'syncAdvancedContinuityArtifacts').mockResolvedValue(undefined);
+    spyOn(InstanceManager.prototype, 'syncMcpServers').mockImplementation(() => false);
+
+    const manager = new InstanceManager();
+    await manager.ensureInstance('work', { mode: 'isolated' });
+
+    expect(manager.listInstances()).toEqual(['work']);
+  });
+
   it('skips shared symlinks and MCP sync for bare instance creation', async () => {
     const linkSharedSpy = spyOn(
       SharedManager.prototype,

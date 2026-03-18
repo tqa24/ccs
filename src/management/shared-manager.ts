@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import ProfileContextSyncLock from './profile-context-sync-lock';
 import { ok, info, warn } from '../utils/ui';
 import { AccountContextPolicy, DEFAULT_ACCOUNT_CONTEXT_GROUP } from '../auth/account-context';
 import { getCcsDir } from '../utils/config-manager';
@@ -114,6 +115,7 @@ class SharedManager {
   private readonly sharedDir: string;
   private readonly claudeDir: string;
   private readonly instancesDir: string;
+  private readonly pluginLayoutLock: ProfileContextSyncLock;
   private readonly sharedItems: SharedItem[];
   private readonly sharedPluginEntries: readonly SharedItem[] = [
     { name: 'cache', type: 'directory' },
@@ -134,6 +136,7 @@ class SharedManager {
     this.sharedDir = path.join(ccsDir, 'shared');
     this.claudeDir = path.join(this.homeDir, '.claude');
     this.instancesDir = path.join(ccsDir, 'instances');
+    this.pluginLayoutLock = new ProfileContextSyncLock(this.instancesDir);
     this.sharedItems = [
       { name: 'commands', type: 'directory' },
       { name: 'skills', type: 'directory' },
@@ -785,6 +788,12 @@ class SharedManager {
     this.normalizeMarketplaceRegistryPaths(configDir);
   }
 
+  normalizeSharedPluginMetadataPathsLocked(configDir?: string): void {
+    this.pluginLayoutLock.withNamedLockSync('__plugin-layout__', () => {
+      this.normalizeSharedPluginMetadataPaths(configDir);
+    });
+  }
+
   /**
    * Normalize plugin registry paths to use canonical ~/.claude/ paths
    * instead of instance-specific ~/.ccs/instances/<name>/ paths.
@@ -890,7 +899,7 @@ class SharedManager {
 
     if (fs.existsSync(this.instancesDir)) {
       for (const entry of fs.readdirSync(this.instancesDir, { withFileTypes: true })) {
-        if (!entry.isDirectory()) {
+        if (!entry.isDirectory() || entry.name.startsWith('.')) {
           continue;
         }
 

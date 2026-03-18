@@ -153,15 +153,22 @@ class InstanceManager {
   /**
    * Delete instance for profile
    */
-  deleteInstance(profileName: string): void {
+  async deleteInstance(profileName: string): Promise<void> {
     const instancePath = this.getInstancePath(profileName);
 
     if (!fs.existsSync(instancePath)) {
       return;
     }
 
-    // Recursive delete
-    fs.rmSync(instancePath, { recursive: true, force: true });
+    await this.contextSyncLock.withLock(profileName, async () => {
+      await this.pluginLayoutLock.withNamedLock('__plugin-layout__', async () => {
+        if (!fs.existsSync(instancePath)) {
+          return;
+        }
+
+        fs.rmSync(instancePath, { recursive: true, force: true });
+      });
+    });
   }
 
   /**
@@ -173,6 +180,10 @@ class InstanceManager {
     }
 
     return fs.readdirSync(this.instancesDir).filter((name) => {
+      if (name.startsWith('.')) {
+        return false;
+      }
+
       const instancePath = path.join(this.instancesDir, name);
       return fs.statSync(instancePath).isDirectory();
     });
