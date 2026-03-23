@@ -152,20 +152,26 @@ jobs:
       DISABLE_TELEMETRY: '1'
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: '64000'
       MAX_THINKING_TOKENS: '32000'
-      # Isolate Claude state per job so parallel self-hosted runners do not
-      # share ~/.claude config or ~/.local/state/claude locks.
-      HOME: ${{ runner.temp }}/claude-home
-      XDG_CONFIG_HOME: ${{ runner.temp }}/xdg-config
-      XDG_CACHE_HOME: ${{ runner.temp }}/xdg-cache
-      XDG_STATE_HOME: ${{ runner.temp }}/xdg-state
-      REVIEW_OUTPUT_FILE: ${{ runner.temp }}/pr_review.md
-      REVIEW_COMMENT_FILE: ${{ runner.temp }}/pr_review_comment.md
+      REVIEW_OUTPUT_FILE: pr_review.md
+      REVIEW_COMMENT_FILE: .ccs-ai-review-comment.md
 
     steps:
       - name: Prepare isolated Claude runtime
         run: |
-          mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$XDG_CACHE_HOME" "$XDG_STATE_HOME"
+          REVIEW_HOME="$RUNNER_TEMP/claude-home"
+          REVIEW_CONFIG_HOME="$RUNNER_TEMP/xdg-config"
+          REVIEW_CACHE_HOME="$RUNNER_TEMP/xdg-cache"
+          REVIEW_STATE_HOME="$RUNNER_TEMP/xdg-state"
+
+          mkdir -p "$REVIEW_HOME" "$REVIEW_CONFIG_HOME" "$REVIEW_CACHE_HOME" "$REVIEW_STATE_HOME"
           rm -f "$REVIEW_OUTPUT_FILE" "$REVIEW_COMMENT_FILE"
+
+          {
+            echo "HOME=$REVIEW_HOME"
+            echo "XDG_CONFIG_HOME=$REVIEW_CONFIG_HOME"
+            echo "XDG_CACHE_HOME=$REVIEW_CACHE_HOME"
+            echo "XDG_STATE_HOME=$REVIEW_STATE_HOME"
+          } >> "$GITHUB_ENV"
 
       - name: Generate App Token
         id: app-token
