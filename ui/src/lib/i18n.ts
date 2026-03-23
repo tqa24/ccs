@@ -473,7 +473,7 @@ const resources = {
         nicknameRequiredHint:
           'Required for this provider. Use a unique friendly name (e.g., work, personal).',
         nicknameOptionalHint:
-          'A friendly name to identify this account. Auto-generated from email if left empty.',
+          'A friendly name to identify this account. Leave blank to use a safe generated identifier.',
         waitingForAuth: 'Waiting for authentication...',
         deviceCodeHint:
           'A verification code dialog will appear shortly. Enter the code on the provider website.',
@@ -1632,7 +1632,7 @@ const resources = {
         nicknameOptional: '昵称（选填）',
         nicknamePlaceholder: '例如：工作、个人',
         nicknameRequiredHint: '该提供商必填。请使用唯一易记名称（如工作、个人）。',
-        nicknameOptionalHint: '用于区分账号的友好名称。留空将根据邮箱自动生成。',
+        nicknameOptionalHint: '用于区分账号的友好名称。留空将自动生成安全标识。',
         waitingForAuth: '等待认证中...',
         deviceCodeHint: '验证码对话框即将出现，请在提供商网站输入验证码。',
         browserHint: '在浏览器中完成认证后，本对话框将自动关闭。',
@@ -2804,7 +2804,7 @@ const resources = {
         nicknameRequiredHint:
           'Bắt buộc với nhà cung cấp này. Dùng tên thân thiện duy nhất (ví dụ: work, personal).',
         nicknameOptionalHint:
-          'Một cái tên thân thiện để xác định tài khoản này. Tự động tạo từ email nếu để trống.',
+          'Tên thân thiện để nhận biết tài khoản này. Để trống để dùng mã nhận dạng an toàn do hệ thống tạo.',
         waitingForAuth: 'Đang chờ xác thực...',
         deviceCodeHint:
           'Hộp thoại mã xác minh sẽ sớm xuất hiện. Nhập mã trên trang web của nhà cung cấp.',
@@ -4004,7 +4004,7 @@ const resources = {
         nicknameRequiredHint:
           'このプロバイダーでは必須です。重複しないわかりやすい名前を付けてください（例: work, personal）。',
         nicknameOptionalHint:
-          'このアカウントを識別しやすい名前です。空欄ならメールアドレスから自動生成されます。',
+          'このアカウントを識別しやすい名前です。空欄の場合は安全な識別子を自動生成します。',
         waitingForAuth: '認証を待機中...',
         deviceCodeHint:
           '確認コードのダイアログがまもなく表示されます。プロバイダーのサイトでコードを入力してください。',

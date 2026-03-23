@@ -156,6 +156,8 @@ The dashboard provides visual management for all account types:
 
 > **OAuth providers** authenticate via browser on first run. Tokens are cached in `~/.ccs/cliproxy/auth/`.
 
+> **Kiro / Copilot account naming:** Manual nicknames are optional. If the provider does not expose an email, CCS derives a safe internal identifier automatically and you can rename it later.
+
 > **AI Providers dashboard:** Configure CLIProxy-managed API key families at `ccs config` -> `CLIProxy` -> `AI Providers`. Use `API Profiles` only for CCS-native Anthropic-compatible profiles.
 
 **Powered by:**
