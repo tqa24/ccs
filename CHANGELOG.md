@@ -1,3 +1,10 @@
+## [7.57.1](https://github.com/kaitranntt/ccs/compare/v7.57.0...v7.57.1) (2026-03-24)
+
+### Bug Fixes
+
+* **ci:** dedupe AI review comments ([d24efd2](https://github.com/kaitranntt/ccs/commit/d24efd2863e71a7663de8e046e41982b20c7eb27))
+* **ci:** export review runtime paths at run time ([ba41008](https://github.com/kaitranntt/ccs/commit/ba4100878c7d6a268cfc2fec422f01f9dd4aa460))
+
 ## [7.57.0](https://github.com/kaitranntt/ccs/compare/v7.56.0...v7.57.0) (2026-03-24)
 
 ### Features
