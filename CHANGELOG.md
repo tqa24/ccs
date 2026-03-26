@@ -1,3 +1,33 @@
+## [7.58.0](https://github.com/kaitranntt/ccs/compare/v7.57.2...v7.58.0) (2026-03-26)
+
+### Features
+
+* **channels:** auto-enable official Claude channels ([a97fc42](https://github.com/kaitranntt/ccs/commit/a97fc42b10d3ce783b2bf84bce499b7bb9dca141))
+* **channels:** auto-enable official discord plugin ([4bce155](https://github.com/kaitranntt/ccs/commit/4bce1559dd96971c3ad34a5fab4ab22d7663fc1e)), closes [#783](https://github.com/kaitranntt/ccs/issues/783)
+* **channels:** support telegram and imessage ([6f1f032](https://github.com/kaitranntt/ccs/commit/6f1f032c6393f2dbb61452f56b331bbc05c1f051)), closes [#783](https://github.com/kaitranntt/ccs/issues/783)
+
+### Bug Fixes
+
+* **channels:** reject oversized official channel tokens ([ec1417a](https://github.com/kaitranntt/ccs/commit/ec1417ab7c1144491a277c3248d947e30ab02dc3))
+* **cliproxy:** harden corrupted registry recovery ([313e244](https://github.com/kaitranntt/ccs/commit/313e244302c174fb9fa84706d6e1ab0003bf2fc5))
+* **cliproxy:** log clean registry recovery and harden email fallback ([63f4862](https://github.com/kaitranntt/ccs/commit/63f48622e54bb84fd320982f2fe0930ad80ff6f1))
+* **cliproxy:** recover corrupted account registries from token files ([d53873b](https://github.com/kaitranntt/ccs/commit/d53873bddd358e89121166c89e4f95d2cfcf8ac3))
+* **docker:** add index annotations to link GHCR package to repository ([9c0dd34](https://github.com/kaitranntt/ccs/commit/9c0dd3489629014f2fa716a7854ac7dc39a7bb56))
+* **settings:** stabilize websearch and quota checks ([3ea9d2f](https://github.com/kaitranntt/ccs/commit/3ea9d2fc346ca7c3cd64785b067aeeefbe2145b5))
+
+### Documentation
+
+* **channels:** document official Claude channel support ([58891d3](https://github.com/kaitranntt/ccs/commit/58891d368d95ca6a48aed6e2de00257462b89de4))
+
+### Styles
+
+* **channels:** format official token guard for ci parity ([3c638b0](https://github.com/kaitranntt/ccs/commit/3c638b02bacd325c793d35d929d3565f34c08692))
+* format official channel files ([0e2f478](https://github.com/kaitranntt/ccs/commit/0e2f47802bf112e925f1cf8ce9156b1ce0602de7))
+
+### Tests
+
+* isolate shared-state test suites for CI stability ([3af5542](https://github.com/kaitranntt/ccs/commit/3af554275e2829669dfb82bd30f94575302928f1))
+
 ## [7.57.2](https://github.com/kaitranntt/ccs/compare/v7.57.1...v7.57.2) (2026-03-25)
 
 ### Bug Fixes
