@@ -1,20 +1,97 @@
 import { buildQualifiedAccountStatsKey } from './account-stats-key';
-import type { AccountUsageStats, CliproxyStats, CliproxyUsageApiResponse } from './stats-fetcher';
+import { mapExternalProviderName } from './provider-capabilities';
+import type {
+  AccountUsageStats,
+  CliproxyManagementAuthFile,
+  CliproxyRequestDetail,
+  CliproxyStats,
+  CliproxyUsageApiResponse,
+} from './stats-fetcher';
 
-export function buildCliproxyStatsFromUsageResponse(data: CliproxyUsageApiResponse): CliproxyStats {
+interface BuildCliproxyStatsOptions {
+  authFiles?: CliproxyManagementAuthFile[];
+}
+
+interface ResolvedAuthFile {
+  provider: string;
+  source?: string;
+}
+
+function normalizeProvider(provider: string): string {
+  const normalized = provider.trim().toLowerCase();
+  if (!normalized) {
+    return 'unknown';
+  }
+
+  return mapExternalProviderName(normalized) ?? normalized;
+}
+
+function buildAuthIndexLookup(
+  authFiles: CliproxyManagementAuthFile[] | undefined
+): ReadonlyMap<string, ResolvedAuthFile> {
+  const lookup = new Map<string, ResolvedAuthFile>();
+
+  for (const authFile of authFiles ?? []) {
+    if (authFile.auth_index === undefined || authFile.auth_index === null || !authFile.provider) {
+      continue;
+    }
+
+    lookup.set(String(authFile.auth_index), {
+      provider: normalizeProvider(authFile.provider),
+      source: authFile.email?.trim() || authFile.name?.trim() || undefined,
+    });
+  }
+
+  return lookup;
+}
+
+function resolveProviderForDetail(
+  usageProvider: string,
+  detail: CliproxyRequestDetail,
+  authIndexLookup: ReadonlyMap<string, ResolvedAuthFile>
+): string {
+  const resolvedAuthFile = authIndexLookup.get(String(detail.auth_index));
+  if (resolvedAuthFile?.provider) {
+    return resolvedAuthFile.provider;
+  }
+
+  return normalizeProvider(usageProvider);
+}
+
+function resolveSourceForDetail(
+  detail: CliproxyRequestDetail,
+  authIndexLookup: ReadonlyMap<string, ResolvedAuthFile>
+): string {
+  const source = detail.source?.trim();
+  if (source) {
+    return source;
+  }
+
+  return authIndexLookup.get(String(detail.auth_index))?.source ?? 'unknown';
+}
+
+export function buildCliproxyStatsFromUsageResponse(
+  data: CliproxyUsageApiResponse,
+  options: BuildCliproxyStatsOptions = {}
+): CliproxyStats {
   const usage = data.usage;
   const requestsByModel: Record<string, number> = {};
   const requestsByProvider: Record<string, number> = {};
   const accountStats: Record<string, AccountUsageStats> = {};
+  const authIndexLookup = buildAuthIndexLookup(options.authFiles);
   let totalSuccessCount = 0;
   let totalFailureCount = 0;
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
+  let sawAnyDetail = false;
 
   if (usage?.apis) {
     for (const [provider, providerData] of Object.entries(usage.apis)) {
-      requestsByProvider[provider] = providerData.total_requests ?? 0;
+      let sawProviderDetail = false;
       if (!providerData.models) {
+        const normalizedProvider = normalizeProvider(provider);
+        requestsByProvider[normalizedProvider] =
+          (requestsByProvider[normalizedProvider] ?? 0) + (providerData.total_requests ?? 0);
         continue;
       }
 
@@ -25,13 +102,17 @@ export function buildCliproxyStatsFromUsageResponse(data: CliproxyUsageApiRespon
         }
 
         for (const detail of modelData.details) {
-          const source = detail.source || 'unknown';
-          const accountKey = buildQualifiedAccountStatsKey(provider, source);
+          sawAnyDetail = true;
+          sawProviderDetail = true;
+          const source = resolveSourceForDetail(detail, authIndexLookup);
+          const resolvedProvider = resolveProviderForDetail(provider, detail, authIndexLookup);
+          const accountKey = buildQualifiedAccountStatsKey(resolvedProvider, source);
+          requestsByProvider[resolvedProvider] = (requestsByProvider[resolvedProvider] ?? 0) + 1;
 
           if (!accountStats[accountKey]) {
             accountStats[accountKey] = {
               accountKey,
-              provider,
+              provider: resolvedProvider,
               source,
               successCount: 0,
               failureCount: 0,
@@ -54,13 +135,21 @@ export function buildCliproxyStatsFromUsageResponse(data: CliproxyUsageApiRespon
           totalOutputTokens += detail.tokens?.output_tokens ?? 0;
         }
       }
+
+      if (!sawProviderDetail) {
+        const normalizedProvider = normalizeProvider(provider);
+        requestsByProvider[normalizedProvider] =
+          (requestsByProvider[normalizedProvider] ?? 0) + (providerData.total_requests ?? 0);
+      }
     }
   }
 
   return {
     totalRequests: usage?.total_requests ?? 0,
-    successCount: totalSuccessCount,
-    failureCount: totalFailureCount,
+    successCount: sawAnyDetail ? totalSuccessCount : (usage?.success_count ?? 0),
+    failureCount: sawAnyDetail
+      ? totalFailureCount
+      : (usage?.failure_count ?? data.failed_requests ?? 0),
     tokens: {
       input: totalInputTokens,
       output: totalOutputTokens,

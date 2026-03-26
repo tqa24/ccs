@@ -64,7 +64,7 @@ export interface CliproxyStats {
 export interface CliproxyRequestDetail {
   timestamp: string;
   source: string;
-  auth_index: number;
+  auth_index: string | number;
   tokens: {
     input_tokens: number;
     output_tokens: number;
@@ -104,6 +104,14 @@ export interface CliproxyUsageApiResponse {
   };
 }
 
+/** Auth file metadata from CLIProxyAPI /v0/management/auth-files */
+export interface CliproxyManagementAuthFile {
+  auth_index?: string | number;
+  provider?: string;
+  email?: string;
+  name?: string;
+}
+
 /**
  * Fetch usage statistics from CLIProxyAPI management API
  * @param port CLIProxyAPI port (default: 8317)
@@ -111,35 +119,16 @@ export interface CliproxyUsageApiResponse {
  */
 export async function fetchCliproxyStats(port?: number): Promise<CliproxyStats | null> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout
+    const [data, authFiles] = await Promise.all([
+      fetchCliproxyUsageRaw(port),
+      fetchCliproxyAuthFiles(port),
+    ]);
 
-    // Dynamic target resolution
-    const target = getProxyTarget();
-    // Allow port override for local testing only
-    if (port !== undefined && !target.isRemote) {
-      target.port = port;
-    }
-    const url = buildProxyUrl(target, '/v0/management/usage');
-
-    // For management endpoints, use management key for remote, local management secret for local
-    const headers = target.isRemote
-      ? buildManagementHeaders(target)
-      : { Accept: 'application/json', Authorization: `Bearer ${getEffectiveManagementSecret()}` };
-
-    const response = await fetch(url, {
-      signal: controller.signal,
-      headers,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
+    if (!data) {
       return null;
     }
 
-    const data = (await response.json()) as CliproxyUsageApiResponse;
-    return buildCliproxyStatsFromUsageResponse(data);
+    return buildCliproxyStatsFromUsageResponse(data, { authFiles: authFiles ?? [] });
   } catch {
     // CLIProxyAPI not running or stats endpoint not available
     return null;
@@ -179,6 +168,39 @@ export async function fetchCliproxyUsageRaw(
     }
 
     return (await response.json()) as CliproxyUsageApiResponse;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchCliproxyAuthFiles(port?: number): Promise<CliproxyManagementAuthFile[] | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const target = getProxyTarget();
+    if (port !== undefined && !target.isRemote) {
+      target.port = port;
+    }
+    const url = buildProxyUrl(target, '/v0/management/auth-files');
+
+    const headers = target.isRemote
+      ? buildManagementHeaders(target)
+      : { Accept: 'application/json', Authorization: `Bearer ${getEffectiveManagementSecret()}` };
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = (await response.json()) as { files?: CliproxyManagementAuthFile[] };
+    return Array.isArray(data.files) ? data.files : null;
   } catch {
     return null;
   }

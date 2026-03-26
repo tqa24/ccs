@@ -51,7 +51,7 @@ import {
   normalizeKiroAuthMethod,
   toKiroManagementMethod,
 } from '../../cliproxy/auth/auth-types';
-import { getOAuthFlowType } from '../../cliproxy/provider-capabilities';
+import { getOAuthFlowType, mapExternalProviderName } from '../../cliproxy/provider-capabilities';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { CLIPROXY_PROFILES } from '../../auth/profile-detector';
 import {
@@ -294,24 +294,11 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
     // Fetch CLIProxyAPI usage stats to determine active providers
     const stats = await fetchCliproxyStats();
 
-    // Map CLIProxyAPI provider names to our internal provider names
-    const statsProviderMap: Record<string, CLIProxyProvider> = {
-      gemini: 'gemini',
-      antigravity: 'agy',
-      codex: 'codex',
-      qwen: 'qwen',
-      iflow: 'iflow',
-      kiro: 'kiro',
-      copilot: 'ghcp', // CLIProxyAPI returns 'copilot', we map to 'ghcp'
-      anthropic: 'claude', // CLIProxyAPI returns 'anthropic', we map to 'claude'
-      claude: 'claude',
-    };
-
     // Update lastUsedAt for providers with recent activity
     if (stats?.requestsByProvider) {
       for (const [statsProvider, requestCount] of Object.entries(stats.requestsByProvider)) {
         if (requestCount > 0) {
-          const provider = statsProviderMap[statsProvider.toLowerCase()];
+          const provider = mapExternalProviderName(statsProvider.toLowerCase());
           if (provider) {
             // Touch the default account for this provider (or all accounts)
             const accounts = getProviderAccounts(provider);
