@@ -277,6 +277,7 @@ jobs:
             - Use simple, single-purpose bash commands only
 
           claude_args: |
+            --bare
             --model ${{ env.REVIEW_MODEL }}
             --allowedTools "Edit,Glob,Grep,LS,Read,Write,Bash(gh pr diff *),Bash(gh pr view *),Bash(gh issue view *),Bash(git diff *),Bash(git log *),Bash(git status *),Bash(cat *),Bash(ls *)"
 
