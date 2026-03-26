@@ -118,7 +118,7 @@ const ROOT_COMMAND_ROUTES: readonly NamedCommandRoute[] = [
   {
     name: 'api',
     handle: async (args) => {
-      const { handleApiCommand } = await import('./api-command');
+      const { handleApiCommand } = await import('./api-command/index');
       await handleApiCommand(args);
     },
   },

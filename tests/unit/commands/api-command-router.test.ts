@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 
-import { createApiCommandHandler } from '../../../src/commands/api-command';
+import { createApiCommandHandler } from '../../../src/commands/api-command/handler';
 
 let calls: string[] = [];
 

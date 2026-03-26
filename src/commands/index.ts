@@ -2,7 +2,7 @@
  * Commands module barrel export
  */
 
-export { handleApiCommand } from './api-command';
+export { handleApiCommand } from './api-command/index';
 export { handleCleanupCommand } from './cleanup-command';
 export { handleCliproxyCommand } from './cliproxy-command';
 export { handleConfigCommand } from './config-command';
