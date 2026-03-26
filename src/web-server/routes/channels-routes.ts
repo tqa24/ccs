@@ -178,7 +178,8 @@ router.put('/:channelId/token', (req: Request, res: Response): void => {
     res.json({ success: true, tokenConfigured: true, tokenPath });
   } catch (error) {
     const message = (error as Error).message;
-    const statusCode = message.includes('cannot be empty') ? 400 : 500;
+    const statusCode =
+      message.includes('cannot be empty') || message.includes('cannot exceed') ? 400 : 500;
     res.status(statusCode).json({ error: message });
   }
 });

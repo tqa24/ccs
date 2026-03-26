@@ -194,4 +194,16 @@ describe('web-server channels-routes', () => {
       else delete process.env.DISCORD_BOT_TOKEN;
     }
   });
+
+  it('rejects oversized token writes with a 400 response', async () => {
+    const response = await putJson(baseUrl, '/api/channels/discord/token', {
+      token: 'x'.repeat(4097),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'DISCORD_BOT_TOKEN cannot exceed 4096 characters.',
+    });
+    expect(fs.existsSync(path.join(tempHome, '.claude', 'channels', 'discord', '.env'))).toBe(false);
+  });
 });

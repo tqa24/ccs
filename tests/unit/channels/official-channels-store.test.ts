@@ -56,6 +56,16 @@ describe('official channels token store', () => {
     expect(readConfiguredOfficialChannelToken('telegram')).toBe('telegram-secret');
   });
 
+  it('rejects oversized official channel tokens before writing channel state', () => {
+    const envPath = getOfficialChannelEnvPath('discord');
+
+    expect(() => setConfiguredOfficialChannelToken('discord', 'x'.repeat(4097))).toThrow(
+      'DISCORD_BOT_TOKEN cannot exceed 4096 characters.'
+    );
+    expect(fs.existsSync(envPath)).toBe(false);
+    expect(hasConfiguredOfficialChannelToken('discord')).toBe(false);
+  });
+
   it('uses the official state-dir override when one is configured', () => {
     const originalDiscordStateDir = process.env.DISCORD_STATE_DIR;
     process.env.DISCORD_STATE_DIR = path.join(tempHome, 'discord-state');

@@ -22,6 +22,8 @@ export interface OfficialChannelTokenStatus {
   processEnvAvailable: boolean;
 }
 
+const MAX_OFFICIAL_CHANNEL_TOKEN_LENGTH = 4096;
+
 function getResolvedStateDirOverride(
   channelId: OfficialChannelId,
   envOverrides?: NodeJS.ProcessEnv | null
@@ -292,6 +294,9 @@ export function setConfiguredOfficialChannelToken(
   const normalized = normalizeDiscordBotToken(token);
   if (!normalized) {
     throw new Error(`${envKey} cannot be empty or multiline.`);
+  }
+  if (normalized.length > MAX_OFFICIAL_CHANNEL_TOKEN_LENGTH) {
+    throw new Error(`${envKey} cannot exceed ${MAX_OFFICIAL_CHANNEL_TOKEN_LENGTH} characters.`);
   }
 
   const envPath = getOfficialChannelEnvPath(channelId);
