@@ -11,6 +11,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { getCapturedFetchRequests, mockFetch, restoreFetch } from '../../mocks';
 
 describe('Gemini CLI Quota Fetcher', () => {
+  const GEMINI_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota';
+  const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
   let tempHome: string;
   let originalCcsHome: string | undefined;
   let originalCcsDir: string | undefined;
@@ -18,6 +20,7 @@ describe('Gemini CLI Quota Fetcher', () => {
   let originalGeminiClientSecret: string | undefined;
   let moduleVersion = 0;
   let buildGeminiCliBuckets: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').buildGeminiCliBuckets;
+  let fetchGeminiCliQuota: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').fetchGeminiCliQuota;
   let resolveGeminiCliProjectId: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').resolveGeminiCliProjectId;
   let refreshGeminiToken: typeof import('../../../src/cliproxy/auth/gemini-token-refresh').refreshGeminiToken;
   let getProviderAuthDir: typeof import('../../../src/cliproxy/config-generator').getProviderAuthDir;
@@ -28,6 +31,23 @@ describe('Gemini CLI Quota Fetcher', () => {
     const tokenPath = path.join(authDir, 'gemini-test.json');
     fs.writeFileSync(tokenPath, JSON.stringify(token, null, 2));
     return tokenPath;
+  }
+
+  function writeActiveGeminiAccount(accountId: string, overrides: Record<string, unknown> = {}): string {
+    return writeGeminiToken({
+      type: 'gemini',
+      email: accountId,
+      project_id: 'cloudaicompanion-test-123',
+      token: {
+        access_token: 'access-token',
+        refresh_token: 'refresh-token',
+        expiry: Date.now() + 60 * 60 * 1000,
+        client_id: 'test-client-id',
+        client_secret: 'test-client-secret',
+        token_uri: GOOGLE_TOKEN_URL,
+      },
+      ...overrides,
+    });
   }
 
   beforeEach(async () => {
@@ -46,7 +66,7 @@ describe('Gemini CLI Quota Fetcher', () => {
     const configGenerator = await import(
       `../../../src/cliproxy/config-generator?gemini-config-generator=${moduleVersion}`
     );
-    ({ buildGeminiCliBuckets, resolveGeminiCliProjectId } = await import(
+    ({ buildGeminiCliBuckets, fetchGeminiCliQuota, resolveGeminiCliProjectId } = await import(
       `../../../src/cliproxy/quota-fetcher-gemini-cli?gemini-quota-fetcher=${moduleVersion}`
     ));
     ({ refreshGeminiToken } = await import(
@@ -262,6 +282,104 @@ describe('Gemini CLI Quota Fetcher', () => {
       const flashBucket = buckets.find((b) => b.label === 'Gemini Flash Series');
       expect(flashBucket!.modelIds).toContain('gemini-3-flash-preview');
       expect(flashBucket!.modelIds).toContain('gemini-2.5-flash');
+    });
+  });
+
+  describe('fetchGeminiCliQuota failure metadata', () => {
+    it('maps 401 responses to reauth-required metadata', async () => {
+      writeActiveGeminiAccount('reauth@example.com');
+
+      mockFetch([
+        {
+          url: GEMINI_QUOTA_URL,
+          method: 'POST',
+          status: 401,
+          response: {
+            error: {
+              message: 'Session expired',
+              status: 'UNAUTHENTICATED',
+            },
+          },
+        },
+        {
+          url: GOOGLE_TOKEN_URL,
+          method: 'POST',
+          status: 400,
+          response: {
+            error: 'invalid_grant',
+          },
+        },
+      ]);
+
+      const result = await fetchGeminiCliQuota('reauth@example.com');
+
+      expect(result.success).toBe(false);
+      expect(result.httpStatus).toBe(401);
+      expect(result.errorCode).toBe('UNAUTHENTICATED');
+      expect(result.needsReauth).toBe(true);
+      expect(result.retryable).toBe(false);
+      expect(result.actionHint).toContain('ccs gemini --auth');
+      expect(result.error).toBe('Session expired');
+    });
+
+    it('preserves 403 verification detail and exposes a helpful action hint', async () => {
+      writeActiveGeminiAccount('verify@example.com');
+
+      mockFetch([
+        {
+          url: GEMINI_QUOTA_URL,
+          method: 'POST',
+          status: 403,
+          response: {
+            error: {
+              message: 'Google requires you to verify this account before using Gemini CLI quota.',
+              status: 'PERMISSION_DENIED',
+              details: [
+                {
+                  reason: 'ACCOUNT_VERIFICATION_REQUIRED',
+                },
+              ],
+            },
+          },
+        },
+      ]);
+
+      const result = await fetchGeminiCliQuota('verify@example.com');
+
+      expect(result.success).toBe(false);
+      expect(result.httpStatus).toBe(403);
+      expect(result.isForbidden).toBe(true);
+      expect(result.retryable).toBe(false);
+      expect(result.error).toContain('verify this account');
+      expect(result.actionHint).toContain('verification');
+      expect(result.errorDetail).toContain('ACCOUNT_VERIFICATION_REQUIRED');
+    });
+
+    it('marks 429 responses as retryable', async () => {
+      writeActiveGeminiAccount('rate-limit@example.com');
+
+      mockFetch([
+        {
+          url: GEMINI_QUOTA_URL,
+          method: 'POST',
+          status: 429,
+          response: {
+            error: {
+              message: 'Too many quota requests',
+              status: 'RESOURCE_EXHAUSTED',
+            },
+          },
+        },
+      ]);
+
+      const result = await fetchGeminiCliQuota('rate-limit@example.com');
+
+      expect(result.success).toBe(false);
+      expect(result.httpStatus).toBe(429);
+      expect(result.retryable).toBe(true);
+      expect(result.errorCode).toBe('RESOURCE_EXHAUSTED');
+      expect(result.actionHint).toContain('Retry');
+      expect(result.error).toBe('Too many quota requests');
     });
   });
 
