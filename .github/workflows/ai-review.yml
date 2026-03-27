@@ -137,11 +137,11 @@ jobs:
     # GLM API environment for model routing
     env:
       ANTHROPIC_BASE_URL: https://api.z.ai/api/anthropic
-      REVIEW_MODEL: glm-5
+      REVIEW_MODEL: glm-5.1
       ANTHROPIC_AUTH_TOKEN: ${{ secrets.GLM_API_KEY }}
-      ANTHROPIC_MODEL: glm-5
-      ANTHROPIC_DEFAULT_OPUS_MODEL: glm-5
-      ANTHROPIC_DEFAULT_SONNET_MODEL: glm-5
+      ANTHROPIC_MODEL: glm-5.1
+      ANTHROPIC_DEFAULT_OPUS_MODEL: glm-5.1
+      ANTHROPIC_DEFAULT_SONNET_MODEL: glm-5.1
       ANTHROPIC_DEFAULT_HAIKU_MODEL: GLM-4.7-FlashX
       DISABLE_BUG_COMMAND: '1'
       DISABLE_ERROR_REPORTING: '1'
@@ -259,8 +259,36 @@ jobs:
             --model ${{ env.REVIEW_MODEL }}
             --allowedTools "Edit,Glob,Grep,LS,Read,Write,Bash(gh pr diff *),Bash(gh pr view *),Bash(gh issue view *),Bash(git diff *),Bash(git log *),Bash(git status *),Bash(cat *),Bash(ls *)"
 
+      # Fallback: if Claude didn't write the review file, extract from execution output
+      - name: Extract review from execution output (fallback)
+        if: always() && steps.claude-review.outcome != 'cancelled'
+        run: |
+          EXEC_LOG="$RUNNER_TEMP/claude-execution-output.json"
+          if [ -s "$REVIEW_OUTPUT_FILE" ]; then
+            echo "[i] Review file exists, skipping fallback extraction"
+            exit 0
+          fi
+          if [ ! -f "$EXEC_LOG" ]; then
+            echo "::warning::No execution output found at $EXEC_LOG"
+            exit 0
+          fi
+          # Extract last assistant text message as fallback review
+          EXTRACTED=$(jq -r '
+            [.[] | select(.type == "assistant") | .message.content[]?
+              | select(.type == "text") | .text] | last // empty
+          ' "$EXEC_LOG" 2>/dev/null || true)
+          if [ -z "$EXTRACTED" ]; then
+            echo "::warning::Could not extract review content from execution output"
+            printf '## AI Review (incomplete)\n\nClaude completed but did not produce a structured review.\nCheck the [execution log artifact](%s) for details.\n\n> Reviewed by `%s` (fallback extraction)\n' \
+              "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              "$REVIEW_MODEL" > "$REVIEW_OUTPUT_FILE"
+          else
+            printf '%s\n' "$EXTRACTED" > "$REVIEW_OUTPUT_FILE"
+          fi
+          echo "[i] Fallback review extracted from execution output"
+
       - name: Publish review comment
-        if: steps.claude-review.outcome == 'success'
+        if: always() && steps.claude-review.outcome != 'cancelled'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REVIEW_MARKER: >-
@@ -271,7 +299,7 @@ jobs:
             sha:${{ needs.prepare.outputs.head_sha }} -->
         run: |
           if [ ! -s "$REVIEW_OUTPUT_FILE" ]; then
-            echo "::error::Claude review finished without writing $REVIEW_OUTPUT_FILE"
+            echo "::error::No review content available (neither Claude nor fallback produced output)"
             exit 1
           fi
 
@@ -296,6 +324,15 @@ jobs:
               gh api "repos/${{ github.repository }}/issues/${{ needs.prepare.outputs.pr_number }}/comments" --method POST --input -
             echo "[i] Posted review comment for PR #${{ needs.prepare.outputs.pr_number }}"
           fi
+
+      - name: Upload execution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review-pr${{ needs.prepare.outputs.pr_number }}-run${{ github.run_id }}
+          path: ${{ runner.temp }}/claude-execution-output.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Add success reaction
         if: success() && github.event_name == 'issue_comment'
