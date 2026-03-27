@@ -1,3 +1,24 @@
+## [7.61.0](https://github.com/kaitranntt/ccs/compare/v7.60.1...v7.61.0) (2026-03-27)
+
+### Features
+
+* **docker:** add integrated deployment commands ([23f767b](https://github.com/kaitranntt/ccs/commit/23f767b0c557affd2cdaaf20226a530db252b558)), closes [#812](https://github.com/kaitranntt/ccs/issues/812)
+
+### Bug Fixes
+
+* **docker:** bound blocking command execution ([5ad4303](https://github.com/kaitranntt/ccs/commit/5ad430334539356b2a5805ee02d7178d3ee0aa16))
+* **websearch:** align provider validation metadata ([dff40b5](https://github.com/kaitranntt/ccs/commit/dff40b5e24bd26cb103fae53e7746456bf38d996))
+* **websearch:** restrict dashboard secrets routes ([4ccc3ed](https://github.com/kaitranntt/ccs/commit/4ccc3edcbbfeb5d148c9ff505f9cad26c80f441b))
+
+### Documentation
+
+* **docker:** document integrated deployment flow ([6ac8f59](https://github.com/kaitranntt/ccs/commit/6ac8f59a78675c35dd6be3cd76365ce16101716c)), closes [#812](https://github.com/kaitranntt/ccs/issues/812) [#812](https://github.com/kaitranntt/ccs/issues/812)
+
+### Tests
+
+* **docker:** cover docker subcommand rendering paths ([5b9954c](https://github.com/kaitranntt/ccs/commit/5b9954cfad2dfdb8c7857083252ff6eb512db4c1))
+* **websearch:** assert parser-layer null body errors ([1fd7f81](https://github.com/kaitranntt/ccs/commit/1fd7f8122181f84eb585f7809e75325462729b8b))
+
 ## [7.60.1](https://github.com/kaitranntt/ccs/compare/v7.60.0...v7.60.1) (2026-03-27)
 
 ### Hotfixes
