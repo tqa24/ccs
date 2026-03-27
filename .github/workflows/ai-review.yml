@@ -242,14 +242,16 @@ jobs:
             ${{ steps.review-prompt.outputs.content }}
 
             ## IMPORTANT: Writing the Review
-            After completing your analysis, write the final review markdown to `${{ env.REVIEW_OUTPUT_FILE }}`.
+            After completing your analysis, use the `Write` tool to write the final review markdown to `${{ env.REVIEW_OUTPUT_FILE }}`.
+            Do NOT use `Edit` tool — use `Write` tool directly to create the file in one shot.
             Do NOT post any GitHub comments yourself. The workflow will publish the saved file.
+            Do NOT modify any source code files — this is a READ-ONLY review.
 
             End your review with:
             > 🤖 Reviewed by `${{ env.REVIEW_MODEL }}`
 
             IMPORTANT RULES:
-            - Overwrite `${{ env.REVIEW_OUTPUT_FILE }}`
+            - Use `Write` tool to overwrite `${{ env.REVIEW_OUTPUT_FILE }}` with the complete review
             - Do NOT use shell operators like || or && in bash commands
             - Do NOT use heredoc (<<) syntax in bash commands
             - Use simple, single-purpose bash commands only
@@ -258,7 +260,7 @@ jobs:
             --bare
             --model ${{ env.REVIEW_MODEL }}
             --permission-mode bypassPermissions
-            --max-turns 20
+            --max-turns 30
             --allowedTools "Glob,Grep,Read,Write,Bash(gh pr diff *),Bash(gh pr view *),Bash(git diff *),Bash(git log *),Bash(git show *),Bash(cat *),Bash(ls *),Bash(wc *),Bash(head *),Bash(tail *),Bash(find *)"
 
       # Fallback: if Claude didn't write the review file, extract from execution output
