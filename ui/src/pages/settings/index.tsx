@@ -210,12 +210,7 @@ function SettingsPageInner() {
 
             {/* Config Content - scrollable */}
             <div className="flex-1 overflow-auto">
-              {rawConfigLoading ? (
-                <div className="flex items-center justify-center h-full text-muted-foreground">
-                  <RefreshCw className="w-5 h-5 animate-spin mr-2" />
-                  {t('settings.loading')}
-                </div>
-              ) : rawConfig ? (
+              {rawConfig ? (
                 <CodeEditor
                   value={rawConfig}
                   onChange={() => {}}
@@ -224,6 +219,11 @@ function SettingsPageInner() {
                   minHeight="auto"
                   className="min-h-full"
                 />
+              ) : rawConfigLoading ? (
+                <div className="flex items-center justify-center h-full text-muted-foreground">
+                  <RefreshCw className="w-5 h-5 animate-spin mr-2" />
+                  {t('settings.loading')}
+                </div>
               ) : (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                   <div className="text-center">
