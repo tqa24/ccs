@@ -297,9 +297,12 @@ describe('websearch routes', () => {
     });
   });
 
-  it('rejects primitive JSON null bodies before route validation', async () => {
+  it('rejects primitive JSON null bodies at the JSON parser layer', async () => {
     const response = await putWebsearch('null');
+
     expect(response.status).toBe(400);
+    expect(response.headers.get('content-type')).toContain('text/html');
+    expect(await response.text()).toContain('SyntaxError');
   });
 
   it('rejects unsupported API key providers', async () => {
