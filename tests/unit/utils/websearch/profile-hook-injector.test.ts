@@ -119,6 +119,33 @@ describe('ensureProfileHooks', () => {
     expect(installedHook).toContain('CCS WebSearch Hook');
   });
 
+  it('repairs an unreadable existing hook binary instead of failing the profile setup', () => {
+    if (process.platform === 'win32') return;
+
+    setupTempHome();
+
+    const hookPath = getHookPath();
+    fs.mkdirSync(path.dirname(hookPath), { recursive: true });
+    fs.writeFileSync(hookPath, '// unreadable stale hook', 'utf8');
+    fs.chmodSync(hookPath, 0o200);
+
+    try {
+      const ensured = ensureProfileHooks('glm');
+      const settingsPath = path.join(getCcsDir(), 'glm.settings.json');
+      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const installedHook = fs.readFileSync(hookPath, 'utf8');
+
+      expect(ensured).toBe(true);
+      expect(installedHook).not.toBe('// unreadable stale hook');
+      expect(installedHook).toContain('CCS WebSearch Hook');
+      expect(settings.hooks.PreToolUse[0].hooks[0].command).toBe(`node "${hookPath}"`);
+    } finally {
+      if (fs.existsSync(hookPath)) {
+        fs.chmodSync(hookPath, 0o644);
+      }
+    }
+  });
+
   it('succeeds when another process installs the hook during a failed local install', () => {
     setupTempHome();
 

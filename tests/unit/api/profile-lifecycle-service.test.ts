@@ -182,6 +182,26 @@ describe('profile lifecycle service', () => {
     expect(result.skipped).toEqual([]);
   });
 
+  it('registers malformed orphan settings when force bypasses validation', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    const malformedPath = path.join(ccsDir, 'bad.settings.json');
+    fs.writeFileSync(malformedPath, '{ invalid json', 'utf8');
+    fs.writeFileSync(path.join(ccsDir, 'config.json'), JSON.stringify({ profiles: {} }, null, 2) + '\n');
+
+    const result = await runInScopedCcsDir(() =>
+      registerApiProfileOrphans({ names: ['bad'], force: true })
+    );
+    const config = await runInScopedCcsDir(() => loadConfigSafe());
+
+    expect(result.registered).toEqual(['bad']);
+    expect(result.skipped).toEqual([]);
+    expect(config.profiles.bad).toBe('~/.ccs/bad.settings.json');
+    expect(fs.existsSync(path.join(ccsDir, 'hooks', 'websearch-transformer.cjs'))).toBe(false);
+    expect(fs.readFileSync(malformedPath, 'utf8')).toBe('{ invalid json');
+  });
+
   it('redacts all sensitive env values during export when includeSecrets=false', async () => {
     const ccsDir = path.join(tempHome, '.ccs');
     fs.mkdirSync(ccsDir, { recursive: true });

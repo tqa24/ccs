@@ -25,8 +25,17 @@ function hasMatchingHookContents(sourcePath: string, destinationPath: string): b
   }
 
   const source = fs.readFileSync(sourcePath);
-  const destination = fs.readFileSync(destinationPath);
-  return source.equals(destination);
+  try {
+    const destination = fs.readFileSync(destinationPath);
+    return source.equals(destination);
+  } catch (error) {
+    if (process.env.CCS_DEBUG) {
+      console.error(
+        warn(`Existing WebSearch hook is unreadable; reinstalling: ${(error as Error).message}`)
+      );
+    }
+    return false;
+  }
 }
 
 function getTempHookPath(hookPath: string): string {

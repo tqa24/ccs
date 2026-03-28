@@ -216,7 +216,9 @@ export function registerApiProfileOrphans(options?: {
     }
 
     try {
-      ensureProfileHooksOrThrow(orphan.name);
+      if (orphan.validation.valid) {
+        ensureProfileHooksOrThrow(orphan.name);
+      }
       registerApiProfileInConfig(orphan.name, options?.target || 'claude', options?.force || false);
       result.registered.push(orphan.name);
     } catch (error) {
