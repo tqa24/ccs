@@ -1,3 +1,58 @@
+## [7.62.0](https://github.com/kaitranntt/ccs/compare/v7.61.1...v7.62.0) (2026-03-29)
+
+### Features
+
+* **ai-review:** parallel subagent review pipeline ([ce023aa](https://github.com/kaitranntt/ccs/commit/ce023aa8f40bad7b6851779700bf59b8739cfb5c)), closes [#837](https://github.com/kaitranntt/ccs/issues/837)
+* **ai-review:** workflow-level parallel review jobs ([8c371e7](https://github.com/kaitranntt/ccs/commit/8c371e73a38389b579fb2ecbfea20c1f4b8d630a)), closes [#843](https://github.com/kaitranntt/ccs/issues/843)
+
+### Bug Fixes
+
+* **ai-review:** address all review findings — restore allowedTools, add fallbacks ([36e8cc4](https://github.com/kaitranntt/ccs/commit/36e8cc47d934ca798d92637079ba39d101eba164))
+* **ai-review:** use printf for subagent prompt outputs, match existing pattern ([d2510fc](https://github.com/kaitranntt/ccs/commit/d2510fc860628ea8c10c30da8d9fb7a6d2d86297))
+* **auth:** signal auth-required for remote access in /api/auth/check ([5a09547](https://github.com/kaitranntt/ccs/commit/5a09547532754da21faacb5351cc3538a9db05a4))
+* **cliproxy:** align gemini 3.1 preset compatibility ([5ac91e0](https://github.com/kaitranntt/ccs/commit/5ac91e0cac6cb4acc9f26f9461943788d5c43ae6))
+* **cliproxy:** align gemini flash pricing and dashboard imports ([2423864](https://github.com/kaitranntt/ccs/commit/2423864817bd045e04f76f5905c2e09c6748a687))
+* **cliproxy:** centralize gemini compatibility and fallback hints ([2251312](https://github.com/kaitranntt/ccs/commit/2251312411f1e2b8f04844efa4a6ca2a07229a4e))
+* **cliproxy:** guard binary install against ETXTBSY when running ([5eac9c5](https://github.com/kaitranntt/ccs/commit/5eac9c584ac67382c71510489578644c81ed01f8))
+* **cliproxy:** resolve gemini presets from live models ([934e6ab](https://github.com/kaitranntt/ccs/commit/934e6ab52b7bc80dd3876b6fe7c75803f0392d82))
+* **docker:** address review findings — PID guard, deleteBinary guard, blocked fallback ([7d410b2](https://github.com/kaitranntt/ccs/commit/7d410b26d04b72bfa77b98334a8b3fcbb4dfb3d8))
+* **docker:** address review findings — test, docs, bcrypt path ([cd09b84](https://github.com/kaitranntt/ccs/commit/cd09b845daed75dde6fd4248fac8450837974513))
+* **docker:** include docker/ assets in npm package ([50b5660](https://github.com/kaitranntt/ccs/commit/50b56600ddc38b85c9308cb9d541b15720aaf5ce)), closes [#829](https://github.com/kaitranntt/ccs/issues/829)
+* **docker:** print auth setup reminder after remote deployment ([59be7f8](https://github.com/kaitranntt/ccs/commit/59be7f8682c4be95886728555fd1567ea1faf7cf))
+* **docker:** register session lock from bootstrap for proxy discovery ([a0f28f8](https://github.com/kaitranntt/ccs/commit/a0f28f8807dff5036f94183e8f12cd0cd36505af))
+* **docker:** use export for remote env vars and increase build timeout ([60167d3](https://github.com/kaitranntt/ccs/commit/60167d3f2b3a1d94392d888e7cc5859372beac39)), closes [#832](https://github.com/kaitranntt/ccs/issues/832)
+* **docker:** use HTTP-first proxy detection in health checks ([d7a80ed](https://github.com/kaitranntt/ccs/commit/d7a80ed38d61204479bd8fb971b656a35e705d42))
+* **docker:** wrap session registration in try-catch and narrow ETXTBSY guard ([e8b7ac7](https://github.com/kaitranntt/ccs/commit/e8b7ac730f108a2ef9393767e070c7703c16e557))
+* harden CCS backlog sync pagination and recovery ([e661772](https://github.com/kaitranntt/ccs/commit/e6617726cb9fcbeefd64d57d3f001fe381099607))
+* **ui:** hide version badge when API fails instead of showing v5.0.0 ([efe6953](https://github.com/kaitranntt/ccs/commit/efe6953da06263d4fdb03468f0c0f7385523cb17))
+* **ui:** redirect to login when auth check fails from remote access ([e9fceed](https://github.com/kaitranntt/ccs/commit/e9fceed80716b4e032e4ad0eca65b5fb005f02ae))
+* **websearch:** avoid partial settings-hook migration ([fbbdd80](https://github.com/kaitranntt/ccs/commit/fbbdd8083028ee6eb43d2f939212e8f63910453c))
+* **websearch:** harden settings-profile hook setup ([0e6965d](https://github.com/kaitranntt/ccs/commit/0e6965d205c06667e9fe43205d8fadcfa4278aa7))
+* **websearch:** install hook for settings profiles ([39a3e9d](https://github.com/kaitranntt/ccs/commit/39a3e9dfc09eacddd1ca2e11fbc8ea7585e64bbb))
+* **websearch:** restore hook recovery and force register ([0821c68](https://github.com/kaitranntt/ccs/commit/0821c68559d7dac6dc3cd0bd1062f0b2889fc774))
+
+### Documentation
+
+* **docker:** add post-deployment guide for auth, token migration, and verification ([c26efae](https://github.com/kaitranntt/ccs/commit/c26efae72ad664f9c8b5a85168704bc7fee7533f)), closes [#841](https://github.com/kaitranntt/ccs/issues/841)
+* **docker:** use docker cp for token migration and fix bcrypt command ([f8c43a3](https://github.com/kaitranntt/ccs/commit/f8c43a374d68b1e8bd1c4fd18b1ab1a903116a60))
+
+### Styles
+
+* **ai-review:** add emojis to orchestrator output format sections ([86f45c2](https://github.com/kaitranntt/ccs/commit/86f45c22741841db64937bc98b9a5d211340f2e4))
+
+### Code Refactoring
+
+* **ai-review:** matrix strategy + orchestrator AI merge ([97f07c2](https://github.com/kaitranntt/ccs/commit/97f07c2b121b85ad05a931b16fe2f348755a5e55))
+* **ai-review:** remove redundant allowedTools, enforce subagent dispatch ([d67fa35](https://github.com/kaitranntt/ccs/commit/d67fa350b8bd1c2ada0577c22a70908284adcb1c))
+* **ai-review:** switch --allowedTools to --tools for actual restriction ([53ad283](https://github.com/kaitranntt/ccs/commit/53ad2836c4cedca8dcc819f003f1526b2cc0a31c))
+
+### Tests
+
+* **auth:** verify effectiveAuthRequired logic for remote vs local access ([a23caf0](https://github.com/kaitranntt/ccs/commit/a23caf00513411132a7d28b12f40a51476a69790))
+* **docker:** add regression test for bundled asset availability ([13254f2](https://github.com/kaitranntt/ccs/commit/13254f28a6d6170fe0a46ed2ed2326441cc2d717))
+* **docker:** add tests for health check port detection and ETXTBSY guard ([a517c50](https://github.com/kaitranntt/ccs/commit/a517c506cbcb7e6993f458b24048c9ccccb9faf5))
+* **docker:** update executor tests for export syntax and build timeout ([cbe93d4](https://github.com/kaitranntt/ccs/commit/cbe93d4f7643091fbdc1c0073c5e05bef4b2eac5))
+
 ## [7.61.1](https://github.com/kaitranntt/ccs/compare/v7.61.0...v7.61.1) (2026-03-28)
 
 ### Bug Fixes
