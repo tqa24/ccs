@@ -244,22 +244,22 @@ jobs:
 
           SECURITY_DELIM="SECURITY_$(openssl rand -hex 16)"
           echo "security_prompt<<${SECURITY_DELIM}" >> "$GITHUB_OUTPUT"
-          echo "$SECURITY_PROMPT" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$SECURITY_PROMPT" >> "$GITHUB_OUTPUT"
           echo "${SECURITY_DELIM}" >> "$GITHUB_OUTPUT"
 
           QUALITY_DELIM="QUALITY_$(openssl rand -hex 16)"
           echo "quality_prompt<<${QUALITY_DELIM}" >> "$GITHUB_OUTPUT"
-          echo "$QUALITY_PROMPT" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$QUALITY_PROMPT" >> "$GITHUB_OUTPUT"
           echo "${QUALITY_DELIM}" >> "$GITHUB_OUTPUT"
 
           CCS_DELIM="CCS_$(openssl rand -hex 16)"
           echo "ccs_prompt<<${CCS_DELIM}" >> "$GITHUB_OUTPUT"
-          echo "$CCS_PROMPT" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$CCS_PROMPT" >> "$GITHUB_OUTPUT"
           echo "${CCS_DELIM}" >> "$GITHUB_OUTPUT"
 
           ADVERSARIAL_DELIM="ADVERSARIAL_$(openssl rand -hex 16)"
           echo "adversarial_prompt<<${ADVERSARIAL_DELIM}" >> "$GITHUB_OUTPUT"
-          echo "$ADVERSARIAL_PROMPT" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$ADVERSARIAL_PROMPT" >> "$GITHUB_OUTPUT"
           echo "${ADVERSARIAL_DELIM}" >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code Review
