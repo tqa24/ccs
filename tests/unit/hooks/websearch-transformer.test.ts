@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -192,5 +192,79 @@ describe('websearch-transformer hook helpers', () => {
       'Attempted providers: DuckDuckGo: DuckDuckGo returned 503'
     );
     expect(output).not.toHaveProperty('additionalContext');
+  });
+
+  it('writes opt-in trace records with redacted query fingerprints', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'websearch-hook-trace-'));
+    const preloadPath = join(tempDir, 'mock-fetch.cjs');
+    const ccsHome = join(tempDir, 'home');
+    const tracePath = join(ccsHome, '.ccs', 'logs', 'websearch-trace.jsonl');
+    const html = `
+      <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Farticle">Example title</a>
+      <a class="result__snippet">Example snippet</a>
+    `.trim();
+
+    writeFileSync(
+      preloadPath,
+      `global.fetch = async () => ({ ok: true, text: async () => ${JSON.stringify(html)} });\n`,
+      'utf8'
+    );
+
+    try {
+      const result = spawnSync('node', ['-r', preloadPath, hookPath], {
+        encoding: 'utf8',
+        input: JSON.stringify({
+          tool_name: 'WebSearch',
+          tool_input: { query: 'btc price' },
+        }),
+        env: {
+          ...process.env,
+          CCS_HOME: ccsHome,
+          CCS_WEBSEARCH_TRACE: '1',
+          CCS_WEBSEARCH_TRACE_LAUNCH_ID: 'hook-trace-test',
+          CCS_WEBSEARCH_TRACE_LAUNCHER: 'unit-test',
+          CCS_WEBSEARCH_ENABLED: '1',
+          CCS_WEBSEARCH_SKIP: '0',
+          CCS_WEBSEARCH_BRAVE: '0',
+          CCS_WEBSEARCH_DUCKDUCKGO: '1',
+          CCS_WEBSEARCH_EXA: '0',
+          CCS_WEBSEARCH_GEMINI: '0',
+          CCS_WEBSEARCH_GROK: '0',
+          CCS_WEBSEARCH_OPENCODE: '0',
+          CCS_WEBSEARCH_TAVILY: '0',
+        },
+      });
+
+      expect(result.status).toBe(0);
+
+      const traceContents = readFileSync(tracePath, 'utf8');
+      expect(traceContents).not.toContain('btc price');
+
+      const traceEvents = traceContents
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+      expect(traceEvents.some((event) => event.event === 'websearch_hook_invoked')).toBe(true);
+      expect(
+        traceEvents.some(
+          (event) =>
+            event.event === 'websearch_provider_attempt' && event.providerName === 'DuckDuckGo'
+        )
+      ).toBe(true);
+      expect(
+        traceEvents.some(
+          (event) =>
+            event.event === 'websearch_provider_success' && event.providerName === 'DuckDuckGo'
+        )
+      ).toBe(true);
+      const fingerprintEvent = traceEvents.find(
+        (event) => event.event === 'websearch_hook_invoked'
+      ) as { queryHash?: string; queryLength?: number } | undefined;
+      expect(fingerprintEvent?.queryHash).toBeString();
+      expect(fingerprintEvent?.queryLength).toBe(9);
+    } finally {
+      rmSync(tempDir, { force: true, recursive: true });
+    }
   });
 });

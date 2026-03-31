@@ -29,6 +29,7 @@ import {
   getWebSearchHookEnv,
   syncWebSearchMcpToConfigDir,
   appendThirdPartyWebSearchToolArgs,
+  createWebSearchTraceContext,
 } from './utils/websearch-manager';
 import { getGlobalEnvConfig, getOfficialChannelsConfig } from './config/unified-config-loader';
 import { ensureProfileHooks as ensureImageAnalyzerHooks } from './utils/hooks/image-analyzer-profile-hook-injector';
@@ -1053,11 +1054,19 @@ async function main(): Promise<void> {
         return;
       }
 
-      execClaude(
-        claudeCli,
-        ['--settings', expandedSettingsPath, ...appendThirdPartyWebSearchToolArgs(remainingArgs)],
-        envVars
-      );
+      const launchArgs = [
+        '--settings',
+        expandedSettingsPath,
+        ...appendThirdPartyWebSearchToolArgs(remainingArgs),
+      ];
+      const traceEnv = createWebSearchTraceContext({
+        launcher: 'ccs.settings-profile',
+        args: launchArgs,
+        profile: profileInfo.name,
+        profileType: profileInfo.type,
+        settingsPath: expandedSettingsPath,
+      });
+      execClaude(claudeCli, launchArgs, { ...envVars, ...traceEnv });
     } else if (profileInfo.type === 'account') {
       // NEW FLOW: Account-based profile (work, personal)
       // All platforms: Use instance isolation with CLAUDE_CONFIG_DIR

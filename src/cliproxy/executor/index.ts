@@ -56,6 +56,7 @@ import {
   ensureWebSearchMcpOrThrow,
   displayWebSearchStatus,
   appendThirdPartyWebSearchToolArgs,
+  createWebSearchTraceContext,
 } from '../../utils/websearch-manager';
 import { loadOrCreateUnifiedConfig, getThinkingConfig } from '../../config/unified-config-loader';
 import { installImageAnalyzerHook } from '../../utils/hooks';
@@ -1034,31 +1035,29 @@ export async function execClaudeWithCLIProxy(
     : getProviderSettingsPath(provider);
 
   let claude: ChildProcess;
+  const launchArgs = ['--settings', settingsPath, ...appendThirdPartyWebSearchToolArgs(claudeArgs)];
+  const traceEnv = createWebSearchTraceContext({
+    launcher: 'cliproxy.executor',
+    args: launchArgs,
+    profile: provider,
+    profileType: 'settings',
+    settingsPath,
+  });
+  const tracedEnv = { ...env, ...traceEnv };
   if (needsShell) {
-    const cmdString = [
-      claudeCli,
-      '--settings',
-      settingsPath,
-      ...appendThirdPartyWebSearchToolArgs(claudeArgs),
-    ]
-      .map(escapeShellArg)
-      .join(' ');
+    const cmdString = [claudeCli, ...launchArgs].map(escapeShellArg).join(' ');
     claude = spawn(cmdString, {
       stdio: 'inherit',
       windowsHide: true,
       shell: true,
-      env,
+      env: tracedEnv,
     });
   } else {
-    claude = spawn(
-      claudeCli,
-      ['--settings', settingsPath, ...appendThirdPartyWebSearchToolArgs(claudeArgs)],
-      {
-        stdio: 'inherit',
-        windowsHide: true,
-        env,
-      }
-    );
+    claude = spawn(claudeCli, launchArgs, {
+      stdio: 'inherit',
+      windowsHide: true,
+      env: tracedEnv,
+    });
   }
 
   // 12b. Start runtime quota monitor (adaptive polling during session)

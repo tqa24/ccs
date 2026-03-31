@@ -10,6 +10,7 @@ import { getClaudeUserConfigPath } from '../claude-config-path';
 import { info, warn } from '../ui';
 import { InstanceManager } from '../../management/instance-manager';
 import { installWebSearchHook } from './hook-installer';
+import { appendWebSearchTrace } from './trace';
 
 const WEBSEARCH_MCP_SERVER = 'ccs-websearch-server.cjs';
 const WEBSEARCH_MCP_SERVER_NAME = 'ccs-websearch';
@@ -154,10 +155,12 @@ function removeManagedServerConfig(configPath: string): boolean {
 export function installWebSearchMcpServer(): boolean {
   const wsConfig = getWebSearchConfig();
   if (!wsConfig.enabled) {
+    appendWebSearchTrace('websearch_mcp_install_skipped', { reason: 'disabled' });
     return false;
   }
 
   if (!installWebSearchHook()) {
+    appendWebSearchTrace('websearch_mcp_install_failed', { reason: 'hook_unavailable' });
     if (process.env.CCS_DEBUG) {
       console.error(
         warn('WebSearch MCP server install skipped because hook runtime is unavailable')
@@ -168,6 +171,7 @@ export function installWebSearchMcpServer(): boolean {
 
   const sourcePath = resolveBundledServerSourcePath();
   if (!sourcePath) {
+    appendWebSearchTrace('websearch_mcp_install_failed', { reason: 'source_missing' });
     if (process.env.CCS_DEBUG) {
       console.error(warn(`WebSearch MCP server source not found: ${WEBSEARCH_MCP_SERVER}`));
     }
@@ -181,6 +185,7 @@ export function installWebSearchMcpServer(): boolean {
 
   const serverPath = getWebSearchMcpServerPath();
   if (hasMatchingContents(sourcePath, serverPath)) {
+    appendWebSearchTrace('websearch_mcp_install_ready', { serverPath });
     return true;
   }
 
@@ -190,8 +195,13 @@ export function installWebSearchMcpServer(): boolean {
     fs.copyFileSync(sourcePath, tempPath);
     fs.chmodSync(tempPath, 0o755);
     fs.renameSync(tempPath, serverPath);
+    appendWebSearchTrace('websearch_mcp_install_ready', { serverPath });
     return true;
   } catch (error) {
+    appendWebSearchTrace('websearch_mcp_install_failed', {
+      reason: 'copy_failed',
+      error: (error as Error).message,
+    });
     if (process.env.CCS_DEBUG) {
       console.error(warn(`Failed to install WebSearch MCP server: ${(error as Error).message}`));
     }
@@ -206,6 +216,7 @@ export function installWebSearchMcpServer(): boolean {
 export function ensureWebSearchMcpConfig(): boolean {
   const wsConfig = getWebSearchConfig();
   if (!wsConfig.enabled) {
+    appendWebSearchTrace('websearch_mcp_config_skipped', { reason: 'disabled' });
     return false;
   }
 
@@ -214,6 +225,7 @@ export function ensureWebSearchMcpConfig(): boolean {
   const config = readClaudeUserConfig(claudeUserConfigPath);
 
   if (config === null) {
+    appendWebSearchTrace('websearch_mcp_config_failed', { reason: 'malformed_user_config' });
     if (process.env.CCS_DEBUG) {
       console.error(warn('Malformed ~/.claude.json prevents WebSearch MCP provisioning'));
     }
@@ -239,6 +251,7 @@ export function ensureWebSearchMcpConfig(): boolean {
     currentConfig !== null &&
     JSON.stringify(currentConfig) === JSON.stringify(desiredServerConfig)
   ) {
+    appendWebSearchTrace('websearch_mcp_config_ready', { configPath: claudeUserConfigPath });
     return true;
   }
 
@@ -252,11 +265,17 @@ export function ensureWebSearchMcpConfig(): boolean {
 
   try {
     writeClaudeUserConfig(claudeUserConfigPath, nextConfig);
+    appendWebSearchTrace('websearch_mcp_config_ready', { configPath: claudeUserConfigPath });
     if (process.env.CCS_DEBUG) {
       console.error(info(`Ensured WebSearch MCP config in ${claudeUserConfigPath}`));
     }
     return true;
   } catch (error) {
+    appendWebSearchTrace('websearch_mcp_config_failed', {
+      reason: 'write_failed',
+      configPath: claudeUserConfigPath,
+      error: (error as Error).message,
+    });
     if (process.env.CCS_DEBUG) {
       console.error(warn(`Failed to update ~/.claude.json: ${(error as Error).message}`));
     }
@@ -267,18 +286,25 @@ export function ensureWebSearchMcpConfig(): boolean {
 export function ensureWebSearchMcp(): boolean {
   const wsConfig = getWebSearchConfig();
   if (!wsConfig.enabled) {
+    appendWebSearchTrace('websearch_mcp_ensure_skipped', { reason: 'disabled' });
     return false;
   }
 
-  return installWebSearchMcpServer() && ensureWebSearchMcpConfig();
+  const installed = installWebSearchMcpServer();
+  const configured = installed && ensureWebSearchMcpConfig();
+  appendWebSearchTrace('websearch_mcp_ensure_result', { installed, configured });
+  return installed && configured;
 }
 
 export function syncWebSearchMcpToConfigDir(claudeConfigDir: string | undefined): boolean {
   if (!claudeConfigDir) {
+    appendWebSearchTrace('websearch_mcp_sync_skipped', { reason: 'missing_config_dir' });
     return false;
   }
 
-  return new InstanceManager().syncMcpServers(claudeConfigDir);
+  const synced = new InstanceManager().syncMcpServers(claudeConfigDir);
+  appendWebSearchTrace('websearch_mcp_sync_result', { claudeConfigDir, synced });
+  return synced;
 }
 
 export function uninstallWebSearchMcpServer(): boolean {

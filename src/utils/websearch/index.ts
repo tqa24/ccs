@@ -67,6 +67,14 @@ export {
 // Claude launch args
 export { appendThirdPartyWebSearchToolArgs } from './claude-tool-args';
 
+// Trace helpers
+export {
+  appendWebSearchTrace,
+  createWebSearchTraceContext,
+  isWebSearchTraceEnabled,
+  readWebSearchTraceRecords,
+} from './trace';
+
 // Status and Readiness
 export {
   getWebSearchCliProviders,

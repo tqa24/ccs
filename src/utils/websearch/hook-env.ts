@@ -19,6 +19,13 @@ export function getWebSearchHookEnv(): Record<string, string> {
   const wsConfig = getWebSearchConfig();
   const env: Record<string, string> = {};
 
+  if (process.env.CCS_WEBSEARCH_TRACE === '1' || process.env.CCS_DEBUG === '1') {
+    env.CCS_WEBSEARCH_TRACE = '1';
+  }
+  if (process.env.CCS_WEBSEARCH_TRACE_FILE) {
+    env.CCS_WEBSEARCH_TRACE_FILE = process.env.CCS_WEBSEARCH_TRACE_FILE;
+  }
+
   // Skip hook entirely if disabled
   if (!wsConfig.enabled) {
     env.CCS_WEBSEARCH_SKIP = '1';

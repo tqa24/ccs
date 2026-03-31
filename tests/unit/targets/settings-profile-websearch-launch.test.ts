@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+const STEERING_PROMPT_SNIPPET = 'prefer the CCS MCP tool WebSearch instead of Bash/curl/http fetches';
+
 interface RunResult {
   status: number | null;
   stdout: string;
@@ -23,6 +25,15 @@ function runCcs(args: string[], env: NodeJS.ProcessEnv): RunResult {
     stdout: result.stdout || '',
     stderr: result.stderr || '',
   };
+}
+
+function readTraceEvents(tracePath: string): Array<Record<string, unknown>> {
+  return fs
+    .readFileSync(tracePath, 'utf8')
+    .trim()
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 describe('settings profile WebSearch launch', () => {
@@ -119,7 +130,40 @@ exit 0
     expect(result.status).toBe(0);
     expect(result.stderr).not.toContain('could not prepare the local WebSearch tool');
     expect(fs.existsSync(claudeArgsLogPath)).toBe(true);
-    expect(fs.readFileSync(claudeArgsLogPath, 'utf8')).toContain('--disallowedTools');
-    expect(fs.readFileSync(claudeArgsLogPath, 'utf8')).toContain('WebSearch');
+    const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
+    expect(launchedArgs).toContain('--disallowedTools');
+    expect(launchedArgs).toContain('WebSearch');
+    expect(launchedArgs).toContain('--append-system-prompt');
+    expect(launchedArgs).toContain(STEERING_PROMPT_SNIPPET);
+  });
+
+  it('writes a source-side launch trace for settings profiles when tracing is enabled', () => {
+    if (process.platform === 'win32') return;
+
+    const tracePath = path.join(ccsDir, 'logs', 'websearch-trace.jsonl');
+    const result = runCcs(['glm', 'smoke'], {
+      ...baseEnv,
+      CCS_WEBSEARCH_TRACE: '1',
+    });
+
+    expect(result.status).toBe(0);
+    expect(fs.existsSync(tracePath)).toBe(true);
+
+    const traceEvents = readTraceEvents(tracePath);
+    const launchEvent = traceEvents.find(
+      (event) => event.event === 'ccs_websearch_launch'
+    ) as
+      | {
+          launcher?: string;
+          nativeWebSearchDisallowed?: boolean;
+          steeringPromptApplied?: boolean;
+          settingsPath?: string;
+        }
+      | undefined;
+
+    expect(launchEvent?.launcher).toBe('ccs.settings-profile');
+    expect(launchEvent?.nativeWebSearchDisallowed).toBe(true);
+    expect(launchEvent?.steeringPromptApplied).toBe(true);
+    expect(launchEvent?.settingsPath).toBe(settingsPath);
   });
 });

@@ -17,6 +17,7 @@ import { fail, info, ok, warn } from '../utils/ui';
 import {
   getWebSearchHookEnv,
   appendThirdPartyWebSearchToolArgs,
+  createWebSearchTraceContext,
   syncWebSearchMcpToConfigDir,
 } from '../utils/websearch-manager';
 import { getImageAnalysisHookEnv } from '../utils/hooks';
@@ -181,9 +182,18 @@ export async function executeCopilotProfile(
 
   // Spawn Claude CLI
   return new Promise((resolve) => {
-    const proc = spawn(claudeCliPath, appendThirdPartyWebSearchToolArgs(claudeArgs), {
+    const launchArgs = appendThirdPartyWebSearchToolArgs(claudeArgs);
+    const traceEnv = createWebSearchTraceContext({
+      launcher: 'copilot.executor',
+      args: launchArgs,
+      profile: 'copilot',
+      profileType: 'copilot',
+      claudeConfigDir,
+    });
+
+    const proc = spawn(claudeCliPath, launchArgs, {
       stdio: 'inherit',
-      env,
+      env: { ...env, ...traceEnv },
       shell: process.platform === 'win32',
     });
 

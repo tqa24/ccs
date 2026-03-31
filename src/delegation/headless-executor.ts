@@ -18,6 +18,13 @@ import { buildExecutionResult } from './executor/result-aggregator';
 import { getCcsDir, getModelDisplayName } from '../utils/config-manager';
 import { getProfileLookupCandidates } from '../utils/profile-compat';
 import { getClaudeLaunchEnvOverrides, stripClaudeCodeEnv } from '../utils/shell-executor';
+import {
+  appendThirdPartyWebSearchToolArgs,
+  appendWebSearchTrace,
+  createWebSearchTraceContext,
+  getWebSearchHookEnv,
+  readWebSearchTraceRecords,
+} from '../utils/websearch-manager';
 
 // Re-export types for consumers
 export type { ExecutionOptions, ExecutionResult, StreamMessage } from './executor/types';
@@ -163,21 +170,32 @@ export class HeadlessExecutor {
       }
     }
 
+    const launchArgs = appendThirdPartyWebSearchToolArgs(args);
+    const traceEnv = createWebSearchTraceContext({
+      launcher: 'delegation.headless-executor',
+      args: launchArgs,
+      cwd,
+      profile,
+      profileType: 'settings',
+      settingsPath,
+    });
+
     if (process.env.CCS_DEBUG) {
-      console.error(info(`Claude CLI args: ${args.join(' ')}`));
+      console.error(info(`Claude CLI args: ${launchArgs.join(' ')}`));
     }
 
     // Initialize UI before spawning
     await ui.init();
 
     // Execute with spawn
-    return this._spawnAndExecute(claudeCli, args, {
+    return this._spawnAndExecute(claudeCli, launchArgs, {
       cwd,
       profile,
       timeout,
       resumeSession,
       sessionId,
       sessionMgr,
+      traceEnv,
     });
   }
 
@@ -194,9 +212,10 @@ export class HeadlessExecutor {
       resumeSession: boolean;
       sessionId: string | null;
       sessionMgr: SessionManager;
+      traceEnv?: Record<string, string>;
     }
   ): Promise<ExecutionResult> {
-    const { cwd, profile, timeout, resumeSession, sessionId, sessionMgr } = ctx;
+    const { cwd, profile, timeout, resumeSession, sessionId, sessionMgr, traceEnv = {} } = ctx;
 
     return new Promise((resolve, reject) => {
       const startTime = Date.now();
@@ -213,6 +232,9 @@ export class HeadlessExecutor {
       const cleanEnv = stripClaudeCodeEnv({
         ...process.env,
         ...getClaudeLaunchEnvOverrides(),
+        ...getWebSearchHookEnv(),
+        ...traceEnv,
+        CCS_PROFILE_TYPE: 'settings',
       });
 
       const proc = spawn(claudeCli, args, {
@@ -312,6 +334,51 @@ export class HeadlessExecutor {
           timedOut,
           messages,
         });
+
+        const launchId = traceEnv.CCS_WEBSEARCH_TRACE_LAUNCH_ID;
+        if (launchId) {
+          const launchTraceRecords = readWebSearchTraceRecords(launchId, {
+            ...process.env,
+            ...traceEnv,
+            CCS_PROFILE_TYPE: 'settings',
+          });
+          const mcpSessionSummary = [...launchTraceRecords]
+            .reverse()
+            .find((record) => record.event === 'mcp_session_summary');
+          const providerSuccess = [...launchTraceRecords]
+            .reverse()
+            .find((record) => record.event === 'websearch_provider_success');
+
+          const exposed = mcpSessionSummary?.exposed === true;
+          const calledWebSearch = result.toolUsageSummary?.calledWebSearch === true;
+          const fallbackToolsUsed = result.toolUsageSummary?.fallbackToolsUsed || [];
+
+          appendWebSearchTrace(
+            'headless_websearch_summary',
+            {
+              profile,
+              sessionId: result.sessionId || null,
+              calledWebSearch,
+              fallbackToolsUsed,
+              providerUsed:
+                typeof providerSuccess?.providerName === 'string'
+                  ? providerSuccess.providerName
+                  : null,
+              exposed,
+              likelyBypassed:
+                exposed && !calledWebSearch
+                  ? fallbackToolsUsed.length > 0
+                    ? true
+                    : 'unknown'
+                  : false,
+            },
+            {
+              ...process.env,
+              ...traceEnv,
+              CCS_PROFILE_TYPE: 'settings',
+            }
+          );
+        }
 
         // Store session
         if (result.sessionId) {

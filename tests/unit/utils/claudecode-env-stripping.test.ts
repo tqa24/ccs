@@ -21,12 +21,14 @@ type SpawnCall = {
   options: Record<string, unknown> | undefined;
 };
 
+const STEERING_PROMPT_SNIPPET = 'prefer the CCS MCP tool WebSearch instead of Bash/curl/http fetches';
 const spawnCalls: SpawnCall[] = [];
 const originalPlatform = process.platform;
 let baselineSigintListeners: Array<(...args: unknown[]) => void> = [];
 let baselineSigtermListeners: Array<(...args: unknown[]) => void> = [];
 let baselineSighupListeners: Array<(...args: unknown[]) => void> = [];
 let originalCcsHome: string | undefined;
+let originalCcsClaudePath: string | undefined;
 let originalDisableAutoUpdater: string | undefined;
 const realSpawn = childProcess.spawn.bind(childProcess);
 const realSpawnSync = childProcess.spawnSync.bind(childProcess);
@@ -150,6 +152,7 @@ describe('CLAUDECODE environment stripping', () => {
     spawnCalls.length = 0;
     process.env.CCS_QUIET = '1';
     originalCcsHome = process.env.CCS_HOME;
+    originalCcsClaudePath = process.env.CCS_CLAUDE_PATH;
     originalDisableAutoUpdater = process.env.DISABLE_AUTOUPDATER;
     delete process.env.DISABLE_AUTOUPDATER;
     baselineSigintListeners = process.listeners('SIGINT');
@@ -162,8 +165,11 @@ describe('CLAUDECODE environment stripping', () => {
     delete process.env.CLAUDECODE;
     delete process.env.claudecode;
     delete process.env.CCS_QUIET;
+    delete process.env.CCS_WEBSEARCH_TRACE;
     if (originalCcsHome !== undefined) process.env.CCS_HOME = originalCcsHome;
     else delete process.env.CCS_HOME;
+    if (originalCcsClaudePath !== undefined) process.env.CCS_CLAUDE_PATH = originalCcsClaudePath;
+    else delete process.env.CCS_CLAUDE_PATH;
     if (originalDisableAutoUpdater !== undefined) {
       process.env.DISABLE_AUTOUPDATER = originalDisableAutoUpdater;
     } else {
@@ -324,5 +330,48 @@ describe('CLAUDECODE environment stripping', () => {
     const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
     expect(Object.keys(env).map((k) => k.toUpperCase())).not.toContain('CLAUDECODE');
     expect(env.DISABLE_AUTOUPDATER).toBe('1');
+  });
+
+  it('headless executor adds third-party WebSearch steering args and env', async () => {
+    writeConfigWithAutoUpdatePreference(false);
+    const ccsDir = path.join(process.env.CCS_HOME as string, '.ccs');
+    fs.writeFileSync(path.join(ccsDir, 'glm.settings.json'), '{}\n', 'utf8');
+    process.env.CCS_CLAUDE_PATH = 'claude';
+
+    const result = await HeadlessExecutor.execute('glm', 'latest AI chip news', {
+      permissionMode: 'default',
+      timeout: 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(spawnCalls.length).toBeGreaterThan(0);
+    const launch = spawnCalls[0];
+    expect(launch.args).toContain('--disallowedTools');
+    expect(launch.args).toContain('WebSearch');
+    expect(launch.args).toContain('--append-system-prompt');
+    expect(launch.args.join(' ')).toContain(STEERING_PROMPT_SNIPPET);
+    const env = launch.options?.env as NodeJS.ProcessEnv;
+    expect(env.CCS_PROFILE_TYPE).toBe('settings');
+    expect(env.CCS_WEBSEARCH_ENABLED || env.CCS_WEBSEARCH_SKIP).toBeDefined();
+  });
+
+  it('headless executor propagates a WebSearch trace launch id when tracing is enabled', async () => {
+    writeConfigWithAutoUpdatePreference(false);
+    const ccsDir = path.join(process.env.CCS_HOME as string, '.ccs');
+    fs.writeFileSync(path.join(ccsDir, 'glm.settings.json'), '{}\n', 'utf8');
+    process.env.CCS_CLAUDE_PATH = 'claude';
+    process.env.CCS_WEBSEARCH_TRACE = '1';
+
+    const result = await HeadlessExecutor.execute('glm', 'latest AI chip news', {
+      permissionMode: 'default',
+      timeout: 1000,
+    });
+
+    expect(result.success).toBe(true);
+    expect(spawnCalls.length).toBeGreaterThan(0);
+    const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
+    expect(env.CCS_WEBSEARCH_TRACE).toBe('1');
+    expect(env.CCS_WEBSEARCH_TRACE_LAUNCH_ID).toBeString();
+    expect(env.CCS_WEBSEARCH_TRACE_LAUNCHER).toBe('delegation.headless-executor');
   });
 });

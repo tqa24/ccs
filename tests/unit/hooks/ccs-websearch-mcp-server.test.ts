@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { spawn } from 'child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -73,8 +73,15 @@ function collectResponses(
   });
 }
 
+function waitForClose(child: ReturnType<typeof spawn>): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    child.once('close', (code) => resolve(code));
+    child.once('error', reject);
+  });
+}
+
 describe('ccs-websearch MCP server', () => {
-  it('lists the CCS search tool and returns provider-backed results', async () => {
+  it('lists the CCS WebSearch tool and returns provider-backed results', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ccs-websearch-mcp-server-'));
     const preloadPath = join(tempDir, 'mock-fetch.cjs');
     const html = `
@@ -124,7 +131,7 @@ describe('ccs-websearch MCP server', () => {
           jsonrpc: '2.0',
           id: 3,
           method: 'tools/call',
-          params: { name: 'search', arguments: { query: 'btc price' } },
+          params: { name: 'WebSearch', arguments: { query: 'btc price' } },
         })
       );
 
@@ -135,15 +142,16 @@ describe('ccs-websearch MCP server', () => {
       expect(toolsList?.result).toEqual({
         tools: [
           {
-            name: 'search',
+            name: 'WebSearch',
             description:
-              'Search the web through CCS-managed providers. Provider order: Exa, Tavily, Brave Search, DuckDuckGo, then optional legacy CLI fallback.',
+              'Third-party WebSearch replacement for CCS-managed Claude launches. Use this instead of Bash/curl/http fetches for web lookups. Provider order: Exa, Tavily, Brave Search, DuckDuckGo, then optional legacy CLI fallback.',
             inputSchema: {
               type: 'object',
               properties: {
                 query: {
                   type: 'string',
-                  description: 'The search query to run against CCS WebSearch providers.',
+                  description:
+                    'Web query to resolve through CCS providers. Prefer this tool over ad hoc Bash/curl lookups when you need current web information.',
                 },
               },
               required: ['query'],
@@ -152,6 +160,75 @@ describe('ccs-websearch MCP server', () => {
           },
         ],
       });
+      expect(toolCall?.result).toBeDefined();
+      expect(
+        ((toolCall?.result as { content: Array<{ text: string }> }).content[0] || {}).text
+      ).toContain('CCS local WebSearch evidence');
+      expect(
+        ((toolCall?.result as { content: Array<{ text: string }> }).content[0] || {}).text
+      ).toContain('Provider: DuckDuckGo');
+    } finally {
+      child.kill();
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts the legacy search alias for direct calls', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-websearch-mcp-server-'));
+    const preloadPath = join(tempDir, 'mock-fetch.cjs');
+    const html = `
+      <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Farticle">Example title</a>
+      <a class="result__snippet">Example snippet</a>
+    `.trim();
+    writeFileSync(
+      preloadPath,
+      `global.fetch = async () => ({ ok: true, text: async () => ${JSON.stringify(html)} });\n`,
+      'utf8'
+    );
+
+    const child = spawn('node', ['-r', preloadPath, serverPath], {
+      env: {
+        ...process.env,
+        CCS_PROFILE_TYPE: 'settings',
+        CCS_WEBSEARCH_ENABLED: '1',
+        CCS_WEBSEARCH_SKIP: '0',
+        CCS_WEBSEARCH_BRAVE: '0',
+        CCS_WEBSEARCH_DUCKDUCKGO: '1',
+        CCS_WEBSEARCH_EXA: '0',
+        CCS_WEBSEARCH_GEMINI: '0',
+        CCS_WEBSEARCH_GROK: '0',
+        CCS_WEBSEARCH_OPENCODE: '0',
+        CCS_WEBSEARCH_TAVILY: '0',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    try {
+      const responsesPromise = collectResponses(child, 2);
+      child.stdin.write(
+        encodeMessage({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'bun-test', version: '1.0.0' },
+          },
+        })
+      );
+      child.stdin.write(
+        encodeMessage({
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'search', arguments: { query: 'btc price' } },
+        })
+      );
+
+      const responses = await responsesPromise;
+      const toolCall = responses.find((message) => message.id === 2);
+
       expect(toolCall?.result).toBeDefined();
       expect(
         ((toolCall?.result as { content: Array<{ text: string }> }).content[0] || {}).text
@@ -199,5 +276,102 @@ describe('ccs-websearch MCP server', () => {
     } finally {
       child.kill();
     }
+  });
+
+  it('writes trace records for exposure, tool calls, provider success, and session summary', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-websearch-mcp-trace-'));
+    const preloadPath = join(tempDir, 'mock-fetch.cjs');
+    const ccsHome = join(tempDir, 'home');
+    const tracePath = join(ccsHome, '.ccs', 'logs', 'websearch-trace.jsonl');
+    const html = `
+      <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Farticle">Example title</a>
+      <a class="result__snippet">Example snippet</a>
+    `.trim();
+    writeFileSync(
+      preloadPath,
+      `global.fetch = async () => ({ ok: true, text: async () => ${JSON.stringify(html)} });\n`,
+      'utf8'
+    );
+
+    const child = spawn('node', ['-r', preloadPath, serverPath], {
+      env: {
+        ...process.env,
+        CCS_HOME: ccsHome,
+        CCS_PROFILE_TYPE: 'settings',
+        CCS_WEBSEARCH_TRACE: '1',
+        CCS_WEBSEARCH_TRACE_LAUNCH_ID: 'mcp-trace-test',
+        CCS_WEBSEARCH_TRACE_LAUNCHER: 'unit-test',
+        CCS_WEBSEARCH_ENABLED: '1',
+        CCS_WEBSEARCH_SKIP: '0',
+        CCS_WEBSEARCH_BRAVE: '0',
+        CCS_WEBSEARCH_DUCKDUCKGO: '1',
+        CCS_WEBSEARCH_EXA: '0',
+        CCS_WEBSEARCH_GEMINI: '0',
+        CCS_WEBSEARCH_GROK: '0',
+        CCS_WEBSEARCH_OPENCODE: '0',
+        CCS_WEBSEARCH_TAVILY: '0',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    try {
+      const responsesPromise = collectResponses(child, 3);
+      child.stdin.write(
+        encodeMessage({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {},
+            clientInfo: { name: 'bun-test', version: '1.0.0' },
+          },
+        })
+      );
+      child.stdin.write(encodeMessage({ jsonrpc: '2.0', id: 2, method: 'tools/list' }));
+      child.stdin.write(
+        encodeMessage({
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: 'WebSearch', arguments: { query: 'btc price' } },
+        })
+      );
+
+      await responsesPromise;
+    } finally {
+      child.kill();
+      await waitForClose(child);
+    }
+
+    const traceEvents = readFileSync(tracePath, 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+    expect(
+      traceEvents.some((event) => event.event === 'mcp_tools_list' && event.exposed === true)
+    ).toBe(true);
+    expect(
+      traceEvents.some(
+        (event) => event.event === 'mcp_tool_call_received' && event.toolName === 'WebSearch'
+      )
+    ).toBe(true);
+    expect(
+      traceEvents.some(
+        (event) =>
+          event.event === 'websearch_provider_success' && event.providerName === 'DuckDuckGo'
+      )
+    ).toBe(true);
+    expect(
+      traceEvents.some(
+        (event) =>
+          event.event === 'mcp_session_summary' &&
+          event.calledWebSearch === true &&
+          event.toolCalls === 1
+      )
+    ).toBe(true);
+
+    rmSync(tempDir, { recursive: true, force: true });
   });
 });
