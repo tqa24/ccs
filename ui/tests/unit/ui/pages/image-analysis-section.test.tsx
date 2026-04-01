@@ -276,11 +276,18 @@ describe('ImageAnalysisSection', () => {
   });
 
   it('auto-saves edits without rendering a dedicated save button', async () => {
-    render(<ImageAnalysisSection />, { withSettingsProvider: true });
+    const { container } = render(<ImageAnalysisSection />, { withSettingsProvider: true });
 
     expect(await screen.findByText('Image')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save changes' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeInTheDocument();
+    expect(container.firstElementChild).toHaveClass(
+      'relative',
+      'flex',
+      'min-h-0',
+      'flex-1',
+      'flex-col'
+    );
 
     const timeoutInput = screen.getByDisplayValue('60');
     await userEvent.clear(timeoutInput);

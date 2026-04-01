@@ -210,79 +210,8 @@ function routeSourceLabel(source: ImageProfile['resolutionSource']): string {
 
 type SectionTone = 'sky' | 'amber' | 'emerald' | 'cyan' | 'slate';
 
-function getSectionShellClass(tone: SectionTone): string {
-  switch (tone) {
-    case 'sky':
-      return 'border-sky-500/20 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.12),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.88),rgba(248,250,252,0.92))] dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_45%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(15,23,42,0.88))]';
-    case 'amber':
-      return 'border-amber-500/20 bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.14),transparent_44%),linear-gradient(180deg,rgba(255,251,235,0.96),rgba(255,247,237,0.92))] dark:bg-[radial-gradient(circle_at_top_left,rgba(245,158,11,0.16),transparent_44%),linear-gradient(180deg,rgba(35,26,17,0.96),rgba(28,22,17,0.92))]';
-    case 'emerald':
-      return 'border-emerald-500/20 bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.14),transparent_46%),linear-gradient(180deg,rgba(236,253,245,0.96),rgba(240,253,250,0.92))] dark:bg-[radial-gradient(circle_at_top_left,rgba(16,185,129,0.18),transparent_46%),linear-gradient(180deg,rgba(16,32,28,0.96),rgba(15,28,25,0.92))]';
-    case 'cyan':
-      return 'border-cyan-500/20 bg-[radial-gradient(circle_at_top_left,rgba(6,182,212,0.14),transparent_44%),linear-gradient(180deg,rgba(236,254,255,0.96),rgba(240,249,255,0.92))] dark:bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_44%),linear-gradient(180deg,rgba(13,28,34,0.96),rgba(15,25,32,0.92))]';
-    case 'slate':
-      return 'border-slate-400/20 bg-[radial-gradient(circle_at_top_right,rgba(148,163,184,0.14),transparent_44%),linear-gradient(180deg,rgba(248,250,252,0.98),rgba(241,245,249,0.96))] dark:bg-[radial-gradient(circle_at_top_right,rgba(148,163,184,0.16),transparent_44%),linear-gradient(180deg,rgba(15,23,42,0.98),rgba(17,24,39,0.96))]';
-  }
-}
-
-function getSectionRuleClass(tone: SectionTone): string {
-  switch (tone) {
-    case 'sky':
-      return 'from-sky-500/60 via-sky-500/15';
-    case 'amber':
-      return 'from-amber-500/60 via-amber-500/15';
-    case 'emerald':
-      return 'from-emerald-500/60 via-emerald-500/15';
-    case 'cyan':
-      return 'from-cyan-500/60 via-cyan-500/15';
-    case 'slate':
-      return 'from-slate-400/55 via-slate-400/15';
-  }
-}
-
-function getSectionIconClass(tone: SectionTone): string {
-  switch (tone) {
-    case 'sky':
-      return 'border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300';
-    case 'amber':
-      return 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300';
-    case 'emerald':
-      return 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
-    case 'cyan':
-      return 'border-cyan-500/20 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300';
-    case 'slate':
-      return 'border-slate-400/25 bg-slate-500/10 text-slate-700 dark:text-slate-300';
-  }
-}
-
-function getSectionEyebrowClass(tone: SectionTone): string {
-  switch (tone) {
-    case 'sky':
-      return 'text-sky-700/80 dark:text-sky-300/80';
-    case 'amber':
-      return 'text-amber-700/80 dark:text-amber-300/80';
-    case 'emerald':
-      return 'text-emerald-700/80 dark:text-emerald-300/80';
-    case 'cyan':
-      return 'text-cyan-700/80 dark:text-cyan-300/80';
-    case 'slate':
-      return 'text-slate-600/80 dark:text-slate-300/80';
-  }
-}
-
-function getInsetPanelClass(tone: SectionTone): string {
-  switch (tone) {
-    case 'sky':
-      return 'border-sky-500/15 bg-background/75';
-    case 'amber':
-      return 'border-amber-500/15 bg-background/80';
-    case 'emerald':
-      return 'border-emerald-500/15 bg-background/78';
-    case 'cyan':
-      return 'border-cyan-500/15 bg-background/78';
-    case 'slate':
-      return 'border-slate-400/15 bg-background/78';
-  }
+function getInsetPanelClass(_tone?: SectionTone): string {
+  return 'border-border/50 bg-background/40';
 }
 
 function getBackendRowClass(state: ImageBackend['state'] | undefined): string {
@@ -381,8 +310,8 @@ function normalizeTimeoutDraft(rawValue: string, fallbackValue: string): string 
 }
 
 interface ImageSectionPanelProps {
-  tone: SectionTone;
-  eyebrow: string;
+  tone?: SectionTone;
+  eyebrow?: string;
   title: string;
   description: string;
   icon: ReactNode;
@@ -393,8 +322,6 @@ interface ImageSectionPanelProps {
 }
 
 function ImageSectionPanel({
-  tone,
-  eyebrow,
   title,
   description,
   icon,
@@ -404,55 +331,32 @@ function ImageSectionPanel({
   className,
 }: ImageSectionPanelProps) {
   return (
-    <section
+    <div
       className={cn(
-        'relative overflow-hidden rounded-[24px] border p-4 shadow-sm',
-        getSectionShellClass(tone),
+        'relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-muted/25 p-4 shadow-sm',
         className
       )}
     >
-      <div
-        className={cn(
-          'absolute inset-x-0 top-0 h-px bg-gradient-to-r to-transparent',
-          getSectionRuleClass(tone)
-        )}
-      />
-      <div className="pointer-events-none absolute -right-12 top-0 h-28 w-28 rounded-full bg-white/35 blur-3xl dark:bg-white/6" />
-
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start gap-2.5">
-            <div
-              className={cn(
-                'inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border',
-                getSectionIconClass(tone)
-              )}
-            >
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/40 via-primary/10 to-transparent" />
+      <div className="relative space-y-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="flex items-start gap-3">
+            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-primary/10 text-primary">
               {icon}
             </div>
-            <div className="min-w-0">
-              <div
-                className={cn(
-                  'text-[10px] font-semibold uppercase tracking-[0.16em]',
-                  getSectionEyebrowClass(tone)
-                )}
-              >
-                {eyebrow}
-              </div>
-              <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold">{title}</h3>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-semibold tracking-tight">{title}</h3>
                 {meta}
               </div>
-              <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+              <p className="mt-0.5 text-sm leading-5 text-muted-foreground">{description}</p>
             </div>
           </div>
+          {action && <div className="shrink-0">{action}</div>}
         </div>
-
-        {action && <div className="shrink-0">{action}</div>}
+        <div className="space-y-3">{children}</div>
       </div>
-
-      <div className="mt-4">{children}</div>
-    </section>
+    </div>
   );
 }
 
@@ -758,86 +662,89 @@ export default function ImageAnalysisSection() {
   }
 
   return (
-    <ScrollArea className="flex-1">
-      <div className="relative isolate overflow-hidden p-4 md:p-5">
-        <div className="pointer-events-none absolute -top-20 left-8 h-48 w-48 rounded-full bg-sky-500/10 blur-3xl dark:bg-sky-500/12" />
-        <div className="pointer-events-none absolute right-4 top-[28rem] h-52 w-52 rounded-full bg-emerald-500/10 blur-3xl dark:bg-emerald-500/12" />
-        <div className="pointer-events-none absolute bottom-20 left-12 h-44 w-44 rounded-full bg-amber-500/10 blur-3xl dark:bg-amber-500/10" />
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        className={`absolute left-5 right-5 top-20 z-10 transition-all duration-200 ease-out ${
+          error || success
+            ? 'translate-y-0 opacity-100'
+            : 'pointer-events-none -translate-y-2 opacity-0'
+        }`}
+      >
+        {error && (
+          <Alert variant="destructive" className="py-2 shadow-lg">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-green-700 shadow-lg dark:border-green-900/50 dark:bg-green-900/90 dark:text-green-300">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <span className="text-sm font-medium">{success}</span>
+          </div>
+        )}
+      </div>
 
-        <div className="relative z-10 space-y-4">
-          {(error || success) && (
-            <div className="space-y-2">
-              {error && (
-                <Alert variant="destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-              {success && (
-                <div className="flex items-center gap-2 rounded-md border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-emerald-900 dark:text-emerald-200">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span className="text-sm font-medium">{success}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          <section className="relative overflow-hidden rounded-[24px] border border-sky-500/20 bg-[radial-gradient(circle_at_top_left,rgba(14,165,233,0.14),transparent_44%),linear-gradient(180deg,rgba(255,255,255,0.88),rgba(248,250,252,0.92))] p-4 shadow-sm dark:bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.16),transparent_44%),linear-gradient(180deg,rgba(15,23,42,0.96),rgba(15,23,42,0.88))]">
-            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-sky-500/50 via-sky-500/10 to-transparent" />
-            <div className="pointer-events-none absolute -right-8 top-0 h-24 w-24 rounded-full bg-white/35 blur-3xl dark:bg-white/6" />
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-2.5">
-                <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300">
-                  <ImageIcon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-sky-700/80 dark:text-sky-300/80">
-                    Image control plane
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-6 p-5">
+          <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-background via-background to-muted/30 p-4 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-primary/70 via-primary/20 to-transparent" />
+            <div
+              className="pointer-events-none absolute inset-0 opacity-[0.035]"
+              style={{
+                backgroundImage:
+                  'repeating-linear-gradient(0deg, transparent, transparent 2px, currentColor 2px, currentColor 3px)',
+              }}
+            />
+            <div className="relative">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-primary/20 bg-primary/8 text-primary">
+                      <ImageIcon className="h-4 w-4" />
+                    </div>
+                    <p className="text-sm font-semibold tracking-tight">Image</p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-base font-semibold tracking-tight">Image</h2>
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                     <Badge className={cn('border', summaryToneClass(data.summary.state))}>
                       {data.summary.title}
                     </Badge>
+                    <span>{summaryCompactDetail(data.summary)}</span>
                   </div>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                    {summaryCompactDetail(data.summary)}
-                  </p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleRefresh}
+                  disabled={loading || saving}
+                  aria-label="Refresh"
+                  title="Refresh"
+                >
+                  <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefresh}
-                disabled={loading || saving}
-                className="h-9 self-start rounded-xl border-sky-500/15 bg-background/72 backdrop-blur-sm"
-              >
-                <RefreshCw className={cn('mr-1 h-4 w-4', loading && 'animate-spin')} />
-                Refresh
-              </Button>
-            </div>
 
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <div className="rounded-[18px] border bg-background/72 px-3 py-2.5 backdrop-blur-sm">
-                <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  Active routes
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="rounded-[18px] border bg-background/72 px-3 py-2.5 backdrop-blur-sm">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Active routes
+                  </div>
+                  <div className="mt-1.5 text-xl font-semibold text-foreground">
+                    {data.summary.activeProfileCount}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Current target path</p>
                 </div>
-                <div className="mt-1.5 text-xl font-semibold text-foreground">
-                  {data.summary.activeProfileCount}
+                <div className="rounded-[18px] border bg-background/72 px-3 py-2.5 backdrop-blur-sm">
+                  <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                    Native path
+                  </div>
+                  <div className="mt-1.5 text-xl font-semibold text-foreground">
+                    {data.summary.nativeProfileCount}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">Skip transformer</p>
                 </div>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">Current target path</p>
-              </div>
-              <div className="rounded-[18px] border bg-background/72 px-3 py-2.5 backdrop-blur-sm">
-                <div className="text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                  Native path
-                </div>
-                <div className="mt-1.5 text-xl font-semibold text-foreground">
-                  {data.summary.nativeProfileCount}
-                </div>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">Skip transformer</p>
               </div>
             </div>
-          </section>
+          </div>
 
           <ImageSectionPanel
             tone="amber"
@@ -1387,7 +1294,7 @@ export default function ImageAnalysisSection() {
             </div>
           </ImageSectionPanel>
         </div>
-      </div>
-    </ScrollArea>
+      </ScrollArea>
+    </div>
   );
 }
