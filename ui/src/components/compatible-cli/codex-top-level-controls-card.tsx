@@ -310,7 +310,9 @@ function TopLevelControlsForm({
                 {isGpt54Selected ? 'GPT-5.4 selected' : 'GPT-5.4 reference'}
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">Draft values only. Nothing applies until Save.</p>
+            <p className="text-xs text-muted-foreground">
+              Draft values only. Nothing applies until Save.
+            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
