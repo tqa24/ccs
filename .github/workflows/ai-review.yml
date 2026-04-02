@@ -478,6 +478,7 @@ jobs:
       - name: Run Claude Code Review
         id: claude-review
         timeout-minutes: ${{ fromJSON(needs.prepare.outputs.claude_timeout_minutes) }}
+        continue-on-error: true
         uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.GLM_API_KEY }}
@@ -602,7 +603,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Add success reaction
-        if: success() && github.event_name == 'issue_comment'
+        if: success() && github.event_name == 'issue_comment' && steps.claude-review.outcome == 'success'
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
             --method POST -f content=rocket
@@ -610,7 +611,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Add failure reaction
-        if: failure() && github.event_name == 'issue_comment'
+        if: always() && github.event_name == 'issue_comment' && (failure() || steps.claude-review.outcome == 'failure')
         run: |
           gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }}/reactions \
             --method POST -f content=confused

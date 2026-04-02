@@ -31,6 +31,7 @@ describe('ai-review workflow', () => {
     const claudeReviewStep = steps.find((step) => step.id === 'claude-review');
     expect(claudeReviewStep).toBeDefined();
     expect(claudeReviewStep?.uses).toBe('anthropics/claude-code-action@v1');
+    expect(claudeReviewStep?.['continue-on-error']).toBe(true);
     expect(claudeReviewStep?.with?.path_to_claude_code_executable).toBe(
       '${{ steps.toolchain.outputs.claude_path }}'
     );
