@@ -57,16 +57,17 @@ describe('normalize-ai-review-output', () => {
     expect(markdown).toContain('### Verdict');
     expect(markdown).toContain('### Top Findings');
     expect(markdown).toContain('- 🔴 High `src/cliproxy/accounts/query.ts:61` — Ambiguous account lookup drops valid matches');
-    expect(markdown).toContain('<summary>Full Findings (1)</summary>');
-    expect(markdown).toContain('**`src/cliproxy/accounts/query.ts:61` — Ambiguous account lookup drops valid matches**');
-    expect(markdown).toContain('<summary>Security Checklist (1)</summary>');
+    expect(markdown).toContain('### Detailed Findings (1)');
+    expect(markdown).toContain('#### 1. Ambiguous account lookup drops valid matches');
+    expect(markdown).toContain('- Location: `src/cliproxy/accounts/query.ts:61`');
+    expect(markdown).toContain('### Security Checklist (1)');
     expect(markdown).toContain('| Injection safety | ✅ | No user-controlled input reaches a shell, SQL, or HTML boundary in this diff. |');
-    expect(markdown).toContain('<summary>CCS Compliance (1)</summary>');
+    expect(markdown).toContain('### CCS Compliance (1)');
     expect(markdown).toContain('| No emojis in CLI | N/A | This change affects GitHub PR comments only, not CLI stdout. |');
-    expect(markdown).toContain('<summary>Informational (1)</summary>');
-    expect(markdown).toContain("<summary>What's Done Well (1)</summary>");
+    expect(markdown).toContain('### Informational (1)');
+    expect(markdown).toContain("### What's Done Well (1)");
     expect(markdown).toContain('**❌ CHANGES REQUESTED**');
-    expect(markdown).toContain('Why it matters: That breaks normal selection flows for users with multiple Codex sessions.');
+    expect(markdown).toContain('Impact: That breaks normal selection flows for users with multiple Codex sessions.');
     expect(markdown).toContain('> 🤖 Reviewed by `glm-5-turbo`');
   });
 
@@ -452,10 +453,11 @@ describe('normalize-ai-review-output', () => {
 
       const markdown = fs.readFileSync(outputFile, 'utf8');
       expect(markdown).toContain('Summary with \\`code\\` and ## heading markers.');
-      expect(markdown).toContain('**`src/example.ts:9` — Title with \\`ticks\\`**');
+      expect(markdown).toContain('#### 1. Title with \\`ticks\\`');
+      expect(markdown).toContain('- Location: `src/example.ts:9`');
       expect(markdown).toContain('Problem: Problem text uses \\*\\*bold\\*\\* markers.');
-      expect(markdown).toContain('Why it matters: Why text uses \\[link\\] syntax.');
-      expect(markdown).toContain('Suggested fix: Fix text uses \\<html\\> markers.');
+      expect(markdown).toContain('Impact: Why text uses \\[link\\] syntax.');
+      expect(markdown).toContain('Fix: Fix text uses \\<html\\> markers.');
       expect(markdown).toContain('Notes with a pipe \\| still render safely in table cells.');
       expect(markdown).toContain('- Informational item with \\`inline code\\`.');
       expect(markdown).toContain('- Strength with \\*\\*bold\\*\\* markers.');
@@ -512,11 +514,11 @@ describe('normalize-ai-review-output', () => {
 
     expect(markdown).toContain('### Top Findings');
     expect(markdown).toContain('No confirmed issues found after reviewing the diff and surrounding code.');
-    expect(markdown).toContain('<summary>Security Checklist (1)</summary>');
+    expect(markdown).toContain('### Security Checklist (1)');
     expect(markdown).toContain(
       '| Injection safety | ✅ | No user-controlled data crosses a risky boundary in the reviewed diff. |'
     );
-    expect(markdown).toContain('<summary>CCS Compliance (1)</summary>');
+    expect(markdown).toContain('### CCS Compliance (1)');
     expect(markdown).toContain('| Help/docs alignment | N/A | No CLI behavior changed, so there was nothing to update. |');
     expect(markdown).toContain('**✅ APPROVED** — No confirmed regressions or missing verification remain.');
   });
@@ -548,9 +550,8 @@ describe('normalize-ai-review-output', () => {
     expect(validation.ok).toBe(true);
     const markdown = reviewOutput.renderStructuredReview(validation.value, { model: 'glm-5-turbo' });
 
-    expect(markdown).toContain(
-      '**`tests/unit/scripts/github/normalize-ai-review-output.test.ts` — Missing empty-state coverage**'
-    );
+    expect(markdown).toContain('#### 1. Missing empty-state coverage');
+    expect(markdown).toContain('- Location: `tests/unit/scripts/github/normalize-ai-review-output.test.ts`');
     expect(markdown).not.toContain('normalize-ai-review-output.test.ts:`');
   });
 
@@ -579,7 +580,7 @@ describe('normalize-ai-review-output', () => {
       { model: 'glm-5-turbo' }
     );
 
-    expect(markdown).toContain('**``src/weird`path.ts`` — Backtick-safe locations stay readable**');
+    expect(markdown).toContain('- Location: ``src/weird`path.ts``');
   });
 
   test('rejects empty checklist sections instead of synthesizing placeholder rows', () => {

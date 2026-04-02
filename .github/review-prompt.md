@@ -58,7 +58,8 @@ Use only the review contract in this file plus the generated scope and packet fi
 - Fill the structured fields only. The renderer owns the markdown layout.
 - Keep `summary` to plain prose only, ideally 2-4 sentences. Do not include the PR title, a separate verdict line, markdown tables, file inventories, or custom section headings there.
 - Keep `overallRationale` to 1 sentence.
-- Keep `what`, `why`, and `fix` concise plain text. Do not emit headings, tables, or fenced code blocks inside those fields.
+- Keep `title`, `what`, `why`, and `fix` concise plain text. Prefer 1 short sentence per field so the rendered review stays readable in expanded long-form format.
+- Do not emit headings, tables, or fenced code blocks inside `title`, `what`, `why`, or `fix`.
 - Use `snippets` only when a short literal excerpt materially clarifies a finding. Keep each snippet under 20 lines, and do not include markdown fences in `code`.
 - Use `securityChecklist` for concise review rows about security-sensitive checks. Provide at least 1 row, and use 2-5 when possible. `status` = `pass` | `fail` | `na`.
 - Use `ccsCompliance` for concise CCS-specific rule checks. Provide at least 1 row, and use 2-5 when possible. `status` = `pass` | `fail` | `na`.

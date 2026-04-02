@@ -646,23 +646,21 @@ function renderFindingSnippets(snippets) {
   const lines = [];
   for (const snippet of snippets) {
     const label = snippet.label ? `Evidence: ${renderInlineText(snippet.label)}` : 'Evidence:';
-    lines.push('', `    ${label}`, '');
-    lines.push(
-      ...renderCodeBlock(snippet.code, snippet.language)
-        .split('\n')
-        .map((line) => `    ${line}`)
-    );
+    if (lines.length > 0) {
+      lines.push('');
+    }
+    lines.push(label, '', ...renderCodeBlock(snippet.code, snippet.language).split('\n'));
   }
 
   return lines;
 }
 
-function renderDetailsBlock(summary, bodyLines) {
+function renderSection(title, bodyLines) {
   if (!bodyLines.length) {
     return [];
   }
 
-  return ['', '<details>', `<summary>${escapeMarkdown(summary)}</summary>`, '', ...bodyLines, '', '</details>'];
+  return ['', title, '', ...bodyLines];
 }
 
 function renderFindingReference(finding) {
@@ -705,11 +703,12 @@ function renderDetailedFindings(findings) {
     if (scopedFindings.length === 0) continue;
 
     lines.push(`**${SEVERITY_SUMMARY_LABELS[severity]} (${scopedFindings.length})**`, '');
-    for (const finding of scopedFindings) {
-      lines.push(`- **${renderCode(renderFindingReference(finding))} — ${renderInlineText(finding.title)}**`);
-      lines.push(`  Problem: ${renderInlineText(finding.what)}`);
-      lines.push(`  Why it matters: ${renderInlineText(finding.why)}`);
-      lines.push(`  Suggested fix: ${renderInlineText(finding.fix)}`);
+    for (const [index, finding] of scopedFindings.entries()) {
+      lines.push(`#### ${index + 1}. ${renderInlineText(finding.title)}`);
+      lines.push(`- Location: ${renderCode(renderFindingReference(finding))}`);
+      lines.push(`- Impact: ${renderInlineText(finding.why)}`);
+      lines.push(`- Problem: ${renderInlineText(finding.what)}`);
+      lines.push(`- Fix: ${renderInlineText(finding.fix)}`);
       lines.push(...renderFindingSnippets(finding.snippets));
       lines.push('');
     }
@@ -738,21 +737,21 @@ export function renderStructuredReview(review, { model, rendering: renderOptions
   }
 
   lines.push('', '### Top Findings', '', ...renderTopFindings(review.findings));
-  lines.push(...renderDetailsBlock(`Full Findings (${review.findings.length})`, renderDetailedFindings(review.findings)));
+  lines.push(...renderSection(`### Detailed Findings (${review.findings.length})`, renderDetailedFindings(review.findings)));
   lines.push(
-    ...renderDetailsBlock(
-      `Security Checklist (${review.securityChecklist.length})`,
+    ...renderSection(
+      `### Security Checklist (${review.securityChecklist.length})`,
       renderChecklistTable('Check', 'check', review.securityChecklist)
     )
   );
   lines.push(
-    ...renderDetailsBlock(
-      `CCS Compliance (${review.ccsCompliance.length})`,
+    ...renderSection(
+      `### CCS Compliance (${review.ccsCompliance.length})`,
       renderChecklistTable('Rule', 'rule', review.ccsCompliance)
     )
   );
-  lines.push(...renderDetailsBlock(`Informational (${review.informational.length})`, renderBulletSection(review.informational)));
-  lines.push(...renderDetailsBlock(`What's Done Well (${review.strengths.length})`, renderBulletSection(review.strengths)));
+  lines.push(...renderSection(`### Informational (${review.informational.length})`, renderBulletSection(review.informational)));
+  lines.push(...renderSection(`### What's Done Well (${review.strengths.length})`, renderBulletSection(review.strengths)));
 
   lines.push(
     '',
