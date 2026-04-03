@@ -41,6 +41,7 @@ import { ensureProfileHooks as ensureImageAnalyzerHooks } from './utils/hooks/im
 import {
   applyImageAnalysisRuntimeOverrides,
   getImageAnalysisHookEnv,
+  installImageAnalyzerHook,
   prepareImageAnalysisFallbackHook,
   resolveImageAnalysisRuntimeConnection,
   resolveImageAnalysisRuntimeStatus,
