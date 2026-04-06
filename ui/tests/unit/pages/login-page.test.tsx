@@ -63,6 +63,35 @@ describe('LoginPage', () => {
     expect(screen.queryByRole('button', { name: 'Sign In' })).not.toBeInTheDocument();
   });
 
+  it('renders the incomplete setup copy when auth is enabled without credentials', () => {
+    useAuthMock.mockReturnValue({
+      authRequired: true,
+      isAuthenticated: false,
+      username: null,
+      loading: false,
+      accessMode: 'setup',
+      authEnabled: true,
+      authConfigured: false,
+      isLocalAccess: false,
+      login: vi.fn(),
+      logout: vi.fn(),
+    });
+
+    render(<LoginPage />);
+
+    expect(
+      screen.getAllByText(
+        'Dashboard auth is turned on, but the host setup is incomplete. Finish the host configuration before signing in.'
+      )
+    ).not.toHaveLength(0);
+    expect(
+      screen.getByText(
+        'Create or re-enable dashboard credentials, then reopen this page from the remote device.'
+      )
+    ).toBeVisible();
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
+  });
+
   it('toggles password visibility on the login form', async () => {
     render(<LoginPage />);
 
