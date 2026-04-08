@@ -561,6 +561,7 @@ export function CliproxyPage() {
         onClose={() => setAddAccountProvider(null)}
         provider={addAccountProvider?.provider || ''}
         displayName={addAccountProvider?.displayName || ''}
+        catalog={addAccountProvider?.provider ? catalogs[addAccountProvider.provider] : undefined}
         isFirstAccount={addAccountProvider?.isFirstAccount || false}
       />
     </div>

@@ -58,6 +58,31 @@ describe('claude preset utils', () => {
     });
   });
 
+  it('skips catalog fetch when the caller already has the provider catalog cached', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ apiKey: { value: 'managed-key' } }),
+      })
+      .mockResolvedValueOnce({ ok: true });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await applyDefaultPreset('claude', undefined, MODEL_CATALOGS.claude);
+
+    expect(result).toEqual({ success: true, presetName: 'Claude Sonnet 4.6' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/settings/auth/tokens/raw');
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      '/api/settings/claude',
+      expect.objectContaining({
+        method: 'PUT',
+      })
+    );
+  });
+
   it('builds UI catalogs from upstream provider models without requiring static dropdown edits', () => {
     const liveCatalogs = {
       gemini: {

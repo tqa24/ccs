@@ -29,6 +29,7 @@ import { Loader2, ExternalLink, User, Download, Copy, Check, ShieldAlert } from 
 import { useKiroImport } from '@/hooks/use-cliproxy';
 import { useCliproxyAuthFlow } from '@/hooks/use-cliproxy-auth-flow';
 import { applyDefaultPreset } from '@/lib/preset-utils';
+import type { CliproxyProviderCatalog } from '@/lib/api-client';
 import { AccountSafetyWarningCard } from '@/components/account/account-safety-warning-card';
 import { AntigravityResponsibilityChecklist } from '@/components/account/antigravity-responsibility-checklist';
 import {
@@ -56,6 +57,7 @@ interface AddAccountDialogProps {
   onClose: () => void;
   provider: string;
   displayName: string;
+  catalog?: CliproxyProviderCatalog;
   /** Whether this is the first account being added (shows different toast message) */
   isFirstAccount?: boolean;
 }
@@ -74,6 +76,7 @@ export function AddAccountDialog({
   onClose,
   provider,
   displayName,
+  catalog,
   isFirstAccount = false,
 }: AddAccountDialogProps) {
   const [nickname, setNickname] = useState('');
@@ -244,7 +247,7 @@ export function AddAccountDialog({
         wasAuthenticatingRef.current = false;
         const applyPresetAndClose = async () => {
           try {
-            const result = await applyDefaultPreset(provider);
+            const result = await applyDefaultPreset(provider, undefined, catalog);
             if (result.success && result.presetName && isFirstAccount) {
               toast.success(`Applied "${result.presetName}" preset`);
             }
@@ -331,7 +334,7 @@ export function AddAccountDialog({
     wasAuthenticatingRef.current = true;
     kiroImportMutation.mutate(undefined, {
       onSuccess: async () => {
-        const result = await applyDefaultPreset('kiro');
+        const result = await applyDefaultPreset('kiro', undefined, catalog);
         if (result.success && result.presetName && isFirstAccount) {
           toast.success(`Applied "${result.presetName}" preset`);
         }

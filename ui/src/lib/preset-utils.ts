@@ -3,6 +3,7 @@
  * Shared functions for applying default presets to provider settings
  */
 
+import type { CliproxyProviderCatalog } from './api-client';
 import { MODEL_CATALOGS } from './model-catalogs';
 import { buildUiCatalogs } from './model-catalogs';
 import { CLIPROXY_DEFAULT_PORT } from './default-ports';
@@ -26,7 +27,11 @@ async function fetchEffectiveApiKey(): Promise<string> {
   }
 }
 
-async function fetchProviderCatalog(provider: string) {
+async function fetchProviderCatalog(provider: string, catalog?: CliproxyProviderCatalog) {
+  if (catalog) {
+    return catalog;
+  }
+
   try {
     const response = await fetch('/api/cliproxy/catalog');
     if (!response.ok) {
@@ -52,18 +57,20 @@ async function fetchProviderCatalog(provider: string) {
  */
 export async function applyDefaultPreset(
   provider: string,
-  port?: number
+  port?: number,
+  catalog?: CliproxyProviderCatalog
 ): Promise<{ success: boolean; presetName?: string }> {
-  const catalog = await fetchProviderCatalog(provider);
-  if (!catalog) return { success: false };
+  const resolvedCatalog = await fetchProviderCatalog(provider, catalog);
+  if (!resolvedCatalog) return { success: false };
 
   const defaultModelEntry =
-    catalog.models.find((model) => model.id === catalog.defaultModel) || catalog.models[0];
+    resolvedCatalog.models.find((model) => model.id === resolvedCatalog.defaultModel) ||
+    resolvedCatalog.models[0];
   const mapping = defaultModelEntry?.presetMapping || {
-    default: catalog.defaultModel,
-    opus: catalog.defaultModel,
-    sonnet: catalog.defaultModel,
-    haiku: catalog.defaultModel,
+    default: resolvedCatalog.defaultModel,
+    opus: resolvedCatalog.defaultModel,
+    sonnet: resolvedCatalog.defaultModel,
+    haiku: resolvedCatalog.defaultModel,
   };
 
   // Fetch effective API key (respects user customization)
@@ -89,7 +96,7 @@ export async function applyDefaultPreset(
     });
     return {
       success: res.ok,
-      presetName: defaultModelEntry?.name || catalog.defaultModel,
+      presetName: defaultModelEntry?.name || resolvedCatalog.defaultModel,
     };
   } catch {
     return { success: false };

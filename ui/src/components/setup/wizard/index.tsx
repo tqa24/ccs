@@ -101,7 +101,11 @@ export function QuickSetupWizard({ open, onClose }: QuickSetupWizardProps) {
       {
         onSuccess: async (data) => {
           if (isFirstAccount) {
-            const result = await applyDefaultPreset(selectedProvider);
+            const result = await applyDefaultPreset(
+              selectedProvider,
+              undefined,
+              catalogs[selectedProvider]
+            );
             if (result.success && result.presetName) {
               toast.success(`Applied "${result.presetName}" preset`);
             } else if (!result.success) {
