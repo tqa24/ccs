@@ -20,7 +20,7 @@ export interface CatalogRoutingSnapshot {
 
 export async function getCatalogRoutingSnapshot(): Promise<CatalogRoutingSnapshot> {
   const snapshot: ResolvedCatalogSnapshot = await getResolvedCatalogSnapshot();
-  const modelsResponse = await fetchCliproxyModels();
+  const modelsResponse = snapshot.source === 'live' ? await fetchCliproxyModels() : null;
   const routing = buildCliproxyRoutingHints(snapshot.catalogs, modelsResponse?.models ?? []);
 
   return {

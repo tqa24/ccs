@@ -1017,7 +1017,6 @@ router.get('/:provider/status', async (req: Request, res: Response): Promise<voi
         return;
       }
 
-      pendingManualAuthState.delete(state);
       try {
         await ensureManagedModelPrefixes([account.provider]);
       } catch {
@@ -1033,6 +1032,7 @@ router.get('/:provider/status', async (req: Request, res: Response): Promise<voi
           isDefault: account.isDefault,
         },
       });
+      pendingManualAuthState.delete(state);
       return;
     }
 
@@ -1167,7 +1167,11 @@ router.post('/:provider/submit-callback', async (req: Request, res: Response): P
       }
 
       if (parsed.state) {
-        pendingManualAuthState.delete(parsed.state);
+        try {
+          await ensureManagedModelPrefixes([account.provider]);
+        } catch {
+          // Keep manual callback success path non-fatal when prefix repair cannot run.
+        }
       }
 
       res.json({
@@ -1180,6 +1184,9 @@ router.post('/:provider/submit-callback', async (req: Request, res: Response): P
           isDefault: account.isDefault,
         },
       });
+      if (parsed.state) {
+        pendingManualAuthState.delete(parsed.state);
+      }
       return;
     }
 

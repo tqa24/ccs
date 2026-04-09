@@ -310,10 +310,7 @@ function getPreferredOptionValue(
   modelId: string,
   routingHint: CliproxyProviderRoutingHints['models'][number] | undefined
 ): string {
-  if (!routingHint?.pinnedAvailable) {
-    return modelId;
-  }
-  return routingHint.recommendedModelId;
+  return routingHint?.recommendedModelId ?? modelId;
 }
 
 export function FlexibleModelSelector({
@@ -337,6 +334,15 @@ export function FlexibleModelSelector({
     () =>
       new Map((routing?.models ?? []).map((hint) => [hint.modelId.toLowerCase(), hint] as const)),
     [routing]
+  );
+  const recommendedOptionValues = useMemo(
+    () =>
+      new Set(
+        resolvedCatalogModels.map((model) =>
+          getPreferredOptionValue(model.id, routingHints.get(model.id.toLowerCase()))
+        )
+      ),
+    [resolvedCatalogModels, routingHints]
   );
   const selectedRoutingHint = useMemo(
     () => routingHints.get(normalizeModelValue(value, routing).toLowerCase()),
@@ -384,6 +390,12 @@ export function FlexibleModelSelector({
 
   const allModelOptions = allModels
     .filter((model) => !catalogModelIds.has(model.id))
+    .filter(
+      (model) =>
+        !recommendedOptionValues.has(
+          getPreferredOptionValue(model.id, routingHints.get(model.id.toLowerCase()))
+        )
+    )
     .map((model) => ({
       value: getPreferredOptionValue(model.id, routingHints.get(model.id.toLowerCase())),
       groupKey: 'all',

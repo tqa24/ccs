@@ -3,6 +3,8 @@ import { buildManagementHeaders, buildProxyUrl, getProxyTarget } from './proxy-t
 import { mapExternalProviderName } from './provider-capabilities';
 import type { CLIProxyProvider } from './types';
 
+const MANAGED_PREFIX_REQUEST_TIMEOUT_MS = 3000;
+
 interface ManagementAuthFileRecord {
   account_type?: string;
   name: string;
@@ -25,11 +27,24 @@ function normalizeProvider(record: ManagementAuthFileRecord): CLIProxyProvider |
   return providerName ? mapExternalProviderName(providerName) : null;
 }
 
-async function listAuthFiles(): Promise<ManagementAuthFileRecord[]> {
+async function fetchManagementEndpoint(path: string, init: RequestInit = {}): Promise<Response> {
   const target = getProxyTarget();
-  const response = await fetch(buildProxyUrl(target, '/v0/management/auth-files'), {
-    headers: buildManagementHeaders(target),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), MANAGED_PREFIX_REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(buildProxyUrl(target, path), {
+      ...init,
+      headers: buildManagementHeaders(target, init.headers as Record<string, string> | undefined),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function listAuthFiles(): Promise<ManagementAuthFileRecord[]> {
+  const response = await fetchManagementEndpoint('/v0/management/auth-files');
 
   if (!response.ok) {
     throw new Error(`auth file listing failed with status ${response.status}`);
@@ -40,12 +55,11 @@ async function listAuthFiles(): Promise<ManagementAuthFileRecord[]> {
 }
 
 async function patchAuthFilePrefix(name: string, prefix: string): Promise<void> {
-  const target = getProxyTarget();
-  const response = await fetch(buildProxyUrl(target, '/v0/management/auth-files/fields'), {
+  const response = await fetchManagementEndpoint('/v0/management/auth-files/fields', {
     method: 'PATCH',
-    headers: buildManagementHeaders(target, {
+    headers: {
       'Content-Type': 'application/json',
-    }),
+    },
     body: JSON.stringify({ name, prefix }),
   });
 
@@ -55,14 +69,9 @@ async function patchAuthFilePrefix(name: string, prefix: string): Promise<void> 
 }
 
 async function readAuthFileMetadata(name: string): Promise<AuthFileMetadata> {
-  const target = getProxyTarget();
-  const url = buildProxyUrl(
-    target,
+  const response = await fetchManagementEndpoint(
     `/v0/management/auth-files/download?name=${encodeURIComponent(name)}`
   );
-  const response = await fetch(url, {
-    headers: buildManagementHeaders(target),
-  });
 
   if (!response.ok) {
     throw new Error(`auth file download failed for ${name} with status ${response.status}`);
@@ -89,8 +98,17 @@ async function readAuthFileMetadata(name: string): Promise<AuthFileMetadata> {
 export async function ensureManagedModelPrefixes(
   providers?: CLIProxyProvider[]
 ): Promise<ManagedPrefixSyncResult> {
+  const allowedProviders = new Set(
+    (providers ?? [])
+      .map((provider) => provider.trim())
+      .filter((provider) => getManagedModelPrefix(provider))
+  );
+
+  if (providers && allowedProviders.size === 0) {
+    return { checked: 0, updated: 0 };
+  }
+
   const files = await listAuthFiles();
-  const allowedProviders = new Set((providers ?? []).map((provider) => provider.trim()));
   let checked = 0;
   let updated = 0;
 

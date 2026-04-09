@@ -47,6 +47,11 @@ const MAX_POLL_DURATION = 5 * 60 * 1000;
 /** Fail visibly after repeated poll transport errors instead of retrying forever */
 const MAX_POLL_FAILURES = 3;
 
+function invalidateCliproxyRoutingData(queryClient: ReturnType<typeof useQueryClient>): void {
+  queryClient.invalidateQueries({ queryKey: ['cliproxy-catalog'] });
+  queryClient.invalidateQueries({ queryKey: ['cliproxy-models'] });
+}
+
 async function parseResponseBody(response: Response): Promise<Record<string, unknown>> {
   const text = await response.text();
   if (!text) return {};
@@ -167,6 +172,7 @@ export function useCliproxyAuthFlow() {
           queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
           queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
           queryClient.invalidateQueries({ queryKey: ['account-quota'] });
+          invalidateCliproxyRoutingData(queryClient);
           toast.success(`${provider} authentication successful`);
           openedAuthUrlRef.current = false;
           setState(INITIAL_STATE);
@@ -301,6 +307,7 @@ export function useCliproxyAuthFlow() {
                 queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
                 queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
                 queryClient.invalidateQueries({ queryKey: ['account-quota'] });
+                invalidateCliproxyRoutingData(queryClient);
                 // Note: No toast here - DeviceCodeDialog's useDeviceCode hook handles success toast
                 // via deviceCodeCompleted WebSocket event to avoid duplicate toasts
                 openedAuthUrlRef.current = false;
@@ -467,6 +474,7 @@ export function useCliproxyAuthFlow() {
           queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
           queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
           queryClient.invalidateQueries({ queryKey: ['account-quota'] });
+          invalidateCliproxyRoutingData(queryClient);
           toast.success(`${currentProvider} authentication successful`);
           setState(INITIAL_STATE);
         } else {

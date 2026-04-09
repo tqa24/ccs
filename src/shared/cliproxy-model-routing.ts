@@ -162,9 +162,7 @@ export function buildCliproxyRoutingHints(
         .map((candidate) => candidate.id)
         .sort((left, right) => left.localeCompare(right));
       const managedPinnedId = `${prefix}/${model.id}`;
-      const recommendedModelId = pinnedCandidates.includes(managedPinnedId)
-        ? managedPinnedId
-        : (pinnedCandidates[0] ?? managedPinnedId);
+      const pinnedAvailable = pinnedCandidates.includes(managedPinnedId);
       const mergedModel = mergedModelMap.get(normalize(model.id));
       const effectiveProvider = mergedModel ? inferProvider(mergedModel) : null;
       const effectiveDisplayName =
@@ -188,8 +186,8 @@ export function buildCliproxyRoutingHints(
         modelName: model.name?.trim() || model.id,
         prefix,
         pinnedModelId: managedPinnedId,
-        recommendedModelId,
-        pinnedAvailable: pinnedCandidates.length > 0,
+        recommendedModelId: managedPinnedId,
+        pinnedAvailable,
         unprefixedStatus,
         effectiveProvider,
         effectiveDisplayName,

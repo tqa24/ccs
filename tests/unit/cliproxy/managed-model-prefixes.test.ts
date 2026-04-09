@@ -111,6 +111,16 @@ describe('ensureManagedModelPrefixes', () => {
     expect(downloadedNames).toEqual(['gemini-main']);
   });
 
+  it('returns immediately when called for providers without managed prefixes', async () => {
+    const fetchMock = mock(() => Promise.reject(new Error('should not fetch')));
+    global.fetch = fetchMock as typeof fetch;
+
+    const result = await ensureManagedModelPrefixes(['codex']);
+
+    expect(result).toEqual({ checked: 0, updated: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it('skips files that already have the managed prefix or a different custom prefix', async () => {
     const requests = installFetchMock({
       files: [

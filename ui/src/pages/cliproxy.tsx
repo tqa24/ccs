@@ -306,6 +306,7 @@ export function CliproxyPage() {
     queryClient.invalidateQueries({ queryKey: ['cliproxy'] });
     queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
     queryClient.invalidateQueries({ queryKey: ['cliproxy-catalog'] });
+    queryClient.invalidateQueries({ queryKey: ['cliproxy-models'] });
   };
 
   const handlePauseToggle = (provider: string, accountId: string, paused: boolean) => {

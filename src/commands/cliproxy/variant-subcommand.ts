@@ -125,7 +125,7 @@ function getSelectableModelId(
   const hint = routing?.models.find(
     (entry) => entry.modelId.toLowerCase() === modelId.toLowerCase()
   );
-  return hint?.pinnedAvailable ? hint.recommendedModelId : modelId;
+  return hint?.recommendedModelId ?? modelId;
 }
 
 function getBackendLabel(backend: CLIProxyBackend): string {

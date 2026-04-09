@@ -28,7 +28,7 @@ function normalizePresetValues(
     const hint = routing?.models.find(
       (entry) => entry.modelId.toLowerCase() === modelId.toLowerCase()
     );
-    return hint?.pinnedAvailable ? hint.recommendedModelId : modelId;
+    return hint?.recommendedModelId ?? modelId;
   };
 
   return {

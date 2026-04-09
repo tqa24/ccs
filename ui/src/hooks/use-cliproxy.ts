@@ -14,6 +14,17 @@ import {
 } from '@/lib/api-client';
 import { toast } from 'sonner';
 
+function invalidateCliproxyRoutingQueries(queryClient: ReturnType<typeof useQueryClient>): void {
+  queryClient.invalidateQueries({ queryKey: ['cliproxy-catalog'] });
+  queryClient.invalidateQueries({ queryKey: ['cliproxy-models'] });
+}
+
+function invalidateCliproxyAccountQueries(queryClient: ReturnType<typeof useQueryClient>): void {
+  queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
+  queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+  invalidateCliproxyRoutingQueries(queryClient);
+}
+
 export function useCliproxy() {
   return useQuery({
     queryKey: ['cliproxy'],
@@ -128,8 +139,7 @@ export function useSetDefaultAccount() {
     mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
       api.cliproxy.accounts.setDefault(provider, accountId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       toast.success('Default account updated');
     },
     onError: (error: Error) => {
@@ -145,8 +155,7 @@ export function useRemoveAccount() {
     mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
       api.cliproxy.accounts.remove(provider, accountId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       toast.success('Account removed');
     },
     onError: (error: Error) => {
@@ -162,8 +171,7 @@ export function usePauseAccount() {
     mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
       api.cliproxy.accounts.pause(provider, accountId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
       toast.success('Account paused');
     },
@@ -180,8 +188,7 @@ export function useResumeAccount() {
     mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
       api.cliproxy.accounts.resume(provider, accountId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
       toast.success('Account resumed');
     },
@@ -198,8 +205,7 @@ export function useSoloAccount() {
     mutationFn: ({ provider, accountId }: { provider: string; accountId: string }) =>
       api.cliproxy.accounts.solo(provider, accountId),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
       const pausedCount = data.paused.length;
       toast.success(
@@ -219,8 +225,7 @@ export function useBulkPauseAccounts() {
     mutationFn: ({ provider, accountIds }: { provider: string; accountIds: string[] }) =>
       api.cliproxy.accounts.bulkPause(provider, accountIds),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
       toast.success(
         `Paused ${data.succeeded.length} account${data.succeeded.length !== 1 ? 's' : ''}`
@@ -244,8 +249,7 @@ export function useBulkResumeAccounts() {
     mutationFn: ({ provider, accountIds }: { provider: string; accountIds: string[] }) =>
       api.cliproxy.accounts.bulkResume(provider, accountIds),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       queryClient.invalidateQueries({ queryKey: ['cliproxy-stats'] });
       toast.success(
         `Resumed ${data.succeeded.length} account${data.succeeded.length !== 1 ? 's' : ''}`
@@ -270,8 +274,7 @@ export function useStartAuth() {
     mutationFn: ({ provider, nickname }: { provider: string; nickname?: string }) =>
       api.cliproxy.auth.start(provider, nickname),
     onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       toast.success(`Account added for ${variables.provider}`);
     },
     onError: (error: Error) => {
@@ -297,8 +300,7 @@ export function useKiroImport() {
   return useMutation({
     mutationFn: () => api.cliproxy.auth.kiroImport(),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
-      queryClient.invalidateQueries({ queryKey: ['cliproxy-auth'] });
+      invalidateCliproxyAccountQueries(queryClient);
       if (data.account) {
         toast.success(`Imported Kiro account: ${data.account.email || data.account.id}`);
       } else {

@@ -64,4 +64,24 @@ describe('cliproxy model routing hints', () => {
       effectiveProvider: null,
     });
   });
+
+  it('does not promote custom auth-file prefixes as managed pinned model ids', () => {
+    const routing = buildCliproxyRoutingHints(
+      {
+        gemini: {
+          provider: 'gemini',
+          displayName: 'Gemini',
+          models: [{ id: 'gemini-3-flash-preview', name: 'Gemini Flash' }],
+        },
+      },
+      [{ id: 'team-a/gemini-3-flash-preview', owned_by: 'google', type: 'gemini-cli' }]
+    );
+
+    expect(routing.gemini?.models[0]).toMatchObject({
+      pinnedModelId: 'gcli/gemini-3-flash-preview',
+      recommendedModelId: 'gcli/gemini-3-flash-preview',
+      pinnedAvailable: false,
+      unprefixedStatus: 'prefix-only',
+    });
+  });
 });

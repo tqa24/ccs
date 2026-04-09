@@ -60,9 +60,7 @@ export function ModelConfigSection({
     [routing]
   );
   const toPreferredModelId = (modelId: string): string =>
-    routingHintMap.get(modelId.toLowerCase())?.pinnedAvailable
-      ? (routingHintMap.get(modelId.toLowerCase())?.recommendedModelId ?? modelId)
-      : modelId;
+    routingHintMap.get(modelId.toLowerCase())?.recommendedModelId ?? modelId;
 
   const extendedContextModels = useMemo(() => {
     if (!catalog) return [];
