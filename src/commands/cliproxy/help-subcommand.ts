@@ -36,7 +36,7 @@ export async function showHelp(): Promise<void> {
     [
       'Catalog Commands:',
       [
-        ['catalog', 'Show catalog status (cached vs static)'],
+        ['catalog', 'Show catalog status, routing hints, and pinned short prefixes'],
         ['catalog refresh', 'Sync models from remote CLIProxy'],
         ['catalog reset', 'Clear cache, revert to static catalog'],
       ],
@@ -85,7 +85,7 @@ export async function showHelp(): Promise<void> {
       [
         ['--backend <type>', 'Use specific backend: original | plus (default: from config)'],
         ['--target <cli>', 'Default target for created/edited variants: claude | droid'],
-        ['--verbose, -v', 'Show detailed quota fetch diagnostics'],
+        ['--verbose, -v', 'Show detailed diagnostics including routing hints and quota fetches'],
       ],
     ],
   ];
@@ -100,6 +100,7 @@ export async function showHelp(): Promise<void> {
   }
 
   console.log(dim('  Note: CLIProxy now persists by default. Use "stop" to terminate.'));
+  console.log(dim('  Routing: use gcli/<model> or agy/<model> to keep overlapping models pinned.'));
   console.log('');
   console.log(subheader('Notes:'));
   console.log(`  Default fallback version: ${color(getFallbackVersion(), 'info')}`);
