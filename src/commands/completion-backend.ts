@@ -157,6 +157,12 @@ function getSuggestionsForCommand(tokensBeforeCurrent: string[]): CompletionSugg
           '--help',
           '-h',
         ]);
+      if (subcommand === 'routing') {
+        if (lastToken === 'set') {
+          return completeSubcommands(['round-robin', 'fill-first']);
+        }
+        return completeSubcommands(['set', 'explain']);
+      }
       if (['remove', 'edit'].includes(subcommand)) {
         return completeSubcommands(getProfileNames('cliproxyVariants'), ['--yes', '-y']);
       }
@@ -220,7 +226,15 @@ function getSuggestionsForCommand(tokensBeforeCurrent: string[]): CompletionSugg
         if (command === 'kiro') {
           return completeSubcommands(
             [],
-            [...PROVIDER_FLAGS, '--kiro-auth-method', '--import', '--incognito']
+            [
+              ...PROVIDER_FLAGS,
+              '--kiro-auth-method',
+              '--kiro-idc-start-url',
+              '--kiro-idc-region',
+              '--kiro-idc-flow',
+              '--import',
+              '--incognito',
+            ]
           );
         }
         return completeSubcommands([], PROVIDER_FLAGS);

@@ -2,7 +2,7 @@ import { COPILOT_SUBCOMMANDS } from '../copilot/constants';
 import { CURSOR_SUBCOMMANDS } from '../cursor/constants';
 import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
 
-export type HelpTopicName = 'profiles' | 'providers' | 'completion' | 'targets';
+export type HelpTopicName = 'profiles' | 'providers' | 'kiro' | 'completion' | 'targets';
 
 export interface HelpTopicEntry {
   name: HelpTopicName;
@@ -25,6 +25,7 @@ export interface ShortcutEntry {
 export const ROOT_HELP_TOPICS: readonly HelpTopicEntry[] = [
   { name: 'profiles', summary: 'Account profiles, API profiles, and CLIProxy variants' },
   { name: 'providers', summary: 'Built-in OAuth providers and runtime shortcuts' },
+  { name: 'kiro', summary: 'Kiro auth methods, IDC flags, and callback guidance' },
   { name: 'completion', summary: 'Shell completion install, refresh, and testing' },
   { name: 'targets', summary: 'Claude, Droid, and Codex target routing' },
 ] as const;
@@ -136,7 +137,7 @@ export const ROOT_COMMAND_CATALOG: readonly RootCommandEntry[] = [
   },
   {
     name: 'cleanup',
-    summary: 'Remove old CLIProxy logs',
+    summary: 'Remove old CCS and CLIProxy logs',
     group: 'operations',
     aliases: ['--cleanup'],
     visibility: 'public',
@@ -236,6 +237,7 @@ export const CLIPROXY_SUBCOMMANDS = [
   'edit',
   'list',
   'remove',
+  'routing',
   'catalog',
   'sync',
   'quota',

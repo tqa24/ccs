@@ -46,9 +46,21 @@ describe('help command parity', () => {
 
     expect(rendered.includes('Built-in OAuth Providers')).toBe(true);
     expect(rendered.includes('ccs cliproxy --help')).toBe(true);
+    expect(rendered.includes('ccs help kiro')).toBe(true);
     expect(rendered.includes('gemini')).toBe(true);
     expect(rendered.includes('codex')).toBe(true);
     expect(rendered.includes('ghcp')).toBe(true);
+  });
+
+  test('kiro topic documents IDC and callback flags', async () => {
+    const rendered = await renderLines((writeLine) => handleHelpRoute(['kiro'], writeLine));
+
+    expect(rendered.includes('CCS Kiro Help')).toBe(true);
+    expect(rendered.includes('--kiro-idc-start-url <url>')).toBe(true);
+    expect(rendered.includes('--kiro-idc-region <region>')).toBe(true);
+    expect(rendered.includes('--kiro-idc-flow <authcode|device>')).toBe(true);
+    expect(rendered.includes('--paste-callback')).toBe(true);
+    expect(rendered.includes('GitHub OAuth is dashboard-only')).toBe(true);
   });
 
   test('completion topic documents install and verification paths', async () => {

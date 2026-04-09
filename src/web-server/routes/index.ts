@@ -6,6 +6,7 @@
  */
 
 import { Router } from 'express';
+import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
 
 // Import domain routers
 import profileRoutes from './profile-routes';
@@ -20,6 +21,7 @@ import websearchRoutes from './websearch-routes';
 import imageAnalysisRoutes from './image-analysis-routes';
 import cliproxyAuthRoutes from './cliproxy-auth-routes';
 import cliproxyStatsRoutes from './cliproxy-stats-routes';
+import cliproxyRoutingRoutes from './cliproxy-routing-routes';
 import cliproxySyncRoutes from './cliproxy-sync-routes';
 import aiProviderRoutes from './ai-provider-routes';
 import copilotRoutes from './copilot-routes';
@@ -32,9 +34,34 @@ import authRoutes from './auth-routes';
 import persistRoutes from './persist-routes';
 import catalogRoutes from './catalog-routes';
 import claudeExtensionRoutes from './claude-extension-routes';
+import logsRoutes from './logs-routes';
 
 // Create the main API router
 export const apiRoutes = Router();
+
+const REMOTE_WRITE_ACCESS_ERROR =
+  'Remote dashboard writes require localhost access when dashboard auth is disabled.';
+
+function isMutationMethod(method: string): boolean {
+  const normalized = method.toUpperCase();
+  return (
+    normalized === 'POST' ||
+    normalized === 'PUT' ||
+    normalized === 'PATCH' ||
+    normalized === 'DELETE'
+  );
+}
+
+apiRoutes.use((req, res, next) => {
+  if (!isMutationMethod(req.method)) {
+    next();
+    return;
+  }
+
+  if (requireLocalAccessWhenAuthDisabled(req, res, REMOTE_WRITE_ACCESS_ERROR)) {
+    next();
+  }
+});
 
 // ==================== Profile & Settings ====================
 // Profile CRUD, settings management, presets, accounts
@@ -59,6 +86,7 @@ apiRoutes.use('/claude-extension', claudeExtensionRoutes);
 
 // ==================== CLIProxy ====================
 // Variants, auth, accounts, stats, status, models, error logs
+apiRoutes.use('/cliproxy', cliproxyRoutingRoutes);
 apiRoutes.use('/cliproxy', variantRoutes);
 apiRoutes.use('/cliproxy/auth', cliproxyAuthRoutes);
 apiRoutes.use('/cliproxy', cliproxyStatsRoutes);
@@ -88,3 +116,4 @@ apiRoutes.use('/cliproxy-server', cliproxyServerRoutes);
 
 // ==================== Misc (File API, Global Env) ====================
 apiRoutes.use('/', miscRoutes);
+apiRoutes.use('/logs', logsRoutes);

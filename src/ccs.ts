@@ -37,7 +37,10 @@ import {
   appendThirdPartyImageAnalysisToolArgs,
 } from './utils/image-analysis';
 import { getGlobalEnvConfig, getOfficialChannelsConfig } from './config/unified-config-loader';
-import { ensureProfileHooks as ensureImageAnalyzerHooks } from './utils/hooks/image-analyzer-profile-hook-injector';
+import {
+  ensureProfileHooks as ensureImageAnalyzerHooks,
+  removeImageAnalysisProfileHook,
+} from './utils/hooks/image-analyzer-profile-hook-injector';
 import {
   applyImageAnalysisRuntimeOverrides,
   getImageAnalysisHookEnv,
@@ -65,6 +68,7 @@ import { tryHandleRootCommand } from './commands/root-command-router';
 import { execClaude } from './utils/shell-executor';
 import { isDeprecatedGlmtProfileName, normalizeDeprecatedGlmtEnv } from './utils/glmt-deprecation';
 import { maybeWarnAboutResumeLaneMismatch } from './auth/resume-lane-warning';
+import { createLogger } from './services/logging';
 
 // Import target adapter system
 import {
@@ -318,6 +322,7 @@ async function main(): Promise<void> {
   registerTarget(new ClaudeAdapter());
   registerTarget(new DroidAdapter());
   registerTarget(new CodexAdapter());
+  const cliLogger = createLogger('cli');
 
   const args = process.argv.slice(2);
   const isCompletionCommand = args[0] === '__complete';
@@ -395,6 +400,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  cliLogger.info('command.start', 'CLI invocation started', {
+    command: args[0] || 'default',
+    argCount: args.length,
+    flags: args.filter((arg) => arg.startsWith('-')).slice(0, 20),
+  });
+
   if (shouldPassthroughNativeCodexFlagCommand(args)) {
     execNativeCodexFlagCommand(args);
     return;
@@ -445,6 +456,9 @@ async function main(): Promise<void> {
       recovery.showRecoveryHints();
     }
   } catch (err) {
+    cliLogger.warn('recovery.failed', 'Auto-recovery failed during CLI startup', {
+      message: (err as Error).message,
+    });
     // Recovery is best-effort - don't block basic CLI functionality
     console.warn('[!] Recovery failed:', (err as Error).message);
   }
@@ -711,22 +725,30 @@ async function main(): Promise<void> {
 
     if (profileInfo.type === 'cliproxy') {
       // CLIPROXY FLOW: OAuth-based profiles (gemini, codex, agy, qwen) or user-defined variants
+      const imageAnalysisMcpReady =
+        resolvedTarget === 'claude' ? ensureImageAnalysisMcpOrThrow() : true;
       if (resolvedTarget === 'claude') {
         ensureWebSearchMcpOrThrow();
-        ensureImageAnalysisMcpOrThrow();
       }
-      const imageAnalysisFallbackHookReady =
-        resolvedTarget === 'claude' ? prepareImageAnalysisFallbackHook() : false;
       const provider = profileInfo.provider || (profileInfo.name as CLIProxyProvider);
-      // Inject Image Analyzer hook into profile settings before launch
-      ensureImageAnalyzerHooks({
-        profileName: profileInfo.name,
-        profileType: profileInfo.type,
-        cliproxyProvider: provider,
-        isComposite: profileInfo.isComposite,
-        settingsPath: profileInfo.settingsPath ? expandPath(profileInfo.settingsPath) : undefined,
-        sharedHookInstalled: imageAnalysisFallbackHookReady,
-      });
+      const expandedCliproxySettingsPath = profileInfo.settingsPath
+        ? expandPath(profileInfo.settingsPath)
+        : undefined;
+      if (resolvedTarget === 'claude') {
+        if (imageAnalysisMcpReady) {
+          removeImageAnalysisProfileHook(profileInfo.name, expandedCliproxySettingsPath);
+        } else {
+          const imageAnalysisFallbackHookReady = prepareImageAnalysisFallbackHook();
+          ensureImageAnalyzerHooks({
+            profileName: profileInfo.name,
+            profileType: profileInfo.type,
+            cliproxyProvider: provider,
+            isComposite: profileInfo.isComposite,
+            settingsPath: expandedCliproxySettingsPath,
+            sharedHookInstalled: imageAnalysisFallbackHookReady,
+          });
+        }
+      }
       const customSettingsPath = profileInfo.settingsPath; // undefined for hardcoded profiles
       const variantPort = profileInfo.port; // variant-specific port for isolation
       const cliproxyPort = variantPort || CLIPROXY_DEFAULT_PORT;
@@ -757,6 +779,9 @@ async function main(): Promise<void> {
           '--port-forward',
           '--nickname',
           '--kiro-auth-method',
+          '--kiro-idc-start-url',
+          '--kiro-idc-region',
+          '--kiro-idc-flow',
           '--backend',
           '--proxy-host',
           '--proxy-port',
@@ -880,15 +905,19 @@ async function main(): Promise<void> {
     } else if (profileInfo.type === 'copilot') {
       // COPILOT FLOW: GitHub Copilot subscription via copilot-api proxy
       ensureWebSearchMcpOrThrow();
-      ensureImageAnalysisMcpOrThrow();
-      const imageAnalysisFallbackHookReady =
-        resolvedTarget === 'claude' ? prepareImageAnalysisFallbackHook() : false;
-      // Inject Image Analyzer hook into profile settings before launch
-      ensureImageAnalyzerHooks({
-        profileName: profileInfo.name,
-        profileType: profileInfo.type,
-        sharedHookInstalled: imageAnalysisFallbackHookReady,
-      });
+      const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
+      if (resolvedTarget === 'claude') {
+        if (imageAnalysisMcpReady) {
+          removeImageAnalysisProfileHook(profileInfo.name);
+        } else {
+          const imageAnalysisFallbackHookReady = prepareImageAnalysisFallbackHook();
+          ensureImageAnalyzerHooks({
+            profileName: profileInfo.name,
+            profileType: profileInfo.type,
+            sharedHookInstalled: imageAnalysisFallbackHookReady,
+          });
+        }
+      }
 
       const { executeCopilotProfile } = await import('./copilot');
       const copilotConfig = profileInfo.copilotConfig;
@@ -978,8 +1007,6 @@ async function main(): Promise<void> {
       const inheritedClaudeConfigDir = continuityInheritance.claudeConfigDir;
       syncWebSearchMcpToConfigDir(inheritedClaudeConfigDir);
       syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir);
-      const imageAnalysisFallbackHookReady =
-        resolvedTarget === 'claude' ? prepareImageAnalysisFallbackHook() : false;
       const expandedSettingsPath =
         resolvedSettingsPath ??
         (profileInfo.settingsPath
@@ -987,14 +1014,22 @@ async function main(): Promise<void> {
           : getSettingsPath(profileInfo.name));
       const settings = resolvedSettings ?? loadSettings(expandedSettingsPath);
       const cliproxyBridge = resolvedCliproxyBridge ?? resolveCliproxyBridgeMetadata(settings);
-      ensureImageAnalyzerHooks({
-        profileName: profileInfo.name,
-        profileType: profileInfo.type,
-        settingsPath: expandedSettingsPath,
-        settings,
-        cliproxyBridge,
-        sharedHookInstalled: imageAnalysisFallbackHookReady,
-      });
+      let imageAnalysisFallbackHookReady: boolean | undefined;
+      if (resolvedTarget === 'claude') {
+        if (imageAnalysisMcpReady) {
+          removeImageAnalysisProfileHook(profileInfo.name, expandedSettingsPath);
+        } else {
+          imageAnalysisFallbackHookReady = prepareImageAnalysisFallbackHook();
+          ensureImageAnalyzerHooks({
+            profileName: profileInfo.name,
+            profileType: profileInfo.type,
+            settingsPath: expandedSettingsPath,
+            settings,
+            cliproxyBridge,
+            sharedHookInstalled: imageAnalysisFallbackHookReady,
+          });
+        }
+      }
       if (resolvedTarget !== 'claude') {
         const compatibility = evaluateTargetRuntimeCompatibility({
           target: resolvedTarget,
@@ -1113,14 +1148,11 @@ async function main(): Promise<void> {
         apiKey: runtimeConnection.apiKey,
         allowSelfSigned: runtimeConnection.allowSelfSigned,
       });
-
-      if (!imageAnalysisMcpReady) {
-        imageAnalysisEnv = {
-          ...imageAnalysisEnv,
-          CCS_CURRENT_PROVIDER: '',
-          CCS_IMAGE_ANALYSIS_SKIP: '1',
-        };
-      }
+      imageAnalysisEnv = {
+        ...imageAnalysisEnv,
+        CCS_IMAGE_ANALYSIS_SKIP_HOOK:
+          resolvedTarget === 'claude' && imageAnalysisMcpReady ? '1' : '0',
+      };
 
       const imageAnalysisProvider = imageAnalysisEnv['CCS_CURRENT_PROVIDER'];
       if (

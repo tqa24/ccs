@@ -38,6 +38,7 @@ export function ProviderEditor({
   isRemoteMode,
   port,
   defaultTarget,
+  topNotice,
   onAddAccount,
   onSetDefault,
   onRemoveAccount,
@@ -121,7 +122,7 @@ export function ProviderEditor({
     conflictDialog,
     handleConflictResolve,
     missingRequiredFields,
-  } = useProviderEditor(provider);
+  } = useProviderEditor(provider, catalog);
 
   // Defensive normalization: remote/legacy payloads may omit account.provider.
   // Fallback to current editor provider to avoid runtime crashes in account UI.
@@ -227,6 +228,7 @@ export function ProviderEditor({
         onRefetch={refetch}
         onSave={() => saveMutation.mutate()}
       />
+      {topNotice ? <div className="border-b bg-muted/10 px-4 py-3">{topNotice}</div> : null}
 
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">

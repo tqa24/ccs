@@ -78,10 +78,79 @@ async function showProvidersHelp(writeLine: HelpWriter): Promise<void> {
       },
       { name: 'ccs api create --preset <id>', summary: 'Create an API-backed provider profile' },
       { name: 'ccs config', summary: 'Use the dashboard for provider and model setup' },
+      { name: 'ccs help kiro', summary: 'Kiro-specific auth methods and IDC flags' },
     ],
     writeLine
   );
   writeLine(`  ${dim('Deep help: ccs cliproxy --help | ccs api --help')}`);
+  writeLine('');
+}
+
+async function showKiroHelp(writeLine: HelpWriter): Promise<void> {
+  await initUI();
+  writeLine(header('CCS Kiro Help'));
+  writeLine('');
+  writeLine('  Kiro supports Builder ID, IDC, and management-only social OAuth flows.');
+  writeLine('');
+  writeCommandTable(
+    'Authentication Methods',
+    [
+      { name: 'ccs kiro --auth', summary: 'Default AWS Builder ID device-code flow' },
+      {
+        name: 'ccs kiro --auth --kiro-auth-method aws-authcode',
+        summary: 'AWS Builder ID auth-code flow via local callback server',
+      },
+      {
+        name: 'ccs kiro --auth --kiro-auth-method idc',
+        summary: 'IAM Identity Center flow; requires IDC start URL',
+      },
+      {
+        name: 'ccs config',
+        summary: 'Dashboard flow for GitHub OAuth and account management',
+      },
+    ],
+    writeLine
+  );
+  writeCommandTable(
+    'Kiro Flags',
+    [
+      {
+        name: '--kiro-auth-method <aws|aws-authcode|google|github|idc>',
+        summary: 'Select the Kiro auth method',
+      },
+      { name: '--kiro-idc-start-url <url>', summary: 'Required IDC start URL when using `idc`' },
+      { name: '--kiro-idc-region <region>', summary: 'Optional IDC region override' },
+      { name: '--kiro-idc-flow <authcode|device>', summary: 'IDC flow type; defaults to authcode' },
+      {
+        name: '--paste-callback',
+        summary: 'Paste the final callback URL for callback-based CLI auth flows',
+      },
+      { name: '--import', summary: 'Import an existing Kiro IDE token instead of starting OAuth' },
+    ],
+    writeLine
+  );
+  writeCommandTable(
+    'Examples',
+    [
+      { name: 'ccs kiro --auth', summary: 'Start the default Builder ID device flow' },
+      {
+        name: 'ccs kiro --auth --kiro-auth-method aws-authcode --paste-callback',
+        summary: 'Use auth-code flow and paste the callback URL manually',
+      },
+      {
+        name: 'ccs kiro --auth --kiro-auth-method idc --kiro-idc-start-url https://d-xxx.awsapps.com/start',
+        summary: 'Start IDC auth with the default authcode flow',
+      },
+      {
+        name: 'ccs kiro --auth --kiro-auth-method idc --kiro-idc-start-url https://d-xxx.awsapps.com/start --kiro-idc-flow device',
+        summary: 'Use IDC device-code flow instead of authcode',
+      },
+    ],
+    writeLine
+  );
+  writeLine(
+    `  ${dim('GitHub OAuth is dashboard-only: ccs config -> Accounts -> Add Kiro account')}`
+  );
   writeLine('');
 }
 
@@ -142,7 +211,10 @@ export async function handleHelpCommand(writeLine: HelpWriter = console.log): Pr
       { name: 'ccs help completion', summary: getTopicSummary('completion') },
       { name: 'ccs help targets', summary: getTopicSummary('targets') },
       { name: 'ccs api --help', summary: 'Deep help for API profile lifecycle commands' },
-      { name: 'ccs cliproxy --help', summary: 'Deep help for variants, quota, and lifecycle' },
+      {
+        name: 'ccs cliproxy --help',
+        summary: 'Deep help for variants, routing, quota, and lifecycle',
+      },
       { name: 'ccs docker --help', summary: 'Deep help for Docker deployment commands' },
       { name: 'ccs cursor --help', summary: 'Deep help for Cursor runtime/admin commands' },
       { name: 'ccs copilot --help', summary: 'Deep help for GitHub Copilot commands' },
@@ -174,6 +246,10 @@ export async function handleHelpRoute(
   }
   if (topic === 'providers') {
     await showProvidersHelp(writeLine);
+    return;
+  }
+  if (topic === 'kiro') {
+    await showKiroHelp(writeLine);
     return;
   }
   if (topic === 'targets') {

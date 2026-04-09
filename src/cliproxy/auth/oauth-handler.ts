@@ -32,8 +32,9 @@ import {
 import {
   OAuthOptions,
   DEFAULT_KIRO_AUTH_METHOD,
+  DEFAULT_KIRO_IDC_FLOW,
   getKiroCallbackPort,
-  getKiroCLIAuthFlag,
+  getKiroCLIAuthArgs,
   isKiroCLIAuthMethod,
   isKiroDeviceCodeMethod,
   getOAuthConfig,
@@ -42,9 +43,17 @@ import {
   getPasteCallbackStartPath,
   getManagementOAuthCallbackPath,
   normalizeKiroAuthMethod,
+  normalizeKiroIDCFlow,
 } from './auth-types';
 import { isHeadlessEnvironment, killProcessOnPort, showStep } from './environment-detector';
-import { getProviderTokenDir, isAuthenticated, registerAccountFromToken } from './token-manager';
+import {
+  ProviderTokenSnapshot,
+  findNewTokenSnapshotForAuthAttempt,
+  getProviderTokenDir,
+  isAuthenticated,
+  listProviderTokenSnapshots,
+  registerAccountFromToken,
+} from './token-manager';
 import { executeOAuthProcess } from './oauth-process';
 import { importKiroToken } from './kiro-import';
 import {
@@ -69,18 +78,23 @@ interface PasteCallbackStartData {
 }
 
 const PASTE_CALLBACK_AUTH_URL_POLL_INTERVAL_MS = 3000;
+const POLLED_AUTH_LOCAL_TOKEN_GRACE_MS = 15 * 1000;
 
 export async function requestPasteCallbackStart(
   provider: CLIProxyProvider,
-  target: ProxyTarget
+  target: ProxyTarget,
+  options?: { kiroMethod?: OAuthOptions['kiroMethod'] }
 ): Promise<PasteCallbackStartData> {
-  const startPath = getPasteCallbackStartPath(provider);
+  const startPath = getPasteCallbackStartPath(provider, {
+    kiroMethod: options?.kiroMethod,
+  });
+  if (!startPath) {
+    throw new Error(
+      `Paste-callback start is not available for ${provider} with the selected method`
+    );
+  }
   const response = await fetch(buildProxyUrl(target, startPath), {
-    ...(provider === 'kiro' ? { method: 'POST' } : {}),
-    headers:
-      provider === 'kiro'
-        ? buildManagementHeaders(target, { 'Content-Type': 'application/json' })
-        : buildManagementHeaders(target),
+    headers: buildManagementHeaders(target),
   });
 
   if (!response.ok) {
@@ -114,6 +128,91 @@ export function getCliAuthNicknameError(
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseAuthUrlState(url: string | null | undefined): string | null {
+  if (!url) {
+    return null;
+  }
+
+  try {
+    return new URL(url).searchParams.get('state');
+  } catch {
+    return null;
+  }
+}
+
+export function findNewTokenSnapshotForManualAuth(
+  provider: CLIProxyProvider,
+  tokenDir: string,
+  knownTokenFiles: ProviderTokenSnapshot[],
+  expectedAccountId?: string
+): ProviderTokenSnapshot | null {
+  return findNewTokenSnapshotForAuthAttempt(provider, tokenDir, knownTokenFiles, expectedAccountId);
+}
+
+async function waitForManualCallbackToken(
+  provider: CLIProxyProvider,
+  target: ProxyTarget,
+  tokenDir: string,
+  oauthState: string | null,
+  knownTokenFiles: ProviderTokenSnapshot[],
+  expectedAccountId: string | undefined,
+  timeoutMs: number,
+  pollIntervalMs: number = PASTE_CALLBACK_AUTH_URL_POLL_INTERVAL_MS
+): Promise<{ tokenSnapshot: ProviderTokenSnapshot | null; error?: string }> {
+  const deadline = Date.now() + timeoutMs;
+  let upstreamCompletedAt: number | null = null;
+
+  while (Date.now() < deadline) {
+    const tokenSnapshot = findNewTokenSnapshotForManualAuth(
+      provider,
+      tokenDir,
+      knownTokenFiles,
+      expectedAccountId
+    );
+    if (tokenSnapshot) {
+      return { tokenSnapshot };
+    }
+
+    if (oauthState) {
+      const response = await fetch(
+        buildProxyUrl(
+          target,
+          `/v0/management/get-auth-status?state=${encodeURIComponent(oauthState)}`
+        ),
+        { headers: buildManagementHeaders(target) }
+      );
+
+      if (response.ok) {
+        const data = (await response.json()) as { status?: string; error?: string };
+        if (data.status === 'error') {
+          return {
+            tokenSnapshot: null,
+            error: data.error || 'Authentication failed while waiting for local token persistence',
+          };
+        }
+        if (data.status === 'ok' && upstreamCompletedAt === null) {
+          upstreamCompletedAt = Date.now();
+        }
+      }
+    }
+
+    if (
+      upstreamCompletedAt !== null &&
+      Date.now() - upstreamCompletedAt >= POLLED_AUTH_LOCAL_TOKEN_GRACE_MS
+    ) {
+      break;
+    }
+
+    if (Date.now() + pollIntervalMs >= deadline) {
+      break;
+    }
+
+    await sleep(pollIntervalMs);
+  }
+
+  return { tokenSnapshot: null };
 }
 
 export async function resolvePasteCallbackAuthUrl(
@@ -297,6 +396,57 @@ async function prepareBinary(
   }
 }
 
+function buildOAuthArgs(
+  provider: CLIProxyProvider,
+  configPath: string,
+  headless: boolean,
+  noIncognito: boolean,
+  options: {
+    kiroMethod?: OAuthOptions['kiroMethod'];
+    kiroIDCStartUrl?: string;
+    kiroIDCRegion?: string;
+    kiroIDCFlow?: OAuthOptions['kiroIDCFlow'];
+  } = {}
+): string[] {
+  const args = ['--config', configPath];
+
+  if (provider === 'kiro') {
+    const method = normalizeKiroAuthMethod(options.kiroMethod);
+    if (!isKiroCLIAuthMethod(method)) {
+      throw new Error(`Kiro auth method '${method}' is not supported by CLI flow.`);
+    }
+    args.push(
+      ...getKiroCLIAuthArgs(method, {
+        idcStartUrl: options.kiroIDCStartUrl,
+        idcRegion: options.kiroIDCRegion,
+        idcFlow: options.kiroIDCFlow,
+      })
+    );
+  } else {
+    args.push(getOAuthConfig(provider).authFlag);
+  }
+
+  if (headless) {
+    args.push('--no-browser');
+  }
+  if (provider === 'kiro' && noIncognito) {
+    args.push('--no-incognito');
+  }
+
+  return args;
+}
+
+export function usesKiroLocalCallbackReplay(
+  method: OAuthOptions['kiroMethod'],
+  idcFlow: OAuthOptions['kiroIDCFlow']
+): boolean {
+  const normalizedMethod = normalizeKiroAuthMethod(method);
+  if (normalizedMethod === 'aws-authcode') {
+    return true;
+  }
+  return normalizedMethod === 'idc' && normalizeKiroIDCFlow(idcFlow) === 'authcode';
+}
+
 /**
  * Handle paste-callback mode: show auth URL, prompt for callback paste
  * Uses proxy target resolver to connect to correct CLIProxyAPI instance (local or remote)
@@ -307,7 +457,8 @@ async function handlePasteCallbackMode(
   verbose: boolean,
   tokenDir: string,
   nickname?: string,
-  expectedAccountId?: string
+  expectedAccountId?: string,
+  options?: { kiroMethod?: OAuthOptions['kiroMethod'] }
 ): Promise<AccountInfo | null> {
   // Resolve CLIProxyAPI target (local or remote based on config)
   const target = getProxyTarget();
@@ -318,12 +469,13 @@ async function handlePasteCallbackMode(
   console.log(info(`Starting ${oauthConfig.displayName} OAuth (paste-callback mode)...`));
 
   try {
-    // Request auth URL from CLIProxyAPI.
-    // Kiro keeps its legacy start route because CLI auth methods do not share the generic
-    // management auth-url contract used by providers like Claude.
+    // Request auth URL from CLIProxyAPI management endpoints when the selected
+    // provider/method supports the manual start-url contract.
     let startData: PasteCallbackStartData;
     try {
-      startData = await requestPasteCallbackStart(provider, target);
+      startData = await requestPasteCallbackStart(provider, target, {
+        kiroMethod: options?.kiroMethod,
+      });
     } catch (error) {
       const startError = (error as Error).message;
       console.log(fail('Failed to start OAuth flow'));
@@ -337,6 +489,9 @@ async function handlePasteCallbackMode(
       console.log(fail('No authorization URL received'));
       return null;
     }
+
+    const oauthState = startData.state || parseAuthUrlState(authUrl);
+    const knownTokenFiles = listProviderTokenSnapshots(provider, tokenDir);
 
     // Display auth URL in box
     console.log('');
@@ -430,14 +585,48 @@ async function handlePasteCallbackMode(
       return null;
     }
 
-    console.log(ok('Authentication successful!'));
+    console.log(info('Callback submitted. Waiting for token exchange...'));
+    const { tokenSnapshot, error: tokenWaitError } = await waitForManualCallbackToken(
+      provider,
+      target,
+      tokenDir,
+      oauthState,
+      knownTokenFiles,
+      expectedAccountId,
+      OAUTH_STATE_TIMEOUT_MS
+    );
+
+    if (tokenWaitError) {
+      console.log(fail(tokenWaitError));
+      warnPossible403Ban(provider, tokenWaitError);
+      return null;
+    }
+
+    if (!tokenSnapshot) {
+      console.log(
+        fail(
+          'Authentication completed upstream, but no new local token was saved for this account. Update CCS/CLIProxy and retry.'
+        )
+      );
+      return null;
+    }
+
     const account = registerAccountFromToken(
       provider,
       tokenDir,
       nickname,
       verbose,
-      expectedAccountId
+      tokenSnapshot.file
     );
+
+    if (!account) {
+      console.log(
+        fail('Authenticated token could not be matched to the requested account. Retry the flow.')
+      );
+      return null;
+    }
+
+    console.log(ok('Authentication successful!'));
 
     // Account safety: check for cross-provider conflicts
     if (account?.email) {
@@ -475,6 +664,8 @@ export async function triggerOAuth(
   const { nickname } = options;
   const resolvedKiroMethod =
     provider === 'kiro' ? normalizeKiroAuthMethod(options.kiroMethod) : DEFAULT_KIRO_AUTH_METHOD;
+  const resolvedKiroIDCFlow =
+    provider === 'kiro' ? normalizeKiroIDCFlow(options.kiroIDCFlow) : DEFAULT_KIRO_IDC_FLOW;
 
   if (provider === 'agy') {
     if (fromUI && !acceptAgyRisk) {
@@ -505,19 +696,6 @@ export async function triggerOAuth(
     return null;
   }
 
-  // Handle paste-callback mode
-  if (options.pasteCallback) {
-    const tokenDir = getProviderTokenDir(provider);
-    return handlePasteCallbackMode(
-      provider,
-      oauthConfig,
-      verbose,
-      tokenDir,
-      nickname,
-      existingNameMatch?.id
-    );
-  }
-
   // Handle --import flag: skip OAuth and import from Kiro IDE directly
   if (options.import && provider === 'kiro') {
     const tokenDir = getProviderTokenDir(provider);
@@ -535,51 +713,43 @@ export async function triggerOAuth(
   }
 
   const callbackPort =
-    provider === 'kiro' ? getKiroCallbackPort(resolvedKiroMethod) : OAUTH_PORTS[provider];
+    provider === 'kiro'
+      ? getKiroCallbackPort(resolvedKiroMethod, { idcFlow: resolvedKiroIDCFlow })
+      : OAUTH_PORTS[provider];
   const isCLI = !fromUI;
   const headless = options.headless ?? isHeadlessEnvironment();
   const isDeviceCodeFlow =
-    provider === 'kiro' ? isKiroDeviceCodeMethod(resolvedKiroMethod) : callbackPort === null;
+    provider === 'kiro'
+      ? isKiroDeviceCodeMethod(resolvedKiroMethod, { idcFlow: resolvedKiroIDCFlow })
+      : callbackPort === null;
+  let selectedPasteCallback = options.pasteCallback === true;
 
-  let authFlag = oauthConfig.authFlag;
-  if (provider === 'kiro') {
-    if (!isKiroCLIAuthMethod(resolvedKiroMethod)) {
-      console.log(fail(`Kiro auth method '${resolvedKiroMethod}' is not supported by CLI flow.`));
-      console.log('    Use Dashboard management OAuth for this method.');
-      return null;
-    }
-    authFlag = getKiroCLIAuthFlag(resolvedKiroMethod);
+  if (provider === 'kiro' && !isKiroCLIAuthMethod(resolvedKiroMethod)) {
+    console.log(fail(`Kiro auth method '${resolvedKiroMethod}' is not supported by CLI flow.`));
+    console.log('    Use Dashboard management OAuth for this method.');
+    return null;
   }
 
   // Interactive mode selection for headless environments
   // Skip if explicit mode flag provided or device code flow (no callback needed)
-  if (headless && !options.pasteCallback && !options.portForward && !isDeviceCodeFlow) {
+  if (headless && !selectedPasteCallback && !options.portForward && !isDeviceCodeFlow) {
     // Non-interactive environment (piped input) - default to paste mode
     if (!process.stdin.isTTY) {
-      const tokenDir = getProviderTokenDir(provider);
-      return handlePasteCallbackMode(
-        provider,
-        oauthConfig,
-        verbose,
-        tokenDir,
-        nickname,
-        existingNameMatch?.id
-      );
+      selectedPasteCallback = true;
+    } else {
+      const mode = await promptOAuthModeChoice(callbackPort);
+      if (mode === 'paste') {
+        selectedPasteCallback = true;
+      }
     }
-    const mode = await promptOAuthModeChoice(callbackPort);
-    if (mode === 'paste') {
-      const tokenDir = getProviderTokenDir(provider);
-      return handlePasteCallbackMode(
-        provider,
-        oauthConfig,
-        verbose,
-        tokenDir,
-        nickname,
-        existingNameMatch?.id
-      );
-    }
-    // mode === 'forward' continues to existing port-forwarding flow below
   }
+
+  const useSelectedKiroLocalPasteCallback =
+    selectedPasteCallback &&
+    provider === 'kiro' &&
+    usesKiroLocalCallbackReplay(resolvedKiroMethod, resolvedKiroIDCFlow);
+  const useSelectedKiroDirectCliFlow =
+    provider === 'kiro' && (isDeviceCodeFlow || useSelectedKiroLocalPasteCallback);
 
   if (existingAccounts.length > 0 && !add) {
     console.log('');
@@ -593,6 +763,19 @@ export async function triggerOAuth(
       console.log(info('Cancelled'));
       return null;
     }
+  }
+
+  if (selectedPasteCallback && !useSelectedKiroDirectCliFlow) {
+    const tokenDir = getProviderTokenDir(provider);
+    return handlePasteCallbackMode(
+      provider,
+      oauthConfig,
+      verbose,
+      tokenDir,
+      nickname,
+      existingNameMatch?.id,
+      { kiroMethod: provider === 'kiro' ? resolvedKiroMethod : undefined }
+    );
   }
 
   // Pre-flight checks (skip for device code flows which don't need callback ports)
@@ -617,14 +800,18 @@ export async function triggerOAuth(
     }
   }
 
-  // Build args
-  const args = ['--config', configPath, authFlag];
-  if (headless) {
-    args.push('--no-browser');
-  }
-  // Kiro-specific: --no-incognito to use normal browser (saves login credentials)
-  if (provider === 'kiro' && noIncognito) {
-    args.push('--no-incognito');
+  const processHeadless = selectedPasteCallback && provider === 'kiro' ? true : headless;
+  let args: string[];
+  try {
+    args = buildOAuthArgs(provider, configPath, processHeadless, noIncognito, {
+      kiroMethod: provider === 'kiro' ? resolvedKiroMethod : undefined,
+      kiroIDCStartUrl: options.kiroIDCStartUrl,
+      kiroIDCRegion: options.kiroIDCRegion,
+      kiroIDCFlow: provider === 'kiro' ? resolvedKiroIDCFlow : undefined,
+    });
+  } catch (error) {
+    console.log(fail((error as Error).message));
+    return null;
   }
 
   // Show step based on flow type
@@ -636,7 +823,14 @@ export async function triggerOAuth(
     showStep(2, 4, 'progress', `Starting callback server on port ${callbackPort}...`);
 
     // Show headless instructions (only for authorization code flows)
-    if (headless) {
+    if (useSelectedKiroLocalPasteCallback) {
+      console.log('');
+      console.log(info('Paste-callback mode enabled for Kiro CLI auth.'));
+      console.log(
+        '    CCS will print the authorization URL and wait for you to paste the final callback URL.'
+      );
+      console.log('');
+    } else if (headless) {
       console.log('');
       console.log(warn('PORT FORWARDING REQUIRED'));
       console.log(`    OAuth callback uses localhost:${callbackPort} which must be reachable.`);
@@ -656,11 +850,14 @@ export async function triggerOAuth(
     tokenDir,
     oauthConfig,
     callbackPort,
-    headless,
+    headless: processHeadless,
     verbose,
     isCLI,
     nickname,
     expectedAccountId: existingNameMatch?.id,
+    authFlowType: isDeviceCodeFlow ? 'device_code' : 'authorization_code',
+    kiroMethod: provider === 'kiro' ? resolvedKiroMethod : undefined,
+    manualCallback: useSelectedKiroLocalPasteCallback,
   });
 
   // Show hint for Kiro users about --no-incognito option (first-time auth only)
