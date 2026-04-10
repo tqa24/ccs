@@ -64,7 +64,9 @@ async function resolveAuthReadiness(
         (entry) => entry.provider === authProvider && entry.authenticated
       );
     } else {
-      deps.initializeAccounts();
+      if (typeof deps.initializeAccounts === 'function') {
+        deps.initializeAccounts();
+      }
       authenticated = deps.getAuthStatus(authProvider).authenticated;
     }
 
