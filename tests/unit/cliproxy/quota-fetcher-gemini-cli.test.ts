@@ -183,6 +183,16 @@ describe('Gemini CLI Quota Fetcher', () => {
       ]);
     });
 
+    it('should keep Gemini 3.1 Flash Lite preview inside the Flash Lite family', () => {
+      const rawBuckets = [{ model_id: 'gemini-3.1-flash-lite-preview', remaining_fraction: 0.65 }];
+
+      const buckets = buildGeminiCliBuckets(rawBuckets);
+
+      expect(buckets).toHaveLength(1);
+      expect(buckets[0].label).toBe('Gemini Flash Lite Series');
+      expect(buckets[0].modelIds).toContain('gemini-3.1-flash-lite-preview');
+    });
+
     it('should recognize Gemini 3.1 preview IDs during the rollout', () => {
       const rawBuckets = [
         { model_id: 'gemini-3.1-flash-preview', remaining_fraction: 0.7 },
@@ -403,6 +413,13 @@ describe('Gemini CLI Quota Fetcher', () => {
       expect(result.tierLabel).toBe('Pro');
       expect(result.tierId).toBe('g1-pro-tier');
       expect(result.creditBalance).toBe(12);
+      expect(result.entitlement).toMatchObject({
+        normalizedTier: 'pro',
+        rawTierId: 'g1-pro-tier',
+        rawTierLabel: 'Pro',
+        accessState: 'entitled',
+        capacityState: 'available',
+      });
       expect(result.buckets.map((bucket) => bucket.label)).toEqual([
         'Gemini Flash Lite Series',
         'Gemini Flash Series',
@@ -821,6 +838,43 @@ describe('Gemini CLI Quota Fetcher', () => {
       } finally {
         globalThis.fetch = originalFetch;
       }
+    });
+
+    it('classifies model capacity exhaustion separately from generic rate limits', async () => {
+      writeActiveGeminiAccount('capacity@example.com');
+
+      mockFetch([
+        {
+          url: GEMINI_QUOTA_URL,
+          method: 'POST',
+          status: 429,
+          response: {
+            error: {
+              code: 429,
+              message: 'No capacity available for model gemini-3.1-pro-preview on the server',
+              status: 'RESOURCE_EXHAUSTED',
+              details: [
+                {
+                  '@type': 'type.googleapis.com/google.rpc.ErrorInfo',
+                  reason: 'MODEL_CAPACITY_EXHAUSTED',
+                  metadata: { model: 'gemini-3.1-pro-preview' },
+                },
+              ],
+            },
+          },
+        },
+      ]);
+
+      const result = await fetchGeminiCliQuota('capacity@example.com');
+
+      expect(result.success).toBe(false);
+      expect(result.httpStatus).toBe(429);
+      expect(result.errorCode).toBe('capacity_exhausted');
+      expect(result.retryable).toBe(true);
+      expect(result.entitlement).toMatchObject({
+        accessState: 'entitled',
+        capacityState: 'capacity_exhausted',
+      });
     });
   });
 

@@ -75,4 +75,12 @@ describe('cliproxy quota subcommand failure formatting', () => {
       },
     ]);
   });
+
+  it('prefers live quota tier over stale account tier', async () => {
+    const { resolveDisplayedTier } = await loadQuotaCommandTestExports();
+
+    expect(resolveDisplayedTier('unknown', 'pro')).toBe('pro');
+    expect(resolveDisplayedTier('pro', 'ultra')).toBe('ultra');
+    expect(resolveDisplayedTier('pro', 'unknown')).toBe('pro');
+  });
 });

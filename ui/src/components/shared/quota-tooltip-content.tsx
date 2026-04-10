@@ -21,6 +21,7 @@ import {
   type ModelTier,
   type UnifiedQuotaResult,
 } from '@/lib/utils';
+import type { ProviderEntitlementEvidence } from '@/lib/api-client';
 
 interface QuotaTooltipContentProps {
   quota: UnifiedQuotaResult | null | undefined;
@@ -75,6 +76,35 @@ function getClaudeWindowDisplayLabel(rateLimitType: string, fallback: string): s
     default:
       return fallback;
   }
+}
+
+function renderEntitlementRows(entitlement: ProviderEntitlementEvidence | undefined) {
+  if (!entitlement) return null;
+
+  const rows: Array<{ label: string; value: string | null }> = [];
+  if (entitlement.rawTierLabel) {
+    rows.push({ label: 'Tier', value: entitlement.rawTierLabel });
+  } else if (entitlement.normalizedTier !== 'unknown') {
+    rows.push({ label: 'Tier', value: entitlement.normalizedTier });
+  }
+  if (entitlement.rawTierId) {
+    rows.push({ label: 'Tier ID', value: entitlement.rawTierId });
+  }
+  if (entitlement.accessState !== 'entitled' || entitlement.capacityState !== 'available') {
+    rows.push({
+      label: 'State',
+      value: `${entitlement.accessState.replaceAll('_', ' ')} / ${entitlement.capacityState.replaceAll('_', ' ')}`,
+    });
+  }
+
+  if (rows.length === 0) return null;
+
+  return rows.map((row) => (
+    <div key={row.label} className="flex justify-between gap-4">
+      <span className="text-muted-foreground">{row.label}</span>
+      <span className="font-mono">{row.value}</span>
+    </div>
+  ));
 }
 
 /**
@@ -132,6 +162,7 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
 
     return (
       <div className="text-xs space-y-1.5">
+        {renderEntitlementRows(quota.entitlement)}
         <p className="font-medium">Model Quotas:</p>
         {tierOrder.map((tier, idx) => {
           const models = groups.get(tier);
@@ -268,10 +299,13 @@ export function QuotaTooltipContent({ quota, resetTime }: QuotaTooltipContentPro
   // Gemini provider tooltip
   if (isGeminiQuotaResult(quota)) {
     const hasBucketResetTime = quota.buckets.some((bucket) => !!bucket.resetTime);
+    const hasEntitlementTier =
+      !!quota.entitlement?.rawTierLabel || quota.entitlement?.normalizedTier !== 'unknown';
 
     return (
       <div className="text-xs space-y-1.5">
-        {quota.tierLabel && (
+        {renderEntitlementRows(quota.entitlement)}
+        {!hasEntitlementTier && quota.tierLabel && (
           <div className="flex justify-between gap-4">
             <span className="text-muted-foreground">Tier</span>
             <span className="font-mono">{quota.tierLabel}</span>

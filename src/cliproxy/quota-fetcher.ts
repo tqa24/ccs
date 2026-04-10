@@ -17,6 +17,12 @@ import {
   type AccountTier,
 } from './account-manager';
 import { sanitizeEmail, isTokenExpired } from './auth-utils';
+import {
+  buildProviderEntitlementEvidence,
+  getProviderTierLabel,
+  normalizeProviderTierId,
+} from './provider-entitlement-evidence';
+import type { ProviderEntitlementEvidence } from './provider-entitlement-types';
 import { buildManagementHeaders, buildProxyUrl, getProxyTarget } from './proxy-target-resolver';
 
 /** Individual model quota info */
@@ -67,6 +73,8 @@ export interface QuotaResult {
   projectId?: string;
   /** Detected account tier based on model access */
   tier?: AccountTier;
+  /** Richer provider entitlement evidence derived from live/runtime signals */
+  entitlement?: ProviderEntitlementEvidence;
 }
 
 /** Google Cloud Code API endpoints */
@@ -175,6 +183,8 @@ interface ManagedResponse {
 interface ProjectLookupResult {
   projectId: string | null;
   tier?: AccountTier;
+  rawTierId?: string | null;
+  rawTierLabel?: string | null;
   error?: string;
   errorCode?: string;
   errorDetail?: string;
@@ -518,21 +528,6 @@ function readAuthData(provider: CLIProxyProvider, accountId: string): AuthData |
  * API returns: "g1-ultra-tier", "g1-pro-tier", "standard-tier", etc.
  * Priority: ultra > pro > free
  */
-function mapTierString(tierStr: string | undefined): AccountTier {
-  if (!tierStr) return 'unknown';
-  const normalized = tierStr.toLowerCase();
-  // Match "g1-ultra-tier" or "ultra" anywhere in string
-  if (normalized.includes('ultra')) return 'ultra';
-  // Match "g1-pro-tier" or "pro" anywhere in string
-  if (normalized.includes('pro')) return 'pro';
-  // Match free/legacy tiers
-  if (normalized.includes('free') || normalized.includes('legacy')) {
-    return 'free';
-  }
-  // "standard-tier" and other unknown values = unknown
-  return 'unknown';
-}
-
 /**
  * Get project ID and tier via loadCodeAssist endpoint
  * Uses paidTier.id for accurate tier detection (g1-ultra-tier, g1-pro-tier)
@@ -590,10 +585,15 @@ async function getProjectId(accountId: string, accessToken: string): Promise<Pro
   }
 
   // Extract tier - paidTier reflects actual subscription status, takes priority
-  const tierStr = data.paidTier?.id || data.currentTier?.id;
-  const tier = mapTierString(tierStr);
+  const rawTierId = (data.paidTier?.id || data.currentTier?.id || '').trim() || null;
+  const tier = normalizeProviderTierId(rawTierId);
 
-  return { projectId: projectId.trim(), tier };
+  return {
+    projectId: projectId.trim(),
+    tier,
+    rawTierId,
+    rawTierLabel: getProviderTierLabel(rawTierId),
+  };
 }
 
 /**
@@ -727,6 +727,8 @@ export async function fetchAccountQuota(
   // Get project ID and tier - prefer stored project ID, but always call API for tier
   let projectId = authData.projectId;
   let apiTier: AccountTier = 'unknown';
+  let rawTierId: string | null = null;
+  let rawTierLabel: string | null = null;
 
   // Always call loadCodeAssist to get accurate tier from API.
   // If the file token is stale, the helper retries through CLIProxy management auth.
@@ -755,6 +757,8 @@ export async function fetchAccountQuota(
   // Use API project ID if available, else fallback to stored
   projectId = lastProjectResult.projectId || projectId;
   apiTier = lastProjectResult.tier || 'unknown';
+  rawTierId = lastProjectResult.rawTierId || null;
+  rawTierLabel = lastProjectResult.rawTierLabel || null;
 
   if (verbose) console.error(`[i] Project ID: ${projectId || 'not found'}`);
 
@@ -769,6 +773,15 @@ export async function fetchAccountQuota(
   if (result.success) {
     const finalTier = apiTier !== 'unknown' ? apiTier : 'unknown';
     result.tier = finalTier;
+    result.entitlement = buildProviderEntitlementEvidence({
+      normalizedTier: finalTier,
+      rawTierId,
+      rawTierLabel,
+      source: rawTierId ? 'runtime_api' : 'runtime_inference',
+      confidence: rawTierId ? 'high' : 'medium',
+      accessState: 'entitled',
+      capacityState: 'available',
+    });
     if (finalTier !== 'unknown') {
       setAccountTier(provider, accountId, finalTier);
     }

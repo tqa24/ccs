@@ -5,6 +5,8 @@
  * Supports Antigravity, Codex, Claude, Gemini CLI, and GitHub Copilot OAuth providers.
  */
 
+import type { ProviderEntitlementEvidence } from './provider-entitlement-types';
+
 /** Supported quota providers */
 export type QuotaProvider = 'agy' | 'codex' | 'claude' | 'gemini' | 'ghcp';
 
@@ -200,6 +202,8 @@ export interface GeminiCliQuotaResult extends QuotaErrorMetadata {
   tierId?: string | null;
   /** Available Google One AI credits when reported by the API */
   creditBalance?: number | null;
+  /** Richer provider entitlement evidence derived from live/runtime signals */
+  entitlement?: ProviderEntitlementEvidence;
   /** Timestamp of fetch */
   lastUpdated: number;
   /** Error message if fetch failed */

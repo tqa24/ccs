@@ -103,6 +103,13 @@ function formatCliAccountLabel(account: { id: string; email?: string; nickname?:
   return account.nickname ? `${account.nickname} (${displayName})` : displayName;
 }
 
+function resolveDisplayedTier(
+  accountTier: string | undefined,
+  liveTier: string | undefined
+): string {
+  return (liveTier && liveTier !== 'unknown' ? liveTier : accountTier) || 'unknown';
+}
+
 interface QuotaFailureDisplayEntry {
   tone: 'error' | 'info' | 'dim';
   text: string;
@@ -363,7 +370,7 @@ function displayAntigravityQuotaSection(
     if (isOnCooldown(provider, account.id)) statusParts.push(color('COOLDOWN', 'warning'));
 
     const defaultMark = account.isDefault ? color('*', 'success') : ' ';
-    const tier = account.tier || 'unknown';
+    const tier = resolveDisplayedTier(account.tier, quota?.entitlement?.normalizedTier);
     const status = statusParts.join(', ');
 
     rows.push([defaultMark, formatCliAccountLabel(account), tier, avgQuota, status]);
@@ -641,6 +648,9 @@ function displayGeminiCliQuotaSection(
     if (quota.tierLabel) {
       console.log(`    Tier: ${dim(quota.tierLabel)}`);
     }
+    if (quota.entitlement?.rawTierId) {
+      console.log(`    Tier ID: ${dim(quota.entitlement.rawTierId)}`);
+    }
     if (quota.creditBalance !== null && quota.creditBalance !== undefined) {
       console.log(`    Credits: ${dim(quota.creditBalance.toLocaleString())}`);
     }
@@ -783,6 +793,7 @@ const QUOTA_PROVIDER_RUNTIME: Record<QuotaSupportedProvider, QuotaProviderRuntim
 
 export const __testExports = {
   getQuotaFailureDisplayEntries,
+  resolveDisplayedTier,
 };
 
 export async function handleQuotaStatus(

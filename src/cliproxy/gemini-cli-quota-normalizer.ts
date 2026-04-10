@@ -20,7 +20,7 @@ const GEMINI_CLI_QUOTA_GROUPS: GeminiCliQuotaGroupDefinition[] = [
     id: 'gemini-flash-lite-series',
     label: 'Gemini Flash Lite Series',
     preferredModelId: 'gemini-2.5-flash-lite',
-    modelIds: ['gemini-2.5-flash-lite'],
+    modelIds: ['gemini-2.5-flash-lite', 'gemini-3.1-flash-lite-preview'],
   },
   {
     id: 'gemini-flash-series',

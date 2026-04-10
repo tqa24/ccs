@@ -86,7 +86,9 @@ export function AccountSurfaceCard({
   const title = displayEmail || identity.email || accountId;
   const normalizedProvider = provider.toLowerCase();
   const showTierBadge =
-    (normalizedProvider === 'agy' || normalizedProvider === 'antigravity') &&
+    (normalizedProvider === 'agy' ||
+      normalizedProvider === 'antigravity' ||
+      normalizedProvider === 'gemini') &&
     tier &&
     tier !== 'unknown' &&
     tier !== 'free';

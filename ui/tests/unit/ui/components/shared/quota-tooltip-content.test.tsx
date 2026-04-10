@@ -34,6 +34,17 @@ function createGeminiQuotaResult(
     tierLabel: 'Pro',
     tierId: 'g1-pro-tier',
     creditBalance: 12,
+    entitlement: {
+      normalizedTier: 'pro',
+      rawTierId: 'g1-pro-tier',
+      rawTierLabel: 'Pro',
+      source: 'runtime_api',
+      confidence: 'high',
+      accessState: 'entitled',
+      capacityState: 'available',
+      lastVerifiedAt: Date.now(),
+      notes: null,
+    },
     lastUpdated: Date.now(),
     ...overrides,
   };
@@ -54,6 +65,8 @@ describe('QuotaTooltipContent', () => {
 
     expect(screen.getByText('Tier')).toBeInTheDocument();
     expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(screen.getByText('Tier ID')).toBeInTheDocument();
+    expect(screen.getByText('g1-pro-tier')).toBeInTheDocument();
     expect(screen.getByText('Credits')).toBeInTheDocument();
     expect(screen.getByText('12')).toBeInTheDocument();
     expect(screen.getByText('Gemini Flash Lite Series')).toBeInTheDocument();

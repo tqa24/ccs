@@ -562,6 +562,30 @@ export interface QuotaResult {
   retryable?: boolean;
   /** True if token is expired and needs re-authentication */
   needsReauth?: boolean;
+  /** Richer provider entitlement evidence derived from live/runtime signals */
+  entitlement?: ProviderEntitlementEvidence;
+}
+
+export interface ProviderEntitlementEvidence {
+  normalizedTier: 'free' | 'pro' | 'ultra' | 'unknown';
+  rawTierId: string | null;
+  rawTierLabel: string | null;
+  source: 'runtime_api' | 'runtime_inference' | 'registry_cache' | 'official_docs';
+  confidence: 'high' | 'medium' | 'low';
+  accessState:
+    | 'entitled'
+    | 'not_entitled'
+    | 'capacity_exhausted'
+    | 'temporarily_unavailable'
+    | 'unknown';
+  capacityState:
+    | 'available'
+    | 'capacity_exhausted'
+    | 'rate_limited'
+    | 'temporarily_unavailable'
+    | 'unknown';
+  lastVerifiedAt: number;
+  notes?: string | null;
 }
 
 /** Codex rate limit window */
@@ -725,6 +749,8 @@ export interface GeminiCliQuotaResult {
   tierId?: string | null;
   /** Available Google One AI credits when reported by the API */
   creditBalance?: number | null;
+  /** Richer provider entitlement evidence derived from live/runtime signals */
+  entitlement?: ProviderEntitlementEvidence;
   /** Timestamp of fetch */
   lastUpdated: number;
   /** Upstream HTTP status when available */
