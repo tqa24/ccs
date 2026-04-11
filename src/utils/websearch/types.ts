@@ -98,6 +98,7 @@ export interface WebSearchProviderConfig {
   model?: string;
   timeout?: number;
   max_results?: number;
+  url?: string;
 }
 
 /**
