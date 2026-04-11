@@ -12,6 +12,12 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
 const hookPath = join(process.cwd(), 'lib', 'hooks', 'websearch-transformer.cjs');
+
+/**
+ * Neutralise CCS_PROFILE_TYPE so shouldSkipHook() does not short-circuit
+ * when tests run inside a CCS-managed Claude session (where it is 'account').
+ */
+const NEUTRAL_PROFILE_TYPE = '';
 type HookOutput = {
   hookSpecificOutput: {
     additionalContext: string;
@@ -101,6 +107,7 @@ function runHookWithMockedFetch(mode: 'success' | 'empty' | 'non-result' | 'fail
       }),
       env: {
         ...process.env,
+        CCS_PROFILE_TYPE: NEUTRAL_PROFILE_TYPE,
         CCS_WEBSEARCH_ENABLED: '1',
         CCS_WEBSEARCH_SKIP: '0',
         CCS_WEBSEARCH_BRAVE: '0',
@@ -352,6 +359,7 @@ describe('websearch-transformer hook helpers', () => {
         }),
         env: {
           ...process.env,
+          CCS_PROFILE_TYPE: NEUTRAL_PROFILE_TYPE,
           CCS_HOME: ccsHome,
           CCS_WEBSEARCH_TRACE: '1',
           CCS_WEBSEARCH_TRACE_LAUNCH_ID: 'hook-trace-test',
@@ -428,6 +436,7 @@ describe('websearch-transformer hook helpers', () => {
         }),
         env: {
           ...process.env,
+          CCS_PROFILE_TYPE: NEUTRAL_PROFILE_TYPE,
           CCS_HOME: ccsHome,
           CCS_WEBSEARCH_TRACE: '1',
           CCS_WEBSEARCH_TRACE_FILE: disallowedTracePath,
@@ -509,6 +518,7 @@ global.fetch = async (url) => {
         }),
         env: {
           ...process.env,
+          CCS_PROFILE_TYPE: NEUTRAL_PROFILE_TYPE,
           CCS_HOME: ccsHome,
           CCS_WEBSEARCH_TRACE: '1',
           CCS_WEBSEARCH_TRACE_LAUNCH_ID: 'quota-fallback-test',
@@ -623,6 +633,7 @@ global.fetch = async (url) => {
         }),
         env: {
           ...process.env,
+          CCS_PROFILE_TYPE: NEUTRAL_PROFILE_TYPE,
           CCS_HOME: ccsHome,
           CCS_WEBSEARCH_TRACE: '1',
           CCS_WEBSEARCH_TRACE_LAUNCH_ID: 'cooldown-skip-test',
@@ -723,6 +734,7 @@ global.fetch = async (url) => {
         }),
         env: {
           ...process.env,
+          CCS_PROFILE_TYPE: NEUTRAL_PROFILE_TYPE,
           CCS_HOME: ccsHome,
           CCS_WEBSEARCH_TRACE: '1',
           CCS_WEBSEARCH_TRACE_LAUNCH_ID: 'transient-retry-test',
