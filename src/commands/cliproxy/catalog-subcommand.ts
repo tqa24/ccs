@@ -5,10 +5,12 @@ import {
   SYNCABLE_PROVIDERS,
   getResolvedCatalog,
   refreshCatalogFromProxy,
+  getAllResolvedCatalogs,
 } from '../../cliproxy/catalog-cache';
 import { getCatalogRoutingSnapshot } from '../../cliproxy/catalog-routing';
 import { ensureManagedModelPrefixes } from '../../cliproxy/managed-model-prefixes';
 import { getProxyTarget } from '../../cliproxy/proxy-target-resolver';
+import type { ThinkingSupport } from '../../cliproxy/model-catalog';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import type { RemoteModelInfo } from '../../cliproxy/management-api-types';
 import type { CliproxyProviderRoutingHints } from '../../shared/cliproxy-model-routing';
@@ -171,6 +173,50 @@ export async function handleCatalogRefresh(verbose: boolean): Promise<void> {
   console.log('');
   console.log(`  ${color('[OK]', 'success')} Catalog synced (${totalModels} total models)`);
   console.log('');
+}
+
+/** JSON-serialisable model entry emitted by `catalog --json`. */
+interface CatalogJsonModel {
+  id: string;
+  name: string;
+  tier?: 'free' | 'pro' | 'ultra';
+  description?: string;
+  deprecated?: boolean;
+  deprecationReason?: string;
+  broken?: boolean;
+  issueUrl?: string;
+  thinking?: ThinkingSupport;
+  extendedContext?: boolean;
+  nativeImageInput?: boolean;
+}
+
+/**
+ * Output catalog as JSON for programmatic consumption.
+ * Used by OnSteroids and other tools to get available models per provider.
+ * Format: { [providerName: string]: CatalogJsonModel[] }
+ */
+export function handleCatalogJson(): void {
+  const catalogs = getAllResolvedCatalogs();
+  const result: Record<string, CatalogJsonModel[]> = {};
+  for (const [provider, catalog] of Object.entries(catalogs)) {
+    if (!catalog) {
+      continue;
+    }
+    result[provider] = catalog.models.map((m) => {
+      const entry: CatalogJsonModel = { id: m.id, name: m.name };
+      if (m.tier !== undefined) entry.tier = m.tier;
+      if (m.description !== undefined) entry.description = m.description;
+      if (m.deprecated !== undefined) entry.deprecated = m.deprecated;
+      if (m.deprecationReason !== undefined) entry.deprecationReason = m.deprecationReason;
+      if (m.broken !== undefined) entry.broken = m.broken;
+      if (m.issueUrl !== undefined) entry.issueUrl = m.issueUrl;
+      if (m.thinking !== undefined) entry.thinking = m.thinking;
+      if (m.extendedContext !== undefined) entry.extendedContext = m.extendedContext;
+      if (m.nativeImageInput !== undefined) entry.nativeImageInput = m.nativeImageInput;
+      return entry;
+    });
+  }
+  console.log(JSON.stringify(result));
 }
 
 /** Reset catalog cache */
