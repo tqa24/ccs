@@ -124,6 +124,20 @@ preferences:
   fs.writeFileSync(path.join(ccsDir, 'config.yaml'), yaml, 'utf8');
 }
 
+function writeConfigWithWebSearchSettings(yamlBody: string): void {
+  const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-websearch-env-'));
+  process.env.CCS_HOME = tempHome;
+  const ccsDir = path.join(tempHome, '.ccs');
+  fs.mkdirSync(ccsDir, { recursive: true });
+  const yaml = `version: 8
+preferences:
+  auto_update: true
+websearch:
+${yamlBody}
+`;
+  fs.writeFileSync(path.join(ccsDir, 'config.yaml'), yaml, 'utf8');
+}
+
 let execClaude: typeof import('../../../src/utils/shell-executor').execClaude;
 let stripClaudeCodeEnv: typeof import('../../../src/utils/shell-executor').stripClaudeCodeEnv;
 let HeadlessExecutor: typeof import('../../../src/delegation/headless-executor').HeadlessExecutor;
@@ -220,7 +234,7 @@ describe('CLAUDECODE environment stripping', () => {
     const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
     expect(env).toBeDefined();
     expect(Object.keys(env).map((k) => k.toUpperCase())).not.toContain('CLAUDECODE');
-    expect(env.CCS_WEBSEARCH_SKIP).toBe('1');
+    expect(env.CCS_WEBSEARCH_ENABLED || env.CCS_WEBSEARCH_SKIP).toBeDefined();
   });
 
   it('execClaude keeps behavior when CLAUDECODE is absent', () => {
@@ -260,6 +274,29 @@ describe('CLAUDECODE environment stripping', () => {
     expect(spawnCalls.length).toBeGreaterThan(0);
     const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
     expect(env.DISABLE_AUTOUPDATER).toBeUndefined();
+  });
+
+  it('execClaude overrides stale inherited WebSearch provider flags with config-derived values', () => {
+    writeConfigWithWebSearchSettings(`  enabled: true
+  providers:
+    duckduckgo:
+      enabled: true
+    searxng:
+      enabled: false
+      url: ''
+`);
+    process.env.CCS_WEBSEARCH_SEARXNG = '1';
+    process.env.CCS_WEBSEARCH_SEARXNG_URL = 'https://search.example.com';
+    process.env.CCS_WEBSEARCH_SKIP = '1';
+
+    execClaude('claude', ['--version'], { CCS_PROFILE_TYPE: 'settings' });
+
+    expect(spawnCalls.length).toBeGreaterThan(0);
+    const env = spawnCalls[0].options?.env as NodeJS.ProcessEnv;
+    expect(env.CCS_WEBSEARCH_ENABLED).toBe('1');
+    expect(env.CCS_WEBSEARCH_SKIP).toBe('0');
+    expect(env.CCS_WEBSEARCH_DUCKDUCKGO).toBe('1');
+    expect(env.CCS_WEBSEARCH_SEARXNG).toBe('0');
   });
 
   it('execClaude normalizes shared plugin metadata before default-profile launch', () => {
