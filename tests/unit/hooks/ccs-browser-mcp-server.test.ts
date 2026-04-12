@@ -16,7 +16,22 @@ type MockPageState = {
   visibleText?: string;
   domSnapshot?: string;
   navigate?: Record<string, { finalUrl: string; readyStates?: string[]; errorText?: string }>;
-  click?: Record<string, { error?: string; disabled?: boolean }>;
+  click?: Record<
+    string,
+    {
+      error?: string;
+      disabled?: boolean;
+      detached?: boolean;
+      hidden?: boolean;
+      requireMouseSequence?: boolean;
+      requireNativeClick?: boolean;
+      forbidSyntheticClickEvent?: boolean;
+      cancelMouseDown?: boolean;
+      cancelMouseUp?: boolean;
+      detachAfterMouseDown?: boolean;
+      mouseSequenceError?: string;
+    }
+  >;
   screenshot?: {
     data?: string;
     lastCaptureBeyondViewport?: boolean;
@@ -267,12 +282,75 @@ function createMockBrowser(pagesInput: MockPageState[]) {
         if (expression.includes('scrollIntoView') && expression.includes('.click()')) {
           const selector = parseJsonArgument(expression, 'selector') || '';
           const clickPlan = page.click?.[selector];
+          const attemptedMouseDown = expression.includes("dispatchMouseEvent('mousedown'");
+          const attemptedMouseUp = expression.includes("dispatchMouseEvent('mouseup'");
+          const attemptedMouseSequence = attemptedMouseDown && attemptedMouseUp;
+          const attemptedClickEvent = expression.includes("dispatchMouseEvent('click'");
+          const readsDispatchResult = expression.includes('const dispatchResult = {');
+          const gatesNativeClickOnDispatchResult = expression.includes('if (!dispatchResult.shouldActivate)');
+          const checksIsConnectedBeforeNativeClick = expression.includes('if (!element.isConnected)');
+          const catchIndex = expression.indexOf('catch (mouseError) {');
+          const catchBlockEnd = catchIndex === -1 ? -1 : expression.indexOf('\n    }', catchIndex);
+          const nativeClickIndexes = Array.from(expression.matchAll(/element\.click\(\)/g)).map(
+            (match) => match.index ?? -1
+          );
+          const attemptedFallbackClick = nativeClickIndexes.some(
+            (index) => catchIndex !== -1 && catchBlockEnd !== -1 && index > catchIndex && index < catchBlockEnd
+          );
+          const attemptedNativeClickOutsideCatch = nativeClickIndexes.some(
+            (index) =>
+              catchIndex === -1 || catchBlockEnd === -1 || index < catchIndex || index > catchBlockEnd
+          );
           if (!clickPlan) {
             replyError(`element not found for selector: ${selector}`);
             return;
           }
+          if (clickPlan.detached && expression.includes('element.isConnected')) {
+            replyError(`element is detached for selector: ${selector}`);
+            return;
+          }
           if (clickPlan.disabled) {
             replyError(`element is disabled for selector: ${selector}`);
+            return;
+          }
+          if (clickPlan.hidden && expression.includes('getBoundingClientRect')) {
+            replyError(`element is hidden or not interactable for selector: ${selector}`);
+            return;
+          }
+          if (clickPlan.requireMouseSequence && !attemptedMouseSequence) {
+            replyError(`mousedown/mouseup required for selector: ${selector}`);
+            return;
+          }
+          if (clickPlan.forbidSyntheticClickEvent && attemptedClickEvent) {
+            replyError(`synthetic click event forbidden for selector: ${selector}`);
+            return;
+          }
+          if ((clickPlan.cancelMouseDown || clickPlan.cancelMouseUp) && !readsDispatchResult) {
+            replyError(`dispatch result must be checked for selector: ${selector}`);
+            return;
+          }
+          if ((clickPlan.cancelMouseDown || clickPlan.cancelMouseUp) && !gatesNativeClickOnDispatchResult) {
+            replyError(`native click must be gated for selector: ${selector}`);
+            return;
+          }
+          if (clickPlan.detachAfterMouseDown && !checksIsConnectedBeforeNativeClick) {
+            replyError(`connected state must be rechecked for selector: ${selector}`);
+            return;
+          }
+          if (clickPlan.requireNativeClick && !attemptedNativeClickOutsideCatch) {
+            replyError(`native click required for selector: ${selector}`);
+            return;
+          }
+          if (clickPlan.mouseSequenceError) {
+            if (!attemptedMouseSequence) {
+              replyError(`mousedown/mouseup required for selector: ${selector}`);
+              return;
+            }
+            if (attemptedFallbackClick || attemptedNativeClickOutsideCatch) {
+              reply({ result: { type: 'string', value: 'ok' } });
+              return;
+            }
+            replyError(clickPlan.mouseSequenceError);
             return;
           }
           if (clickPlan.error) {
@@ -402,7 +480,11 @@ describe('ccs-browser MCP server', () => {
     );
 
     const tools = (responses.find((message) => message.id === 2)?.result as {
-      tools: Array<{ name: string; inputSchema?: { properties?: Record<string, { type?: string; minimum?: number }> } }>;
+      tools: Array<{
+        name: string;
+        description?: string;
+        inputSchema?: { properties?: Record<string, { type?: string; minimum?: number }> };
+      }>;
     }).tools;
 
     expect(tools.map((tool) => tool.name)).toEqual([
@@ -415,6 +497,10 @@ describe('ccs-browser MCP server', () => {
       'browser_type',
       'browser_take_screenshot',
     ]);
+
+    const clickTool = tools.find((tool) => tool.name === 'browser_click');
+    expect(clickTool?.description).toContain('mouse event chain');
+    expect(clickTool?.description).not.toContain('synthetic element.click()');
 
     for (const tool of tools.filter((candidate) => candidate.inputSchema?.properties?.pageIndex)) {
       expect(tool.inputSchema?.properties?.pageIndex).toMatchObject({
@@ -660,6 +746,220 @@ describe('ccs-browser MCP server', () => {
     const pageSideError = responses.find((message) => message.id === 5);
     expect((pageSideError?.result as { isError?: boolean }).isError).toBe(true);
     expect(getResponseText(pageSideError)).toContain('click exploded');
+  });
+
+  it('reports detached and hidden click targets as handled errors', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '#hidden': { hidden: true },
+            '#detached': { detached: true },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#hidden' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#detached' } },
+        },
+      ]
+    );
+
+    const hiddenError = responses.find((message) => message.id === 2);
+    expect((hiddenError?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(hiddenError)).toContain('element is hidden or not interactable for selector: #hidden');
+
+    const detachedError = responses.find((message) => message.id === 3);
+    expect((detachedError?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(detachedError)).toContain('element is detached for selector: #detached');
+  });
+
+  it('uses a mouse sequence when the target requires it', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '#menu-trigger': { requireMouseSequence: true },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#menu-trigger' } },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #menu-trigger');
+  });
+
+  it('preserves mouse sequence preparation without dispatching a synthetic click event', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '#click-event': {
+              requireMouseSequence: true,
+              forbidSyntheticClickEvent: true,
+              requireNativeClick: true,
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#click-event' } },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #click-event');
+  });
+
+  it('preserves native click activation after the mouse sequence', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '#native-click': {
+              requireMouseSequence: true,
+              requireNativeClick: true,
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#native-click' } },
+        },
+      ]
+    );
+
+    const clickResponse = responses.find((message) => message.id === 2);
+    expect((clickResponse?.result as { isError?: boolean }).isError).not.toBe(true);
+    expect(getResponseText(clickResponse)).toContain('status: clicked');
+    expect(getResponseText(clickResponse)).toContain('selector: #native-click');
+  });
+
+  it('does not force activation when mousedown cancels the interaction', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '#cancel-mousedown': {
+              requireMouseSequence: true,
+              cancelMouseDown: true,
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#cancel-mousedown' } },
+        },
+      ]
+    );
+
+    const clickResponse = responses.find((message) => message.id === 2);
+    expect((clickResponse?.result as { isError?: boolean }).isError).not.toBe(true);
+    expect(getResponseText(clickResponse)).toContain('status: clicked');
+    expect(getResponseText(clickResponse)).toContain('selector: #cancel-mousedown');
+  });
+
+  it('rechecks connectivity before native activation after the mouse sequence', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '#detached-during-click': {
+              requireMouseSequence: true,
+              requireNativeClick: true,
+              detachAfterMouseDown: true,
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#detached-during-click' } },
+        },
+      ]
+    );
+
+    const clickResponse = responses.find((message) => message.id === 2);
+    expect((clickResponse?.result as { isError?: boolean }).isError).not.toBe(true);
+    expect(getResponseText(clickResponse)).toContain('status: clicked');
+    expect(getResponseText(clickResponse)).toContain('selector: #detached-during-click');
+  });
+
+  it('falls back to click when mouse sequence dispatch fails', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '#fallback': { mouseSequenceError: 'mouse dispatch exploded' },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '#fallback' } },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #fallback');
   });
 
   it('captures screenshots and reports empty payload failures', async () => {
