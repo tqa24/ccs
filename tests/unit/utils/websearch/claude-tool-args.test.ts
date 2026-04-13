@@ -157,4 +157,16 @@ describe('appendThirdPartyWebSearchToolArgs', () => {
     expect(fileFlags.length).toBeGreaterThanOrEqual(2);
     expect(result).not.toContain('--append-system-prompt');
   });
+
+  it('does not treat unrelated user prompt files as the managed CCS steering prompt', () => {
+    const result = appendThirdPartyWebSearchToolArgs([
+      'smoke',
+      '--append-system-prompt-file',
+      '/tmp/user-ccs-prompt-websearch-tool-notes.txt',
+    ]);
+
+    const filePaths = result.filter((arg, index) => result[index - 1] === '--append-system-prompt-file');
+    expect(filePaths).toContain('/tmp/user-ccs-prompt-websearch-tool-notes.txt');
+    expect(filePaths.some((filePath) => filePath.endsWith('/ccs-prompt-websearch-tool.txt'))).toBe(true);
+  });
 });

@@ -7,8 +7,8 @@
 
 import {
   buildSteeringArg,
+  hasManagedPromptFileArg,
   PROMPT_FLAG_INLINE,
-  PROMPT_FLAG_FILE,
 } from '../prompt-injection-strategy';
 
 const NATIVE_WEBSEARCH_TOOL = 'WebSearch';
@@ -83,9 +83,8 @@ function hasExactFlagValue(params: {
   args: string[];
   flag: string;
   expectedValue: string;
-  allowPartiallyMatch?: boolean;
 }): boolean {
-  const { args, flag, expectedValue, allowPartiallyMatch } = params;
+  const { args, flag, expectedValue } = params;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -94,10 +93,6 @@ function hasExactFlagValue(params: {
       const value = getImmediateFlagValue(args, index);
 
       if (value === expectedValue) {
-        return true;
-      }
-
-      if (allowPartiallyMatch && value?.includes(expectedValue)) {
         return true;
       }
 
@@ -169,11 +164,9 @@ function ensureWebSearchSteeringPrompt(args: string[]): string[] {
   }
 
   if (
-    hasExactFlagValue({
+    hasManagedPromptFileArg({
       args: optionArgs,
-      flag: PROMPT_FLAG_FILE,
-      expectedValue: THIRD_PARTY_WEBSEARCH_STEERING_PROMPT.name,
-      allowPartiallyMatch: true,
+      promptName: THIRD_PARTY_WEBSEARCH_STEERING_PROMPT.name,
     })
   ) {
     return args;

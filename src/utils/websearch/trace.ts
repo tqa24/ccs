@@ -11,7 +11,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { getCcsDir } from '../config-manager';
 import { createLogger } from '../../services/logging';
-import { PROMPT_FLAG_INLINE, PROMPT_FLAG_FILE } from '../prompt-injection-strategy';
+import { hasManagedPromptFileArg, PROMPT_FLAG_INLINE } from '../prompt-injection-strategy';
 import { THIRD_PARTY_WEBSEARCH_STEERING_PROMPT } from './claude-tool-args';
 
 const TRACE_FILE_NAME = 'websearch-trace.jsonl';
@@ -61,9 +61,8 @@ function hasExactFlagValue(params: {
   args: string[];
   flag: string;
   expectedValue: string;
-  allowIncludesValue?: boolean;
 }): boolean {
-  const { args, flag, expectedValue, allowIncludesValue } = params;
+  const { args, flag, expectedValue } = params;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -72,10 +71,6 @@ function hasExactFlagValue(params: {
       const immediateFlagValue = getImmediateFlagValue(args, index);
 
       if (immediateFlagValue === expectedValue) {
-        return true;
-      }
-
-      if (allowIncludesValue && immediateFlagValue?.includes(expectedValue)) {
         return true;
       }
 
@@ -203,14 +198,7 @@ function hasSteeringPromptInArgs(args: string[]): boolean {
     return true;
   }
 
-  if (
-    hasExactFlagValue({
-      args,
-      flag: PROMPT_FLAG_FILE,
-      expectedValue: THIRD_PARTY_WEBSEARCH_STEERING_PROMPT.name,
-      allowIncludesValue: true,
-    })
-  ) {
+  if (hasManagedPromptFileArg({ args, promptName: THIRD_PARTY_WEBSEARCH_STEERING_PROMPT.name })) {
     return true;
   }
 

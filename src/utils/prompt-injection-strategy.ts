@@ -22,6 +22,43 @@ export const PROMPT_FLAG_INLINE = '--append-system-prompt';
 /** `--append-system-prompt-file` — prompt read from file */
 export const PROMPT_FLAG_FILE = '--append-system-prompt-file';
 
+function getManagedPromptsDir(): string {
+  return path.join(getCcsDir(), 'prompts');
+}
+
+export function getManagedPromptFileName(promptName: string): string {
+  return `${promptName}.txt`;
+}
+
+export function getManagedPromptFilePath(promptName: string): string {
+  return path.join(getManagedPromptsDir(), getManagedPromptFileName(promptName));
+}
+
+export function hasManagedPromptFileArg(params: { args: string[]; promptName: string }): boolean {
+  const expectedPath = path.resolve(getManagedPromptFilePath(params.promptName));
+
+  for (let index = 0; index < params.args.length; index += 1) {
+    const arg = params.args[index];
+
+    if (arg === PROMPT_FLAG_FILE) {
+      const filePath = params.args[index + 1];
+      if (filePath && path.resolve(filePath) === expectedPath) {
+        return true;
+      }
+      continue;
+    }
+
+    if (
+      arg.startsWith(`${PROMPT_FLAG_FILE}=`) &&
+      path.resolve(arg.slice(PROMPT_FLAG_FILE.length + 1)) === expectedPath
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Detect which prompt injection mode to use based on user-provided args.
  *
@@ -56,9 +93,7 @@ export function buildFileSteeringArg(params: {
   promptFileName: string;
   promptContent: string;
 }): string[] {
-  const ccsDir = getCcsDir();
-
-  const promptsFolder = path.join(ccsDir, '/prompts');
+  const promptsFolder = getManagedPromptsDir();
 
   if (!fs.existsSync(promptsFolder)) {
     fs.mkdirSync(promptsFolder, { recursive: true });
@@ -83,7 +118,7 @@ export function buildSteeringArg(params: {
 
   if (mode === 'file') {
     return buildFileSteeringArg({
-      promptFileName: `${params.promptName}.txt`,
+      promptFileName: getManagedPromptFileName(params.promptName),
       promptContent: params.promptContent,
     });
   }
