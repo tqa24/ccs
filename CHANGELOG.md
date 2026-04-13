@@ -1,3 +1,59 @@
+## [7.69.0](https://github.com/kaitranntt/ccs/compare/v7.68.2...v7.69.0) (2026-04-13)
+
+### Features
+
+* **browser:** 接入 CCS browser MCP 与最小交互闭环 ([eb8149e](https://github.com/kaitranntt/ccs/commit/eb8149e8fa476f279583136be7286dbaf1ac4361))
+* **cli:** add --append-system-prompt-file support ([45c231a](https://github.com/kaitranntt/ccs/commit/45c231a71732c40046a67f1cb46f1a5bcd8e96ee))
+* **cliproxy:** add --json flag to catalog command ([dceb6f6](https://github.com/kaitranntt/ccs/commit/dceb6f6d37972322a881d32c4d8b0c420e2f52db))
+* **cliproxy:** add thinking config to catalog --json and test false values ([22acd96](https://github.com/kaitranntt/ccs/commit/22acd96ba40dda2c9ed596b2db2643863b3b7e4d))
+* **cliproxy:** include model metadata in catalog --json output ([fbfb130](https://github.com/kaitranntt/ccs/commit/fbfb130f4d6313f10a6c757ceccfcfe2d7e69241))
+* **cursor:** harden live probe and runtime contracts ([e1049e3](https://github.com/kaitranntt/ccs/commit/e1049e38d409ad32bf0c1ae41eb713f59dbdfe02))
+* **ui:** persist paused account toggle state in localStorage ([18e5cd5](https://github.com/kaitranntt/ccs/commit/18e5cd5d94da8335cc01575d96693e197ea56eb0))
+* **websearch:** add SearXNG provider support and configuration ([eec8c8b](https://github.com/kaitranntt/ccs/commit/eec8c8b4a3288ec29e246aac58785f642618a48f))
+* **websearch:** add url property to WebSearchProviderConfig interface ([36d828f](https://github.com/kaitranntt/ccs/commit/36d828f99c4a8dae40286b72709487ae8cb49f2c))
+
+### Bug Fixes
+
+* **browser:** 加固 browser_click 激活语义并修复相关验证阻塞 ([74f0281](https://github.com/kaitranntt/ccs/commit/74f028168dfa4d5c8478679465bb527a7a5f8b7f))
+* **ci:** sync bun.lock for browser MCP types ([a63417e](https://github.com/kaitranntt/ccs/commit/a63417e567edc1cca36a184527504ea78a45a1f8))
+* **cli:** match managed prompt files by exact path ([7fc39f7](https://github.com/kaitranntt/ccs/commit/7fc39f7c0319c19ec52d21dc60248a27c128fe3f))
+* **cliproxy:** guard against undefined catalog and add issueUrl field ([7bf5b4b](https://github.com/kaitranntt/ccs/commit/7bf5b4b95e0bb12afc1d23d668fb43546608db58))
+* **cliproxy:** preserve explicit false values in catalog --json ([9ac1ac9](https://github.com/kaitranntt/ccs/commit/9ac1ac98040503cd395d51e4cffff123a1ace44f))
+* **cursor:** align auto-detect status and CI coverage ([2719d7a](https://github.com/kaitranntt/ccs/commit/2719d7a6f7a2589dd2b9f9478f9c86d8aaea8876))
+* **cursor:** resolve PR review findings ([cf5df06](https://github.com/kaitranntt/ccs/commit/cf5df0630a2360c0c145b926dc94e1775ed8d7b0))
+* **docker:** delegate restart/install to supervisorctl in Docker deployments ([7776715](https://github.com/kaitranntt/ccs/commit/7776715ebadc5821167c0bf721266f43a228b3cb)), closes [#964](https://github.com/kaitranntt/ccs/issues/964)
+* **test:** isolate chrome reuse home env expectations ([a68bc46](https://github.com/kaitranntt/ccs/commit/a68bc46cafd27b3a07d63df9597729b7ea6261a3))
+* **ui:** clarify Gemini quota tooltip labels ([5076b21](https://github.com/kaitranntt/ccs/commit/5076b212af6a9318505e52536899af1060faf053))
+* **websearch:** harden searxng url handling ([8b553c3](https://github.com/kaitranntt/ccs/commit/8b553c35c150e6411e6af0ce0a0a27305b516e6c))
+* **websearch:** reject blank searxng status urls ([8d8f446](https://github.com/kaitranntt/ccs/commit/8d8f4469b6537faf0918773c52ea2b71abef11de))
+
+### Hotfixes
+
+* detect bun-owned installs through symlinked ccs path ([898e7a6](https://github.com/kaitranntt/ccs/commit/898e7a632125476f269d4ff34280589404d7c3ae))
+* restore bun types for stable release CI ([6cfb171](https://github.com/kaitranntt/ccs/commit/6cfb17151475efbef306c4a3e2265d3212f88ee2))
+
+### Documentation
+
+* **cliproxy:** add catalog --json to --help output ([ea2b16b](https://github.com/kaitranntt/ccs/commit/ea2b16bb6622c7e4d668aa63b735093701313036))
+* **cliproxy:** clarify catalog --json output format in JSDoc ([ac92688](https://github.com/kaitranntt/ccs/commit/ac92688cc5f14054f4bd73c15723d521baa9afb1))
+
+### Tests
+
+* **browser:** 修复 default profile browser launch 竞态测试 ([7754c6c](https://github.com/kaitranntt/ccs/commit/7754c6c0ff3aa8f69f17860d283c80b752d5a6cc))
+* **ci:** add env isolation comment to persist-command-handler ([79251d7](https://github.com/kaitranntt/ccs/commit/79251d7af8b22a3a7fdb11ac6a357dd245df4590))
+* **ci:** improve test isolation readability per review feedback ([1a7fc4a](https://github.com/kaitranntt/ccs/commit/1a7fc4a3f280e647c07c4b1a4e9eeae2d3ae3d3c))
+* **ci:** isolate CCS-managed env vars from host session ([2cc92e8](https://github.com/kaitranntt/ccs/commit/2cc92e8bb80ba7239bb66b8cd24e0cb4c6ff0627))
+* **cliproxy:** add catalog --json tests and clarify flag priority ([509d2e4](https://github.com/kaitranntt/ccs/commit/509d2e4dd83840775915c7297621da89a7b7fe9c))
+* **ui:** 修复彩色输出下的脆弱断言 ([2527889](https://github.com/kaitranntt/ccs/commit/2527889d1d28ee1e7c58581b697e18a220f15cf3))
+
+### Build System
+
+* **types:** 补充 Bun 类型声明配置 ([26059c7](https://github.com/kaitranntt/ccs/commit/26059c78dc4f19e0309e96be42b4238146a34ff5))
+
+### CI
+
+* retrigger validation ([ef564ca](https://github.com/kaitranntt/ccs/commit/ef564cafdf4213d07914f8e2cf9a348a6fb272b3))
+
 ## [7.68.2](https://github.com/kaitranntt/ccs/compare/v7.68.1...v7.68.2) (2026-04-13)
 
 ### Bug Fixes
