@@ -1,3 +1,13 @@
+## [7.68.2](https://github.com/kaitranntt/ccs/compare/v7.68.1...v7.68.2) (2026-04-13)
+
+### Bug Fixes
+
+* **image-analysis:** wrap defaultDeps in arrow functions to fix circular dep capture ([a76265a](https://github.com/kaitranntt/ccs/commit/a76265a7c0edcae7e1b952cacd32e0eca20b6325)), closes [#973](https://github.com/kaitranntt/ccs/issues/973)
+
+### Tests
+
+* **image-analysis:** cover circular dependency regression ([d74b514](https://github.com/kaitranntt/ccs/commit/d74b514dc5b2d741071b13d85ac02da115ae9b9d))
+
 ## [7.68.1](https://github.com/kaitranntt/ccs/compare/v7.68.0...v7.68.1) (2026-04-12)
 
 ### Hotfixes
