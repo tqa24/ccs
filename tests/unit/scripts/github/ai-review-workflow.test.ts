@@ -38,6 +38,8 @@ describe('PR-Agent review lane migration', () => {
 
     expect(config).toContain('[config]');
     expect(config).toContain('git_provider = "github"');
+    expect(config).toContain('fallback_models = ["gpt-5.4-mini"]');
+    expect(config).toContain('custom_model_max_tokens = 131072');
     expect(config).toContain('[pr_reviewer]');
     expect(config).not.toContain('auto_review = true');
     expect(config).not.toContain('claude-code-action');

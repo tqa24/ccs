@@ -1,9 +1,11 @@
 [config]
 git_provider = "github"
+fallback_models = ["gpt-5.4-mini"]
 publish_output = true
 publish_output_progress = false
 response_language = "en-US"
-max_model_tokens = 32000
+max_model_tokens = 131072
+custom_model_max_tokens = 131072
 large_patch_policy = "clip"
 temperature = 0.1
 
