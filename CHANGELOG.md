@@ -1,3 +1,43 @@
+## [7.70.0](https://github.com/kaitranntt/ccs/compare/v7.69.1...v7.70.0) (2026-04-14)
+
+### Features
+
+* **ci:** migrate AI review to self-hosted PR-Agent ([25216ea](https://github.com/kaitranntt/ccs/commit/25216eaf334c405ed433f800886ee541161177de))
+* **ui:** complete dashboard i18n coverage across 162 files ([c3401f0](https://github.com/kaitranntt/ccs/commit/c3401f0a91135734ea8098f86c08715d90a3021c)), closes [#983](https://github.com/kaitranntt/ccs/issues/983)
+
+### Bug Fixes
+
+* apply api-key updates during token regeneration ([f067f39](https://github.com/kaitranntt/ccs/commit/f067f3924556968b2d0d0304455ce96284b8c74f))
+* **browser:** harden browser MCP websocket startup ([d30f580](https://github.com/kaitranntt/ccs/commit/d30f5803a71bf7ab57230a840c1e180b5a8f7959))
+* **ci:** allow PR-Agent dispatch bot reruns ([9a91901](https://github.com/kaitranntt/ccs/commit/9a91901a9b1ef6d4f07ce8f82500aa3669abb5e1))
+* **ci:** preserve AI review variable contract ([d6ec5ee](https://github.com/kaitranntt/ccs/commit/d6ec5eeebdeebb54ffb3d3b93e395f976a6aef97))
+* **ci:** restore trusted PR review dispatch ([0d2ce7d](https://github.com/kaitranntt/ccs/commit/0d2ce7d1b3449033ef61d4d74108cd91914fe077))
+* **ci:** restrict self-hosted PR-Agent comment triggers ([e1271e2](https://github.com/kaitranntt/ccs/commit/e1271e2dbf4933d9a5c02ecde36cbf4ce07394bc))
+* **ci:** stabilize update-command tests under parallel runners ([b148d1b](https://github.com/kaitranntt/ccs/commit/b148d1ba660774f89be3542e9dcbd62abad79b49))
+* **cliproxy:** degrade gracefully on GitHub release 403s ([4e15ec5](https://github.com/kaitranntt/ccs/commit/4e15ec5387ada5f24a29d57bb70e1bc004e5c6fe))
+* **ui:** finish dashboard i18n follow-up pass ([87899a4](https://github.com/kaitranntt/ccs/commit/87899a489c6bf4d81e490c8754bad89c78436a11))
+* **ui:** use i18n singleton in claude extension status card ([be9a481](https://github.com/kaitranntt/ccs/commit/be9a481e75901cbf7360399b208085f64574cf23))
+
+### Hotfixes
+
+* stop auto-enabling stale Chrome DevTools reuse ([5c799e6](https://github.com/kaitranntt/ccs/commit/5c799e68e98fd671ad85c3665b32d796d022631a))
+
+### Code Refactoring
+
+* **ci:** make ai-review model/endpoint configurable via repository variables ([026ff6c](https://github.com/kaitranntt/ccs/commit/026ff6ceddefae92a2e7caa83a5d51f920d391be))
+
+### Performance Improvements
+
+* **hooks:** shorten feature-branch pre-push gate ([2868dcd](https://github.com/kaitranntt/ccs/commit/2868dcdaaeac719fdcec22e9aee3f4e8f5e3bb09))
+
+### Tests
+
+* **ci:** harden cursor models oversized-body fallback ([66e2969](https://github.com/kaitranntt/ccs/commit/66e29691b03b51910c41c2771d676a6df35da876))
+* **ci:** update ai-review workflow runtime assertions ([72d8f36](https://github.com/kaitranntt/ccs/commit/72d8f36b5d1bf12a8db2ede96a058394b5384d5f))
+* **hooks:** harden cross-platform MCP coverage ([3103f3f](https://github.com/kaitranntt/ccs/commit/3103f3f293b9b09114e32762e92c75770f6dcaf0))
+* **tokens:** isolate auth rotation from mocked handlers ([cb1d78b](https://github.com/kaitranntt/ccs/commit/cb1d78bd9d5c157b3e27ab15631260fa515f527f))
+* **update:** isolate current-install command deps ([394d7d9](https://github.com/kaitranntt/ccs/commit/394d7d94fc77144c25cdd84195805fbec2966233))
+
 ## [7.69.1](https://github.com/kaitranntt/ccs/compare/v7.69.0...v7.69.1) (2026-04-13)
 
 ### Hotfixes
