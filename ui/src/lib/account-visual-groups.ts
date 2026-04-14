@@ -16,6 +16,8 @@ export interface AccountVisualVariant {
   audience: AccountAudience;
   audienceLabel: string | null;
   detailLabel: string | null;
+  compactDetailLabel: string | null;
+  inlineLabel: string | null;
 }
 
 export interface AccountVisualGroup {
@@ -67,6 +69,8 @@ function buildAccountVariant(
     audience: identity.audience,
     audienceLabel: identity.audienceLabel,
     detailLabel: identity.detailLabel,
+    compactDetailLabel: identity.compactDetailLabel,
+    inlineLabel: identity.inlineLabel,
   };
 }
 
@@ -77,8 +81,8 @@ function sortAccountVariants(variants: AccountVisualVariant[]): AccountVisualVar
       return audienceDelta;
     }
 
-    const leftLabel = left.audienceLabel ?? left.detailLabel ?? left.id;
-    const rightLabel = right.audienceLabel ?? right.detailLabel ?? right.id;
+    const leftLabel = left.inlineLabel ?? left.audienceLabel ?? left.detailLabel ?? left.id;
+    const rightLabel = right.inlineLabel ?? right.audienceLabel ?? right.detailLabel ?? right.id;
 
     return leftLabel.localeCompare(rightLabel);
   });

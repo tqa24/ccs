@@ -24,7 +24,7 @@ function normalizeVariantTokenPart(value: string): string {
     .toLowerCase();
 }
 
-function formatVariantPart(part: string): string {
+export function formatAccountVariantPart(part: string): string {
   const normalized = part.trim().toLowerCase();
   if (!normalized) {
     return '';
@@ -103,7 +103,7 @@ function formatWorkspaceLabel(parts: string[]): {
     };
   }
 
-  const extraLabel = parts.map(formatVariantPart).filter(Boolean).join(' · ');
+  const extraLabel = parts.map(formatAccountVariantPart).filter(Boolean).join(' · ');
   return {
     detailLabel: extraLabel || 'Team', // TODO i18n: missing key for team fallback
     compactDetailLabel: extraLabel || 'Team',
@@ -167,10 +167,13 @@ export function getAccountIdentityPresentation(
   }
 
   if (suffix && PERSONAL_PLAN_PARTS.has(suffix)) {
-    const detailParts = [formatVariantPart(suffix), ...parts.slice(0, -1).map(formatVariantPart)]
+    const detailParts = [
+      formatAccountVariantPart(suffix),
+      ...parts.slice(0, -1).map(formatAccountVariantPart),
+    ]
       .filter(Boolean)
       .join(' · ');
-    const detailLabel = detailParts || formatVariantPart(suffix);
+    const detailLabel = detailParts || formatAccountVariantPart(suffix);
     const inlineLabel = ['Personal', detailLabel].filter(Boolean).join(' · '); // TODO i18n: missing key for Personal
     return {
       email: resolvedEmail,
@@ -182,7 +185,7 @@ export function getAccountIdentityPresentation(
     };
   }
 
-  const fallbackLabel = parts.map(formatVariantPart).filter(Boolean).join(' · ');
+  const fallbackLabel = parts.map(formatAccountVariantPart).filter(Boolean).join(' · ');
   return {
     email: resolvedEmail,
     audience: 'unknown',

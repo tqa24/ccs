@@ -13,6 +13,7 @@ import {
   getProviderResetTime,
   getQuotaFailureInfo,
 } from '@/lib/utils';
+import { formatAccountVariantPart } from '@/lib/account-identity';
 import { GripVertical, Loader2, Pause, Play } from 'lucide-react';
 import {
   useAccountQuota,
@@ -87,29 +88,110 @@ function getCompactQuotaColor(percentage: number) {
   return 'bg-red-500';
 }
 
-function getVariantMarkerLabel(audience: string, fallbackLabel?: string | null) {
-  if (audience === 'business') return 'Biz';
-  if (audience === 'personal') return 'Pers';
+function getCodexPlanDetailLabel(quota: unknown): string | null {
+  if (!quota || typeof quota !== 'object' || !('planType' in quota)) {
+    return null;
+  }
 
-  const normalizedFallback = fallbackLabel?.trim();
+  const planType = (quota as { planType?: unknown }).planType;
+  if (typeof planType !== 'string' || planType.trim().length === 0) {
+    return null;
+  }
+
+  return formatAccountVariantPart(planType);
+}
+
+function getVariantDetailLabel(
+  variant: {
+    audience: string;
+    detailLabel?: string | null;
+    compactDetailLabel?: string | null;
+  },
+  quota?: unknown
+) {
+  const codexPlanDetail = getCodexPlanDetailLabel(quota);
+  return variant.detailLabel ?? variant.compactDetailLabel ?? codexPlanDetail;
+}
+
+function getVariantCompactDetailLabel(
+  variant: {
+    audience: string;
+    compactDetailLabel?: string | null;
+    detailLabel?: string | null;
+  },
+  quota?: unknown
+) {
+  const codexPlanDetail = getCodexPlanDetailLabel(quota);
+  return variant.compactDetailLabel ?? variant.detailLabel ?? codexPlanDetail;
+}
+
+function getVariantInlineLabel(
+  variant: {
+    audience: string;
+    audienceLabel?: string | null;
+    detailLabel?: string | null;
+    compactDetailLabel?: string | null;
+    inlineLabel?: string | null;
+  },
+  quota?: unknown
+) {
+  const detailLabel = getVariantDetailLabel(variant, quota);
+  const composedLabel = [variant.audienceLabel, detailLabel].filter(Boolean).join(' · ');
+  return composedLabel || variant.inlineLabel || null;
+}
+
+function getVariantMarkerLabel(
+  variant: {
+    audience: string;
+    audienceLabel?: string | null;
+    detailLabel?: string | null;
+    compactDetailLabel?: string | null;
+  },
+  audienceCounts: Map<string, number>,
+  quota?: unknown
+) {
+  const compactDetailLabel = getVariantCompactDetailLabel(variant, quota);
+  if (variant.audience === 'business') {
+    const businessVariantCount = audienceCounts.get('business') ?? 0;
+    return businessVariantCount > 1 && compactDetailLabel ? compactDetailLabel : 'Biz';
+  }
+  if (variant.audience === 'personal') {
+    return compactDetailLabel ?? 'Pers';
+  }
+
+  const normalizedFallback =
+    compactDetailLabel?.trim() || variant.audienceLabel?.trim() || variant.detailLabel?.trim();
   return normalizedFallback?.[0]?.toUpperCase() ?? '?';
 }
 
 function getGroupedVariantSummaryLabel(
-  variants: Array<{ audience: string; audienceLabel?: string | null; detailLabel?: string | null }>
+  variants: Array<{
+    audience: string;
+    audienceLabel?: string | null;
+    detailLabel?: string | null;
+    compactDetailLabel?: string | null;
+  }>,
+  quotas: Array<unknown>,
+  audienceCounts: Map<string, number>
 ) {
   const audiences = new Set(variants.map((variant) => variant.audience));
+  const hasDistinctDetails = variants.some((variant, index) =>
+    Boolean(getVariantCompactDetailLabel(variant, quotas[index]))
+  );
 
-  if (audiences.size === 2 && audiences.has('business') && audiences.has('personal')) {
+  if (
+    !hasDistinctDetails &&
+    variants.length === 2 &&
+    audiences.size === 2 &&
+    audiences.has('business') &&
+    audiences.has('personal')
+  ) {
     return 'B|P';
   }
 
   if (variants.length === 1) {
     const [variant] = variants;
-    return getVariantMarkerLabel(
-      variant.audience,
-      variant.audienceLabel ?? variant.detailLabel ?? null
-    );
+    return getVariantMarkerLabel(variant, audienceCounts, quotas[0]);
   }
 
   return null;
@@ -153,20 +235,19 @@ export function AccountCard({
     })),
     showQuota && hasGroupedVariants
   );
-  const groupedHeaderVariants = hasGroupedVariants
-    ? Array.from(
-        new Map(
-          (account.variants ?? [])
-            .slice()
-            .sort((left, right) => {
-              const order = { business: 0, personal: 1, unknown: 2 } as const;
-              return order[left.audience] - order[right.audience];
-            })
-            .map((variant) => [variant.audienceLabel ?? variant.detailLabel ?? variant.id, variant])
-        ).values()
-      )
-    : [];
-  const groupedVariantSummaryLabel = getGroupedVariantSummaryLabel(groupedHeaderVariants);
+  const groupedHeaderVariants = hasGroupedVariants ? (account.variants ?? []) : [];
+  const groupedVariantQuotas = groupedHeaderVariants.map(
+    (_, index) => variantQuotaQueries[index]?.data
+  );
+  const groupedVariantAudienceCounts = groupedHeaderVariants.reduce((counts, variant) => {
+    counts.set(variant.audience, (counts.get(variant.audience) ?? 0) + 1);
+    return counts;
+  }, new Map<string, number>());
+  const groupedVariantSummaryLabel = getGroupedVariantSummaryLabel(
+    groupedHeaderVariants,
+    groupedVariantQuotas,
+    groupedVariantAudienceCounts
+  );
 
   const compactMetaBadges = hasGroupedVariants ? (
     <>
@@ -174,8 +255,9 @@ export function AccountCard({
         className="inline-flex shrink-0 items-center overflow-hidden rounded-md border border-border/60 bg-muted/60 shadow-sm shadow-black/5 dark:bg-zinc-900/80"
         title={groupedHeaderVariants
           .map(
-            (variant) =>
-              variant.audienceLabel ?? variant.detailLabel ?? t('accountSurfaceCard.variant')
+            (variant, index) =>
+              getVariantInlineLabel(variant, groupedVariantQuotas[index]) ??
+              t('accountSurfaceCard.variant')
           )
           .join(' • ')}
       >
@@ -198,8 +280,9 @@ export function AccountCard({
               )}
             >
               {getVariantMarkerLabel(
-                variant.audience,
-                variant.audienceLabel ?? variant.detailLabel ?? null
+                variant,
+                groupedVariantAudienceCounts,
+                groupedVariantQuotas[index]
               )}
             </span>
           ))
@@ -224,7 +307,7 @@ export function AccountCard({
           const quotaLabel = minQuota !== null ? formatQuotaPercent(minQuota) : null;
           const quotaValue = quotaLabel !== null ? Number(quotaLabel) : null;
           const failureInfo = getQuotaFailureInfo(quota);
-          const label = variant.audienceLabel ?? variant.detailLabel ?? cleanEmail(variant.email);
+          const label = getVariantInlineLabel(variant, quota) ?? cleanEmail(variant.email);
 
           return (
             <Tooltip key={variant.id}>

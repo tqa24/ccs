@@ -1,7 +1,7 @@
 import { render, screen } from '@tests/setup/test-utils';
 import { describe, expect, it } from 'vitest';
 import { AccountSurfaceCard } from '@/components/account/shared/account-surface-card';
-import type { GeminiCliQuotaResult } from '@/lib/api-client';
+import type { CodexQuotaResult, GeminiCliQuotaResult } from '@/lib/api-client';
 
 function createGeminiQuotaResult(
   overrides: Partial<GeminiCliQuotaResult> = {}
@@ -29,6 +29,16 @@ function createGeminiQuotaResult(
   };
 }
 
+function createCodexQuotaResult(overrides: Partial<CodexQuotaResult> = {}): CodexQuotaResult {
+  return {
+    success: true,
+    windows: [],
+    planType: 'free',
+    lastUpdated: Date.now(),
+    ...overrides,
+  };
+}
+
 describe('AccountSurfaceCard', () => {
   it('prefers live quota entitlement tier over a stale account tier for Gemini badges', () => {
     render(
@@ -45,5 +55,41 @@ describe('AccountSurfaceCard', () => {
     );
 
     expect(screen.getByText('pro')).toBeInTheDocument();
+  });
+
+  it('shows both personal identity and free-tier detail for compact Codex cards', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="codex"
+        accountId="user@example.com#free"
+        email="user@example.com"
+        displayEmail="user@example.com"
+        tokenFile="codex-user@example.com-free.json"
+        showQuota={false}
+      />
+    );
+
+    expect(screen.getByText('Pers')).toBeInTheDocument();
+    expect(screen.getByTitle('Personal')).toBeInTheDocument();
+    expect(screen.getByText('Free')).toBeInTheDocument();
+  });
+
+  it('keeps richer token-derived Codex personal detail when live quota planType is coarser', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="codex"
+        accountId="user@example.com#pro"
+        email="user@example.com"
+        displayEmail="user@example.com"
+        tokenFile="codex-user@example.com-pro.json"
+        quota={createCodexQuotaResult({ planType: 'free' })}
+        showQuota={false}
+      />
+    );
+
+    expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(screen.queryByText('Free')).not.toBeInTheDocument();
   });
 });
