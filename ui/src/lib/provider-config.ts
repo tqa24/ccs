@@ -10,18 +10,17 @@ import {
   getProvidersByOAuthFlow,
 } from '../../../src/cliproxy/provider-capabilities';
 import type { AiProviderFamilyId, AiProviderModelAlias } from '../../../src/cliproxy/ai-providers';
+import i18n from './i18n';
 
 // Monorepo contract: UI consumes provider capability constants directly from backend
 // to enforce one source of truth and prevent provider drift across surfaces.
 
 /** Canonical list of CLIProxy provider IDs (shared with backend). */
 export const CLIPROXY_PROVIDERS = CLIPROXY_PROVIDER_IDS;
-
-/** Union type for CLIProxy provider IDs */
 export type CLIProxyProvider = (typeof CLIPROXY_PROVIDERS)[number];
 export type ProviderVisualId = CLIProxyProvider | 'openai' | 'vertex';
 
-/** Check if a string is a valid CLIProxy provider */
+/** Check if a string is a backend-supported CLIProxy provider. */
 export function isValidProvider(provider: string): provider is CLIProxyProvider {
   return CLIPROXY_PROVIDERS.includes(provider as CLIProxyProvider);
 }
@@ -37,9 +36,13 @@ interface ProviderMetadata {
 
 const SPECIAL_PROVIDER_VISUAL_IDS = ['openai', 'vertex'] as const;
 
+function isPresentationProvider(provider: string): provider is CLIProxyProvider {
+  return isValidProvider(provider);
+}
+
 function isProviderVisualId(provider: string): provider is ProviderVisualId {
   return (
-    isValidProvider(provider) ||
+    isPresentationProvider(provider) ||
     SPECIAL_PROVIDER_VISUAL_IDS.includes(provider as (typeof SPECIAL_PROVIDER_VISUAL_IDS)[number])
   );
 }
@@ -64,6 +67,10 @@ export const PROVIDER_ASSETS: Partial<Record<ProviderVisualId, string>> = {
   qwen: '/assets/providers/qwen-color.svg',
   iflow: '/assets/providers/iflow.png',
   kiro: '/assets/providers/kiro.png',
+  cursor: '/assets/sidebar/cursor.svg',
+  gitlab: '/assets/providers/gitlab.svg',
+  codebuddy: '/assets/providers/codebuddy.png',
+  kilo: '/assets/providers/kilo.png',
   ghcp: '/assets/providers/copilot.svg',
   claude: '/assets/providers/claude.svg',
   kimi: '/assets/providers/kimi.svg',
@@ -90,6 +97,10 @@ export const PROVIDER_FALLBACK_VISUALS: Record<ProviderVisualId, ProviderFallbac
   qwen: { textClass: 'text-cyan-600', letter: 'Q' },
   iflow: { textClass: 'text-indigo-600', letter: 'i' },
   kiro: { textClass: 'text-teal-600', letter: 'K' },
+  cursor: { textClass: 'text-slate-900', letter: 'C' },
+  gitlab: { textClass: 'text-orange-600', letter: 'G' },
+  codebuddy: { textClass: 'text-blue-600', letter: 'B' },
+  kilo: { textClass: 'text-rose-600', letter: 'K' },
   ghcp: { textClass: 'text-green-600', letter: 'C' },
   kimi: { textClass: 'text-orange-500', letter: 'K' },
   openai: { textClass: 'text-slate-900', letter: 'O' },
@@ -223,6 +234,10 @@ export const PROVIDER_COLORS: Record<string, string> = {
   iflow: '#f94144',
   qwen: '#6236FF',
   kiro: '#4d908e',
+  cursor: '#111827',
+  gitlab: '#FC6D26',
+  codebuddy: '#2563EB',
+  kilo: '#E11D48',
   ghcp: '#43aa8b',
   claude: '#D97757',
   kimi: '#FF6B35',
@@ -239,15 +254,15 @@ const PROVIDER_NAMES: Record<string, string> = {
 export function getProviderDisplayName(provider: unknown): string {
   const normalized = normalizeProviderInput(provider);
   if (!normalized) {
-    return 'Unknown provider'; // TODO i18n: missing key
+    return i18n.t('toasts.providerUnknown', { provider: 'unknown' });
   }
-  return PROVIDER_NAMES[normalized] || String(provider);
+  return PROVIDER_NAMES[normalized] || i18n.t('toasts.providerUnknown', { provider: normalized });
 }
 
 /** Map provider to user-facing short description */
 export function getProviderDescription(provider: unknown): string {
   const normalized = normalizeProviderInput(provider);
-  if (!isValidProvider(normalized)) return '';
+  if (!isPresentationProvider(normalized)) return '';
   return PROVIDER_METADATA[normalized].description;
 }
 
@@ -283,12 +298,12 @@ export function isDeviceCodeProvider(provider: unknown): boolean {
 export function getDeviceCodeProviderDisplayName(provider: unknown): string {
   const normalized = normalizeProviderInput(provider);
   if (!normalized) {
-    return 'Unknown provider'; // TODO i18n: missing key
+    return i18n.t('toasts.providerUnknown', { provider: 'unknown' });
   }
   if (isValidProvider(normalized)) {
     return DEVICE_CODE_PROVIDER_DISPLAY_NAMES[normalized] || getProviderDisplayName(normalized);
   }
-  return String(provider);
+  return i18n.t('toasts.providerUnknown', { provider: normalized });
 }
 
 /** Provider-specific helper text for device-code dialog. */
@@ -296,10 +311,11 @@ export function getDeviceCodeProviderInstruction(provider: unknown): string {
   const normalized = normalizeProviderInput(provider);
   if (isValidProvider(normalized)) {
     return (
-      DEVICE_CODE_PROVIDER_INSTRUCTIONS[normalized] || 'Complete the authorization in your browser.' // TODO i18n: missing key
+      DEVICE_CODE_PROVIDER_INSTRUCTIONS[normalized] ||
+      i18n.t('providerConfig.defaultDeviceCodeInstruction')
     );
   }
-  return 'Complete the authorization in your browser.'; // TODO i18n: missing key
+  return i18n.t('providerConfig.defaultDeviceCodeInstruction');
 }
 
 /** Kiro auth methods exposed in CCS UI (aligned with CLIProxyAPIPlus support). */

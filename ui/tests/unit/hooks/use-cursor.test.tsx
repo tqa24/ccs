@@ -32,7 +32,7 @@ describe('useCursor', () => {
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
-      if (url.endsWith('/api/cursor/status')) {
+      if (url.endsWith('/api/legacy/cursor/status')) {
         return Promise.resolve(
           createJsonResponse({
             enabled: true,
@@ -48,7 +48,7 @@ describe('useCursor', () => {
         );
       }
 
-      if (url.endsWith('/api/cursor/settings')) {
+      if (url.endsWith('/api/legacy/cursor/settings')) {
         return Promise.resolve(
           createJsonResponse({
             enabled: true,
@@ -60,7 +60,7 @@ describe('useCursor', () => {
         );
       }
 
-      if (url.endsWith('/api/cursor/models')) {
+      if (url.endsWith('/api/legacy/cursor/models')) {
         return Promise.resolve(
           createJsonResponse({
             models: [{ id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', provider: 'openai' }],
@@ -69,7 +69,7 @@ describe('useCursor', () => {
         );
       }
 
-      if (url.endsWith('/api/cursor/settings/raw')) {
+      if (url.endsWith('/api/legacy/cursor/settings/raw')) {
         return Promise.resolve(
           createJsonResponse({
             settings: {},
@@ -80,7 +80,7 @@ describe('useCursor', () => {
         );
       }
 
-      if (url.endsWith('/api/cursor/probe') && init?.method === 'POST') {
+      if (url.endsWith('/api/legacy/cursor/probe') && init?.method === 'POST') {
         return Promise.resolve(createJsonResponse(probeFailure, 503));
       }
 
@@ -102,14 +102,16 @@ describe('useCursor', () => {
     await waitFor(() => expect(result.current.probeResult).toMatchObject(probeFailure));
     await waitFor(() =>
       expect(
-        fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/api/cursor/status'))
-          .length
+        fetchMock.mock.calls.filter(([input]) =>
+          String(input).endsWith('/api/legacy/cursor/status')
+        ).length
       ).toBeGreaterThanOrEqual(2)
     );
     await waitFor(() =>
       expect(
-        fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/api/cursor/models'))
-          .length
+        fetchMock.mock.calls.filter(([input]) =>
+          String(input).endsWith('/api/legacy/cursor/models')
+        ).length
       ).toBeGreaterThanOrEqual(2)
     );
   });

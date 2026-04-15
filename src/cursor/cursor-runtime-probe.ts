@@ -120,7 +120,7 @@ export async function probeCursorRuntime(config: CursorConfig): Promise<CursorPr
       stage: 'auth',
       status: 401,
       duration_ms: Date.now() - startedAt,
-      message: 'Cursor credentials not found. Run `ccs cursor auth` first.',
+      message: 'Cursor credentials not found. Run `ccs legacy cursor auth` first.',
       error_type: 'authentication_error',
     };
   }
@@ -131,7 +131,7 @@ export async function probeCursorRuntime(config: CursorConfig): Promise<CursorPr
       stage: 'auth',
       status: 401,
       duration_ms: Date.now() - startedAt,
-      message: 'Cursor credentials expired. Run `ccs cursor auth` again.',
+      message: 'Cursor credentials expired. Run `ccs legacy cursor auth` again.',
       error_type: 'authentication_error',
     };
   }
@@ -168,7 +168,7 @@ export async function probeCursorRuntime(config: CursorConfig): Promise<CursorPr
       status: 503,
       duration_ms: Date.now() - startedAt,
       message:
-        'Cursor daemon is not running. Start it with `ccs cursor start` or enable auto_start.',
+        'Cursor daemon is not running. Start it with `ccs legacy cursor start` or enable auto_start.',
       error_type: 'daemon_not_running',
     };
   }

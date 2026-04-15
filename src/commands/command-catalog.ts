@@ -1,5 +1,4 @@
 import { COPILOT_SUBCOMMANDS } from '../copilot/constants';
-import { CURSOR_SUBCOMMANDS } from '../cursor/constants';
 import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
 
 export type HelpTopicName = 'profiles' | 'providers' | 'kiro' | 'completion' | 'targets';
@@ -105,7 +104,7 @@ export const ROOT_COMMAND_CATALOG: readonly RootCommandEntry[] = [
   },
   {
     name: 'cursor',
-    summary: 'Run or manage the Cursor bridge',
+    summary: 'Run Cursor via CLIProxy or manage Cursor provider auth',
     group: 'runtime',
     visibility: 'public',
   },
@@ -183,6 +182,10 @@ export const BUILTIN_PROVIDER_SHORTCUTS: readonly ShortcutEntry[] = CLIPROXY_PRO
         ghcp: 'GitHub Copilot via CLIProxy OAuth',
         claude: 'Claude via CLIProxy OAuth',
         kimi: 'Kimi via CLIProxy OAuth',
+        cursor: 'Cursor via CLIProxy OAuth',
+        gitlab: 'GitLab Duo via CLIProxy OAuth',
+        codebuddy: 'CodeBuddy via CLIProxy OAuth',
+        kilo: 'Kilo AI via CLIProxy OAuth',
       }[name] || 'CLIProxy OAuth provider',
   })
 );
@@ -304,7 +307,14 @@ export const COMMAND_FLAG_SUGGESTIONS: Readonly<Record<string, readonly string[]
   update: ['--force', '--beta', '--dev', '--help', '-h'],
 };
 
-export const CURSOR_COMPLETION_SUBCOMMANDS = [...CURSOR_SUBCOMMANDS] as const;
+export const CURSOR_COMPLETION_SUBCOMMANDS = [
+  '--auth',
+  '--accounts',
+  '--config',
+  '--logout',
+  '--help',
+  '-h',
+] as const;
 export const COPILOT_COMPLETION_SUBCOMMANDS = [...COPILOT_SUBCOMMANDS, 'help'] as const;
 
 export function getPublicRootCommands(): readonly RootCommandEntry[] {

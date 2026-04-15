@@ -30,6 +30,7 @@ import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middlewar
 import type { Settings } from '../../types/config';
 import type { CLIProxyProvider } from '../../cliproxy/types';
 import { mapExternalProviderName } from '../../cliproxy/provider-capabilities';
+import { resolveProviderSettingsPath } from '../../cliproxy/config/env-builder';
 import { expandPath } from '../../utils/helpers';
 import {
   canonicalizeModelIdForProvider,
@@ -100,6 +101,17 @@ function resolveSettingsPath(profileOrVariant: string): string {
 
   const ccsDir = getCcsDir();
   const resolvedCcsDir = path.resolve(ccsDir);
+
+  const directProvider = mapExternalProviderName(profileOrVariant);
+  if (directProvider) {
+    if (profileOrVariant !== directProvider) {
+      return resolvePathWithin(
+        resolvedCcsDir,
+        path.join(resolvedCcsDir, `${profileOrVariant}.settings.json`)
+      );
+    }
+    return path.resolve(resolveProviderSettingsPath(directProvider));
+  }
 
   // Check if this is a variant
   const variants = listVariants();

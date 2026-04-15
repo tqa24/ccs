@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { queryClient } from '@/lib/query-client';
@@ -129,6 +129,10 @@ export default function App() {
                     />
                     <Route
                       path="/cursor"
+                      element={<Navigate to="/cliproxy?provider=cursor" replace />}
+                    />
+                    <Route
+                      path="/legacy/cursor"
                       element={
                         <Suspense fallback={<PageLoader />}>
                           <CursorPage />

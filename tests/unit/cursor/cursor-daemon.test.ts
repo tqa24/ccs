@@ -321,8 +321,10 @@ describe('handleCursorCommand', () => {
 
       expect(exitCode).toBe(0);
       expect(errors).toHaveLength(0);
-      expect(logs.some((line) => line.includes('Cursor IDE Integration'))).toBe(true);
-      expect(logs.some((line) => line.includes('Usage: ccs cursor <subcommand>'))).toBe(true);
+      expect(logs.some((line) => line.includes('Legacy Cursor Compatibility'))).toBe(true);
+      expect(logs.some((line) => line.includes('Usage: ccs legacy cursor <subcommand>'))).toBe(
+        true
+      );
     } finally {
       console.log = originalLog;
       console.error = originalError;
@@ -423,7 +425,9 @@ describe('renderCursorStatus', () => {
         true
       );
       expect(logs.some((line) => line.includes('Next steps:'))).toBe(true);
-      expect(logs.some((line) => line.includes('  - Help:        ccs cursor help'))).toBe(true);
+      expect(logs.some((line) => line.includes('  - Help:        ccs legacy cursor help'))).toBe(
+        true
+      );
     } finally {
       console.log = originalLog;
     }
@@ -471,7 +475,7 @@ describe('renderCursorStatus', () => {
 });
 
 describe('renderCursorHelp', () => {
-  it('shows bare ccs cursor as the runtime entrypoint', () => {
+  it('marks the legacy Cursor surface deprecated while keeping compatibility guidance', () => {
     const originalLog = console.log;
     const logs: string[] = [];
 
@@ -483,12 +487,23 @@ describe('renderCursorHelp', () => {
       const exitCode = renderCursorHelp();
 
       expect(exitCode).toBe(0);
-      expect(logs.some((line) => line.includes('Usage: ccs cursor <subcommand>'))).toBe(true);
+      expect(logs.some((line) => line.includes('Usage: ccs legacy cursor <subcommand>'))).toBe(
+        true
+      );
+      expect(logs.some((line) => line.includes('Legacy Cursor Compatibility'))).toBe(true);
+      expect(
+        logs.some((line) =>
+          line.includes('Deprecated: `ccs cursor` now belongs to the CLIProxy Cursor provider.')
+        )
+      ).toBe(true);
       expect(logs.some((line) => line.includes('probe     Run a live authenticated runtime probe'))).toBe(
         true
       );
       expect(
-        logs.some((line) => line.includes('ccs cursor [claude args]'))
+        logs.some((line) => line.includes('ccs cursor --auth'))
+      ).toBe(true);
+      expect(
+        logs.some((line) => line.includes('ccs legacy cursor [claude args]'))
       ).toBe(true);
     } finally {
       console.log = originalLog;

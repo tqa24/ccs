@@ -82,6 +82,21 @@ describe('image-analysis-backend-resolver', () => {
     expect(status.resolutionSource).toBe('profile-backend');
   });
 
+  it('treats cliproxy cursor as a provider-backed profile rather than a legacy bridge alias', () => {
+    const status = resolveImageAnalysisStatus(
+      {
+        profileName: 'cursor',
+        profileType: 'cliproxy',
+        cliproxyProvider: 'cursor',
+      },
+      DEFAULT_IMAGE_ANALYSIS_CONFIG
+    );
+
+    expect(status.backendId).toBe('cursor');
+    expect(status.resolutionSource).toBe('cliproxy-provider');
+    expect(status.reason).toContain('no image-analysis model configured');
+  });
+
   it('uses the fallback backend for an unmapped third-party settings profile', () => {
     const status = resolveImageAnalysisStatus(
       {

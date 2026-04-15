@@ -15,6 +15,7 @@ import {
   isAnthropicModelEnvKey,
 } from '@/lib/extended-context-utils';
 import { supportsExtendedContext } from '@/lib/model-catalogs';
+import { isValidProvider } from '@/lib/provider-config';
 
 /** Required env vars for CLIProxy providers (informational only - runtime fills defaults) */
 const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
@@ -39,12 +40,18 @@ export function useProviderEditor(
     queryFn: async () => {
       const res = await fetch(`/api/settings/${provider}/raw`);
       if (!res.ok) {
+        const fallbackPath =
+          provider === 'cursor'
+            ? `~/.ccs/cliproxy/providers/${provider}.settings.json`
+            : isValidProvider(provider)
+              ? `~/.ccs/${provider}.settings.json`
+              : `~/.ccs/profiles/${provider}/settings.json`;
         // Return empty settings for unconfigured providers
         return {
           profile: provider,
           settings: { env: {} },
           mtime: Date.now(),
-          path: `~/.ccs/profiles/${provider}/settings.json`,
+          path: fallbackPath,
         };
       }
       return res.json();

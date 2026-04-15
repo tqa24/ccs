@@ -25,6 +25,17 @@ interface ProviderEditorHeaderProps {
   onSave: () => void;
 }
 
+function formatSettingsPathBadgeLabel(pathValue: string): string {
+  const normalized = pathValue.replace(/\\/g, '/');
+  const cliproxySegment = '/cliproxy/providers/';
+  const cliproxyIndex = normalized.lastIndexOf(cliproxySegment);
+  if (cliproxyIndex !== -1) {
+    return normalized.slice(cliproxyIndex + 1);
+  }
+
+  return normalized.replace(/^.*\//, '');
+}
+
 export function ProviderEditorHeader({
   displayName,
   logoProvider,
@@ -63,7 +74,7 @@ export function ProviderEditorHeader({
             )}
             {!isRemoteMode && data?.path && (
               <Badge variant="outline" className="text-xs">
-                {data.path.replace(/^.*[\\/]/, '')}
+                {formatSettingsPathBadgeLabel(data.path)}
               </Badge>
             )}
           </div>

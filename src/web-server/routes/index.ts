@@ -104,6 +104,7 @@ apiRoutes.use('/copilot', copilotRoutes);
 
 // ==================== Cursor ====================
 apiRoutes.use('/cursor', cursorRoutes);
+apiRoutes.use('/legacy/cursor', cursorRoutes);
 
 // ==================== Droid ====================
 apiRoutes.use('/droid', droidRoutes);

@@ -87,17 +87,36 @@ describe('npm CLI', () => {
     });
 
     it('routes cursor probe through the cursor command handler', function() {
+      let output = '';
       try {
-        execSync(`bun "${srcCcsPath}" cursor probe`, {
+        output = execSync(`bun "${srcCcsPath}" cursor probe`, {
+          encoding: 'utf8',
           stdio: 'pipe',
           timeout: 3000,
           env: { ...process.env, CCS_HOME: testCcsHome }
         });
       } catch (e) {
-        const output = e.stderr?.toString() || e.stdout?.toString() || '';
-        assert(!output.includes("Profile 'cursor' not found"), 'Should not fall through to profile lookup');
-        assert(output.includes('Cursor Live Probe'), 'Should render the cursor probe command output');
+        output = e.stderr?.toString() || e.stdout?.toString() || '';
       }
+      assert(!output.includes("Profile 'cursor' not found"), 'Should not fall through to profile lookup');
+      assert(
+        output.includes('Cursor Live Probe') || output.includes('legacy cursor probe'),
+        'Should route through the legacy cursor compatibility handler'
+      );
+    });
+
+    it('routes gitlab --help to provider shortcut help instead of starting auth', function() {
+      const output = execSync(`bun "${srcCcsPath}" gitlab --help`, {
+        encoding: 'utf8',
+        timeout: 3000,
+        env: { ...process.env, CCS_HOME: testCcsHome }
+      });
+
+      assert(output.includes('CCS gitlab Shortcut Help'), 'Should render provider shortcut help');
+      assert(output.includes('--gitlab-token-login'), 'Should document canonical GitLab PAT flag');
+      assert(output.includes('--token-login'), 'Should document legacy GitLab PAT alias');
+      assert(output.includes('--gitlab-url <url>'), 'Should document self-hosted GitLab URL flag');
+      assert(!output.includes('Starting GitLab Duo OAuth'), 'Should not start OAuth when help is requested');
     });
   });
 

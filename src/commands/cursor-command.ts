@@ -26,6 +26,18 @@ import {
 } from './cursor-command-display';
 import { ok, fail, info } from '../utils/ui';
 
+const LEGACY_CURSOR_COMMAND = 'ccs legacy cursor';
+const CLIPROXY_CURSOR_COMMAND = 'ccs cursor';
+
+function printLegacyCursorDeprecationNotice(): void {
+  console.log(
+    info(
+      `Deprecated compatibility path. \`${CLIPROXY_CURSOR_COMMAND}\` now belongs to the CLIProxy Cursor provider; use \`${LEGACY_CURSOR_COMMAND}\` for the old bridge.`
+    )
+  );
+  console.log('');
+}
+
 /**
  * Handle cursor subcommand.
  */
@@ -114,6 +126,7 @@ function printAutoDetectFailure(result: {
  * Handle auth subcommand.
  */
 async function handleAuth(args: string[]): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   const manual = args.includes('--manual');
 
   if (manual) {
@@ -125,7 +138,7 @@ async function handleAuth(args: string[]): Promise<number> {
     if (!accessToken || !machineId) {
       console.error(
         fail(
-          'Manual auth requires both token and machine ID.\n\nExample:\n  ccs cursor auth --manual --token <token> --machine-id <machine-id>'
+          `Manual auth requires both token and machine ID.\n\nExample:\n  ${LEGACY_CURSOR_COMMAND} auth --manual --token <token> --machine-id <machine-id>`
         )
       );
       return 1;
@@ -146,8 +159,9 @@ async function handleAuth(args: string[]): Promise<number> {
     console.log(ok('Cursor credentials imported (manual mode)'));
     console.log('');
     console.log('Next steps:');
-    console.log('  1. Enable integration: ccs cursor enable');
-    console.log('  2. Start daemon:       ccs cursor start');
+    console.log(`  0. Preferred auth:     ${CLIPROXY_CURSOR_COMMAND} --auth`);
+    console.log(`  1. Enable integration: ${LEGACY_CURSOR_COMMAND} enable`);
+    console.log(`  2. Start daemon:       ${LEGACY_CURSOR_COMMAND} start`);
     return 0;
   }
 
@@ -168,9 +182,10 @@ async function handleAuth(args: string[]): Promise<number> {
     console.log(ok('Auto-detected Cursor credentials'));
     console.log('');
     console.log('Next steps:');
-    console.log('  1. Enable integration: ccs cursor enable');
-    console.log('  2. Start daemon:       ccs cursor start');
-    console.log('  3. Check status:       ccs cursor status');
+    console.log(`  0. Preferred auth:     ${CLIPROXY_CURSOR_COMMAND} --auth`);
+    console.log(`  1. Enable integration: ${LEGACY_CURSOR_COMMAND} enable`);
+    console.log(`  2. Start daemon:       ${LEGACY_CURSOR_COMMAND} start`);
+    console.log(`  3. Check status:       ${LEGACY_CURSOR_COMMAND} status`);
     return 0;
   }
 
@@ -178,13 +193,14 @@ async function handleAuth(args: string[]): Promise<number> {
   printAutoDetectFailure(autoResult);
   console.log('');
   console.log('Manual fallback:');
-  console.log('  ccs cursor auth --manual --token <token> --machine-id <machine-id>');
+  console.log(`  ${LEGACY_CURSOR_COMMAND} auth --manual --token <token> --machine-id <machine-id>`);
   console.log('');
 
   return 1;
 }
 
 async function handleStatus(): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   const cursorConfig = getCursorConfig();
   const authStatus = checkAuthStatus();
   const daemonStatus = await getDaemonStatus(cursorConfig.port);
@@ -193,6 +209,7 @@ async function handleStatus(): Promise<number> {
 }
 
 async function handleProbe(): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   const cursorConfig = getCursorConfig();
   const result = await probeCursorRuntime(cursorConfig);
   renderCursorProbe(result);
@@ -200,6 +217,7 @@ async function handleProbe(): Promise<number> {
 }
 
 async function handleModels(): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   const cursorConfig = getCursorConfig();
   const models = await getAvailableModels(cursorConfig.port);
   const defaultModel = getDefaultModel();
@@ -211,20 +229,21 @@ async function handleModels(): Promise<number> {
  * Handle start subcommand.
  */
 async function handleStart(): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   const cursorConfig = getCursorConfig();
 
   if (!cursorConfig.enabled) {
-    console.error(fail('Cursor integration is disabled. Run: ccs cursor enable'));
+    console.error(fail(`Cursor integration is disabled. Run: ${LEGACY_CURSOR_COMMAND} enable`));
     return 1;
   }
 
   const authStatus = checkAuthStatus();
   if (!authStatus.authenticated) {
-    console.error(fail('Not authenticated. Run: ccs cursor auth'));
+    console.error(fail(`Not authenticated. Run: ${LEGACY_CURSOR_COMMAND} auth`));
     return 1;
   }
   if (authStatus.expired) {
-    console.error(fail('Credentials expired. Run: ccs cursor auth'));
+    console.error(fail(`Credentials expired. Run: ${LEGACY_CURSOR_COMMAND} auth`));
     return 1;
   }
 
@@ -248,6 +267,7 @@ async function handleStart(): Promise<number> {
  * Handle stop subcommand.
  */
 async function handleStop(): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   console.log(info('Stopping cursor daemon...'));
 
   const result = await stopDaemon();
@@ -265,6 +285,7 @@ async function handleStop(): Promise<number> {
  * Handle enable subcommand.
  */
 async function handleEnable(): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   mutateUnifiedConfig((config) => {
     if (!config.cursor) {
       config.cursor = { ...DEFAULT_CURSOR_CONFIG };
@@ -276,9 +297,10 @@ async function handleEnable(): Promise<number> {
   console.log(ok('Cursor integration enabled'));
   console.log('');
   console.log('Next steps:');
-  console.log('  1. Authenticate: ccs cursor auth');
-  console.log('  2. Start daemon: ccs cursor start');
-  console.log('  3. Check status: ccs cursor status');
+  console.log(`  0. Preferred auth: ${CLIPROXY_CURSOR_COMMAND} --auth`);
+  console.log(`  1. Authenticate: ${LEGACY_CURSOR_COMMAND} auth`);
+  console.log(`  2. Start daemon: ${LEGACY_CURSOR_COMMAND} start`);
+  console.log(`  3. Check status: ${LEGACY_CURSOR_COMMAND} status`);
 
   return 0;
 }
@@ -287,6 +309,7 @@ async function handleEnable(): Promise<number> {
  * Handle disable subcommand.
  */
 async function handleDisable(): Promise<number> {
+  printLegacyCursorDeprecationNotice();
   mutateUnifiedConfig((config) => {
     if (config.cursor) {
       config.cursor.enabled = false;
