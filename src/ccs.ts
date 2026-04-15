@@ -150,10 +150,7 @@ function detectProfile(args: string[]): DetectedProfile {
 }
 
 function shouldUseCursorCliproxyShortcut(args: string[]): boolean {
-  return (
-    args[0] === 'cursor' &&
-    args.some((arg, index) => index > 0 && CURSOR_CLIPROXY_SHORTCUT_FLAGS.has(arg))
-  );
+  return args[0] === 'cursor' && CURSOR_CLIPROXY_SHORTCUT_FLAGS.has(args[1] || '');
 }
 
 function resolveRuntimeReasoningFlags(
