@@ -33,6 +33,7 @@ import {
 } from '../../cliproxy/proxy-target-resolver';
 import { fetchRemoteAuthStatus } from '../../cliproxy/remote-auth-fetcher';
 import { ensureManagedModelPrefixes } from '../../cliproxy/managed-model-prefixes';
+import { invalidateQuotaCache } from '../../cliproxy/quota-response-cache';
 import { loadOrCreateUnifiedConfig } from '../../config/unified-config-loader';
 import { tryKiroImport } from '../../cliproxy/auth/kiro-import';
 import {
@@ -188,6 +189,13 @@ function shouldKeepWaitingForLocalToken(
   return (
     upstreamCompletedAt !== null && now - upstreamCompletedAt < POLLED_AUTH_LOCAL_TOKEN_GRACE_MS
   );
+}
+
+function invalidateQuotaForRegisteredAccount(account: {
+  provider: CLIProxyProvider;
+  id: string;
+}): void {
+  invalidateQuotaCache(account.provider, account.id);
 }
 
 function parseKiroMethod(raw: unknown): { method: KiroAuthMethod; invalid: boolean } {
@@ -1022,6 +1030,7 @@ router.get('/:provider/status', async (req: Request, res: Response): Promise<voi
       } catch {
         // Keep manual callback success path non-fatal when prefix repair cannot run.
       }
+      invalidateQuotaForRegisteredAccount(account);
       res.json({
         status: 'ok',
         account: {
@@ -1173,6 +1182,7 @@ router.post('/:provider/submit-callback', async (req: Request, res: Response): P
           // Keep manual callback success path non-fatal when prefix repair cannot run.
         }
       }
+      invalidateQuotaForRegisteredAccount(account);
 
       res.json({
         success: true,
@@ -1204,6 +1214,8 @@ router.post('/:provider/submit-callback', async (req: Request, res: Response): P
       });
       return;
     }
+
+    invalidateQuotaForRegisteredAccount(account);
 
     res.json({
       success: true,
