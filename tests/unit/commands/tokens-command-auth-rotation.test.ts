@@ -2,64 +2,125 @@ import { describe, expect, it } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { handleTokensCommand } from '../../../src/commands/tokens-command';
-import { getConfigYamlPath, loadUnifiedConfig } from '../../../src/config/unified-config-loader';
-import { runWithScopedCcsHome, setGlobalConfigDir } from '../../../src/utils/config-manager';
+import { spawnSync } from 'child_process';
+import { pathToFileURL } from 'url';
+import { setGlobalConfigDir } from '../../../src/utils/config-manager';
 
-async function withScopedTokensHome<T>(run: (tempHome: string) => Promise<T>): Promise<T> {
+const REPO_ROOT = path.resolve(import.meta.dir, '../../..');
+const TOKENS_COMMAND_URL = pathToFileURL(
+  path.join(REPO_ROOT, 'src/commands/tokens-command.ts')
+).href;
+const UNIFIED_CONFIG_LOADER_URL = pathToFileURL(
+  path.join(REPO_ROOT, 'src/config/unified-config-loader.ts')
+).href;
+
+function withScopedTokensHome<T>(run: (tempHome: string) => T): T {
   const tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-tokens-rotation-'));
   setGlobalConfigDir(undefined);
 
   try {
-    return await runWithScopedCcsHome(tempHome, async () => await run(tempHome));
+    return run(tempHome);
   } finally {
     setGlobalConfigDir(undefined);
     fs.rmSync(tempHome, { recursive: true, force: true });
   }
 }
 
+function runTokensCommandInChild(tempHome: string, args: string[]) {
+  const script = `
+    import { handleTokensCommand } from ${JSON.stringify(TOKENS_COMMAND_URL)};
+    import { loadUnifiedConfig } from ${JSON.stringify(UNIFIED_CONFIG_LOADER_URL)};
+
+    const exitCode = await handleTokensCommand(${JSON.stringify(args)});
+    const config = loadUnifiedConfig();
+    const managementSecret = config?.cliproxy.auth?.management_secret ?? null;
+
+    console.log(JSON.stringify({
+      exitCode,
+      apiKey: config?.cliproxy.auth?.api_key ?? null,
+      managementSecretLength: typeof managementSecret === 'string' ? managementSecret.length : 0,
+    }));
+  `;
+
+  const scriptPath = path.join(tempHome, `tokens-child-${Date.now()}.mjs`);
+  fs.writeFileSync(scriptPath, script, 'utf8');
+
+  const result = spawnSync('/bin/bash', ['-lc', `bun ${JSON.stringify(scriptPath)}`], {
+    cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      CCS_HOME: tempHome,
+      CCS_DIR: '',
+      NO_COLOR: '1',
+    },
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  if (result.status !== 0) {
+    throw new Error(
+      `child tokens command failed: ${JSON.stringify({
+        command: `bun ${scriptPath}`,
+        status: result.status,
+        signal: result.signal,
+        error: result.error?.message ?? null,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      })}`
+    );
+  }
+
+  const lines = result.stdout
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const payload = JSON.parse(lines.at(-1) || '{}') as {
+    exitCode: number;
+    apiKey: string | null;
+    managementSecretLength: number;
+  };
+
+  return { payload, stdout: result.stdout, stderr: result.stderr };
+}
+
 describe('tokens command auth rotation', () => {
-  it('applies api-key and regenerated secret in a single invocation', async () => {
-    await withScopedTokensHome(async () => {
-      const exitCode = await handleTokensCommand([
+  it('applies api-key and regenerated secret in a single invocation', () => {
+    withScopedTokensHome((tempHome) => {
+      const { payload } = runTokensCommandInChild(tempHome, [
         '--api-key',
         'ccs-custom-key-123',
         '--regenerate-secret',
       ]);
-
-      const config = loadUnifiedConfig();
-      const managementSecret = config?.cliproxy.auth?.management_secret;
-      const configYamlPath = getConfigYamlPath();
+      const configYamlPath = path.join(tempHome, '.ccs', 'config.yaml');
 
       const diagnostics = {
-        exitCode,
+        exitCode: payload.exitCode,
         configYamlPath,
         configExists: fs.existsSync(configYamlPath),
-        apiKey: config?.cliproxy.auth?.api_key ?? null,
-        managementSecretLength: (managementSecret ?? '').length,
+        apiKey: payload.apiKey,
+        managementSecretLength: payload.managementSecretLength,
       };
 
       if (
-        exitCode !== 0 ||
-        config?.cliproxy.auth?.api_key !== 'ccs-custom-key-123' ||
-        typeof managementSecret !== 'string' ||
-        (managementSecret ?? '').length <= 20
+        payload.exitCode !== 0 ||
+        payload.apiKey !== 'ccs-custom-key-123' ||
+        payload.managementSecretLength <= 20
       ) {
         throw new Error(`tokens rotation diagnostics: ${JSON.stringify(diagnostics)}`);
       }
     });
   });
 
-  it('rejects conflicting manual and generated secret flags', async () => {
-    await withScopedTokensHome(async () => {
-      const exitCode = await handleTokensCommand([
+  it('rejects conflicting manual and generated secret flags', () => {
+    withScopedTokensHome((tempHome) => {
+      const { payload } = runTokensCommandInChild(tempHome, [
         '--secret',
         'manual-secret',
         '--regenerate-secret',
       ]);
 
-      expect(exitCode).toBe(1);
-      expect(fs.existsSync(getConfigYamlPath())).toBe(false);
+      expect(payload.exitCode).toBe(1);
+      expect(fs.existsSync(path.join(tempHome, '.ccs', 'config.yaml'))).toBe(false);
     });
   });
 });
