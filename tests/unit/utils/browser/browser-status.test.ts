@@ -72,6 +72,7 @@ describe('browser status', () => {
         source: 'config',
         effectiveUserDataDir: join(tempHome, '.ccs', 'browser', 'chrome-user-data'),
         devtoolsPort: 9222,
+        evalMode: 'readonly',
         managedMcpServerName: 'ccs-browser',
       });
       expect(status.claude.launchCommands.linux).toContain('--remote-debugging-port=9222');
@@ -79,6 +80,7 @@ describe('browser status', () => {
         enabled: true,
         state: 'enabled',
         serverName: 'ccs_browser',
+        evalMode: 'readonly',
         supportsConfigOverrides: true,
       });
     } finally {
@@ -93,9 +95,11 @@ describe('browser status', () => {
           enabled: true,
           user_data_dir: '/config-browser',
           devtools_port: 9333,
+          eval_mode: 'readwrite',
         },
         codex: {
           enabled: true,
+          eval_mode: 'disabled',
         },
       };
     });
@@ -108,6 +112,7 @@ describe('browser status', () => {
       CCS_BROWSER_DEVTOOLS_PORT: '9444',
       CCS_BROWSER_DEVTOOLS_HTTP_URL: 'http://127.0.0.1:9444',
       CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/test',
+      CCS_BROWSER_EVAL_MODE: 'readwrite',
     });
     const codexSpy = spyOn(codexDetector, 'getCodexBinaryInfo').mockReturnValue({
       path: '/usr/local/bin/codex',
@@ -125,8 +130,11 @@ describe('browser status', () => {
         source: 'CCS_BROWSER_USER_DATA_DIR',
         effectiveUserDataDir: '/env-browser',
         devtoolsPort: 9444,
+        evalMode: 'readwrite',
       });
       expect(status.claude.runtimeEnv?.CCS_BROWSER_DEVTOOLS_PORT).toBe('9444');
+      expect(status.claude.runtimeEnv?.CCS_BROWSER_EVAL_MODE).toBe('readwrite');
+      expect(status.codex.evalMode).toBe('disabled');
     } finally {
       runtimeSpy.mockRestore();
       codexSpy.mockRestore();
@@ -140,9 +148,11 @@ describe('browser status', () => {
           enabled: true,
           user_data_dir: '/tmp/browser-profile',
           devtools_port: 9222,
+          eval_mode: 'readonly',
         },
         codex: {
           enabled: true,
+          eval_mode: 'readonly',
         },
       };
     });
@@ -178,6 +188,7 @@ describe('browser status', () => {
       CCS_BROWSER_DEVTOOLS_PORT: '50123',
       CCS_BROWSER_DEVTOOLS_HTTP_URL: 'http://127.0.0.1:50123',
       CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/legacy',
+      CCS_BROWSER_EVAL_MODE: 'readonly',
     });
     const codexSpy = spyOn(codexDetector, 'getCodexBinaryInfo').mockReturnValue({
       path: '/usr/local/bin/codex',
@@ -192,8 +203,10 @@ describe('browser status', () => {
       expect(runtimeSpy.mock.calls[0]?.[0]).toEqual({
         profileDir: '/legacy-browser',
         devtoolsPort: undefined,
+        evalMode: 'readonly',
       });
       expect(status.claude.runtimeEnv?.CCS_BROWSER_DEVTOOLS_PORT).toBe('50123');
+      expect(status.claude.runtimeEnv?.CCS_BROWSER_EVAL_MODE).toBe('readonly');
     } finally {
       runtimeSpy.mockRestore();
       codexSpy.mockRestore();
@@ -207,9 +220,11 @@ describe('browser status', () => {
           enabled: true,
           user_data_dir: '/tmp/config-browser',
           devtools_port: 9222,
+          eval_mode: 'disabled',
         },
         codex: {
           enabled: true,
+          eval_mode: 'readwrite',
         },
       };
     });
@@ -220,6 +235,7 @@ describe('browser status', () => {
       CCS_BROWSER_DEVTOOLS_PORT: '9222',
       CCS_BROWSER_DEVTOOLS_HTTP_URL: 'http://127.0.0.1:9222',
       CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/config',
+      CCS_BROWSER_EVAL_MODE: 'disabled',
     });
     const codexSpy = spyOn(codexDetector, 'getCodexBinaryInfo').mockReturnValue({
       path: '/usr/local/bin/codex',
@@ -234,6 +250,7 @@ describe('browser status', () => {
       expect(runtimeSpy.mock.calls[0]?.[0]).toEqual({
         profileDir: '/tmp/config-browser',
         devtoolsPort: '9222',
+        evalMode: 'disabled',
       });
     } finally {
       runtimeSpy.mockRestore();

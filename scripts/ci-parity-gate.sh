@@ -34,7 +34,9 @@ echo "[i] Pre-push CI parity gate"
 echo "    branch: $CURRENT_BRANCH"
 echo "    base:   $BASE_BRANCH"
 
-git fetch origin "$BASE_BRANCH" --quiet || true
+if git ls-remote --exit-code --heads origin "$BASE_BRANCH" >/dev/null 2>&1; then
+  git fetch origin "$BASE_BRANCH" --quiet
+fi
 if git show-ref --verify --quiet "refs/remotes/origin/$BASE_BRANCH"; then
   if ! git merge-base --is-ancestor "origin/$BASE_BRANCH" HEAD; then
     echo "[X] Branch '$CURRENT_BRANCH' is behind origin/$BASE_BRANCH."

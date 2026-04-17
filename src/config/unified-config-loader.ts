@@ -36,6 +36,7 @@ import type {
   OfficialChannelId,
   DashboardAuthConfig,
   BrowserConfig,
+  BrowserEvalMode,
   ImageAnalysisConfig,
   LoggingConfig,
   CursorConfig,
@@ -70,15 +71,25 @@ function normalizeBrowserDevtoolsPort(value: number | undefined): number {
   return port;
 }
 
+function normalizeBrowserEvalMode(value: string | undefined): BrowserEvalMode {
+  if (value === 'disabled' || value === 'readonly' || value === 'readwrite') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_CONFIG.claude.eval_mode;
+}
+
 function canonicalizeBrowserConfig(config?: BrowserConfig): BrowserConfig {
   return {
     claude: {
       enabled: config?.claude?.enabled ?? DEFAULT_BROWSER_CONFIG.claude.enabled,
       user_data_dir: config?.claude?.user_data_dir?.trim() || getRecommendedBrowserUserDataDir(),
       devtools_port: normalizeBrowserDevtoolsPort(config?.claude?.devtools_port),
+      eval_mode: normalizeBrowserEvalMode(config?.claude?.eval_mode),
     },
     codex: {
       enabled: config?.codex?.enabled ?? DEFAULT_BROWSER_CONFIG.codex.enabled,
+      eval_mode: normalizeBrowserEvalMode(config?.codex?.eval_mode),
     },
   };
 }
@@ -955,6 +966,7 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push('#');
     lines.push('# claude.user_data_dir should point at the Chrome user-data directory for the');
     lines.push('# dedicated attach session. claude.devtools_port is the expected debugging port.');
+    lines.push('# eval_mode controls browser_eval access: disabled | readonly | readwrite.');
     lines.push('# Configure via: Settings > Browser or `ccs browser ...`.');
     lines.push('# ----------------------------------------------------------------------------');
     lines.push(

@@ -25,6 +25,7 @@ export interface ClaudeBrowserStatus {
   effectiveUserDataDir: string;
   recommendedUserDataDir: string;
   devtoolsPort: number;
+  evalMode: 'disabled' | 'readonly' | 'readwrite';
   managedMcpServerName: string;
   managedMcpServerPath: string;
   launchCommands: BrowserLaunchCommands;
@@ -38,6 +39,7 @@ export interface CodexBrowserStatus {
   detail: string;
   nextStep: string;
   serverName: string;
+  evalMode: 'disabled' | 'readonly' | 'readwrite';
   supportsConfigOverrides: boolean;
   binaryPath: string | null;
   version?: string;
@@ -68,6 +70,7 @@ async function buildClaudeBrowserStatus(
     effectiveUserDataDir: effective.userDataDir,
     recommendedUserDataDir: getRecommendedBrowserUserDataDir(),
     devtoolsPort: effective.devtoolsPort,
+    evalMode: effective.evalMode,
     managedMcpServerName: getBrowserMcpServerName(),
     managedMcpServerPath: getBrowserMcpServerPath(),
     launchCommands,
@@ -89,6 +92,7 @@ async function buildClaudeBrowserStatus(
     const runtimeEnv = await resolveBrowserRuntimeEnv({
       profileDir: effective.userDataDir,
       devtoolsPort: effective.hasExplicitDevtoolsPort ? String(effective.devtoolsPort) : undefined,
+      evalMode: effective.evalMode,
     });
 
     return {
@@ -142,6 +146,7 @@ function buildCodexBrowserStatus(browserConfig = getBrowserConfig()): CodexBrows
       nextStep:
         'Enable Codex Browser Tools in Settings > Browser to restore the managed Codex browser path.',
       serverName: 'ccs_browser',
+      evalMode: browserConfig.codex.eval_mode,
       supportsConfigOverrides: false,
       binaryPath: null,
     };
@@ -159,6 +164,7 @@ function buildCodexBrowserStatus(browserConfig = getBrowserConfig()): CodexBrows
         : 'No Codex binary was detected, so CCS cannot confirm managed browser override support.',
       nextStep: 'Install or upgrade Codex, then rerun browser status/doctor.',
       serverName: 'ccs_browser',
+      evalMode: browserConfig.codex.eval_mode,
       supportsConfigOverrides,
       binaryPath: binaryInfo?.path ?? null,
       version: binaryInfo?.version,
@@ -172,6 +178,7 @@ function buildCodexBrowserStatus(browserConfig = getBrowserConfig()): CodexBrows
     detail: 'CCS can inject the managed Playwright MCP overrides into Codex-target launches.',
     nextStep: 'Use a Codex-target CCS launch to access browser tools.',
     serverName: 'ccs_browser',
+    evalMode: browserConfig.codex.eval_mode,
     supportsConfigOverrides,
     binaryPath: binaryInfo.path,
     version: binaryInfo.version,

@@ -12,14 +12,20 @@ interface BrowserRouteBody {
     enabled?: boolean;
     userDataDir?: string;
     devtoolsPort?: number;
+    evalMode?: 'disabled' | 'readonly' | 'readwrite';
   };
   codex?: {
     enabled?: boolean;
+    evalMode?: 'disabled' | 'readonly' | 'readwrite';
   };
 }
 
 function isValidDevtoolsPort(value: number): boolean {
   return Number.isInteger(value) && value >= 1 && value <= 65535;
+}
+
+function isValidEvalMode(value: string): value is 'disabled' | 'readonly' | 'readwrite' {
+  return value === 'disabled' || value === 'readonly' || value === 'readwrite';
 }
 
 router.use((req: Request, res: Response, next) => {
@@ -86,8 +92,20 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
     });
     return;
   }
+  if (claude?.evalMode !== undefined && !isValidEvalMode(claude.evalMode)) {
+    res.status(400).json({
+      error: 'Invalid value for claude.evalMode. Must be one of: disabled, readonly, readwrite.',
+    });
+    return;
+  }
   if (codex?.enabled !== undefined && typeof codex.enabled !== 'boolean') {
     res.status(400).json({ error: 'Invalid value for codex.enabled. Must be a boolean.' });
+    return;
+  }
+  if (codex?.evalMode !== undefined && !isValidEvalMode(codex.evalMode)) {
+    res.status(400).json({
+      error: 'Invalid value for codex.evalMode. Must be one of: disabled, readonly, readwrite.',
+    });
     return;
   }
 
@@ -101,9 +119,11 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
           enabled: claude?.enabled ?? current.claude.enabled,
           user_data_dir: nextClaudeUserDataDir,
           devtools_port: claude?.devtoolsPort ?? current.claude.devtools_port,
+          eval_mode: claude?.evalMode ?? current.claude.eval_mode,
         },
         codex: {
           enabled: codex?.enabled ?? current.codex.enabled,
+          eval_mode: codex?.evalMode ?? current.codex.eval_mode,
         },
       };
     });
@@ -128,9 +148,11 @@ function toBrowserRouteConfig(config: ReturnType<typeof getBrowserConfig>) {
       enabled: config.claude.enabled,
       userDataDir: config.claude.user_data_dir,
       devtoolsPort: config.claude.devtools_port,
+      evalMode: config.claude.eval_mode,
     },
     codex: {
       enabled: config.codex.enabled,
+      evalMode: config.codex.eval_mode,
     },
   };
 }

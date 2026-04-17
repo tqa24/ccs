@@ -816,6 +816,8 @@ export const DEFAULT_DASHBOARD_AUTH_CONFIG: DashboardAuthConfig = {
  * Browser automation configuration.
  * Controls Claude browser attach and Codex browser tooling.
  */
+export type BrowserEvalMode = 'disabled' | 'readonly' | 'readwrite';
+
 export interface BrowserClaudeConfig {
   /** Enable Claude browser attach (default: false) */
   enabled: boolean;
@@ -823,11 +825,15 @@ export interface BrowserClaudeConfig {
   user_data_dir: string;
   /** DevTools port used for attach mode (default: 9222) */
   devtools_port: number;
+  /** Eval access mode for browser_eval (default: readonly) */
+  eval_mode: BrowserEvalMode;
 }
 
 export interface BrowserCodexConfig {
   /** Enable Codex browser tooling injection (default: true) */
   enabled: boolean;
+  /** Stored for dashboard/config parity; runtime enforcement is Claude-only in Phase 1 */
+  eval_mode: BrowserEvalMode;
 }
 
 export interface BrowserConfig {
@@ -840,9 +846,11 @@ export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
     enabled: false,
     user_data_dir: '',
     devtools_port: 9222,
+    eval_mode: 'readonly',
   },
   codex: {
     enabled: true,
+    eval_mode: 'readonly',
   },
 };
 

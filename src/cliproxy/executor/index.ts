@@ -1164,6 +1164,7 @@ export async function execClaudeWithCLIProxy(
           devtoolsPort: browserAttachConfig.hasExplicitDevtoolsPort
             ? String(browserAttachConfig.devtoolsPort)
             : undefined,
+          evalMode: browserAttachConfig.evalMode,
         })),
       }
     : undefined;

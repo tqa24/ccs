@@ -8,6 +8,76 @@ import { join } from 'node:path';
 
 type JsonRpcMessage = Record<string, unknown>;
 
+type MockRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+};
+
+type MockQueryState = {
+  exists?: boolean;
+  connected?: boolean;
+  innerText?: string;
+  textContent?: string;
+  rect?: MockRect;
+  display?: string;
+  visibility?: string;
+  opacity?: string;
+  href?: string;
+  onclick?: string;
+  error?: string;
+};
+
+type MockQueryPlan = MockQueryState | MockQueryState[];
+
+type MockClickState = {
+  error?: string;
+  disabled?: boolean;
+  detached?: boolean;
+  hidden?: boolean;
+  requireMouseSequence?: boolean;
+  requireNativeClick?: boolean;
+  forbidSyntheticClickEvent?: boolean;
+  cancelMouseDown?: boolean;
+  cancelMouseUp?: boolean;
+  detachAfterMouseDown?: boolean;
+  mouseSequenceError?: string;
+  label?: string;
+};
+
+type MockClickPlan = MockClickState | MockClickState[];
+
+type MockHoverState = {
+  error?: string;
+  detached?: boolean;
+  hidden?: boolean;
+  zeroSized?: boolean;
+  requireCdpMouseMove?: boolean;
+  lastMouseMove?: {
+    x: number;
+    y: number;
+  };
+};
+
+type MockWaitPlan = {
+  selectorSnapshots?: Record<string, MockQueryPlan[]>;
+  pageTextSequence?: string[];
+};
+
+type MockEvalPlan = Record<
+  string,
+  {
+    result?: unknown;
+    error?: string;
+    nonSerializable?: boolean;
+  }
+>;
+
 type MockPageState = {
   id: string;
   title: string;
@@ -16,25 +86,30 @@ type MockPageState = {
   visibleText?: string;
   domSnapshot?: string;
   navigate?: Record<string, { finalUrl: string; readyStates?: string[]; errorText?: string }>;
-  click?: Record<
-    string,
-    {
-      error?: string;
-      disabled?: boolean;
-      detached?: boolean;
-      hidden?: boolean;
-      requireMouseSequence?: boolean;
-      requireNativeClick?: boolean;
-      forbidSyntheticClickEvent?: boolean;
-      cancelMouseDown?: boolean;
-      cancelMouseUp?: boolean;
-      detachAfterMouseDown?: boolean;
-      mouseSequenceError?: string;
-    }
-  >;
+  click?: Record<string, MockClickPlan>;
+  hover?: Record<string, MockHoverState>;
+  query?: Record<string, MockQueryPlan>;
+  wait?: MockWaitPlan;
+  eval?: MockEvalPlan;
   screenshot?: {
+    expectedClip?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      scale: number;
+    };
+    requireScrolledMeasurement?: boolean;
+    scrolledSelectors?: string[];
     data?: string;
     lastCaptureBeyondViewport?: boolean;
+    lastClip?: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      scale: number;
+    };
   };
   type?: Record<
     string,
@@ -153,6 +228,46 @@ function parseJsonArgument(expression: string, key: string): string | undefined 
   return undefined;
 }
 
+function parseNumberArgument(expression: string, key: string): number | undefined {
+  const match = expression.match(new RegExp(`const ${key} = ([0-9]+|undefined);`));
+  if (!match?.[1] || match[1] === 'undefined') {
+    return undefined;
+  }
+  return Number.parseInt(match[1], 10);
+}
+
+function pickMockMatch<T>(plan: T | T[] | undefined, nth = 0): {
+  count: number;
+  target: T | undefined;
+} {
+  if (Array.isArray(plan)) {
+    return { count: plan.length, target: plan[nth] };
+  }
+  return { count: plan ? 1 : 0, target: nth === 0 ? plan : undefined };
+}
+
+function shiftSelectorSnapshot(page: MockPageState, selector: string): MockQueryPlan | undefined {
+  const queue = page.wait?.selectorSnapshots?.[selector];
+  if (!queue || queue.length === 0) {
+    return page.query?.[selector];
+  }
+  if (queue.length === 1) {
+    return queue[0];
+  }
+  return queue.shift();
+}
+
+function shiftPageText(page: MockPageState): string {
+  const queue = page.wait?.pageTextSequence;
+  if (!queue || queue.length === 0) {
+    return page.visibleText || '';
+  }
+  if (queue.length === 1) {
+    return queue[0] || '';
+  }
+  return queue.shift() || '';
+}
+
 function createMockBrowser(pagesInput: MockPageState[]) {
   let tempDir = '';
   let httpServer: http.Server | null = null;
@@ -250,7 +365,36 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             return;
           }
           page.screenshot.lastCaptureBeyondViewport = message.params?.captureBeyondViewport === true;
+          const clip =
+            message.params?.clip && typeof message.params.clip === 'object'
+              ? (message.params.clip as Record<string, unknown>)
+              : null;
+          page.screenshot.lastClip = clip
+            ? {
+                x: Number(clip.x),
+                y: Number(clip.y),
+                width: Number(clip.width),
+                height: Number(clip.height),
+                scale: Number(clip.scale),
+              }
+            : undefined;
+          if (page.screenshot.expectedClip) {
+            expect(page.screenshot.lastClip).toEqual(page.screenshot.expectedClip);
+          }
           reply({ data: page.screenshot.data || '' });
+          return;
+        }
+
+        if (message.method === 'Input.dispatchMouseEvent') {
+          const type = typeof message.params?.type === 'string' ? message.params.type : '';
+          const x = Number(message.params?.x);
+          const y = Number(message.params?.y);
+          for (const hoverPlan of Object.values(page.hover || {})) {
+            if (type === 'mouseMoved') {
+              hoverPlan.lastMouseMove = { x, y };
+            }
+          }
+          reply({});
           return;
         }
 
@@ -260,13 +404,37 @@ function createMockBrowser(pagesInput: MockPageState[]) {
 
         const expression = String(message.params?.expression || '');
 
+        if (page.eval?.[expression]) {
+          const evalPlan = page.eval[expression];
+          if (evalPlan.error) {
+            socket.send(
+              JSON.stringify({
+                id: message.id,
+                result: { exceptionDetails: { text: evalPlan.error } },
+              })
+            );
+            return;
+          }
+          if (evalPlan.nonSerializable) {
+            socket.send(JSON.stringify({ id: message.id, result: { result: { type: 'object' } } }));
+            return;
+          }
+          socket.send(
+            JSON.stringify({
+              id: message.id,
+              result: { result: { type: 'object', value: evalPlan.result } },
+            })
+          );
+          return;
+        }
+
         if (expression.includes('document.title') && expression.includes('location.href')) {
           reply({ result: { type: 'string', value: JSON.stringify({ title: page.title, url: page.currentUrl }) } });
           return;
         }
 
         if (expression.includes('document.body ? document.body.innerText')) {
-          reply({ result: { type: 'string', value: page.visibleText || '' } });
+          reply({ result: { type: 'string', value: shiftPageText(page) } });
           return;
         }
 
@@ -288,7 +456,9 @@ function createMockBrowser(pagesInput: MockPageState[]) {
 
         if (expression.includes('scrollIntoView') && expression.includes('.click()')) {
           const selector = parseJsonArgument(expression, 'selector') || '';
+          const nth = parseNumberArgument(expression, 'nth') ?? 0;
           const clickPlan = page.click?.[selector];
+          const { count, target: resolvedClickPlan } = pickMockMatch(clickPlan, nth);
           const attemptedMouseDown = expression.includes("dispatchMouseEvent('mousedown'");
           const attemptedMouseUp = expression.includes("dispatchMouseEvent('mouseup'");
           const attemptedMouseSequence = attemptedMouseDown && attemptedMouseUp;
@@ -308,47 +478,51 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             (index) =>
               catchIndex === -1 || catchBlockEnd === -1 || index < catchIndex || index > catchBlockEnd
           );
-          if (!clickPlan) {
-            replyError(`element not found for selector: ${selector}`);
+          if (!resolvedClickPlan) {
+            replyError(`element index ${nth} is out of range for selector: ${selector}`);
             return;
           }
-          if (clickPlan.detached && expression.includes('element.isConnected')) {
+          if (count <= nth) {
+            replyError(`element index ${nth} is out of range for selector: ${selector}`);
+            return;
+          }
+          if (resolvedClickPlan.detached && expression.includes('element.isConnected')) {
             replyError(`element is detached for selector: ${selector}`);
             return;
           }
-          if (clickPlan.disabled) {
+          if (resolvedClickPlan.disabled) {
             replyError(`element is disabled for selector: ${selector}`);
             return;
           }
-          if (clickPlan.hidden && expression.includes('getBoundingClientRect')) {
+          if (resolvedClickPlan.hidden && expression.includes('getBoundingClientRect')) {
             replyError(`element is hidden or not interactable for selector: ${selector}`);
             return;
           }
-          if (clickPlan.requireMouseSequence && !attemptedMouseSequence) {
+          if (resolvedClickPlan.requireMouseSequence && !attemptedMouseSequence) {
             replyError(`mousedown/mouseup required for selector: ${selector}`);
             return;
           }
-          if (clickPlan.forbidSyntheticClickEvent && attemptedClickEvent) {
+          if (resolvedClickPlan.forbidSyntheticClickEvent && attemptedClickEvent) {
             replyError(`synthetic click event forbidden for selector: ${selector}`);
             return;
           }
-          if ((clickPlan.cancelMouseDown || clickPlan.cancelMouseUp) && !readsDispatchResult) {
+          if ((resolvedClickPlan.cancelMouseDown || resolvedClickPlan.cancelMouseUp) && !readsDispatchResult) {
             replyError(`dispatch result must be checked for selector: ${selector}`);
             return;
           }
-          if ((clickPlan.cancelMouseDown || clickPlan.cancelMouseUp) && !gatesNativeClickOnDispatchResult) {
+          if ((resolvedClickPlan.cancelMouseDown || resolvedClickPlan.cancelMouseUp) && !gatesNativeClickOnDispatchResult) {
             replyError(`native click must be gated for selector: ${selector}`);
             return;
           }
-          if (clickPlan.detachAfterMouseDown && !checksIsConnectedBeforeNativeClick) {
+          if (resolvedClickPlan.detachAfterMouseDown && !checksIsConnectedBeforeNativeClick) {
             replyError(`connected state must be rechecked for selector: ${selector}`);
             return;
           }
-          if (clickPlan.requireNativeClick && !attemptedNativeClickOutsideCatch) {
+          if (resolvedClickPlan.requireNativeClick && !attemptedNativeClickOutsideCatch) {
             replyError(`native click required for selector: ${selector}`);
             return;
           }
-          if (clickPlan.mouseSequenceError) {
+          if (resolvedClickPlan.mouseSequenceError) {
             if (!attemptedMouseSequence) {
               replyError(`mousedown/mouseup required for selector: ${selector}`);
               return;
@@ -357,11 +531,166 @@ function createMockBrowser(pagesInput: MockPageState[]) {
               reply({ result: { type: 'string', value: 'ok' } });
               return;
             }
-            replyError(clickPlan.mouseSequenceError);
+            replyError(resolvedClickPlan.mouseSequenceError);
             return;
           }
-          if (clickPlan.error) {
-            replyError(clickPlan.error);
+          if (resolvedClickPlan.error) {
+            replyError(resolvedClickPlan.error);
+            return;
+          }
+          reply({ result: { type: 'string', value: 'ok' } });
+          return;
+        }
+
+        if (
+          expression.includes('getComputedStyle(element)') &&
+          (expression.includes('boundingClientRect') ||
+            expression.includes('visibleClip') ||
+            expression.includes('centerPoint') ||
+            expression.includes('querySelectorAll(selector)'))
+        ) {
+          const selector = parseJsonArgument(expression, 'selector') || '';
+          const nth = parseNumberArgument(expression, 'nth');
+          const queryPlan = shiftSelectorSnapshot(page, selector);
+          if (
+            page.screenshot?.requireScrolledMeasurement &&
+            selector in (page.query || {}) &&
+            !expression.includes('scrollIntoView')
+          ) {
+            replyError(`scrollIntoView required for selector: ${selector}`);
+            return;
+          }
+          if (Array.isArray(queryPlan) && expression.includes('querySelectorAll(selector)')) {
+            const targetIndex = nth ?? 0;
+            const target = queryPlan[targetIndex];
+            if (target?.error) {
+              replyError(target.error);
+              return;
+            }
+            if (queryPlan.length <= targetIndex || target?.exists === false || !target) {
+              reply({
+                result: {
+                  type: 'string',
+                  value: JSON.stringify({
+                    exists: nth === undefined ? queryPlan.length > 0 : queryPlan.length > targetIndex,
+                    count: queryPlan.length,
+                    targetIndex,
+                    targetMissing: true,
+                  }),
+                },
+              });
+              return;
+            }
+            const rect = target.rect;
+            const text = target.innerText || target.textContent || '';
+            reply({
+              result: {
+                type: 'string',
+                value: JSON.stringify({
+                  exists: true,
+                  count: queryPlan.length,
+                  targetIndex,
+                  connected: target.connected !== false,
+                  text,
+                  innerText: target.innerText || '',
+                  textContent: target.textContent || '',
+                  boundingClientRect: rect,
+                  display: target.display || 'block',
+                  visibility: target.visibility || 'visible',
+                  opacity: target.opacity || '1',
+                  href: target.href || '',
+                  onclick: target.onclick || '',
+                  interactable:
+                    target.connected !== false &&
+                    (target.display || 'block') !== 'none' &&
+                    (target.visibility || 'visible') !== 'hidden' &&
+                    Boolean(rect && rect.width > 0 && rect.height > 0),
+                }),
+              },
+            });
+            return;
+          }
+          const resolvedQueryPlan = Array.isArray(queryPlan) ? queryPlan.shift() : queryPlan;
+          if (resolvedQueryPlan?.error) {
+            replyError(resolvedQueryPlan.error);
+            return;
+          }
+          if (resolvedQueryPlan?.exists === false || !resolvedQueryPlan) {
+            reply({ result: { type: 'string', value: JSON.stringify({ exists: false }) } });
+            return;
+          }
+          const rect = resolvedQueryPlan.rect;
+          const text = resolvedQueryPlan.innerText || resolvedQueryPlan.textContent || '';
+          const viewportWidth = 1280;
+          const viewportHeight = 720;
+          const clipX = Math.max(0, rect?.left ?? 0);
+          const clipY = Math.max(0, rect?.top ?? 0);
+          const clipRight = Math.min(viewportWidth, rect?.right ?? 0);
+          const clipBottom = Math.min(viewportHeight, rect?.bottom ?? 0);
+          reply({
+            result: {
+              type: 'string',
+              value: JSON.stringify({
+                exists: true,
+                connected: resolvedQueryPlan.connected !== false,
+                text,
+                innerText: resolvedQueryPlan.innerText || '',
+                textContent: resolvedQueryPlan.textContent || '',
+                boundingClientRect: rect,
+                display: resolvedQueryPlan.display || 'block',
+                visibility: resolvedQueryPlan.visibility || 'visible',
+                opacity: resolvedQueryPlan.opacity || '1',
+                interactable:
+                  resolvedQueryPlan.connected !== false &&
+                  (resolvedQueryPlan.display || 'block') !== 'none' &&
+                  (resolvedQueryPlan.visibility || 'visible') !== 'hidden' &&
+                  Boolean(rect && rect.width > 0 && rect.height > 0),
+                centerPoint: rect
+                  ? {
+                      x: rect.left + rect.width / 2,
+                      y: rect.top + rect.height / 2,
+                    }
+                  : undefined,
+                visibleClip: rect
+                  ? {
+                      x: clipX,
+                      y: clipY,
+                      width: Math.max(0, clipRight - clipX),
+                      height: Math.max(0, clipBottom - clipY),
+                      scale: 1,
+                    }
+                  : undefined,
+              }),
+            },
+          });
+          return;
+        }
+
+        if (
+          expression.includes("dispatch('mouseover')") &&
+          expression.includes("dispatch('mouseenter')") &&
+          expression.includes("dispatch('mousemove')")
+        ) {
+          const selector = parseJsonArgument(expression, 'selector') || '';
+          const hoverPlan = page.hover?.[selector];
+          if (!hoverPlan) {
+            replyError(`element not found for selector: ${selector}`);
+            return;
+          }
+          if (hoverPlan.detached) {
+            replyError(`element is detached for selector: ${selector}`);
+            return;
+          }
+          if (hoverPlan.hidden || hoverPlan.zeroSized) {
+            replyError(`element is hidden or not interactable for selector: ${selector}`);
+            return;
+          }
+          if (hoverPlan.requireCdpMouseMove && !hoverPlan.lastMouseMove) {
+            replyError(`real mouse movement required for selector: ${selector}`);
+            return;
+          }
+          if (hoverPlan.error) {
+            replyError(hoverPlan.error);
             return;
           }
           reply({ result: { type: 'string', value: 'ok' } });
@@ -508,11 +837,21 @@ describe('ccs-browser MCP server', () => {
       'browser_click',
       'browser_type',
       'browser_take_screenshot',
+      'browser_wait_for',
+      'browser_eval',
+      'browser_hover',
+      'browser_query',
+      'browser_take_element_screenshot',
     ]);
 
     const clickTool = tools.find((tool) => tool.name === 'browser_click');
     expect(clickTool?.description).toContain('mouse event chain');
     expect(clickTool?.description).not.toContain('synthetic element.click()');
+
+    const queryTool = tools.find((tool) => tool.name === 'browser_query');
+    expect(queryTool?.inputSchema?.properties?.fields).toMatchObject({
+      type: 'array',
+    });
 
     for (const tool of tools.filter((candidate) => candidate.inputSchema?.properties?.pageIndex)) {
       expect(tool.inputSchema?.properties?.pageIndex).toMatchObject({
@@ -789,7 +1128,7 @@ describe('ccs-browser MCP server', () => {
 
     const selectorMiss = responses.find((message) => message.id === 3);
     expect((selectorMiss?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(selectorMiss)).toContain('element not found for selector: #missing');
+    expect(getResponseText(selectorMiss)).toContain('element index 0 is out of range for selector: #missing');
 
     const disabledError = responses.find((message) => message.id === 4);
     expect((disabledError?.result as { isError?: boolean }).isError).toBe(true);
@@ -798,6 +1137,41 @@ describe('ccs-browser MCP server', () => {
     const pageSideError = responses.find((message) => message.id === 5);
     expect((pageSideError?.result as { isError?: boolean }).isError).toBe(true);
     expect(getResponseText(pageSideError)).toContain('click exploded');
+  });
+
+  it('clicks the requested zero-based match and rejects out-of-range nth', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Click Page',
+          currentUrl: 'https://example.com/',
+          click: {
+            '.menu-item': [{ label: 'first' }, { label: 'second' }],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 20,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '.menu-item', nth: 1 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 21,
+          method: 'tools/call',
+          params: { name: 'browser_click', arguments: { selector: '.menu-item', nth: 3 } },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 20))).toContain('status: clicked');
+    expect(getResponseText(responses.find((message) => message.id === 20))).toContain('nth: 1');
+    expect(getResponseText(responses.find((message) => message.id === 21))).toContain(
+      'Browser MCP failed: element index 3 is out of range for selector: .menu-item'
+    );
   });
 
   it('reports detached and hidden click targets as handled errors', async () => {
@@ -1012,6 +1386,780 @@ describe('ccs-browser MCP server', () => {
 
     expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
     expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #fallback');
+  });
+
+  it('requires real mouse movement for hover-only targets and reports hover failures', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Hover Page',
+          currentUrl: 'https://example.com/',
+          hover: {
+            '.draft-card': { requireCdpMouseMove: true },
+            '.missing-bounds': { zeroSized: true },
+          },
+          query: {
+            '.draft-card': {
+              exists: true,
+              connected: true,
+              rect: {
+                x: 100,
+                y: 40,
+                width: 120,
+                height: 48,
+                top: 40,
+                right: 220,
+                bottom: 88,
+                left: 100,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+            '.missing-bounds': {
+              exists: true,
+              connected: true,
+              rect: {
+                x: 0,
+                y: 0,
+                width: 0,
+                height: 0,
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'browser_hover',
+            arguments: { selector: '.draft-card' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: {
+            name: 'browser_hover',
+            arguments: { selector: '.missing-bounds' },
+          },
+        },
+      ]
+    );
+
+    const hoverResponse = responses.find((message) => message.id === 2);
+    expect((hoverResponse?.result as { isError?: boolean }).isError).not.toBe(true);
+    expect(getResponseText(hoverResponse)).toContain('status: hovered');
+    expect(getResponseText(hoverResponse)).toContain('selector: .draft-card');
+
+    const hoverError = responses.find((message) => message.id === 3);
+    expect((hoverError?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(hoverError)).toContain(
+      'element is hidden or not interactable for selector: .missing-bounds'
+    );
+  });
+
+  it('queries element diagnostics and validates query fields', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Query Page',
+          currentUrl: 'https://example.com/',
+          query: {
+            '.edit-button': {
+              exists: true,
+              connected: true,
+              innerText: 'Edit',
+              textContent: 'Edit',
+              rect: {
+                x: 123,
+                y: 45,
+                width: 48,
+                height: 24,
+                top: 45,
+                right: 171,
+                bottom: 69,
+                left: 123,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+            '.missing-button': {
+              exists: false,
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: { selector: '.edit-button' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: {
+              selector: '.edit-button',
+              fields: ['display', 'visibility', 'opacity'],
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: { selector: '.missing-button' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 5,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: { selector: '.edit-button', fields: 'display' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 6,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: { selector: '.edit-button', fields: ['displayMode'] },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('exists: true');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'boundingClientRect: {"x":123'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 3))).toContain('display: block');
+    expect(getResponseText(responses.find((message) => message.id === 3))).not.toContain('innerText:');
+
+    const missingResponse = responses.find((message) => message.id === 4);
+    expect((missingResponse?.result as { isError?: boolean }).isError).not.toBe(true);
+    expect(getResponseText(missingResponse)).toContain('exists: false');
+
+    expect(getResponseText(responses.find((message) => message.id === 5))).toContain(
+      'Browser MCP failed: fields must be an array of strings'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 6))).toContain(
+      'Browser MCP failed: unknown query field: displayMode'
+    );
+  });
+
+  it('reports count, nth-aware fields, href, and onclick for multi-match selectors', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Query Page',
+          currentUrl: 'https://example.com/',
+          query: {
+            '.hover-action': [
+              {
+                exists: true,
+                connected: true,
+                innerText: 'Open',
+                textContent: 'Open',
+                display: 'block',
+                visibility: 'visible',
+                opacity: '1',
+                href: 'https://example.com/open',
+                onclick: 'openCard()',
+              },
+              {
+                exists: true,
+                connected: true,
+                innerText: 'Archive',
+                textContent: 'Archive',
+                display: 'block',
+                visibility: 'visible',
+                opacity: '0.95',
+                href: 'https://example.com/archive',
+                onclick: 'archiveCard()',
+              },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 30,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: {
+              selector: '.hover-action',
+              nth: 1,
+              fields: ['count', 'exists', 'innerText', 'href', 'onclick'],
+            },
+          },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 30));
+    expect(text).toContain('count: 2');
+    expect(text).toContain('exists: true');
+    expect(text).toContain('innerText: Archive');
+    expect(text).toContain('href: https://example.com/archive');
+    expect(text).toContain('onclick: archiveCard()');
+    expect(text).toContain('nth: 1');
+  });
+
+  it('keeps count and exists available when nth is out of range, but rejects target fields', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Query Page',
+          currentUrl: 'https://example.com/',
+          query: {
+            '.hover-action': [
+              { exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 31,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: {
+              selector: '.hover-action',
+              nth: 3,
+              fields: ['count', 'exists'],
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 32,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: {
+              selector: '.hover-action',
+              nth: 3,
+              fields: ['count', 'innerText'],
+            },
+          },
+        },
+      ]
+    );
+
+    const countOnly = responses.find((message) => message.id === 31);
+    expect((countOnly?.result as { isError?: boolean }).isError).not.toBe(true);
+    expect(getResponseText(countOnly)).toContain('count: 1');
+    expect(getResponseText(countOnly)).toContain('exists: false');
+
+    expect(getResponseText(responses.find((message) => message.id === 32))).toContain(
+      'Browser MCP failed: element index 3 is out of range for selector: .hover-action'
+    );
+  });
+
+  it('waits for selector visibility with opacity threshold', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Wait Page',
+          currentUrl: 'https://example.com/',
+          wait: {
+            selectorSnapshots: {
+              '.hover-action': [
+                { exists: false },
+                {
+                  exists: true,
+                  connected: true,
+                  display: 'block',
+                  visibility: 'visible',
+                  opacity: '0.95',
+                  rect: { x: 10, y: 10, width: 40, height: 20, top: 10, right: 50, bottom: 30, left: 10 },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 40,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for',
+            arguments: {
+              selector: '.hover-action',
+              timeoutMs: 1000,
+              pollIntervalMs: 10,
+              condition: { kind: 'visibility', visibility: 'visible', opacityGt: 0.9 },
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 40))).toContain('status: satisfied');
+  });
+
+  it('waits for page text includes and returns timeout summaries', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Wait Timeout',
+          currentUrl: 'https://example.com/',
+          wait: {
+            pageTextSequence: ['loading', 'loading', 'loaded archive menu'],
+            selectorSnapshots: {
+              '.hover-action': [
+                {
+                  exists: true,
+                  connected: true,
+                  display: 'block',
+                  visibility: 'visible',
+                  opacity: '0.2',
+                  rect: { x: 10, y: 10, width: 40, height: 20, top: 10, right: 50, bottom: 30, left: 10 },
+                },
+              ],
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 41,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for',
+            arguments: {
+              timeoutMs: 1000,
+              pollIntervalMs: 10,
+              condition: { kind: 'text', includes: 'archive menu' },
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 42,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for',
+            arguments: {
+              selector: '.hover-action',
+              timeoutMs: 30,
+              pollIntervalMs: 10,
+              condition: { kind: 'visibility', visibility: 'visible', opacityGt: 0.9 },
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 41))).toContain('status: satisfied');
+    expect(getResponseText(responses.find((message) => message.id === 42))).toContain(
+      'Browser MCP failed: wait condition timed out'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 42))).toContain('opacity=0.2');
+  });
+
+  it('waits for selector text includes', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Wait Text',
+          currentUrl: 'https://example.com/',
+          wait: {
+            selectorSnapshots: {
+              '.hover-action': [
+                [{ exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' }],
+                [{ exists: true, connected: true, innerText: 'Archive', textContent: 'Archive', display: 'block', visibility: 'visible', opacity: '1' }],
+              ],
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 45,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for',
+            arguments: {
+              selector: '.hover-action',
+              timeoutMs: 1000,
+              pollIntervalMs: 10,
+              condition: { kind: 'text', includes: 'Archive' },
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 45))).toContain('status: satisfied');
+  });
+
+  it('lets nth become valid later during polling and rejects unsupported page-level wait kinds', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Wait Nth',
+          currentUrl: 'https://example.com/',
+          wait: {
+            selectorSnapshots: {
+              '.hover-action': [
+                [{ exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' }],
+                [
+                  { exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' },
+                  { exists: true, connected: true, innerText: 'Archive', textContent: 'Archive', display: 'block', visibility: 'visible', opacity: '1', rect: { x: 10, y: 10, width: 40, height: 20, top: 10, right: 50, bottom: 30, left: 10 } },
+                ],
+              ],
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 43,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for',
+            arguments: {
+              selector: '.hover-action',
+              nth: 1,
+              timeoutMs: 1000,
+              pollIntervalMs: 10,
+              condition: { kind: 'visibility', visibility: 'visible' },
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 44,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for',
+            arguments: {
+              timeoutMs: 100,
+              pollIntervalMs: 10,
+              condition: { kind: 'visibility', visibility: 'visible' },
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 43))).toContain('status: satisfied');
+    expect(getResponseText(responses.find((message) => message.id === 44))).toContain(
+      'Browser MCP failed: page-level wait only supports text conditions in Phase 1'
+    );
+  });
+
+  it('defaults browser_eval to readonly and enforces readwrite gating', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Eval Page',
+          currentUrl: 'https://example.com/',
+          eval: {
+            'JSON.stringify({ hovered: true, label: "Archive" })': {
+              result: { hovered: true, label: 'Archive' },
+            },
+            'document.body.dataset.test = "1"': {
+              error: 'EvalError: Possible side-effect in debug-evaluate',
+            },
+            'throw new Error("boom")': {
+              error: 'boom',
+            },
+            'window': {
+              nonSerializable: true,
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 50,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
+            arguments: { expression: 'JSON.stringify({ hovered: true, label: "Archive" })' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 51,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
+            arguments: { expression: 'document.body.dataset.test = "1"' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 52,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
+            arguments: { expression: 'document.body.dataset.test = "1"', mode: 'readwrite' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 53,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
+            arguments: { expression: 'throw new Error("boom")' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 54,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
+            arguments: { expression: 'window' },
+          },
+        },
+      ],
+      { childEnv: { ...process.env, CCS_BROWSER_EVAL_MODE: 'readonly' } }
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 50))).toContain('mode: readonly');
+    expect(getResponseText(responses.find((message) => message.id === 50))).toContain(
+      'value: {"hovered":true,"label":"Archive"}'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 51))).toContain(
+      'Browser MCP failed: EvalError: Possible side-effect in debug-evaluate'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 52))).toContain(
+      'Browser MCP failed: browser_eval readwrite mode is disabled by CCS_BROWSER_EVAL_MODE=readonly'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 53))).toContain('Browser MCP failed: boom');
+    expect(getResponseText(responses.find((message) => message.id === 54))).toContain(
+      'Browser MCP failed: evaluation result is not JSON-serializable'
+    );
+  });
+
+  it('allows readwrite browser_eval when configured', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Eval Page',
+          currentUrl: 'https://example.com/',
+          eval: {
+            'document.body.dataset.test = "1"': {
+              result: 'ok',
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 54,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
+            arguments: { expression: 'document.body.dataset.test = "1"', mode: 'readwrite' },
+          },
+        },
+      ],
+      { childEnv: { ...process.env, CCS_BROWSER_EVAL_MODE: 'readwrite' } }
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 54))).toContain('mode: readwrite');
+    expect(getResponseText(responses.find((message) => message.id === 54))).toContain('value: "ok"');
+  });
+
+  it('captures element screenshots using the post-scroll visible clip and reports failures', async () => {
+    const screenshotPlan: MockPageState['screenshot'] = {
+      data: 'ZWxlbWVudC1zaG90',
+      requireScrolledMeasurement: true,
+      expectedClip: {
+        x: 0,
+        y: 12,
+        width: 50,
+        height: 28,
+        scale: 1,
+      },
+    };
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Element Screenshot Page',
+          currentUrl: 'https://example.com/',
+          query: {
+            '.edit-button': {
+              exists: true,
+              connected: true,
+              innerText: 'Edit',
+              textContent: 'Edit',
+              rect: {
+                x: -14,
+                y: 12,
+                width: 64,
+                height: 28,
+                top: 12,
+                right: 50,
+                bottom: 40,
+                left: -14,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+            '.zero-sized': {
+              exists: true,
+              connected: true,
+              rect: {
+                x: 10,
+                y: 10,
+                width: 0,
+                height: 0,
+                top: 10,
+                right: 10,
+                bottom: 10,
+                left: 10,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+          },
+          screenshot: screenshotPlan,
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'browser_take_element_screenshot',
+            arguments: { selector: '.edit-button' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 3,
+          method: 'tools/call',
+          params: {
+            name: 'browser_take_element_screenshot',
+            arguments: { selector: '.missing-button' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 4,
+          method: 'tools/call',
+          params: {
+            name: 'browser_take_element_screenshot',
+            arguments: { selector: '.zero-sized' },
+          },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 2));
+    expect(text).toContain('selector: .edit-button');
+    expect(text).toContain('format: png');
+    expect(text).toContain('data: ZWxlbWVudC1zaG90');
+
+    expect(getResponseText(responses.find((message) => message.id === 3))).toContain(
+      'Browser MCP failed: element not found for selector: .missing-button'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 4))).toContain(
+      'Browser MCP failed: element has empty bounds for selector: .zero-sized'
+    );
+
+    const emptyPayloadResponses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Element Screenshot Empty Payload Page',
+          currentUrl: 'https://example.com/',
+          query: {
+            '.edit-button': {
+              exists: true,
+              connected: true,
+              rect: {
+                x: 220,
+                y: 80,
+                width: 64,
+                height: 28,
+                top: 80,
+                right: 284,
+                bottom: 108,
+                left: 220,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+          },
+          screenshot: { data: '' },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'browser_take_element_screenshot',
+            arguments: { selector: '.edit-button' },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(emptyPayloadResponses.find((message) => message.id === 2))).toContain(
+      'Browser MCP failed: screenshot capture failed'
+    );
   });
 
   it('captures screenshots and reports empty payload failures', async () => {

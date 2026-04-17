@@ -234,14 +234,18 @@ export interface UpdateImageAnalysisSettingsPayload {
   profileBackends?: Record<string, string>;
 }
 
+export type BrowserEvalMode = 'disabled' | 'readonly' | 'readwrite';
+
 export interface BrowserSettingsConfig {
   claude: {
     enabled: boolean;
     userDataDir: string;
     devtoolsPort: number;
+    evalMode: BrowserEvalMode;
   };
   codex: {
     enabled: boolean;
+    evalMode: BrowserEvalMode;
   };
 }
 
@@ -262,6 +266,7 @@ export interface ClaudeBrowserStatus {
   effectiveUserDataDir: string;
   recommendedUserDataDir: string;
   devtoolsPort: number;
+  evalMode: BrowserEvalMode;
   managedMcpServerName: string;
   managedMcpServerPath: string;
   launchCommands: BrowserLaunchCommands;
@@ -275,6 +280,7 @@ export interface CodexBrowserStatus {
   detail: string;
   nextStep: string;
   serverName: string;
+  evalMode: BrowserEvalMode;
   supportsConfigOverrides: boolean;
   binaryPath: string | null;
   version?: string;

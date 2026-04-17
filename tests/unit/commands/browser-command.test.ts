@@ -37,6 +37,7 @@ describe('browser command', () => {
         effectiveUserDataDir: '/tmp/browser-profile',
         recommendedUserDataDir: '/tmp/browser-profile',
         devtoolsPort: 9222,
+        evalMode: 'readonly',
         managedMcpServerName: 'ccs-browser',
         managedMcpServerPath: '/tmp/ccs-browser-server.cjs',
         launchCommands: {
@@ -50,6 +51,7 @@ describe('browser command', () => {
           CCS_BROWSER_DEVTOOLS_PORT: '9222',
           CCS_BROWSER_DEVTOOLS_HTTP_URL: 'http://127.0.0.1:9222',
           CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/test',
+          CCS_BROWSER_EVAL_MODE: 'readonly',
         },
       },
       codex: {
@@ -59,6 +61,7 @@ describe('browser command', () => {
         detail: 'CCS can inject the managed Playwright MCP overrides.',
         nextStep: 'Use a Codex-target launch.',
         serverName: 'ccs_browser',
+        evalMode: 'readonly',
         supportsConfigOverrides: true,
         binaryPath: '/usr/local/bin/codex',
         version: 'codex-cli 0.120.0',
@@ -75,6 +78,7 @@ describe('browser command', () => {
       );
       expect(rendered.includes('Managed MCP: ccs-browser')).toBe(true);
       expect(rendered.includes('Managed server: ccs_browser')).toBe(true);
+      expect(rendered.includes('browser_eval access: readonly')).toBe(true);
       expect(rendered.includes('DevTools endpoint: http://127.0.0.1:9222')).toBe(true);
     } finally {
       statusSpy.mockRestore();
@@ -100,6 +104,7 @@ describe('browser command', () => {
         effectiveUserDataDir: '/tmp/browser-profile',
         recommendedUserDataDir: '/tmp/browser-profile',
         devtoolsPort: 9444,
+        evalMode: 'readwrite',
         managedMcpServerName: 'ccs-browser',
         managedMcpServerPath: '/tmp/ccs-browser-server.cjs',
         launchCommands,
@@ -111,6 +116,7 @@ describe('browser command', () => {
         detail: 'Detected Codex at /usr/local/bin/codex, but it does not advertise --config overrides.',
         nextStep: 'Install or upgrade Codex, then rerun browser status/doctor.',
         serverName: 'ccs_browser',
+        evalMode: 'disabled',
         supportsConfigOverrides: false,
         binaryPath: '/usr/local/bin/codex',
         version: 'codex-cli 0.70.0',
@@ -150,6 +156,7 @@ describe('browser command', () => {
         effectiveUserDataDir: '/tmp/browser-profile',
         recommendedUserDataDir: '/tmp/browser-profile',
         devtoolsPort: 9222,
+        evalMode: 'readonly',
         managedMcpServerName: 'ccs-browser',
         managedMcpServerPath: '/tmp/ccs-browser-server.cjs',
         launchCommands: {
@@ -167,6 +174,7 @@ describe('browser command', () => {
         detail: 'No Codex binary was detected, so CCS cannot confirm managed browser override support.',
         nextStep: 'Install or upgrade Codex, then rerun browser status/doctor.',
         serverName: 'ccs_browser',
+        evalMode: 'readonly',
         supportsConfigOverrides: false,
         binaryPath: null,
       },

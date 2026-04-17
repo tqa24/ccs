@@ -604,7 +604,6 @@ async function main(): Promise<void> {
     } catch (error) {
       console.error(fail((error as Error).message));
       process.exit(1);
-      return;
     }
 
     // Detect Claude CLI (needed for claude target and all CLIProxy-derived flows)
@@ -1089,7 +1088,13 @@ async function main(): Promise<void> {
       }
       const inheritedClaudeConfigDir = continuityInheritance.claudeConfigDir;
       syncWebSearchMcpToConfigDir(inheritedClaudeConfigDir);
-      syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir);
+      if (!syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir) && inheritedClaudeConfigDir) {
+        console.error(
+          warn(
+            'Image Analysis MCP config could not be synced into the inherited Claude instance. This session will continue with the current fallback behavior.'
+          )
+        );
+      }
       if (
         browserAttachConfig?.enabled &&
         inheritedClaudeConfigDir &&
@@ -1269,7 +1274,13 @@ async function main(): Promise<void> {
             ...imageAnalysisEnv,
             CCS_CURRENT_PROVIDER: '',
             CCS_IMAGE_ANALYSIS_SKIP: '1',
+            CCS_IMAGE_ANALYSIS_BACKEND_ID: '',
+            CCS_IMAGE_ANALYSIS_MODEL: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_BASE_URL: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_PATH: '',
           };
+          delete imageAnalysisEnv.CCS_IMAGE_ANALYSIS_RUNTIME_API_KEY;
+          delete imageAnalysisEnv.CCS_IMAGE_ANALYSIS_RUNTIME_ALLOW_SELF_SIGNED;
         } else if (imageAnalysisStatus.proxyReadiness === 'stopped') {
           const ensureServiceResult = await ensureCliproxyService(
             CLIPROXY_DEFAULT_PORT,
@@ -1285,7 +1296,13 @@ async function main(): Promise<void> {
               ...imageAnalysisEnv,
               CCS_CURRENT_PROVIDER: '',
               CCS_IMAGE_ANALYSIS_SKIP: '1',
+              CCS_IMAGE_ANALYSIS_BACKEND_ID: '',
+              CCS_IMAGE_ANALYSIS_MODEL: '',
+              CCS_IMAGE_ANALYSIS_RUNTIME_BASE_URL: '',
+              CCS_IMAGE_ANALYSIS_RUNTIME_PATH: '',
             };
+            delete imageAnalysisEnv.CCS_IMAGE_ANALYSIS_RUNTIME_API_KEY;
+            delete imageAnalysisEnv.CCS_IMAGE_ANALYSIS_RUNTIME_ALLOW_SELF_SIGNED;
           }
         }
       }
@@ -1308,6 +1325,7 @@ async function main(): Promise<void> {
             devtoolsPort: browserAttachConfig.hasExplicitDevtoolsPort
               ? String(browserAttachConfig.devtoolsPort)
               : undefined,
+            evalMode: browserAttachConfig.evalMode,
           })),
         };
       }
@@ -1487,6 +1505,7 @@ async function main(): Promise<void> {
                 ? String(browserAttachConfig.devtoolsPort)
                 : undefined,
             })),
+            CCS_BROWSER_EVAL_MODE: browserAttachConfig.evalMode,
           };
           Object.assign(envVars, browserRuntimeEnv);
         }

@@ -1,6 +1,6 @@
 # Browser Automation
 
-Last Updated: 2026-04-16
+Last Updated: 2026-04-17
 
 CCS provides browser automation through two separate runtime paths:
 
@@ -19,6 +19,28 @@ that already has useful authenticated state.
 
 Claude Browser Attach requires a browser launched in attach mode with remote debugging
 enabled. A recent Chrome update alone is not sufficient.
+
+The managed `ccs-browser` runtime currently exposes four tool groups:
+
+- **Session inspection**: `browser_get_session_info`, `browser_get_url_and_title`, `browser_get_visible_text`, `browser_get_dom_snapshot`
+- **Navigation and interaction**: `browser_navigate`, `browser_click`, `browser_type`, `browser_take_screenshot`
+- **Hover diagnostics**: `browser_hover`, `browser_query`, `browser_take_element_screenshot`
+- **Readiness and page evaluation**: `browser_wait_for`, `browser_eval`
+
+Notable Phase 1 capability details:
+
+- `browser_click` accepts zero-based `nth` so Claude can target the Nth matching element
+- `browser_query` is multi-match aware and can return `count`, `href`, and `onclick` in addition to visibility-oriented fields
+- `browser_wait_for` can wait on page text or selector state before the next step runs
+- `browser_eval` is gated by `browser.claude.eval_mode` and supports `disabled`, `readonly`, or `readwrite`; readonly mode uses side-effect-blocked evaluation and may reject expressions that could mutate page state
+
+A common hover-debug workflow is:
+
+1. call `browser_hover` to move the browser pointer onto the card or trigger
+2. call `browser_wait_for` if the hover state needs time to appear
+3. call `browser_query` on the hover-only control to inspect `exists`, `count`, visibility, opacity, `href`, `onclick`, and bounds
+4. call `browser_take_element_screenshot` to confirm the revealed state
+5. call `browser_eval` in read-only mode when you need page-side inspection that the structured tools do not expose directly
 
 ### Codex Browser Tools
 
@@ -40,10 +62,12 @@ The Browser screen exposes two sections:
   - enable/disable the Claude attach lane
   - choose the Chrome user-data directory
   - set the expected DevTools port
+  - choose the `browser_eval` access level (`disabled`, `readonly`, `readwrite`)
   - review readiness and next-step guidance
   - copy a generated browser launch command
 - **Codex Browser Tools**
   - enable/disable CCS-managed browser tooling for Codex-target launches
+  - choose the stored `browser_eval` access level for Browser settings parity
   - review whether the detected Codex build supports managed browser overrides
 
 ### Via CLI
@@ -67,15 +91,19 @@ browser:
     enabled: false
     user_data_dir: "~/.ccs/browser/chrome-user-data"
     devtools_port: 9222
+    eval_mode: readonly
   codex:
     enabled: true
+    eval_mode: readonly
 ```
 
 Notes:
 
 - `claude.user_data_dir` is a **Chrome user-data directory**, not a display-name browser profile
 - `claude.devtools_port` is the expected remote debugging port for attach mode
+- `claude.eval_mode` controls whether `browser_eval` is disabled, read-only, or read/write for Claude Browser Attach
 - `codex.enabled` controls whether CCS injects browser tooling into Codex-target launches
+- `codex.eval_mode` is stored and surfaced in Browser settings for parity; in Phase 1, `browser_eval` enforcement primarily applies to Claude Browser Attach
 
 ## Environment Variable Overrides
 
@@ -86,6 +114,7 @@ CCS still supports environment-variable overrides for backward compatibility.
 | `CCS_BROWSER_USER_DATA_DIR` | Preferred override for Claude Browser Attach user-data dir |
 | `CCS_BROWSER_PROFILE_DIR` | Legacy alias for the same attach directory |
 | `CCS_BROWSER_DEVTOOLS_PORT` | Explicit DevTools port override |
+| `CCS_BROWSER_EVAL_MODE` | Explicit `browser_eval` access override for Claude Browser Attach |
 
 If an override is active, Browser status surfaces should report that the current session is being
 managed externally by environment variables.

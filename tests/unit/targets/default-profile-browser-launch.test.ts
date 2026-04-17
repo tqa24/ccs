@@ -111,6 +111,7 @@ printf "%s\n" "$@" > "${claudeArgsLogPath}"
   printf "port=%s\n" "$CCS_BROWSER_DEVTOOLS_PORT"
   printf "httpUrl=%s\n" "$CCS_BROWSER_DEVTOOLS_HTTP_URL"
   printf "wsUrl=%s\n" "$CCS_BROWSER_DEVTOOLS_WS_URL"
+  printf "evalMode=%s\n" "$CCS_BROWSER_EVAL_MODE"
 } > "${claudeEnvLogPath}"
 exit 0
 `,
@@ -126,6 +127,13 @@ exit 0
       CCS_CLAUDE_PATH: fakeClaudePath,
       CCS_DEBUG: '1',
     };
+    delete baseEnv.CCS_BROWSER_USER_DATA_DIR;
+    delete baseEnv.CCS_BROWSER_PROFILE_DIR;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_PORT;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_HOST;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_HTTP_URL;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_WS_URL;
+    delete baseEnv.CCS_BROWSER_EVAL_MODE;
   });
 
   afterEach(() => {
@@ -149,7 +157,7 @@ exit 0
       fs.writeFileSync(delayedPortFile, '43123', 'utf8');
     }, 50);
 
-    await expect(waitForMockDevtoolsPort(delayedPortFile, 500)).resolves.toBe('43123');
+    expect(waitForMockDevtoolsPort(delayedPortFile, 500)).resolves.toBe('43123');
   });
 
   it('ignores stale default Chrome DevTools metadata unless browser reuse is explicitly configured', () => {
@@ -245,6 +253,7 @@ server.listen(0, '127.0.0.1', () => {
     expect(launchedEnv).toContain(`port=${port}`);
     expect(launchedEnv).toContain(`httpUrl=http://127.0.0.1:${port}`);
     expect(launchedEnv).toContain('wsUrl=ws://127.0.0.1/devtools/browser/default-target');
+    expect(launchedEnv).toContain('evalMode=readonly');
   });
 
   it('uses config-backed browser attach settings when env overrides are absent', async () => {
@@ -298,9 +307,11 @@ server.listen(0, '127.0.0.1', () => {
             enabled: true,
             user_data_dir: browserProfileDir,
             devtools_port: Number.parseInt(port, 10),
+            eval_mode: 'readwrite',
           },
           codex: {
             enabled: true,
+            eval_mode: 'readonly',
           },
         };
       });
@@ -317,6 +328,7 @@ server.listen(0, '127.0.0.1', () => {
       expect(launchedEnv).toContain(`userDataDir=${browserProfileDir}`);
       expect(launchedEnv).toContain(`port=${port}`);
       expect(launchedEnv).toContain('wsUrl=ws://127.0.0.1/devtools/browser/config-target');
+      expect(launchedEnv).toContain('evalMode=readwrite');
     } finally {
       if (originalCcsHome !== undefined) {
         process.env.CCS_HOME = originalCcsHome;

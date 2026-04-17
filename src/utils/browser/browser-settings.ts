@@ -1,5 +1,5 @@
 import * as path from 'path';
-import type { BrowserConfig } from '../../config/unified-config-types';
+import type { BrowserConfig, BrowserEvalMode } from '../../config/unified-config-types';
 import { getCcsDir } from '../config-manager';
 import { expandPath } from '../helpers';
 
@@ -11,6 +11,7 @@ export interface EffectiveClaudeBrowserAttachConfig {
   overrideActive: boolean;
   userDataDir: string;
   devtoolsPort: number;
+  evalMode: BrowserEvalMode;
   hasExplicitDevtoolsPort: boolean;
 }
 
@@ -64,6 +65,7 @@ export function getEffectiveClaudeBrowserAttachConfig(
       overrideActive: true,
       userDataDir: override.userDataDir,
       devtoolsPort: override.devtoolsPort ?? configPort,
+      evalMode: config.claude.eval_mode,
       hasExplicitDevtoolsPort: override.devtoolsPort !== undefined,
     };
   }
@@ -74,6 +76,7 @@ export function getEffectiveClaudeBrowserAttachConfig(
     overrideActive: false,
     userDataDir: configUserDataDir,
     devtoolsPort: configPort,
+    evalMode: config.claude.eval_mode,
     // Config-backed browser attach always keeps an explicit port so launches
     // stay aligned with Settings > Browser, even when the effective value is
     // the default 9222.

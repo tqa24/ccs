@@ -182,7 +182,7 @@ process.exit(0);
       ['-c', 'model="gpt-5"', '--version'],
       [
         '-c',
-        `mcp_servers.ccs_browser.command=${JSON.stringify(process.platform === 'win32' ? 'npx.cmd' : 'npx')}`,
+        `mcp_servers.ccs_browser.command=${JSON.stringify('npx')}`,
         '-c',
         `mcp_servers.ccs_browser.args=${JSON.stringify(['-y', '@playwright/mcp@0.0.70'])}`,
         '-c',
@@ -207,9 +207,11 @@ process.exit(0);
             enabled: false,
             user_data_dir: '',
             devtools_port: 9222,
+            eval_mode: 'readonly',
           },
           codex: {
             enabled: false,
+            eval_mode: 'readonly',
           },
         };
       });
@@ -254,7 +256,7 @@ process.exit(0);
       ['-c', 'model="gpt-5"', '--version'],
       [
         '-c',
-        `mcp_servers.ccs_browser.command=${JSON.stringify(process.platform === 'win32' ? 'npx.cmd' : 'npx')}`,
+        `mcp_servers.ccs_browser.command=${JSON.stringify('npx')}`,
         '-c',
         `mcp_servers.ccs_browser.args=${JSON.stringify(['-y', '@playwright/mcp@0.0.70'])}`,
         '-c',

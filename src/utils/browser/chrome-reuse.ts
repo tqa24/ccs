@@ -1,11 +1,13 @@
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import type { BrowserEvalMode } from '../../config/unified-config-types';
 import { expandPath } from '../helpers';
 
 export interface BrowserReuseOptions {
   profileDir?: string;
   devtoolsPort?: string;
+  evalMode?: BrowserEvalMode;
 }
 
 export interface BrowserRuntimeEnv {
@@ -14,6 +16,7 @@ export interface BrowserRuntimeEnv {
   CCS_BROWSER_DEVTOOLS_PORT: string;
   CCS_BROWSER_DEVTOOLS_HTTP_URL: string;
   CCS_BROWSER_DEVTOOLS_WS_URL: string;
+  CCS_BROWSER_EVAL_MODE?: string;
 }
 
 const DEVTOOLS_HOST = '127.0.0.1';
@@ -100,6 +103,7 @@ export async function resolveBrowserRuntimeEnv(
     CCS_BROWSER_DEVTOOLS_PORT: port,
     CCS_BROWSER_DEVTOOLS_HTTP_URL: httpUrl,
     CCS_BROWSER_DEVTOOLS_WS_URL: websocketUrl,
+    ...(options.evalMode ? { CCS_BROWSER_EVAL_MODE: options.evalMode } : {}),
   };
 }
 

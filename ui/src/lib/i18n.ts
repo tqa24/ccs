@@ -2435,6 +2435,14 @@ const resources = {
           nextStep: 'Next step',
           technicalDetails: 'Technical Details',
           diagnostics: 'Diagnostics',
+          evalMode: {
+            label: 'browser_eval access',
+            options: {
+              disabled: 'Disabled',
+              readonly: 'Read-only',
+              readwrite: 'Read/write',
+            },
+          },
           actions: {
             saveClaude: 'Save Claude settings',
             saveCodex: 'Save Codex settings',
@@ -2461,6 +2469,8 @@ const resources = {
             effectivePath: 'Effective attach path',
             recommendedPath: 'Recommended path',
             managedRuntime: 'Managed browser runtime',
+            evalModeHint:
+              'Controls browser_eval access for Claude Browser Attach. Read-only allows inspection; read/write also allows page-side mutations.',
             overrideMessage:
               'An environment override is currently active from {{source}}. This dashboard remains the source of truth once that override is removed.',
             launchGuidance: 'Launch guidance',
@@ -2480,6 +2490,8 @@ const resources = {
             overrideUnsupported: 'Not supported',
             binary: 'Detected Codex binary',
             notDetected: 'Not detected',
+            evalModeHint:
+              'Stored for Browser settings parity. In Phase 1, browser_eval enforcement primarily applies to Claude Browser Attach.',
           },
         },
       },
@@ -4850,6 +4862,14 @@ const resources = {
           nextStep: '下一步',
           technicalDetails: '技术细节',
           diagnostics: '诊断信息',
+          evalMode: {
+            label: 'browser_eval 权限',
+            options: {
+              disabled: '禁用',
+              readonly: '只读',
+              readwrite: '可读写',
+            },
+          },
           actions: {
             saveClaude: '保存 Claude 设置',
             saveCodex: '保存 Codex 设置',
@@ -4873,6 +4893,8 @@ const resources = {
             effectivePath: '当前生效的 attach 路径',
             recommendedPath: '推荐路径',
             managedRuntime: '托管浏览器运行时',
+            evalModeHint:
+              '控制 Claude Browser Attach 中 browser_eval 的权限。只读仅允许读取，读写还允许页面侧修改。',
             overrideMessage:
               '当前存在来自 {{source}} 的环境变量覆盖。移除该覆盖后，Dashboard 配置将重新成为唯一来源。',
             launchGuidance: '启动指引',
@@ -4889,6 +4911,8 @@ const resources = {
             overrideUnsupported: '不支持',
             binary: '检测到的 Codex 可执行文件',
             notDetected: '未检测到',
+            evalModeHint:
+              '为保持 Browser 设置页一致性而保存该配置。Phase 1 中，browser_eval 的实际限制主要作用于 Claude Browser Attach。',
           },
         },
       },
@@ -7367,6 +7391,14 @@ const resources = {
           nextStep: 'Bước tiếp theo',
           technicalDetails: 'Chi tiết kỹ thuật',
           diagnostics: 'Chẩn đoán',
+          evalMode: {
+            label: 'Quyền browser_eval',
+            options: {
+              disabled: 'Tắt',
+              readonly: 'Chỉ đọc',
+              readwrite: 'Đọc/ghi',
+            },
+          },
           actions: {
             saveClaude: 'Lưu cấu hình Claude',
             saveCodex: 'Lưu cấu hình Codex',
@@ -7394,6 +7426,8 @@ const resources = {
             effectivePath: 'Đường dẫn attach đang có hiệu lực',
             recommendedPath: 'Đường dẫn khuyến nghị',
             managedRuntime: 'Runtime trình duyệt được quản lý',
+            evalModeHint:
+              'Điều khiển quyền browser_eval cho Claude Browser Attach. Chỉ đọc cho phép quan sát; đọc/ghi cũng cho phép thay đổi phía trang.',
             overrideMessage:
               'Hiện có override môi trường từ {{source}}. Khi bỏ override này, Dashboard sẽ lại là nguồn cấu hình chính.',
             launchGuidance: 'Hướng dẫn khởi chạy',
@@ -7413,6 +7447,8 @@ const resources = {
             overrideUnsupported: 'Không được hỗ trợ',
             binary: 'Binary Codex được phát hiện',
             notDetected: 'Không phát hiện',
+            evalModeHint:
+              'Được lưu để giữ tương thích giao diện Browser settings. Ở Phase 1, việc áp dụng hạn chế browser_eval chủ yếu diễn ra trên Claude Browser Attach.',
           },
         },
       },
@@ -9791,6 +9827,14 @@ const resources = {
           nextStep: '次の手順',
           technicalDetails: '技術的な詳細',
           diagnostics: '診断情報',
+          evalMode: {
+            label: 'browser_eval 権限',
+            options: {
+              disabled: '無効',
+              readonly: '読み取り専用',
+              readwrite: '読み書き可',
+            },
+          },
           actions: {
             saveClaude: 'Claude 設定を保存',
             saveCodex: 'Codex 設定を保存',
@@ -9818,6 +9862,8 @@ const resources = {
             effectivePath: '現在有効な attach パス',
             recommendedPath: '推奨パス',
             managedRuntime: '管理済みブラウザランタイム',
+            evalModeHint:
+              'Claude Browser Attach における browser_eval の権限を制御します。読み取り専用は参照のみ、読み書き可はページ側の変更も許可します。',
             overrideMessage:
               '{{source}} から環境変数オーバーライドが有効です。これを外すと Dashboard の設定が再び主ソースになります。',
             launchGuidance: '起動ガイダンス',
@@ -9837,6 +9883,8 @@ const resources = {
             overrideUnsupported: '非対応',
             binary: '検出された Codex バイナリ',
             notDetected: '未検出',
+            evalModeHint:
+              'Browser 設定画面の整合性のために保存されます。Phase 1 では browser_eval の制御は主に Claude Browser Attach に適用されます。',
           },
         },
       },

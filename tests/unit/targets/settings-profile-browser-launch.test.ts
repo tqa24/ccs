@@ -87,6 +87,7 @@ printf "%s\n" "$@" > "${claudeArgsLogPath}"
   printf "port=%s\n" "$CCS_BROWSER_DEVTOOLS_PORT"
   printf "httpUrl=%s\n" "$CCS_BROWSER_DEVTOOLS_HTTP_URL"
   printf "wsUrl=%s\n" "$CCS_BROWSER_DEVTOOLS_WS_URL"
+  printf "evalMode=%s\n" "$CCS_BROWSER_EVAL_MODE"
 } > "${claudeEnvLogPath}"
 exit 0
 `,
@@ -102,6 +103,13 @@ exit 0
       CCS_CLAUDE_PATH: fakeClaudePath,
       CCS_DEBUG: '1',
     };
+    delete baseEnv.CCS_BROWSER_USER_DATA_DIR;
+    delete baseEnv.CCS_BROWSER_PROFILE_DIR;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_PORT;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_HOST;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_HTTP_URL;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_WS_URL;
+    delete baseEnv.CCS_BROWSER_EVAL_MODE;
   });
 
   afterEach(() => {
@@ -196,6 +204,7 @@ server.listen(0, '127.0.0.1', () => {
     expect(launchedEnv).toContain(`port=${port}`);
     expect(launchedEnv).toContain(`httpUrl=http://127.0.0.1:${port}`);
     expect(launchedEnv).toContain('wsUrl=ws://127.0.0.1/devtools/browser/browser-target');
+    expect(launchedEnv).toContain('evalMode=readonly');
   });
 
   it('uses config-backed browser attach settings for settings-profile launches', async () => {
@@ -255,9 +264,11 @@ server.listen(0, '127.0.0.1', () => {
             enabled: true,
             user_data_dir: browserProfileDir,
             devtools_port: Number.parseInt(port, 10),
+            eval_mode: 'disabled',
           },
           codex: {
             enabled: true,
+            eval_mode: 'readonly',
           },
         };
       });
@@ -274,6 +285,7 @@ server.listen(0, '127.0.0.1', () => {
       expect(launchedEnv).toContain(`userDataDir=${browserProfileDir}`);
       expect(launchedEnv).toContain(`port=${port}`);
       expect(launchedEnv).toContain('wsUrl=ws://127.0.0.1/devtools/browser/config-settings-target');
+      expect(launchedEnv).toContain('evalMode=disabled');
     } finally {
       if (originalCcsHome !== undefined) {
         process.env.CCS_HOME = originalCcsHome;
