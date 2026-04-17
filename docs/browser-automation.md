@@ -20,12 +20,13 @@ that already has useful authenticated state.
 Claude Browser Attach requires a browser launched in attach mode with remote debugging
 enabled. A recent Chrome update alone is not sufficient.
 
-The managed `ccs-browser` runtime currently exposes four tool groups:
+The managed `ccs-browser` runtime currently exposes five tool groups:
 
 - **Session inspection**: `browser_get_session_info`, `browser_get_url_and_title`, `browser_get_visible_text`, `browser_get_dom_snapshot`
 - **Navigation and interaction**: `browser_navigate`, `browser_click`, `browser_type`, `browser_take_screenshot`
 - **Hover diagnostics**: `browser_hover`, `browser_query`, `browser_take_element_screenshot`
 - **Readiness and page evaluation**: `browser_wait_for`, `browser_eval`
+- **Event observation**: `browser_wait_for_event`
 
 Notable Phase 1 capability details:
 
@@ -34,6 +35,12 @@ Notable Phase 1 capability details:
 - `browser_wait_for` can wait on page text or selector state before the next step runs
 - `browser_eval` is gated by `browser.claude.eval_mode` and supports `disabled`, `readonly`, or `readwrite`; readonly mode uses side-effect-blocked evaluation and may reject expressions that could mutate page state
 
+Phase 3 capability details:
+
+- `browser_click`, `browser_hover`, `browser_query`, `browser_wait_for`, and `browser_take_element_screenshot` accept optional `frameSelector` to resolve targets inside a specific same-origin iframe
+- the same scoped-selector tools accept optional `pierceShadow: true` to search open shadow roots beneath the selected root
+- `browser_wait_for_event` observes typed page or browser events for dialogs, navigation, requests, and downloads
+
 A common hover-debug workflow is:
 
 1. call `browser_hover` to move the browser pointer onto the card or trigger
@@ -41,6 +48,24 @@ A common hover-debug workflow is:
 3. call `browser_query` on the hover-only control to inspect `exists`, `count`, visibility, opacity, `href`, `onclick`, and bounds
 4. call `browser_take_element_screenshot` to confirm the revealed state
 5. call `browser_eval` in read-only mode when you need page-side inspection that the structured tools do not expose directly
+
+Scoped selector notes:
+
+- `browser_click`, `browser_hover`, `browser_query`, `browser_wait_for`, and `browser_take_element_screenshot` accept optional `frameSelector` for same-origin iframes whose `contentDocument` is accessible
+- the same selector-based tools accept optional `pierceShadow: true` for open shadow-root traversal
+- closed shadow roots, frame-index routing, request interception, and download acceptance controls are still out of scope
+
+Example event wait:
+
+```json
+{
+  "name": "browser_wait_for_event",
+  "arguments": {
+    "event": { "kind": "navigation", "urlIncludes": "/checkout" },
+    "timeoutMs": 2000
+  }
+}
+```
 
 ### Codex Browser Tools
 

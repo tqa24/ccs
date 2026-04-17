@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { spawn } from 'child_process';
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import * as http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { tmpdir } from 'node:os';
@@ -69,6 +69,24 @@ type MockWaitPlan = {
   pageTextSequence?: string[];
 };
 
+type MockPageEventPlan = {
+  dialogs?: Array<{ type: string; message: string }>;
+  navigations?: Array<{ url: string; parentId?: string }>;
+  requests?: Array<{ url: string; method: string }>;
+  downloads?: Array<{ url: string; suggestedFilename: string }>;
+};
+
+type MockFrameState = {
+  selector: string;
+  query?: Record<string, MockQueryPlan>;
+  visibleText?: string;
+};
+
+type MockShadowRootState = {
+  hostSelector: string;
+  query?: Record<string, MockQueryPlan>;
+};
+
 type MockEvalPlan = Record<
   string,
   {
@@ -91,6 +109,9 @@ type MockPageState = {
   query?: Record<string, MockQueryPlan>;
   wait?: MockWaitPlan;
   eval?: MockEvalPlan;
+  frames?: MockFrameState[];
+  shadowRoots?: MockShadowRootState[];
+  events?: MockPageEventPlan;
   screenshot?: {
     expectedClip?: {
       x: number;
@@ -130,6 +151,7 @@ const bundledServerPath = join(process.cwd(), 'lib', 'mcp', 'ccs-browser-server.
 type RunMcpRequestsOptions = {
   serverPath?: string;
   childEnv?: NodeJS.ProcessEnv;
+  responseTimeoutMs?: number;
 };
 
 function encodeMessage(message: unknown): string {
@@ -138,12 +160,40 @@ function encodeMessage(message: unknown): string {
 
 function collectResponses(
   child: ReturnType<typeof spawn>,
-  expectedCount: number
+  expectedCount: number,
+  timeoutMs = 7000
 ): Promise<Array<Record<string, unknown>>> {
   return new Promise((resolve, reject) => {
     let buffer = Buffer.alloc(0);
+    let stderrBuffer = '';
+    let settled = false;
     const responses: Array<Record<string, unknown>> = [];
-    const timer = setTimeout(() => reject(new Error('Timed out waiting for MCP responses')), 7000);
+    const fail = (error: Error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    };
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      resolve(responses);
+    };
+    const timer = setTimeout(() => {
+      const details = stderrBuffer.trim();
+      fail(
+        new Error(
+          details
+            ? `Timed out waiting for MCP responses\n${details}`
+            : 'Timed out waiting for MCP responses'
+        )
+      );
+    }, timeoutMs);
 
     function tryParse(): void {
       while (true) {
@@ -160,16 +210,14 @@ function collectResponses(
 
         responses.push(JSON.parse(body) as Record<string, unknown>);
         if (responses.length >= expectedCount) {
-          clearTimeout(timer);
-          resolve(responses);
+          finish();
           return;
         }
       }
     }
 
     if (!child.stdout) {
-      clearTimeout(timer);
-      reject(new Error('MCP child stdout is unavailable'));
+      fail(new Error('MCP child stdout is unavailable'));
       return;
     }
 
@@ -178,14 +226,29 @@ function collectResponses(
       try {
         tryParse();
       } catch (error) {
-        clearTimeout(timer);
-        reject(error);
+        fail(error instanceof Error ? error : new Error(String(error)));
       }
     });
 
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      stderrBuffer += chunk.toString();
+    });
+
     child.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
+      fail(error);
+    });
+
+    child.on('exit', (code, signal) => {
+      if (settled || responses.length >= expectedCount) {
+        return;
+      }
+      const details = stderrBuffer.trim();
+      const suffix = details ? `\n${details}` : '';
+      fail(
+        new Error(
+          `MCP child exited before all responses arrived (code=${code}, signal=${signal})${suffix}`
+        )
+      );
     });
   });
 }
@@ -236,7 +299,10 @@ function parseNumberArgument(expression: string, key: string): number | undefine
   return Number.parseInt(match[1], 10);
 }
 
-function pickMockMatch<T>(plan: T | T[] | undefined, nth = 0): {
+function pickMockMatch<T>(
+  plan: T | T[] | undefined,
+  nth = 0
+): {
   count: number;
   target: T | undefined;
 } {
@@ -257,6 +323,14 @@ function shiftSelectorSnapshot(page: MockPageState, selector: string): MockQuery
   return queue.shift();
 }
 
+function getMockFrame(page: MockPageState, frameSelector: string): MockFrameState | undefined {
+  return page.frames?.find((frame) => frame.selector === frameSelector);
+}
+
+function getMockShadowRoot(page: MockPageState): MockShadowRootState | undefined {
+  return page.shadowRoots?.[0];
+}
+
 function shiftPageText(page: MockPageState): string {
   const queue = page.wait?.pageTextSequence;
   if (!queue || queue.length === 0) {
@@ -268,10 +342,24 @@ function shiftPageText(page: MockPageState): string {
   return queue.shift() || '';
 }
 
+function resolveNodeModulesPath(): string {
+  const candidates = [
+    join(process.cwd(), 'node_modules'),
+    join(process.cwd(), '..', 'node_modules'),
+    join(process.cwd(), '..', '..', 'node_modules'),
+  ];
+  return (
+    candidates.find((candidate) => existsSync(join(candidate, 'ws'))) ||
+    candidates.find((candidate) => existsSync(candidate)) ||
+    candidates[0]
+  );
+}
+
 function createMockBrowser(pagesInput: MockPageState[]) {
   let tempDir = '';
   let httpServer: http.Server | null = null;
   let wsServer: WebSocketServer | null = null;
+  let browserSocketPath = '';
   const pageStates = new Map<string, MockPageState>();
 
   for (const [index, page] of pagesInput.entries()) {
@@ -294,15 +382,22 @@ function createMockBrowser(pagesInput: MockPageState[]) {
           const serverPort = address && typeof address !== 'string' ? address.port : 0;
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(
-            JSON.stringify(
-              Array.from(pageStates.entries()).map(([wsPath, page]) => ({
+            JSON.stringify([
+              ...Array.from(pageStates.entries()).map(([wsPath, page]) => ({
                 id: page.id,
                 type: 'page',
                 title: page.title,
                 url: page.currentUrl,
                 webSocketDebuggerUrl: `ws://127.0.0.1:${serverPort}${wsPath}`,
-              }))
-            )
+              })),
+              {
+                id: 'browser-target',
+                type: 'browser',
+                title: 'Browser',
+                url: '',
+                webSocketDebuggerUrl: `ws://127.0.0.1:${serverPort}${browserSocketPath || '/devtools/browser'}`,
+              },
+            ])
           );
           return;
         }
@@ -321,8 +416,30 @@ function createMockBrowser(pagesInput: MockPageState[]) {
       });
     });
 
+    browserSocketPath = '/devtools/browser';
     wsServer = new WebSocketServer({ server: httpServer as http.Server });
     wsServer.on('connection', (socket, request) => {
+      if ((request.url || '') === browserSocketPath) {
+        const downloadPage = pagesInput.find(
+          (candidate) => (candidate.events?.downloads?.length || 0) > 0
+        );
+        if (downloadPage?.events?.downloads?.[0]) {
+          const download = downloadPage.events.downloads[0];
+          setTimeout(() => {
+            socket.send(
+              JSON.stringify({
+                method: 'Browser.downloadWillBegin',
+                params: {
+                  url: download.url,
+                  suggestedFilename: download.suggestedFilename,
+                },
+              })
+            );
+          }, 10);
+        }
+        return;
+      }
+
       const page = pageStates.get(request.url || '');
       if (!page) {
         socket.close();
@@ -341,7 +458,12 @@ function createMockBrowser(pagesInput: MockPageState[]) {
         }
 
         function replyError(errorText: string): void {
-          socket.send(JSON.stringify({ id: message.id, result: { result: { subtype: 'error', description: errorText } } }));
+          socket.send(
+            JSON.stringify({
+              id: message.id,
+              result: { result: { subtype: 'error', description: errorText } },
+            })
+          );
         }
 
         if (message.method === 'Page.navigate') {
@@ -364,7 +486,8 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             reply({ data: '' });
             return;
           }
-          page.screenshot.lastCaptureBeyondViewport = message.params?.captureBeyondViewport === true;
+          page.screenshot.lastCaptureBeyondViewport =
+            message.params?.captureBeyondViewport === true;
           const clip =
             message.params?.clip && typeof message.params.clip === 'object'
               ? (message.params.clip as Record<string, unknown>)
@@ -395,6 +518,51 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             }
           }
           reply({});
+          return;
+        }
+
+        if (message.method === 'Page.enable' || message.method === 'Network.enable') {
+          reply({});
+          if (message.method === 'Page.enable') {
+            const dialog = page.events?.dialogs?.[0];
+            const navigations = page.events?.navigations || [];
+            if (dialog) {
+              setTimeout(() => {
+                socket.send(
+                  JSON.stringify({
+                    method: 'Page.javascriptDialogOpening',
+                    params: { message: dialog.message, type: dialog.type },
+                  })
+                );
+              }, 10);
+            }
+            navigations.forEach((navigation, index) => {
+              setTimeout(
+                () => {
+                  socket.send(
+                    JSON.stringify({
+                      method: 'Page.frameNavigated',
+                      params: { frame: { url: navigation.url, parentId: navigation.parentId } },
+                    })
+                  );
+                },
+                10 + index * 10
+              );
+            });
+          }
+          if (message.method === 'Network.enable') {
+            const requestPlan = page.events?.requests?.[0];
+            if (requestPlan) {
+              setTimeout(() => {
+                socket.send(
+                  JSON.stringify({
+                    method: 'Network.requestWillBeSent',
+                    params: { request: { url: requestPlan.url, method: requestPlan.method } },
+                  })
+                );
+              }, 10);
+            }
+          }
           return;
         }
 
@@ -429,7 +597,12 @@ function createMockBrowser(pagesInput: MockPageState[]) {
         }
 
         if (expression.includes('document.title') && expression.includes('location.href')) {
-          reply({ result: { type: 'string', value: JSON.stringify({ title: page.title, url: page.currentUrl }) } });
+          reply({
+            result: {
+              type: 'string',
+              value: JSON.stringify({ title: page.title, url: page.currentUrl }),
+            },
+          });
           return;
         }
 
@@ -464,19 +637,30 @@ function createMockBrowser(pagesInput: MockPageState[]) {
           const attemptedMouseSequence = attemptedMouseDown && attemptedMouseUp;
           const attemptedClickEvent = expression.includes("dispatchMouseEvent('click'");
           const readsDispatchResult = expression.includes('const dispatchResult = {');
-          const gatesNativeClickOnDispatchResult = expression.includes('if (!dispatchResult.shouldActivate)');
-          const checksIsConnectedBeforeNativeClick = expression.includes('if (!element.isConnected)');
+          const gatesNativeClickOnDispatchResult = expression.includes(
+            'if (!dispatchResult.shouldActivate)'
+          );
+          const checksIsConnectedBeforeNativeClick = expression.includes(
+            'if (!element.isConnected)'
+          );
           const catchIndex = expression.indexOf('catch (mouseError) {');
           const catchBlockEnd = catchIndex === -1 ? -1 : expression.indexOf('\n    }', catchIndex);
           const nativeClickIndexes = Array.from(expression.matchAll(/element\.click\(\)/g)).map(
             (match) => match.index ?? -1
           );
           const attemptedFallbackClick = nativeClickIndexes.some(
-            (index) => catchIndex !== -1 && catchBlockEnd !== -1 && index > catchIndex && index < catchBlockEnd
+            (index) =>
+              catchIndex !== -1 &&
+              catchBlockEnd !== -1 &&
+              index > catchIndex &&
+              index < catchBlockEnd
           );
           const attemptedNativeClickOutsideCatch = nativeClickIndexes.some(
             (index) =>
-              catchIndex === -1 || catchBlockEnd === -1 || index < catchIndex || index > catchBlockEnd
+              catchIndex === -1 ||
+              catchBlockEnd === -1 ||
+              index < catchIndex ||
+              index > catchBlockEnd
           );
           if (!resolvedClickPlan) {
             replyError(`element index ${nth} is out of range for selector: ${selector}`);
@@ -506,11 +690,17 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             replyError(`synthetic click event forbidden for selector: ${selector}`);
             return;
           }
-          if ((resolvedClickPlan.cancelMouseDown || resolvedClickPlan.cancelMouseUp) && !readsDispatchResult) {
+          if (
+            (resolvedClickPlan.cancelMouseDown || resolvedClickPlan.cancelMouseUp) &&
+            !readsDispatchResult
+          ) {
             replyError(`dispatch result must be checked for selector: ${selector}`);
             return;
           }
-          if ((resolvedClickPlan.cancelMouseDown || resolvedClickPlan.cancelMouseUp) && !gatesNativeClickOnDispatchResult) {
+          if (
+            (resolvedClickPlan.cancelMouseDown || resolvedClickPlan.cancelMouseUp) &&
+            !gatesNativeClickOnDispatchResult
+          ) {
             replyError(`native click must be gated for selector: ${selector}`);
             return;
           }
@@ -551,10 +741,32 @@ function createMockBrowser(pagesInput: MockPageState[]) {
         ) {
           const selector = parseJsonArgument(expression, 'selector') || '';
           const nth = parseNumberArgument(expression, 'nth');
-          const queryPlan = shiftSelectorSnapshot(page, selector);
+          const frameSelector = parseJsonArgument(expression, 'frameSelector') || '';
+          const pierceShadow = expression.includes('const pierceShadow = true');
+          const frame = frameSelector ? getMockFrame(page, frameSelector) : undefined;
+          const shadowRoot = pierceShadow ? getMockShadowRoot(page) : undefined;
+          const scopedQuery = frame?.query?.[selector] ?? shadowRoot?.query?.[selector];
+          const frameRootPlan = frame?.query?.[frameSelector];
+          const frameRect = !Array.isArray(frameRootPlan) ? frameRootPlan?.rect : undefined;
+          const applyFrameOffset = (rect?: MockRect): MockRect | undefined => {
+            if (!rect || !frameRect) {
+              return rect;
+            }
+            return {
+              x: rect.x + frameRect.left,
+              y: rect.y + frameRect.top,
+              width: rect.width,
+              height: rect.height,
+              top: rect.top + frameRect.top,
+              right: rect.right + frameRect.left,
+              bottom: rect.bottom + frameRect.top,
+              left: rect.left + frameRect.left,
+            };
+          };
+          const queryPlan = scopedQuery ?? shiftSelectorSnapshot(page, selector);
           if (
             page.screenshot?.requireScrolledMeasurement &&
-            selector in (page.query || {}) &&
+            (selector in (page.query || {}) || Boolean(scopedQuery)) &&
             !expression.includes('scrollIntoView')
           ) {
             replyError(`scrollIntoView required for selector: ${selector}`);
@@ -572,7 +784,8 @@ function createMockBrowser(pagesInput: MockPageState[]) {
                 result: {
                   type: 'string',
                   value: JSON.stringify({
-                    exists: nth === undefined ? queryPlan.length > 0 : queryPlan.length > targetIndex,
+                    exists:
+                      nth === undefined ? queryPlan.length > 0 : queryPlan.length > targetIndex,
                     count: queryPlan.length,
                     targetIndex,
                     targetMissing: true,
@@ -581,7 +794,7 @@ function createMockBrowser(pagesInput: MockPageState[]) {
               });
               return;
             }
-            const rect = target.rect;
+            const rect = applyFrameOffset(target.rect);
             const text = target.innerText || target.textContent || '';
             reply({
               result: {
@@ -619,7 +832,7 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             reply({ result: { type: 'string', value: JSON.stringify({ exists: false }) } });
             return;
           }
-          const rect = resolvedQueryPlan.rect;
+          const rect = applyFrameOffset(resolvedQueryPlan.rect);
           const text = resolvedQueryPlan.innerText || resolvedQueryPlan.textContent || '';
           const viewportWidth = 1280;
           const viewportHeight = 720;
@@ -784,7 +997,11 @@ async function runMcpRequests(
   const child = await browser.start(options);
 
   try {
-    const responsesPromise = collectResponses(child, requests.length + 1);
+    const responsesPromise = collectResponses(
+      child,
+      requests.length + 1,
+      options.responseTimeoutMs
+    );
     child.stdin.write(
       encodeMessage({
         jsonrpc: '2.0',
@@ -801,6 +1018,7 @@ async function runMcpRequests(
     for (const request of requests) {
       child.stdin.write(encodeMessage(request));
     }
+    child.stdin.end();
 
     return await responsesPromise;
   } finally {
@@ -820,13 +1038,15 @@ describe('ccs-browser MCP server', () => {
       [{ jsonrpc: '2.0', id: 2, method: 'tools/list' }]
     );
 
-    const tools = (responses.find((message) => message.id === 2)?.result as {
-      tools: Array<{
-        name: string;
-        description?: string;
-        inputSchema?: { properties?: Record<string, { type?: string; minimum?: number }> };
-      }>;
-    }).tools;
+    const tools = (
+      responses.find((message) => message.id === 2)?.result as {
+        tools: Array<{
+          name: string;
+          description?: string;
+          inputSchema?: { properties?: Record<string, { type?: string; minimum?: number }> };
+        }>;
+      }
+    ).tools;
 
     expect(tools.map((tool) => tool.name)).toEqual([
       'browser_get_session_info',
@@ -842,6 +1062,7 @@ describe('ccs-browser MCP server', () => {
       'browser_hover',
       'browser_query',
       'browser_take_element_screenshot',
+      'browser_wait_for_event',
     ]);
 
     const clickTool = tools.find((tool) => tool.name === 'browser_click');
@@ -887,8 +1108,9 @@ describe('ccs-browser MCP server', () => {
         {
           serverPath: bootstrapServerPath,
           childEnv: {
-            NODE_PATH: join(process.cwd(), 'node_modules'),
+            NODE_PATH: resolveNodeModulesPath(),
           },
+          responseTimeoutMs: 12000,
         }
       );
 
@@ -899,7 +1121,7 @@ describe('ccs-browser MCP server', () => {
     } finally {
       rmSync(installDir, { recursive: true, force: true });
     }
-  });
+  }, 10000);
 
   it('navigates successfully after readiness polling', async () => {
     const responses = await runMcpRequests(
@@ -935,42 +1157,38 @@ describe('ccs-browser MCP server', () => {
     expect(text).toContain('status: navigated');
   });
 
-  it(
-    'returns a handled error when navigation readiness times out',
-    async () => {
-      const responses = await runMcpRequests(
-        [
-          {
-            id: 'page-1',
-            title: 'Example Page',
-            currentUrl: 'https://example.com/',
-            navigate: {
-              'https://example.com/slow': {
-                finalUrl: 'https://example.com/',
-                readyStates: new Array(60).fill('loading'),
-              },
+  it('returns a handled error when navigation readiness times out', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Example Page',
+          currentUrl: 'https://example.com/',
+          navigate: {
+            'https://example.com/slow': {
+              finalUrl: 'https://example.com/',
+              readyStates: new Array(60).fill('loading'),
             },
           },
-        ],
-        [
-          {
-            jsonrpc: '2.0',
-            id: 2,
-            method: 'tools/call',
-            params: {
-              name: 'browser_navigate',
-              arguments: { url: 'https://example.com/slow' },
-            },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 2,
+          method: 'tools/call',
+          params: {
+            name: 'browser_navigate',
+            arguments: { url: 'https://example.com/slow' },
           },
-        ]
-      );
+        },
+      ]
+    );
 
-      const response = responses.find((message) => message.id === 2);
-      expect((response?.result as { isError?: boolean }).isError).toBe(true);
-      expect(getResponseText(response)).toContain('Browser MCP failed: navigation did not complete');
-    },
-    8000
-  );
+    const response = responses.find((message) => message.id === 2);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain('Browser MCP failed: navigation did not complete');
+  }, 8000);
 
   it('returns handled errors for missing URL, malformed URL, invalid page index, and out-of-range page index', async () => {
     const responses = await runMcpRequests(
@@ -992,25 +1210,35 @@ describe('ccs-browser MCP server', () => {
           jsonrpc: '2.0',
           id: 4,
           method: 'tools/call',
-          params: { name: 'browser_navigate', arguments: { pageIndex: 1.5, url: 'https://example.com/next' } },
+          params: {
+            name: 'browser_navigate',
+            arguments: { pageIndex: 1.5, url: 'https://example.com/next' },
+          },
         },
         {
           jsonrpc: '2.0',
           id: 5,
           method: 'tools/call',
-          params: { name: 'browser_navigate', arguments: { pageIndex: 9, url: 'https://example.com/next' } },
+          params: {
+            name: 'browser_navigate',
+            arguments: { pageIndex: 9, url: 'https://example.com/next' },
+          },
         },
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('Browser MCP failed: url is required');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'Browser MCP failed: url is required'
+    );
     expect(getResponseText(responses.find((message) => message.id === 3))).toContain(
       'Browser MCP failed: url must be an absolute http or https URL'
     );
     expect(getResponseText(responses.find((message) => message.id === 4))).toContain(
       'Browser MCP failed: pageIndex must be a non-negative integer'
     );
-    expect(getResponseText(responses.find((message) => message.id === 5))).toContain('page index 9 is out of range');
+    expect(getResponseText(responses.find((message) => message.id === 5))).toContain(
+      'page index 9 is out of range'
+    );
   });
 
   it('surfaces Page.navigate CDP failures as handled errors', async () => {
@@ -1123,12 +1351,18 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #submit');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'status: clicked'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'selector: #submit'
+    );
 
     const selectorMiss = responses.find((message) => message.id === 3);
     expect((selectorMiss?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(selectorMiss)).toContain('element index 0 is out of range for selector: #missing');
+    expect(getResponseText(selectorMiss)).toContain(
+      'element index 0 is out of range for selector: #missing'
+    );
 
     const disabledError = responses.find((message) => message.id === 4);
     expect((disabledError?.result as { isError?: boolean }).isError).toBe(true);
@@ -1167,7 +1401,9 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 20))).toContain('status: clicked');
+    expect(getResponseText(responses.find((message) => message.id === 20))).toContain(
+      'status: clicked'
+    );
     expect(getResponseText(responses.find((message) => message.id === 20))).toContain('nth: 1');
     expect(getResponseText(responses.find((message) => message.id === 21))).toContain(
       'Browser MCP failed: element index 3 is out of range for selector: .menu-item'
@@ -1205,7 +1441,9 @@ describe('ccs-browser MCP server', () => {
 
     const hiddenError = responses.find((message) => message.id === 2);
     expect((hiddenError?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(hiddenError)).toContain('element is hidden or not interactable for selector: #hidden');
+    expect(getResponseText(hiddenError)).toContain(
+      'element is hidden or not interactable for selector: #hidden'
+    );
 
     const detachedError = responses.find((message) => message.id === 3);
     expect((detachedError?.result as { isError?: boolean }).isError).toBe(true);
@@ -1234,8 +1472,12 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #menu-trigger');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'status: clicked'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'selector: #menu-trigger'
+    );
   });
 
   it('preserves mouse sequence preparation without dispatching a synthetic click event', async () => {
@@ -1264,8 +1506,12 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #click-event');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'status: clicked'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'selector: #click-event'
+    );
   });
 
   it('preserves native click activation after the mouse sequence', async () => {
@@ -1384,8 +1630,12 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('status: clicked');
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('selector: #fallback');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'status: clicked'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'selector: #fallback'
+    );
   });
 
   it('requires real mouse movement for hover-only targets and reports hover failures', async () => {
@@ -1556,12 +1806,18 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 2))).toContain('exists: true');
+    expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
+      'exists: true'
+    );
     expect(getResponseText(responses.find((message) => message.id === 2))).toContain(
       'boundingClientRect: {"x":123'
     );
-    expect(getResponseText(responses.find((message) => message.id === 3))).toContain('display: block');
-    expect(getResponseText(responses.find((message) => message.id === 3))).not.toContain('innerText:');
+    expect(getResponseText(responses.find((message) => message.id === 3))).toContain(
+      'display: block'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 3))).not.toContain(
+      'innerText:'
+    );
 
     const missingResponse = responses.find((message) => message.id === 4);
     expect((missingResponse?.result as { isError?: boolean }).isError).not.toBe(true);
@@ -1645,7 +1901,15 @@ describe('ccs-browser MCP server', () => {
           currentUrl: 'https://example.com/',
           query: {
             '.hover-action': [
-              { exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' },
+              {
+                exists: true,
+                connected: true,
+                innerText: 'Open',
+                textContent: 'Open',
+                display: 'block',
+                visibility: 'visible',
+                opacity: '1',
+              },
             ],
           },
         },
@@ -1707,7 +1971,16 @@ describe('ccs-browser MCP server', () => {
                   display: 'block',
                   visibility: 'visible',
                   opacity: '0.95',
-                  rect: { x: 10, y: 10, width: 40, height: 20, top: 10, right: 50, bottom: 30, left: 10 },
+                  rect: {
+                    x: 10,
+                    y: 10,
+                    width: 40,
+                    height: 20,
+                    top: 10,
+                    right: 50,
+                    bottom: 30,
+                    left: 10,
+                  },
                 },
               ],
             },
@@ -1732,7 +2005,9 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 40))).toContain('status: satisfied');
+    expect(getResponseText(responses.find((message) => message.id === 40))).toContain(
+      'status: satisfied'
+    );
   });
 
   it('waits for page text includes and returns timeout summaries', async () => {
@@ -1752,7 +2027,16 @@ describe('ccs-browser MCP server', () => {
                   display: 'block',
                   visibility: 'visible',
                   opacity: '0.2',
-                  rect: { x: 10, y: 10, width: 40, height: 20, top: 10, right: 50, bottom: 30, left: 10 },
+                  rect: {
+                    x: 10,
+                    y: 10,
+                    width: 40,
+                    height: 20,
+                    top: 10,
+                    right: 50,
+                    bottom: 30,
+                    left: 10,
+                  },
                 },
               ],
             },
@@ -1790,11 +2074,15 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 41))).toContain('status: satisfied');
+    expect(getResponseText(responses.find((message) => message.id === 41))).toContain(
+      'status: satisfied'
+    );
     expect(getResponseText(responses.find((message) => message.id === 42))).toContain(
       'Browser MCP failed: wait condition timed out'
     );
-    expect(getResponseText(responses.find((message) => message.id === 42))).toContain('opacity=0.2');
+    expect(getResponseText(responses.find((message) => message.id === 42))).toContain(
+      'opacity=0.2'
+    );
   });
 
   it('waits for selector text includes', async () => {
@@ -1807,8 +2095,28 @@ describe('ccs-browser MCP server', () => {
           wait: {
             selectorSnapshots: {
               '.hover-action': [
-                [{ exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' }],
-                [{ exists: true, connected: true, innerText: 'Archive', textContent: 'Archive', display: 'block', visibility: 'visible', opacity: '1' }],
+                [
+                  {
+                    exists: true,
+                    connected: true,
+                    innerText: 'Open',
+                    textContent: 'Open',
+                    display: 'block',
+                    visibility: 'visible',
+                    opacity: '1',
+                  },
+                ],
+                [
+                  {
+                    exists: true,
+                    connected: true,
+                    innerText: 'Archive',
+                    textContent: 'Archive',
+                    display: 'block',
+                    visibility: 'visible',
+                    opacity: '1',
+                  },
+                ],
               ],
             },
           },
@@ -1832,7 +2140,9 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 45))).toContain('status: satisfied');
+    expect(getResponseText(responses.find((message) => message.id === 45))).toContain(
+      'status: satisfied'
+    );
   });
 
   it('lets nth become valid later during polling and rejects unsupported page-level wait kinds', async () => {
@@ -1845,10 +2155,46 @@ describe('ccs-browser MCP server', () => {
           wait: {
             selectorSnapshots: {
               '.hover-action': [
-                [{ exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' }],
                 [
-                  { exists: true, connected: true, innerText: 'Open', textContent: 'Open', display: 'block', visibility: 'visible', opacity: '1' },
-                  { exists: true, connected: true, innerText: 'Archive', textContent: 'Archive', display: 'block', visibility: 'visible', opacity: '1', rect: { x: 10, y: 10, width: 40, height: 20, top: 10, right: 50, bottom: 30, left: 10 } },
+                  {
+                    exists: true,
+                    connected: true,
+                    innerText: 'Open',
+                    textContent: 'Open',
+                    display: 'block',
+                    visibility: 'visible',
+                    opacity: '1',
+                  },
+                ],
+                [
+                  {
+                    exists: true,
+                    connected: true,
+                    innerText: 'Open',
+                    textContent: 'Open',
+                    display: 'block',
+                    visibility: 'visible',
+                    opacity: '1',
+                  },
+                  {
+                    exists: true,
+                    connected: true,
+                    innerText: 'Archive',
+                    textContent: 'Archive',
+                    display: 'block',
+                    visibility: 'visible',
+                    opacity: '1',
+                    rect: {
+                      x: 10,
+                      y: 10,
+                      width: 40,
+                      height: 20,
+                      top: 10,
+                      right: 50,
+                      bottom: 30,
+                      left: 10,
+                    },
+                  },
                 ],
               ],
             },
@@ -1887,7 +2233,9 @@ describe('ccs-browser MCP server', () => {
       ]
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 43))).toContain('status: satisfied');
+    expect(getResponseText(responses.find((message) => message.id === 43))).toContain(
+      'status: satisfied'
+    );
     expect(getResponseText(responses.find((message) => message.id === 44))).toContain(
       'Browser MCP failed: page-level wait only supports text conditions in Phase 1'
     );
@@ -1910,7 +2258,7 @@ describe('ccs-browser MCP server', () => {
             'throw new Error("boom")': {
               error: 'boom',
             },
-            'window': {
+            window: {
               nonSerializable: true,
             },
           },
@@ -1966,7 +2314,9 @@ describe('ccs-browser MCP server', () => {
       { childEnv: { ...process.env, CCS_BROWSER_EVAL_MODE: 'readonly' } }
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 50))).toContain('mode: readonly');
+    expect(getResponseText(responses.find((message) => message.id === 50))).toContain(
+      'mode: readonly'
+    );
     expect(getResponseText(responses.find((message) => message.id === 50))).toContain(
       'value: {"hovered":true,"label":"Archive"}'
     );
@@ -1976,7 +2326,9 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(responses.find((message) => message.id === 52))).toContain(
       'Browser MCP failed: browser_eval readwrite mode is disabled by CCS_BROWSER_EVAL_MODE=readonly'
     );
-    expect(getResponseText(responses.find((message) => message.id === 53))).toContain('Browser MCP failed: boom');
+    expect(getResponseText(responses.find((message) => message.id === 53))).toContain(
+      'Browser MCP failed: boom'
+    );
     expect(getResponseText(responses.find((message) => message.id === 54))).toContain(
       'Browser MCP failed: evaluation result is not JSON-serializable'
     );
@@ -2010,8 +2362,195 @@ describe('ccs-browser MCP server', () => {
       { childEnv: { ...process.env, CCS_BROWSER_EVAL_MODE: 'readwrite' } }
     );
 
-    expect(getResponseText(responses.find((message) => message.id === 54))).toContain('mode: readwrite');
-    expect(getResponseText(responses.find((message) => message.id === 54))).toContain('value: "ok"');
+    expect(getResponseText(responses.find((message) => message.id === 54))).toContain(
+      'mode: readwrite'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 54))).toContain(
+      'value: "ok"'
+    );
+  });
+
+  it('queries inside an iframe selected by frameSelector', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Frame Page',
+          currentUrl: 'https://example.com/',
+          frames: [
+            {
+              selector: '#details-frame',
+              query: {
+                '.save-button': {
+                  exists: true,
+                  connected: true,
+                  innerText: 'Save',
+                  textContent: 'Save',
+                  display: 'block',
+                  visibility: 'visible',
+                  opacity: '1',
+                },
+              },
+            },
+          ],
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 55,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: {
+              selector: '.save-button',
+              frameSelector: '#details-frame',
+              fields: ['exists', 'innerText'],
+            },
+          },
+        },
+      ]
+    );
+
+    expect(
+      getMockFrame(
+        {
+          frames: [{ selector: '#details-frame' }],
+          id: 'x',
+          title: 'x',
+          currentUrl: 'https://example.com/',
+        },
+        '#details-frame'
+      )
+    ).toBeDefined();
+    expect(getResponseText(responses.find((message) => message.id === 55))).toContain(
+      'innerText: Save'
+    );
+  });
+
+  it('queries through open shadow roots when pierceShadow is true', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Shadow Page',
+          currentUrl: 'https://example.com/',
+          shadowRoots: [
+            {
+              hostSelector: 'app-toolbar',
+              query: {
+                'button[action="archive"]': {
+                  exists: true,
+                  connected: true,
+                  innerText: 'Archive',
+                  textContent: 'Archive',
+                  display: 'block',
+                  visibility: 'visible',
+                  opacity: '1',
+                },
+              },
+            },
+          ],
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 56,
+          method: 'tools/call',
+          params: {
+            name: 'browser_query',
+            arguments: {
+              selector: 'button[action="archive"]',
+              pierceShadow: true,
+              fields: ['exists', 'innerText'],
+            },
+          },
+        },
+      ]
+    );
+
+    expect(
+      getMockShadowRoot({
+        shadowRoots: [{ hostSelector: 'app-toolbar' }],
+        id: 'x',
+        title: 'x',
+        currentUrl: 'https://example.com/',
+      })
+    ).toBeDefined();
+    expect(getResponseText(responses.find((message) => message.id === 56))).toContain(
+      'innerText: Archive'
+    );
+  });
+
+  it('waits for a matching navigation event with browser_wait_for_event', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Event Page',
+          currentUrl: 'https://example.com/',
+          events: {
+            navigations: [{ url: 'https://example.com/checkout' }],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 57,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              timeoutMs: 1000,
+              event: { kind: 'navigation', urlIncludes: '/checkout' },
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 57))).toContain(
+      'status: observed'
+    );
+  });
+
+  it('ignores child-frame navigations when waiting for a page navigation event', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Event Page',
+          currentUrl: 'https://example.com/',
+          events: {
+            navigations: [
+              { url: 'https://example.com/embedded-checkout', parentId: 'frame-1' },
+              { url: 'https://example.com/checkout' },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 58,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              timeoutMs: 1000,
+              event: { kind: 'navigation', urlIncludes: '/checkout' },
+            },
+          },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 58));
+    expect(text).toContain('status: observed');
+    expect(text).toContain('"url":"https://example.com/checkout"');
+    expect(text).not.toContain('embedded-checkout');
   });
 
   it('captures element screenshots using the post-scroll visible clip and reports failures', async () => {
@@ -2160,6 +2699,83 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(emptyPayloadResponses.find((message) => message.id === 2))).toContain(
       'Browser MCP failed: screenshot capture failed'
     );
+
+    const iframeScreenshotResponses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Iframe Screenshot Page',
+          currentUrl: 'https://example.com/',
+          frames: [
+            {
+              selector: '#details-frame',
+              query: {
+                '#details-frame': {
+                  exists: true,
+                  connected: true,
+                  rect: {
+                    x: 40,
+                    y: 100,
+                    width: 300,
+                    height: 200,
+                    top: 100,
+                    right: 340,
+                    bottom: 300,
+                    left: 40,
+                  },
+                  display: 'block',
+                  visibility: 'visible',
+                  opacity: '1',
+                },
+                '.save-button': {
+                  exists: true,
+                  connected: true,
+                  rect: {
+                    x: 10,
+                    y: 20,
+                    width: 60,
+                    height: 24,
+                    top: 20,
+                    right: 70,
+                    bottom: 44,
+                    left: 10,
+                  },
+                  display: 'block',
+                  visibility: 'visible',
+                  opacity: '1',
+                },
+              },
+            },
+          ],
+          screenshot: {
+            data: 'aWZyYW1lLXNob3Q=',
+            requireScrolledMeasurement: true,
+            expectedClip: {
+              x: 50,
+              y: 120,
+              width: 60,
+              height: 24,
+              scale: 1,
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 5,
+          method: 'tools/call',
+          params: {
+            name: 'browser_take_element_screenshot',
+            arguments: { selector: '.save-button', frameSelector: '#details-frame' },
+          },
+        },
+      ]
+    );
+
+    expect(
+      getResponseText(iframeScreenshotResponses.find((message) => message.id === 5))
+    ).toContain('data: aWZyYW1lLXNob3Q=');
   });
 
   it('captures screenshots and reports empty payload failures', async () => {
@@ -2217,7 +2833,9 @@ describe('ccs-browser MCP server', () => {
 
     const errorResponse = errorResponses.find((message) => message.id === 2);
     expect((errorResponse?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(errorResponse)).toContain('Browser MCP failed: screenshot capture failed');
+    expect(getResponseText(errorResponse)).toContain(
+      'Browser MCP failed: screenshot capture failed'
+    );
   });
 
   it('types into supported editable targets with explicit focus and final-value verification, and rejects unsupported targets', async () => {
@@ -2318,10 +2936,14 @@ describe('ccs-browser MCP server', () => {
 
     const unsupported = responses.find((message) => message.id === 5);
     expect((unsupported?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(unsupported)).toContain('element is not text-editable for selector: #color');
+    expect(getResponseText(unsupported)).toContain(
+      'element is not text-editable for selector: #color'
+    );
 
     const nonEditable = responses.find((message) => message.id === 6);
     expect((nonEditable?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(nonEditable)).toContain('element is not text-editable for selector: #plain');
+    expect(getResponseText(nonEditable)).toContain(
+      'element is not text-editable for selector: #plain'
+    );
   });
 });
