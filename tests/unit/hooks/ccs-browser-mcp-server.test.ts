@@ -1433,9 +1433,15 @@ describe('ccs-browser MCP server', () => {
     expect(addRuleTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
     expect(addRuleTool?.inputSchema?.properties?.urlIncludes).toMatchObject({ type: 'string' });
     expect(addRuleTool?.inputSchema?.properties?.method).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.resourceType).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.urlPattern).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.urlRegex).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.headerMatchers).toMatchObject({ type: 'array' });
+    expect(addRuleTool?.inputSchema?.properties?.priority).toMatchObject({ type: 'integer' });
     expect(addRuleTool?.inputSchema?.properties?.action).toMatchObject({ type: 'string' });
     expect(addRuleTool?.inputSchema?.properties?.statusCode).toMatchObject({ type: 'integer' });
-    expect(addRuleTool?.inputSchema?.properties?.headers).toMatchObject({ type: 'array' });
+    expect(addRuleTool?.inputSchema?.properties?.responseHeaders).toMatchObject({ type: 'array' });
+    expect(addRuleTool?.inputSchema?.properties?.headers).toBeUndefined();
     expect(addRuleTool?.inputSchema?.properties?.body).toMatchObject({ type: 'string' });
     expect(addRuleTool?.inputSchema?.properties?.contentType).toMatchObject({ type: 'string' });
 
@@ -2018,6 +2024,459 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(response)).toContain('Browser MCP failed: action must be one of: continue, fail');
   });
 
+  it('rejects intercept rules when urlPattern and urlRegex are both provided', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 981,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              urlPattern: 'https://example.com/api/*',
+              urlRegex: '^https://example\\.com/api/',
+              action: 'continue',
+            },
+          },
+        },
+      ]
+    );
+
+    const response = responses.find((message) => message.id === 981);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain('Browser MCP failed: urlPattern and urlRegex cannot be used together');
+  });
+
+  it('rejects intercept rules when priority is not an integer', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 982,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              urlIncludes: '/api',
+              priority: 1.5,
+              action: 'continue',
+            },
+          },
+        },
+      ]
+    );
+
+    const response = responses.find((message) => message.id === 982);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain('Browser MCP failed: priority must be an integer');
+  });
+
+  it('rejects intercept rules when headerMatchers is not an array', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 983,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              headerMatchers: 'x',
+              action: 'continue',
+            },
+          },
+        },
+      ]
+    );
+
+    const response = responses.find((message) => message.id === 983);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain('Browser MCP failed: headerMatchers must be an array');
+  });
+
+  it('rejects intercept rules when a header matcher is missing name', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 984,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              headerMatchers: [{ valueIncludes: 'staging' }],
+              action: 'continue',
+            },
+          },
+        },
+      ]
+    );
+
+    const response = responses.find((message) => message.id === 984);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain('Browser MCP failed: headerMatchers.name is required');
+  });
+
+  it('rejects intercept rules when a header matcher has no value matcher', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 985,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              headerMatchers: [{ name: 'x-env' }],
+              action: 'continue',
+            },
+          },
+        },
+      ]
+    );
+
+    const response = responses.find((message) => message.id === 985);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain('Browser MCP failed: headerMatchers entry must include valueIncludes or valueRegex');
+  });
+
+  it('rejects intercept rules when no matching condition is provided', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 986,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              priority: 10,
+              action: 'continue',
+            },
+          },
+        },
+      ]
+    );
+
+    const response = responses.find((message) => message.id === 986);
+    expect((response?.result as { isError?: boolean }).isError).toBe(true);
+    expect(getResponseText(response)).toContain('Browser MCP failed: at least one matching condition is required');
+  });
+
+  it('adds a resourceType interception rule and lists its richer matching summary', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 987,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              resourceType: 'XHR',
+              priority: 10,
+              action: 'continue',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 988,
+          method: 'tools/call',
+          params: { name: 'browser_list_intercept_rules', arguments: {} },
+        },
+      ]
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 988));
+    expect(listText).toContain('resourceType: XHR');
+    expect(listText).toContain('priority: 10');
+  });
+
+  it('prefers the higher-priority matched rule over an earlier lower-priority rule', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Home',
+        currentUrl: 'https://example.com/',
+        intercept: {
+          pausedRequests: [
+            {
+              requestId: 'req-priority',
+              url: 'https://example.com/api/orders',
+              method: 'GET',
+              resourceType: 'XHR',
+            },
+          ],
+        },
+      },
+    ];
+    const responses = await runMcpRequests(
+      pages,
+      [
+        {
+          jsonrpc: '2.0',
+          id: 989,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              urlIncludes: '/api',
+              action: 'fulfill',
+              statusCode: 201,
+              body: 'low',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 990,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              resourceType: 'XHR',
+              priority: 10,
+              action: 'fulfill',
+              statusCode: 202,
+              body: 'high',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 991,
+          method: 'tools/call',
+          params: { name: 'browser_list_requests', arguments: {} },
+        },
+      ],
+      {
+        responseTimeoutMs: 12000,
+      }
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 991));
+    expect(listText).toContain('requestId: req-priority');
+    expect(listText).toContain('matchedRuleId: rule-2');
+    expect(pages[0]?.intercept?.fulfilledRequests?.[0]?.responseCode).toBe(202);
+  });
+
+  it('matches urlPattern rules with wildcard syntax', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Home',
+        currentUrl: 'https://example.com/',
+        intercept: {
+          pausedRequests: [
+            {
+              requestId: 'req-pattern',
+              url: 'https://example.com/api/v1/users',
+              method: 'GET',
+            },
+          ],
+        },
+      },
+    ];
+    const responses = await runMcpRequests(
+      pages,
+      [
+        {
+          jsonrpc: '2.0',
+          id: 992,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              urlPattern: 'https://example.com/api/*',
+              action: 'fail',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 993,
+          method: 'tools/call',
+          params: { name: 'browser_list_requests', arguments: {} },
+        },
+      ],
+      {
+        responseTimeoutMs: 12000,
+      }
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 993));
+    expect(listText).toContain('requestId: req-pattern');
+    expect(listText).toContain('action: fail');
+    expect(pages[0]?.intercept?.failedRequests?.[0]?.requestId).toBe('req-pattern');
+  });
+
+  it('matches urlRegex rules', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Home',
+        currentUrl: 'https://example.com/',
+        intercept: {
+          pausedRequests: [
+            {
+              requestId: 'req-regex',
+              url: 'https://example.com/api/users',
+              method: 'GET',
+            },
+          ],
+        },
+      },
+    ];
+    const responses = await runMcpRequests(
+      pages,
+      [
+        {
+          jsonrpc: '2.0',
+          id: 994,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              urlRegex: '^https://example\\.com/api/(users|teams)$',
+              action: 'continue',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 995,
+          method: 'tools/call',
+          params: { name: 'browser_list_requests', arguments: {} },
+        },
+      ],
+      {
+        responseTimeoutMs: 12000,
+      }
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 995));
+    expect(listText).toContain('requestId: req-regex');
+    expect(listText).toContain('matchedRuleId: rule-1');
+    expect(pages[0]?.intercept?.continuedRequestIds).toContain('req-regex');
+  });
+
+  it('matches headerMatchers using valueIncludes and case-insensitive header names', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Home',
+        currentUrl: 'https://example.com/',
+        intercept: {
+          pausedRequests: [
+            {
+              requestId: 'req-header-includes',
+              url: 'https://example.com/api/header-includes',
+              method: 'GET',
+              requestHeaders: {
+                'X-Env': 'staging-us',
+              },
+            },
+          ],
+        },
+      },
+    ];
+    const responses = await runMcpRequests(
+      pages,
+      [
+        {
+          jsonrpc: '2.0',
+          id: 996,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              headerMatchers: [{ name: 'x-env', valueIncludes: 'staging' }],
+              action: 'fulfill',
+              statusCode: 207,
+              body: 'matched-includes',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 997,
+          method: 'tools/call',
+          params: { name: 'browser_list_requests', arguments: {} },
+        },
+      ],
+      {
+        responseTimeoutMs: 12000,
+      }
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 997));
+    expect(listText).toContain('requestId: req-header-includes');
+    expect(listText).toContain('matchedRuleId: rule-1');
+    expect(pages[0]?.intercept?.fulfilledRequests?.[0]?.responseCode).toBe(207);
+  });
+
+  it('matches headerMatchers using valueRegex', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Home',
+        currentUrl: 'https://example.com/',
+        intercept: {
+          pausedRequests: [
+            {
+              requestId: 'req-header-regex',
+              url: 'https://example.com/api/header-regex',
+              method: 'GET',
+              requestHeaders: {
+                'x-tenant': 'acme-prod',
+              },
+            },
+          ],
+        },
+      },
+    ];
+    const responses = await runMcpRequests(
+      pages,
+      [
+        {
+          jsonrpc: '2.0',
+          id: 998,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: {
+              headerMatchers: [{ name: 'X-Tenant', valueRegex: '^acme-' }],
+              action: 'continue',
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 999,
+          method: 'tools/call',
+          params: { name: 'browser_list_requests', arguments: {} },
+        },
+      ],
+      {
+        responseTimeoutMs: 12000,
+      }
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 999));
+    expect(listText).toContain('requestId: req-header-regex');
+    expect(listText).toContain('matchedRuleId: rule-1');
+    expect(pages[0]?.intercept?.continuedRequestIds).toContain('req-header-regex');
+  });
+
   it('adds a fulfill interception rule and lists its response summary', async () => {
     const responses = await runMcpRequests(
       [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
@@ -2144,7 +2603,7 @@ describe('ccs-browser MCP server', () => {
               urlIncludes: '/api/mock/headers',
               action: 'fulfill',
               statusCode: 201,
-              headers: [
+              responseHeaders: [
                 { name: 'Cache-Control', value: 'no-store' },
                 { name: 'X-Mocked-By', value: 'ccs-browser' },
               ],
@@ -2227,7 +2686,7 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(response)).toContain('Browser MCP failed: statusCode must be an integer between 100 and 599');
   });
 
-  it('rejects fulfill rules when headers is not an array', async () => {
+  it('rejects fulfill rules when responseHeaders is not an array', async () => {
     const responses = await runMcpRequests(
       [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
       [
@@ -2240,7 +2699,7 @@ describe('ccs-browser MCP server', () => {
             arguments: {
               urlIncludes: '/api/mock',
               action: 'fulfill',
-              headers: 'x',
+              responseHeaders: 'x',
               body: 'x',
             },
           },
@@ -2250,10 +2709,10 @@ describe('ccs-browser MCP server', () => {
 
     const response = responses.find((message) => message.id === 969);
     expect((response?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(response)).toContain('Browser MCP failed: headers must be an array');
+    expect(getResponseText(response)).toContain('Browser MCP failed: responseHeaders must be an array');
   });
 
-  it('rejects fulfill rules when a header entry is missing name', async () => {
+  it('rejects fulfill rules when a responseHeaders entry is missing name', async () => {
     const responses = await runMcpRequests(
       [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
       [
@@ -2266,7 +2725,7 @@ describe('ccs-browser MCP server', () => {
             arguments: {
               urlIncludes: '/api/mock',
               action: 'fulfill',
-              headers: [{ value: 'x' }],
+              responseHeaders: [{ value: 'x' }],
               body: 'x',
             },
           },
@@ -2276,7 +2735,7 @@ describe('ccs-browser MCP server', () => {
 
     const response = responses.find((message) => message.id === 970);
     expect((response?.result as { isError?: boolean }).isError).toBe(true);
-    expect(getResponseText(response)).toContain('Browser MCP failed: headers.name is required');
+    expect(getResponseText(response)).toContain('Browser MCP failed: responseHeaders.name is required');
   });
 
   it('rejects fulfill rules when body is not a string', async () => {
