@@ -100,6 +100,20 @@ type MockEvalPlan = Record<
   }
 >;
 
+type MockInterceptRuleMatch = {
+  url: string;
+  method: string;
+  resourceType?: string;
+  requestId?: string;
+};
+
+type MockInterceptState = {
+  pausedRequests?: MockInterceptRuleMatch[];
+  continuedRequestIds?: string[];
+  failedRequests?: Array<{ requestId: string; errorReason?: string }>;
+  fetchEnabledPatterns?: unknown[];
+};
+
 type MockPageState = {
   id: string;
   title: string;
@@ -116,6 +130,7 @@ type MockPageState = {
   frames?: MockFrameState[];
   shadowRoots?: MockShadowRootState[];
   events?: MockPageEventPlan;
+  intercept?: MockInterceptState;
   screenshot?: {
     expectedClip?: {
       x: number;
@@ -664,6 +679,51 @@ function createMockBrowser(pagesInput: MockPageState[]) {
               }, 10);
             }
           }
+          return;
+        }
+
+        if (message.method === 'Fetch.enable') {
+          page.intercept = page.intercept || {};
+          page.intercept.fetchEnabledPatterns = Array.isArray(message.params?.patterns)
+            ? (message.params?.patterns as unknown[])
+            : [];
+          reply({});
+          for (const [index, paused] of (page.intercept.pausedRequests || []).entries()) {
+            setTimeout(() => {
+              socket.send(
+                JSON.stringify({
+                  method: 'Fetch.requestPaused',
+                  params: {
+                    requestId: paused.requestId || `fetch-${index + 1}`,
+                    resourceType: paused.resourceType || 'XHR',
+                    request: {
+                      url: paused.url,
+                      method: paused.method,
+                    },
+                  },
+                })
+              );
+            }, 10 + index * 10);
+          }
+          return;
+        }
+
+        if (message.method === 'Fetch.continueRequest') {
+          page.intercept = page.intercept || {};
+          page.intercept.continuedRequestIds = page.intercept.continuedRequestIds || [];
+          page.intercept.continuedRequestIds.push(String(message.params?.requestId || ''));
+          reply({});
+          return;
+        }
+
+        if (message.method === 'Fetch.failRequest') {
+          page.intercept = page.intercept || {};
+          page.intercept.failedRequests = page.intercept.failedRequests || [];
+          page.intercept.failedRequests.push({
+            requestId: String(message.params?.requestId || ''),
+            errorReason: typeof message.params?.errorReason === 'string' ? message.params.errorReason : '',
+          });
+          reply({});
           return;
         }
 
