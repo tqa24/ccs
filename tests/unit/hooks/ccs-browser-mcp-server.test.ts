@@ -1347,6 +1347,10 @@ describe('ccs-browser MCP server', () => {
       'browser_select_page',
       'browser_open_page',
       'browser_close_page',
+      'browser_add_intercept_rule',
+      'browser_remove_intercept_rule',
+      'browser_list_intercept_rules',
+      'browser_list_requests',
       'browser_take_screenshot',
       'browser_wait_for',
       'browser_eval',
@@ -1385,6 +1389,24 @@ describe('ccs-browser MCP server', () => {
     const closeTool = tools.find((tool) => tool.name === 'browser_close_page');
     expect(closeTool?.inputSchema?.properties?.pageIndex).toMatchObject({ type: 'integer' });
     expect(closeTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
+
+    const addRuleTool = tools.find((tool) => tool.name === 'browser_add_intercept_rule');
+    expect(addRuleTool?.inputSchema?.properties?.pageIndex).toMatchObject({ type: 'integer' });
+    expect(addRuleTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.urlIncludes).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.method).toMatchObject({ type: 'string' });
+    expect(addRuleTool?.inputSchema?.properties?.action).toMatchObject({ type: 'string' });
+
+    const removeRuleTool = tools.find((tool) => tool.name === 'browser_remove_intercept_rule');
+    expect(removeRuleTool?.inputSchema?.properties?.ruleId).toMatchObject({ type: 'string' });
+
+    const listRulesTool = tools.find((tool) => tool.name === 'browser_list_intercept_rules');
+    expect(listRulesTool?.inputSchema).toMatchObject({ type: 'object' });
+
+    const listRequestsTool = tools.find((tool) => tool.name === 'browser_list_requests');
+    expect(listRequestsTool?.inputSchema?.properties?.pageIndex).toMatchObject({ type: 'integer' });
+    expect(listRequestsTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
+    expect(listRequestsTool?.inputSchema?.properties?.limit).toMatchObject({ type: 'integer' });
 
     const queryTool = tools.find((tool) => tool.name === 'browser_query');
     expect(queryTool?.inputSchema?.properties?.fields).toMatchObject({
@@ -1651,6 +1673,228 @@ describe('ccs-browser MCP server', () => {
     const listText = getResponseText(responses.find((message) => message.id === 853));
     expect(listText).toContain('0. Home');
     expect(listText).not.toContain('https://example.com/new');
+  });
+
+  it('adds an interception rule and lists it by bound pageId', async () => {
+    const responses = await runMcpRequests(
+      [
+        { id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' },
+        { id: 'page-2', title: 'Docs', currentUrl: 'https://example.com/docs' },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 901,
+          method: 'tools/call',
+          params: {
+            name: 'browser_select_page',
+            arguments: { pageIndex: 1 },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 902,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: { urlIncludes: '/api', method: 'GET', action: 'continue' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 903,
+          method: 'tools/call',
+          params: {
+            name: 'browser_list_intercept_rules',
+            arguments: {},
+          },
+        },
+      ]
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 903));
+    expect(listText).toContain('pageId: page-2');
+    expect(listText).toContain('urlIncludes: /api');
+    expect(listText).toContain('method: GET');
+    expect(listText).toContain('action: continue');
+  });
+
+  it('keeps an existing rule bound to the original page after selected page changes', async () => {
+    const responses = await runMcpRequests(
+      [
+        { id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' },
+        { id: 'page-2', title: 'Docs', currentUrl: 'https://example.com/docs' },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 911,
+          method: 'tools/call',
+          params: { name: 'browser_select_page', arguments: { pageIndex: 0 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 912,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: { urlIncludes: '/api', method: 'POST', action: 'fail' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 913,
+          method: 'tools/call',
+          params: { name: 'browser_select_page', arguments: { pageIndex: 1 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 914,
+          method: 'tools/call',
+          params: { name: 'browser_list_intercept_rules', arguments: {} },
+        },
+      ]
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 914));
+    expect(listText).toContain('pageId: page-1');
+    expect(listText).toContain('method: POST');
+    expect(listText).toContain('action: fail');
+  });
+
+  it('removes an interception rule by ruleId', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 921,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: { urlIncludes: '/api', method: 'GET', action: 'continue' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 922,
+          method: 'tools/call',
+          params: {
+            name: 'browser_remove_intercept_rule',
+            arguments: { ruleId: 'rule-1' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 923,
+          method: 'tools/call',
+          params: { name: 'browser_list_intercept_rules', arguments: {} },
+        },
+      ]
+    );
+
+    const removeText = getResponseText(responses.find((message) => message.id === 922));
+    expect(removeText).toContain('ruleId: rule-1');
+    expect(removeText).toContain('status: removed');
+
+    const listText = getResponseText(responses.find((message) => message.id === 923));
+    expect(listText).toBe('status: empty');
+  });
+
+  it('records recent requests with matched rule action summaries', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Home',
+          currentUrl: 'https://example.com/',
+          intercept: {
+            pausedRequests: [
+              {
+                requestId: 'req-1',
+                url: 'https://example.com/api/users',
+                method: 'GET',
+                resourceType: 'XHR',
+              },
+              {
+                requestId: 'req-2',
+                url: 'https://example.com/assets/app.js',
+                method: 'GET',
+                resourceType: 'Script',
+              },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 931,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: { urlIncludes: '/api', method: 'GET', action: 'fail' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 932,
+          method: 'tools/call',
+          params: { name: 'browser_list_requests', arguments: {} },
+        },
+      ],
+      {
+        responseTimeoutMs: 12000,
+      }
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 932));
+    expect(listText).toContain('requestId: req-1');
+    expect(listText).toContain('matchedRuleId: rule-1');
+    expect(listText).toContain('action: fail');
+    expect(listText).toContain('requestId: req-2');
+    expect(listText).toContain('action: continue');
+  });
+
+  it('removes rules bound to a page after that page is closed', async () => {
+    const responses = await runMcpRequests(
+      [
+        { id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' },
+        { id: 'page-2', title: 'Docs', currentUrl: 'https://example.com/docs' },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 941,
+          method: 'tools/call',
+          params: { name: 'browser_select_page', arguments: { pageIndex: 1 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 942,
+          method: 'tools/call',
+          params: {
+            name: 'browser_add_intercept_rule',
+            arguments: { urlIncludes: '/api', method: 'GET', action: 'continue' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 943,
+          method: 'tools/call',
+          params: { name: 'browser_close_page', arguments: { pageId: 'page-2' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 944,
+          method: 'tools/call',
+          params: { name: 'browser_list_intercept_rules', arguments: {} },
+        },
+      ]
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 944));
+    expect(listText).not.toContain('pageId: page-2');
   });
 
   it('works from an installed copy when global WebSocket is unavailable and NODE_PATH supplies package dependencies', async () => {
