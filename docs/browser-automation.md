@@ -23,7 +23,7 @@ enabled. A recent Chrome update alone is not sufficient.
 The managed `ccs-browser` runtime currently exposes five tool groups:
 
 - **Session inspection**: `browser_get_session_info`, `browser_get_url_and_title`, `browser_get_visible_text`, `browser_get_dom_snapshot`
-- **Navigation and interaction**: `browser_navigate`, `browser_click`, `browser_type`, `browser_press_key`, `browser_scroll`, `browser_take_screenshot`
+- **Navigation and interaction**: `browser_navigate`, `browser_click`, `browser_type`, `browser_press_key`, `browser_scroll`, `browser_select_page`, `browser_open_page`, `browser_close_page`, `browser_take_screenshot`
 - **Hover diagnostics**: `browser_hover`, `browser_query`, `browser_take_element_screenshot`
 - **Readiness and page evaluation**: `browser_wait_for`, `browser_eval`
 - **Event observation**: `browser_wait_for_event`
@@ -46,6 +46,35 @@ Phase 4 capability details:
 - `browser_click` also accepts optional `offsetX`, `offsetY`, `button`, and `clickCount` for more precise element-relative click control
 - `browser_press_key` sends real browser-level key events, supports modifier combinations plus repeat counts, and covers a focused set of common special keys such as `Enter`, `Tab`, `Escape`, and arrow keys
 - `browser_scroll` supports page-level `by-offset` scrolling and element-scoped `by-offset` or `into-view` scrolling, including same-origin iframe scoping
+
+Phase 5 capability details:
+
+- `browser_get_session_info` marks the currently selected page
+- `browser_select_page` chooses the default target page for later tool calls
+- `browser_open_page` opens a new tab and makes it selected
+- `browser_close_page` closes the selected page by default and deterministically falls back only when the selected page is closed or no longer available
+- existing tools still honor explicit `pageIndex`; when omitted, they resolve through the selected page
+- selected page state is session-local MCP runtime state and is not persisted across runtime restarts
+
+Minimal multi-tab workflow examples:
+
+```json
+{
+  "name": "browser_select_page",
+  "arguments": {
+    "pageIndex": 1
+  }
+}
+```
+
+```json
+{
+  "name": "browser_open_page",
+  "arguments": {
+    "url": "https://example.com/docs"
+  }
+}
+```
 
 A common hover-debug workflow is:
 

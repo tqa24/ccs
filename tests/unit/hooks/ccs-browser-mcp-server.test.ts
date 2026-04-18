@@ -379,6 +379,7 @@ function createMockBrowser(pagesInput: MockPageState[]) {
   let wsServer: WebSocketServer | null = null;
   let browserSocketPath = '';
   const pageStates = new Map<string, MockPageState>();
+  let nextPageCounter = pagesInput.length + 1;
 
   for (const [index, page] of pagesInput.entries()) {
     pageStates.set(`/devtools/page/${index + 1}`, {
@@ -395,13 +396,15 @@ function createMockBrowser(pagesInput: MockPageState[]) {
 
     const port = await new Promise<number>((resolve, reject) => {
       httpServer = http.createServer((req, res) => {
+        const address = httpServer?.address();
+        const serverPort = address && typeof address !== 'string' ? address.port : 0;
+
         if (req.url === '/json/list') {
-          const address = httpServer?.address();
-          const serverPort = address && typeof address !== 'string' ? address.port : 0;
+          const pageEntries = Array.from(pageStates.entries());
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(
             JSON.stringify([
-              ...Array.from(pageStates.entries()).map(([wsPath, page]) => ({
+              ...pageEntries.map(([wsPath, page]) => ({
                 id: page.id,
                 type: 'page',
                 title: page.title,
@@ -419,6 +422,47 @@ function createMockBrowser(pagesInput: MockPageState[]) {
           );
           return;
         }
+
+        if (req.url?.startsWith('/json/new')) {
+          const parsed = new URL(req.url, `http://127.0.0.1:${serverPort}`);
+          const requestedUrl = parsed.searchParams.get('url') || 'about:blank';
+          const wsPath = `/devtools/page/${nextPageCounter}`;
+          const newPage: MockPageState = {
+            id: `page-${nextPageCounter}`,
+            title: requestedUrl === 'about:blank' ? 'about:blank' : requestedUrl,
+            currentUrl: requestedUrl,
+            visibleText: 'New page visible text',
+            domSnapshot: '<html><body>New page</body></html>',
+          };
+          pageStates.set(wsPath, newPage);
+          nextPageCounter += 1;
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              id: newPage.id,
+              type: 'page',
+              title: newPage.title,
+              url: newPage.currentUrl,
+              webSocketDebuggerUrl: `ws://127.0.0.1:${serverPort}${wsPath}`,
+            })
+          );
+          return;
+        }
+
+        if (req.url?.startsWith('/json/close/')) {
+          const targetId = decodeURIComponent(req.url.slice('/json/close/'.length));
+          const entry = Array.from(pageStates.entries()).find(([, page]) => page.id === targetId);
+          if (!entry) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'page not found' }));
+            return;
+          }
+          pageStates.delete(entry[0]);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ id: targetId }));
+          return;
+        }
+
         res.writeHead(404);
         res.end('not found');
       });
@@ -1240,6 +1284,9 @@ describe('ccs-browser MCP server', () => {
       'browser_type',
       'browser_press_key',
       'browser_scroll',
+      'browser_select_page',
+      'browser_open_page',
+      'browser_close_page',
       'browser_take_screenshot',
       'browser_wait_for',
       'browser_eval',
@@ -1268,6 +1315,17 @@ describe('ccs-browser MCP server', () => {
     expect(scrollTool?.inputSchema?.properties?.deltaX).toMatchObject({ type: 'number' });
     expect(scrollTool?.inputSchema?.properties?.deltaY).toMatchObject({ type: 'number' });
 
+    const selectTool = tools.find((tool) => tool.name === 'browser_select_page');
+    expect(selectTool?.inputSchema?.properties?.pageIndex).toMatchObject({ type: 'integer' });
+    expect(selectTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
+
+    const openTool = tools.find((tool) => tool.name === 'browser_open_page');
+    expect(openTool?.inputSchema?.properties?.url).toMatchObject({ type: 'string' });
+
+    const closeTool = tools.find((tool) => tool.name === 'browser_close_page');
+    expect(closeTool?.inputSchema?.properties?.pageIndex).toMatchObject({ type: 'integer' });
+    expect(closeTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
+
     const queryTool = tools.find((tool) => tool.name === 'browser_query');
     expect(queryTool?.inputSchema?.properties?.fields).toMatchObject({
       type: 'array',
@@ -1279,6 +1337,260 @@ describe('ccs-browser MCP server', () => {
         minimum: 0,
       });
     }
+  });
+
+  it('marks the selected page in browser_get_session_info', async () => {
+    const responses = await runMcpRequests(
+      [
+        { id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' },
+        { id: 'page-2', title: 'Docs', currentUrl: 'https://example.com/docs' },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 801,
+          method: 'tools/call',
+          params: { name: 'browser_select_page', arguments: { pageIndex: 1 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 802,
+          method: 'tools/call',
+          params: { name: 'browser_get_session_info', arguments: {} },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 802));
+    expect(text).toContain('selected: true');
+    expect(text).toContain('1. Docs');
+  });
+
+  it('uses the selected page when pageIndex is omitted', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Home',
+          currentUrl: 'https://example.com/',
+          visibleText: 'Home text',
+        },
+        {
+          id: 'page-2',
+          title: 'Docs',
+          currentUrl: 'https://example.com/docs',
+          visibleText: 'Docs text',
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 811,
+          method: 'tools/call',
+          params: { name: 'browser_select_page', arguments: { pageIndex: 1 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 812,
+          method: 'tools/call',
+          params: { name: 'browser_get_visible_text', arguments: {} },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 812));
+    expect(text).toContain('Docs text');
+  });
+
+  it('opens a page and makes it selected', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 821,
+          method: 'tools/call',
+          params: {
+            name: 'browser_open_page',
+            arguments: { url: 'https://example.com/new' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 822,
+          method: 'tools/call',
+          params: { name: 'browser_get_session_info', arguments: {} },
+        },
+      ]
+    );
+
+    const openText = getResponseText(responses.find((message) => message.id === 821));
+    expect(openText).toContain('status: opened');
+    expect(openText).toContain('url: https://example.com/new');
+
+    const listText = getResponseText(responses.find((message) => message.id === 822));
+    expect(listText).toContain('https://example.com/new');
+    expect(listText).toContain('selected: true');
+  });
+
+  it('closes the selected page and falls back deterministically', async () => {
+    const responses = await runMcpRequests(
+      [
+        { id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' },
+        { id: 'page-2', title: 'Docs', currentUrl: 'https://example.com/docs' },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 831,
+          method: 'tools/call',
+          params: { name: 'browser_select_page', arguments: { pageIndex: 1 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 832,
+          method: 'tools/call',
+          params: { name: 'browser_close_page', arguments: {} },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 833,
+          method: 'tools/call',
+          params: { name: 'browser_get_session_info', arguments: {} },
+        },
+      ]
+    );
+
+    const closeText = getResponseText(responses.find((message) => message.id === 832));
+    expect(closeText).toContain('status: closed');
+
+    const listText = getResponseText(responses.find((message) => message.id === 833));
+    expect(listText).toContain('0. Home');
+    expect(listText).toContain('selected: true');
+    expect(listText).not.toContain('Docs');
+  });
+
+  it('keeps the selected page when closing a different page', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Home',
+          currentUrl: 'https://example.com/',
+          visibleText: 'Home text',
+        },
+        {
+          id: 'page-2',
+          title: 'Docs',
+          currentUrl: 'https://example.com/docs',
+          visibleText: 'Docs text',
+        },
+        {
+          id: 'page-3',
+          title: 'Pricing',
+          currentUrl: 'https://example.com/pricing',
+          visibleText: 'Pricing text',
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 834,
+          method: 'tools/call',
+          params: { name: 'browser_select_page', arguments: { pageIndex: 0 } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 835,
+          method: 'tools/call',
+          params: { name: 'browser_close_page', arguments: { pageId: 'page-3' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 836,
+          method: 'tools/call',
+          params: { name: 'browser_get_visible_text', arguments: {} },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 837,
+          method: 'tools/call',
+          params: { name: 'browser_get_session_info', arguments: {} },
+        },
+      ]
+    );
+
+    const visibleText = getResponseText(responses.find((message) => message.id === 836));
+    expect(visibleText).toContain('Home text');
+
+    const listText = getResponseText(responses.find((message) => message.id === 837));
+    expect(listText).toContain('0. Home');
+    expect(listText).toContain('selected: true');
+    expect(listText).not.toContain('Pricing');
+  });
+
+  it('reconciles a stale selected page when browser_get_session_info is called', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 841,
+          method: 'tools/call',
+          params: { name: 'browser_open_page', arguments: { url: 'https://example.com/new' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 842,
+          method: 'tools/call',
+          params: { name: 'browser_close_page', arguments: { pageId: 'page-2' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 843,
+          method: 'tools/call',
+          params: { name: 'browser_get_session_info', arguments: {} },
+        },
+      ]
+    );
+
+    const listText = getResponseText(responses.find((message) => message.id === 843));
+    expect(listText).toContain('0. Home');
+    expect(listText).toContain('selected: true');
+  });
+
+  it('closes a page by pageId', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 851,
+          method: 'tools/call',
+          params: { name: 'browser_open_page', arguments: { url: 'https://example.com/new' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 852,
+          method: 'tools/call',
+          params: { name: 'browser_close_page', arguments: { pageId: 'page-2' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 853,
+          method: 'tools/call',
+          params: { name: 'browser_get_session_info', arguments: {} },
+        },
+      ]
+    );
+
+    const closeText = getResponseText(responses.find((message) => message.id === 852));
+    expect(closeText).toContain('pageId: page-2');
+    expect(closeText).toContain('status: closed');
+
+    const listText = getResponseText(responses.find((message) => message.id === 853));
+    expect(listText).toContain('0. Home');
+    expect(listText).not.toContain('https://example.com/new');
   });
 
   it('works from an installed copy when global WebSocket is unavailable and NODE_PATH supplies package dependencies', async () => {
