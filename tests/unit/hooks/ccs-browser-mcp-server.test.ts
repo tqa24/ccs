@@ -107,10 +107,18 @@ type MockInterceptRuleMatch = {
   requestId?: string;
 };
 
+type MockFulfilledRequest = {
+  requestId: string;
+  responseCode?: number;
+  responseHeaders?: Array<{ name: string; value: string }>;
+  body?: string;
+};
+
 type MockInterceptState = {
   pausedRequests?: MockInterceptRuleMatch[];
   continuedRequestIds?: string[];
   failedRequests?: Array<{ requestId: string; errorReason?: string }>;
+  fulfilledRequests?: MockFulfilledRequest[];
   fetchEnabledPatterns?: unknown[];
   enableError?: string;
   pauseDispatchDelayMs?: number;
@@ -729,6 +737,22 @@ function createMockBrowser(pagesInput: MockPageState[]) {
           page.intercept.failedRequests.push({
             requestId: String(message.params?.requestId || ''),
             errorReason: typeof message.params?.errorReason === 'string' ? message.params.errorReason : '',
+          });
+          reply({});
+          return;
+        }
+
+        if (message.method === 'Fetch.fulfillRequest') {
+          page.intercept = page.intercept || {};
+          page.intercept.fulfilledRequests = page.intercept.fulfilledRequests || [];
+          page.intercept.fulfilledRequests.push({
+            requestId: String(message.params?.requestId || ''),
+            responseCode:
+              typeof message.params?.responseCode === 'number' ? message.params.responseCode : undefined,
+            responseHeaders: Array.isArray(message.params?.responseHeaders)
+              ? (message.params.responseHeaders as Array<{ name: string; value: string }>)
+              : [],
+            body: typeof message.params?.body === 'string' ? message.params.body : '',
           });
           reply({});
           return;
