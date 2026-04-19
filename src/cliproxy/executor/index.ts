@@ -17,7 +17,7 @@ import * as path from 'path';
 import { ProgressIndicator } from '../../utils/progress-indicator';
 import { ok, fail, info, warn } from '../../utils/ui';
 import { getCcsDir } from '../../utils/config-manager';
-import { escapeShellArg } from '../../utils/shell-executor';
+import { escapeShellArg, getWindowsEscapedCommandShell } from '../../utils/shell-executor';
 import { ensureCLIProxyBinary } from '../binary-manager';
 import {
   generateConfig,
@@ -1316,7 +1316,7 @@ export async function execClaudeWithCLIProxy(
     claude = spawn(cmdString, {
       stdio: 'inherit',
       windowsHide: true,
-      shell: true,
+      shell: getWindowsEscapedCommandShell(),
       env: tracedEnv,
     });
   } else {

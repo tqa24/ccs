@@ -4,7 +4,7 @@
  * Cross-platform shell execution utilities for CCS.
  */
 
-import { spawn, spawnSync, ChildProcess } from 'child_process';
+import { spawn, spawnSync, ChildProcess, type SpawnOptions } from 'child_process';
 import { ErrorManager } from './error-manager';
 import { getWebSearchHookEnv } from './websearch-manager';
 import { wireChildProcessSignals } from './signal-forwarder';
@@ -108,13 +108,17 @@ export function escapeShellArg(arg: string): string {
 }
 
 /**
- * Return the Windows shell that matches escapeShellArg() quoting semantics.
+ * Return the shell that matches escapeShellArg() quoting semantics.
  *
- * `shell: true` is not strict enough for npm `.cmd` wrappers because Node may
- * route through a different quoting path than the one escapeShellArg() expects.
+ * On Windows, prefer ComSpec over a bare `cmd.exe` so escaped wrapper launches
+ * keep the same shell contract without depending on PATH lookup.
  */
-export function getWindowsEscapedCommandShell(): string {
-  return 'cmd.exe';
+export function getWindowsEscapedCommandShell(): SpawnOptions['shell'] {
+  if (process.platform !== 'win32') {
+    return true;
+  }
+
+  return process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
 }
 
 /**

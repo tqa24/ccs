@@ -1,16 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
 import * as childProcess from 'child_process';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-const spawnCalls: Array<{
-  command: string;
-  args: string[];
-  options: Record<string, unknown> | undefined;
-}> = [];
-const originalPlatform = process.platform;
+import { CodexAdapter } from '../../../src/targets/codex-adapter';
+import { buildCodexBrowserMcpOverrides } from '../../../src/utils/browser-codex-overrides';
+import * as signalForwarder from '../../../src/utils/signal-forwarder';
 
 function createMockChild(): EventEmitter & {
   stdout: EventEmitter;
@@ -46,34 +43,12 @@ function createMockChild(): EventEmitter & {
   return child;
 }
 
-mock.module('child_process', () => ({
-  ...childProcess,
-  spawn: (...spawnArgs: unknown[]) => {
-    const command = String(spawnArgs[0] ?? '');
-    const maybeArgs = spawnArgs[1];
-    const args = Array.isArray(maybeArgs) ? (maybeArgs as string[]) : [];
-    const options = (Array.isArray(maybeArgs) ? spawnArgs[2] : spawnArgs[1]) as
-      | Record<string, unknown>
-      | undefined;
-
-    spawnCalls.push({ command, args, options });
-    return createMockChild();
-  },
-}));
-
-mock.module('../../../src/utils/signal-forwarder', () => ({
-  wireChildProcessSignals: () => {},
-}));
-
-import { CodexAdapter } from '../../../src/targets/codex-adapter';
-import { buildCodexBrowserMcpOverrides } from '../../../src/utils/browser-codex-overrides';
-
 describe('codex-adapter exec', () => {
+  const originalPlatform = process.platform;
   let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-codex-adapter-exec-'));
-    spawnCalls.length = 0;
   });
 
   afterEach(() => {
@@ -87,29 +62,45 @@ describe('codex-adapter exec', () => {
     const fakeCodex = path.join(tmpDir, 'codex.cmd');
     fs.writeFileSync(fakeCodex, '');
 
-    const adapter = new CodexAdapter();
-    const binaryInfo = {
-      path: fakeCodex,
-      needsShell: true,
-      features: ['config-overrides'],
-    };
-    const args = adapter.buildArgs('default', ['--version'], {
-      profileType: 'default',
-      creds: {
-        profile: 'default',
-        baseUrl: '',
-        apiKey: '',
-        runtimeConfigOverrides: buildCodexBrowserMcpOverrides(),
-      },
-      binaryInfo,
-    });
+    const spawnSpy = spyOn(childProcess, 'spawn').mockImplementation(
+      () => createMockChild() as unknown as ReturnType<typeof childProcess.spawn>
+    );
+    const signalSpy = spyOn(signalForwarder, 'wireChildProcessSignals').mockImplementation(
+      () => undefined
+    );
 
-    adapter.exec(args, {}, { binaryInfo });
+    try {
+      const adapter = new CodexAdapter();
+      const binaryInfo = {
+        path: fakeCodex,
+        needsShell: true,
+        features: ['config-overrides'],
+      };
+      const args = adapter.buildArgs('default', ['--version'], {
+        profileType: 'default',
+        creds: {
+          profile: 'default',
+          baseUrl: '',
+          apiKey: '',
+          runtimeConfigOverrides: buildCodexBrowserMcpOverrides(),
+        },
+        binaryInfo,
+      });
 
-    expect(spawnCalls).toHaveLength(1);
-    expect(spawnCalls[0]?.options?.shell).toBe('cmd.exe');
-    expect(spawnCalls[0]?.command).toContain(fakeCodex);
-    expect(spawnCalls[0]?.command).toContain('mcp_servers.ccs_browser.args=');
-    expect(spawnCalls[0]?.command).toContain('@playwright/mcp@0.0.70');
+      adapter.exec(args, {}, { binaryInfo });
+
+      expect(spawnSpy).toHaveBeenCalledTimes(1);
+      const [command, options] = spawnSpy.mock.calls[0] as [
+        string,
+        Record<string, unknown> | undefined,
+      ];
+      expect(options?.shell).toBe('cmd.exe');
+      expect(command).toContain(fakeCodex);
+      expect(command).toContain('mcp_servers.ccs_browser.args=');
+      expect(command).toContain('@playwright/mcp@0.0.70');
+    } finally {
+      spawnSpy.mockRestore();
+      signalSpy.mockRestore();
+    }
   });
 });
