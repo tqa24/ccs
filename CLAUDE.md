@@ -15,6 +15,32 @@ AI-facing guidance for agent tooling when working with this repository.
 
 Tests set `process.env.CCS_HOME` to a temp directory. Code using `os.homedir()` directly will modify the user's real files.
 
+## CI-First Protocol (MANDATORY)
+
+**A task is NOT complete until CI is green. After every `git push`, the AI agent MUST block on CI until it passes.**
+
+### Required Sequence
+1. `git push`
+2. **Immediately** run `gh pr checks --watch` (or `gh run watch`) and block until all checks complete.
+3. If **green** → task may proceed to next step / be declared done.
+4. If **red**:
+   - Pull failing logs: `gh run view --log-failed` (or `gh pr checks <n>` to identify the failing job, then `gh run view <run-id> --log-failed`).
+   - Fix the root cause locally. Do NOT retry blindly.
+   - Commit and push again. Re-watch CI.
+5. Applies to initial `gh pr create` AND every subsequent push on an open PR.
+
+### Fallback (when `--watch` is unavailable or flaky)
+Poll with short sleep until no check is `pending` / `in_progress`:
+```bash
+until [ "$(gh pr checks <n> --json state -q '[.[] | select(.state == "IN_PROGRESS" or .state == "PENDING" or .state == "QUEUED")] | length')" = "0" ]; do
+  sleep 10
+done
+gh pr checks <n>
+```
+
+### Absolute rule
+AI MUST NOT declare a task done, close a session, or move to the next task while CI is red or still running. Leaving a PR red and moving on is the primary failure mode this protocol prevents.
+
 ## Core Function
 
 Multi-provider profile and runtime manager for Claude Code, Factory Droid,
@@ -201,8 +227,10 @@ bun run validate            # Step 3: Final check (must pass)
 
 | Project | Command | Runs |
 |---------|---------|------|
-| Main | `bun run validate` | typecheck + lint:fix + format:check + maintainability:check + test:all |
+| Main | `bun run validate` | typecheck + lint:fix + format:check + test:all |
 | UI | `bun run validate` | typecheck + lint:fix + format:check |
+
+**Note:** `maintainability:check` is a SEPARATE gate — not part of `validate`. Run it explicitly via `bun run maintainability:check[:strict|:warn]` when touching debt-sensitive code or before merging to protected branches.
 
 ### ESLint Rules (ALL errors)
 
@@ -238,7 +266,7 @@ bun run validate            # Step 3: Final check (must pass)
 - Baseline file: `docs/metrics/maintainability-baseline.json`
 - Metric collector/check script: `scripts/maintainability-baseline.js`
 - Branch-aware gate wrapper: `scripts/maintainability-check.js`
-- Enforcement path: `bun run maintainability:check` (included in `bun run validate`)
+- Enforcement path: `bun run maintainability:check` (run separately — NOT part of `bun run validate`; invoked by `validate:ci-parity` on protected branches)
 - Gate modes:
   - `strict`: protected branches (`main`, `dev`, `hotfix/*`, `kai/hotfix-*`) and equivalent CI refs
   - `warn`: pull request CI and non-protected local branches (non-blocking for parallel PR workflow)
@@ -499,27 +527,30 @@ rm -rf ~/.ccs             # Clean environment
 
 **IMPORTANT:** Use `bun run dev` at CCS root for always up-to-date code. Do NOT use `ccs config` during development as it uses the globally installed version.
 
-## Pre-Commit Checklist
+## Two-Tier Pre-Push Checklist
 
-**Quality (BLOCKERS):**
-- [ ] `bun run format` — formatting fixed
-- [ ] `bun run validate` — all checks pass
-- [ ] `bun run validate:ci-parity` — CI parity passed (required before protected-branch pushes; recommended before PRs)
-- [ ] `cd ui && bun run format && bun run validate` — if UI changed
-- [ ] If touching debt-sensitive code, run `bun run maintainability:check:strict` before opening/merging PR
+Optimized for iterative push-then-review workflow. Do NOT run the full gate on every push — CI is the safety net. Run the full gate once before asking for review / merge.
+
+### Tier 1 — Iterative push (feature branch)
+Husky `pre-push` auto-runs: `typecheck + lint:fix + format:check + build:all` plus targeted tests based on changed files. AI does **nothing extra** at push time.
+
+**After push (MANDATORY):** follow the [CI-First Protocol](#ci-first-protocol-mandatory) — watch CI until green. Do not move on while CI is red.
+
+### Tier 2 — Before requesting review / merge
+Run ONCE, not per push:
+- [ ] `bun run validate:ci-parity` — full build + validate matches CI
+- [ ] `gh pr checks <n>` — all checks green
+- [ ] If touching debt-sensitive code: `bun run maintainability:check:strict`
 - [ ] If strict mode fails and increase is intentional: `bun run maintainability:baseline` and commit `docs/metrics/maintainability-baseline.json`
+- [ ] If UI changed: `cd ui && bun run format && bun run validate`
 
-**Code:**
+### Code / Docs / Standards (verify before merge)
 - [ ] Conventional commit format (`feat:`, `fix:`, etc.)
 - [ ] Respective `--help` updated (see Help Location Reference) — if CLI changed
 - [ ] Tests added/updated — if behavior changed
 - [ ] README.md updated — if user-facing
-
-**Documentation:**
 - [ ] CCS docs updated (owner: `~/CloudPersonal/ccs/docs/`) — if CLI/config changed
 - [ ] Local `docs/` updated — if architecture changed
-
-**Standards:**
 - [ ] CLI output ASCII only (NO emojis in terminal output), NO_COLOR respected
 - [ ] YAGNI/KISS/DRY alignment verified
 - [ ] No manual version bump or tags
