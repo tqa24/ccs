@@ -5,6 +5,18 @@ set -euo pipefail
 # Feature branches use a faster gate and let GitHub CI run the full suite.
 # Override in emergencies only: CCS_SKIP_PREPUSH_GATE=1 git push --no-verify
 
+# Skip gate entirely for delete-only pushes. Git passes refs on stdin as
+# "<local-ref> <local-sha> <remote-ref> <remote-sha>"; deletes have local-sha = 40 zeros.
+# Running a full test suite just to delete a merged branch is pure waste.
+STDIN_CONTENT="$(cat || true)"
+if [[ -n "$STDIN_CONTENT" ]]; then
+  NON_DELETE_COUNT="$(printf '%s\n' "$STDIN_CONTENT" | awk 'NF >= 2 && $2 !~ /^0{40}$/' | wc -l | tr -d ' ')"
+  if [[ "$NON_DELETE_COUNT" == "0" ]]; then
+    echo "[i] Delete-only push, skipping pre-push gate."
+    exit 0
+  fi
+fi
+
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 BASE_BRANCH="${CCS_PR_BASE:-}"
 
@@ -29,6 +41,7 @@ echo "    base:   $BASE_BRANCH"
 bun run typecheck
 bun run lint:fix
 bun run format:check
+bun run build:all
 
 git fetch origin "$BASE_BRANCH" --quiet || true
 DIFF_RANGE="HEAD"

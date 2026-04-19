@@ -4,7 +4,7 @@
  * Cross-platform shell execution utilities for CCS.
  */
 
-import { spawn, spawnSync, ChildProcess } from 'child_process';
+import { spawn, spawnSync, ChildProcess, type SpawnOptions } from 'child_process';
 import { ErrorManager } from './error-manager';
 import { getWebSearchHookEnv } from './websearch-manager';
 import { wireChildProcessSignals } from './signal-forwarder';
@@ -108,6 +108,20 @@ export function escapeShellArg(arg: string): string {
 }
 
 /**
+ * Return the shell that matches escapeShellArg() quoting semantics.
+ *
+ * On Windows, prefer ComSpec over a bare `cmd.exe` so escaped wrapper launches
+ * keep the same shell contract without depending on PATH lookup.
+ */
+export function getWindowsEscapedCommandShell(): SpawnOptions['shell'] {
+  if (process.platform !== 'win32') {
+    return true;
+  }
+
+  return process.env.ComSpec || process.env.COMSPEC || 'cmd.exe';
+}
+
+/**
  * Execute Claude CLI with unified spawn logic
  */
 export function execClaude(
@@ -182,7 +196,7 @@ export function execClaude(
     child = spawn(cmdString, {
       stdio: 'inherit',
       windowsHide: true,
-      shell: true,
+      shell: getWindowsEscapedCommandShell(),
       env,
     });
   } else {
