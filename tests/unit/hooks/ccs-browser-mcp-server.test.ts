@@ -435,6 +435,10 @@ function getResponseText(message: Record<string, unknown> | undefined): string {
   return result.content?.[0]?.text || '';
 }
 
+function createReplayStep(step: Record<string, unknown>): Record<string, unknown> {
+  return step;
+}
+
 function parseJsonArgument(expression: string, key: string): string | undefined {
   const marker = `const ${key} = JSON.parse(`;
   const start = expression.indexOf(marker);
@@ -1829,6 +1833,9 @@ describe('ccs-browser MCP server', () => {
       'browser_stop_recording',
       'browser_get_recording',
       'browser_clear_recording',
+      'browser_start_replay',
+      'browser_get_replay',
+      'browser_cancel_replay',
       'browser_take_screenshot',
       'browser_wait_for',
       'browser_eval',
@@ -1949,6 +1956,17 @@ describe('ccs-browser MCP server', () => {
 
     const clearRecordingTool = tools.find((tool) => tool.name === 'browser_clear_recording');
     expect(clearRecordingTool?.inputSchema).toMatchObject({ type: 'object' });
+
+    const startReplayTool = tools.find((tool) => tool.name === 'browser_start_replay');
+    expect(startReplayTool?.inputSchema?.properties?.steps).toMatchObject({ type: 'array' });
+    expect(startReplayTool?.inputSchema?.properties?.pageIndex).toMatchObject({ type: 'integer' });
+    expect(startReplayTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
+
+    const getReplayTool = tools.find((tool) => tool.name === 'browser_get_replay');
+    expect(getReplayTool?.inputSchema).toMatchObject({ type: 'object' });
+
+    const cancelReplayTool = tools.find((tool) => tool.name === 'browser_cancel_replay');
+    expect(cancelReplayTool?.inputSchema).toMatchObject({ type: 'object' });
 
     const queryTool = tools.find((tool) => tool.name === 'browser_query');
     expect(queryTool?.inputSchema?.properties?.fields).toMatchObject({
@@ -5814,6 +5832,272 @@ describe('ccs-browser MCP server', () => {
     const text = getResponseText(responses.find((message) => message.id === 1036));
     expect(text).toContain('status: stopped');
     expect(text).toContain('recording stopped because target page was closed');
+  });
+
+  it('starts a replay, reports progress, and completes basic steps', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Replay Page',
+        currentUrl: 'https://example.com/replay',
+        click: {
+          '#submit': {},
+        },
+        query: {
+          '#submit': {
+            exists: true,
+            connected: true,
+            rect: {
+              x: 20,
+              y: 30,
+              width: 100,
+              height: 40,
+              top: 30,
+              right: 120,
+              bottom: 70,
+              left: 20,
+            },
+            display: 'block',
+            visibility: 'visible',
+            opacity: '1',
+          },
+        },
+        type: {
+          '#email': { kind: 'input', inputType: 'email', value: '' },
+        },
+        scroll: {
+          '#results': { expectedBehavior: 'by-offset', expectedDeltaX: 0, expectedDeltaY: 240 },
+        },
+      },
+    ];
+
+    const responses = await runMcpRequests(pages, [
+      {
+        jsonrpc: '2.0',
+        id: 1101,
+        method: 'tools/call',
+        params: {
+          name: 'browser_start_replay',
+          arguments: {
+            steps: [
+              createReplayStep({
+                type: 'click',
+                pageId: 'page-1',
+                selector: '#submit',
+                nth: 0,
+                args: { button: 'left', clickCount: 1, offsetX: 12, offsetY: 8 },
+              }),
+              createReplayStep({
+                type: 'type',
+                pageId: 'page-1',
+                selector: '#email',
+                nth: 0,
+                args: { text: 'walker@example.com' },
+              }),
+              createReplayStep({
+                type: 'scroll',
+                pageId: 'page-1',
+                selector: '#results',
+                args: { deltaX: 0, deltaY: 240 },
+              }),
+            ],
+          },
+        },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 1102,
+        method: 'tools/call',
+        params: { name: 'browser_get_replay', arguments: {} },
+      },
+    ]);
+
+    expect(getResponseText(responses.find((message) => message.id === 1101))).toContain('status: completed');
+    expect(getResponseText(responses.find((message) => message.id === 1102))).toContain('completedSteps: 3');
+    expect(getResponseText(responses.find((message) => message.id === 1102))).toContain('status: completed');
+  });
+
+  it('rejects invalid replay payloads before execution starts', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Replay Page', currentUrl: 'https://example.com/replay' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1111,
+          method: 'tools/call',
+          params: { name: 'browser_start_replay', arguments: { steps: [] } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1112,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_replay',
+            arguments: {
+              steps: [createReplayStep({ type: 'unknown-step', pageId: 'page-1' })],
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1113,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_replay',
+            arguments: {
+              steps: [createReplayStep({ type: 'click', pageId: 'page-2', selector: '#submit', args: {} })],
+              pageId: 'page-1',
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1111))).toContain('steps must be a non-empty array');
+    expect(getResponseText(responses.find((message) => message.id === 1112))).toContain('unsupported replay step type');
+    expect(getResponseText(responses.find((message) => message.id === 1113))).toContain('replay step pageId mismatch');
+  });
+
+  it('fails replay on the first failing step and reports failedStepIndex', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Replay Failure Page',
+          currentUrl: 'https://example.com/replay-failure',
+          click: {
+            '#submit': {},
+          },
+          query: {
+            '#submit': {
+              exists: true,
+              connected: true,
+              rect: {
+                x: 20,
+                y: 30,
+                width: 100,
+                height: 40,
+                top: 30,
+                right: 120,
+                bottom: 70,
+                left: 20,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1114,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_replay',
+            arguments: {
+              steps: [
+                createReplayStep({ type: 'click', pageId: 'page-1', selector: '#submit', args: {} }),
+                createReplayStep({ type: 'click', pageId: 'page-1', selector: '#missing', args: {} }),
+              ],
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1115,
+          method: 'tools/call',
+          params: { name: 'browser_get_replay', arguments: {} },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 1115));
+    expect(text).toContain('status: failed');
+    expect(text).toContain('failedStepIndex: 1');
+    expect(text).toContain('element index 0 is out of range for selector: #missing');
+  });
+
+  it('replays drag_element and pointer_action steps successfully', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Replay Drag Page',
+        currentUrl: 'https://example.com/replay-drag',
+        query: {
+          '#card-a': {
+            exists: true,
+            connected: true,
+            rect: {
+              x: 20,
+              y: 40,
+              width: 100,
+              height: 60,
+              top: 40,
+              right: 120,
+              bottom: 100,
+              left: 20,
+            },
+            display: 'block',
+            visibility: 'visible',
+            opacity: '1',
+          },
+          '#lane-b': {
+            exists: true,
+            connected: true,
+            rect: {
+              x: 240,
+              y: 60,
+              width: 120,
+              height: 80,
+              top: 60,
+              right: 360,
+              bottom: 140,
+              left: 240,
+            },
+            display: 'block',
+            visibility: 'visible',
+            opacity: '1',
+          },
+        },
+      },
+    ];
+
+    const responses = await runMcpRequests(pages, [
+      {
+        jsonrpc: '2.0',
+        id: 1121,
+        method: 'tools/call',
+        params: {
+          name: 'browser_start_replay',
+          arguments: {
+            steps: [
+              createReplayStep({
+                type: 'drag_element',
+                pageId: 'page-1',
+                selector: '#card-a',
+                args: { targetSelector: '#lane-b' },
+              }),
+              createReplayStep({
+                type: 'pointer_action',
+                pageId: 'page-1',
+                args: {
+                  actions: [
+                    { type: 'move', x: 10, y: 20 },
+                    { type: 'down', button: 'left' },
+                    { type: 'up', button: 'left' },
+                  ],
+                },
+              }),
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(getResponseText(responses.find((message) => message.id === 1121))).toContain('status: completed');
+    expect(getResponseText(responses.find((message) => message.id === 1121))).toContain('completedSteps: 2');
   });
 
   it('drags local files onto normal, frame, and shadow dropzones', async () => {
