@@ -108,7 +108,7 @@ export const MODEL_CATALOG: Partial<Record<CLIProxyProvider, ProviderCatalog>> =
       {
         id: 'claude-opus-4-7',
         name: 'Claude Opus 4.7',
-        description: 'Latest flagship without thinking',
+        description: 'Latest flagship model',
         nativeImageInput: true,
         thinking: {
           type: 'budget',
