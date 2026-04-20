@@ -297,4 +297,26 @@ describe('openai proxy messages endpoint', () => {
 
     expect(response.status).toBe(200);
   });
+
+  it('responds 200 to HEAD / (health probe from Claude Code)', async () => {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/`, { method: 'HEAD' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json');
+    expect(await response.text()).toBe('');
+  });
+
+  it('responds 200 to HEAD /health', async () => {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/health`, { method: 'HEAD' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json');
+    expect(await response.text()).toBe('');
+  });
+
+  it('still responds with body for GET /', async () => {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean; service: string; endpoints: string[] };
+    expect(body.ok).toBe(true);
+    expect(body.endpoints).toContain('/v1/messages');
+  });
 });

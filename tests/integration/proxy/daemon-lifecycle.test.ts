@@ -83,6 +83,16 @@ describe('openai proxy daemon lifecycle', () => {
     ).json()) as { data?: Array<{ id: string }> };
     expect(models.data?.map((entry) => entry.id)).toEqual(['qwen3-coder']);
 
+    const headRoot = await fetch(`http://127.0.0.1:${port}/`, { method: 'HEAD' });
+    expect(headRoot.status).toBe(200);
+    expect(headRoot.headers.get('content-type')).toBe('application/json');
+    expect(await headRoot.text()).toBe('');
+
+    const headHealth = await fetch(`http://127.0.0.1:${port}/health`, { method: 'HEAD' });
+    expect(headHealth.status).toBe(200);
+    expect(headHealth.headers.get('content-type')).toBe('application/json');
+    expect(await headHealth.text()).toBe('');
+
     const stopped = await stopOpenAICompatProxy();
     expect(stopped.success).toBe(true);
     expect((await getOpenAICompatProxyStatus()).running).toBe(false);
