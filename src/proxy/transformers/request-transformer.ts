@@ -458,8 +458,33 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
 
     if (role === 'user') {
       const userParts: OpenAIContentPart[] = [];
-      let sawToolResult = false;
+      const followUpParts: OpenAIContentPart[] = [];
       const resolvedToolUseIds = new Set<string>();
+
+      const handleUserPart = (
+        part: OpenAIContentPart,
+        blockIndex: number,
+        kind: 'text' | 'image'
+      ) => {
+        if (!pendingToolUseIds || pendingToolUseIds.size === 0) {
+          userParts.push(part);
+          return;
+        }
+
+        if (resolvedToolUseIds.size === 0) {
+          throw new Error(
+            `messages[${messageIndex}].content[${blockIndex}] ${kind} is not allowed before tool_result blocks for pending tool_use ids`
+          );
+        }
+
+        if (resolvedToolUseIds.size !== pendingToolUseIds.size) {
+          throw new Error(
+            `messages[${messageIndex}].content[${blockIndex}] ${kind} is not allowed between tool_result blocks for pending tool_use ids`
+          );
+        }
+
+        followUpParts.push(part);
+      };
 
       content.forEach((block, blockIndex) => {
         const parsed = assertObject(
@@ -472,23 +497,17 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
         }
 
         if (parsed.type === 'text') {
-          if (sawToolResult) {
-            throw new Error(
-              `messages[${messageIndex}].content[${blockIndex}] text is not allowed after tool_result blocks`
-            );
-          }
           const text = typeof parsed.text === 'string' ? parsed.text : '';
-          userParts.push({ type: 'text', text });
+          handleUserPart({ type: 'text', text }, blockIndex, 'text');
           return;
         }
 
         if (isImageBlock(parsed)) {
-          if (sawToolResult) {
-            throw new Error(
-              `messages[${messageIndex}].content[${blockIndex}] image is not allowed after tool_result blocks`
-            );
-          }
-          userParts.push(toImagePart(parsed, `messages[${messageIndex}].content[${blockIndex}]`));
+          handleUserPart(
+            toImagePart(parsed, `messages[${messageIndex}].content[${blockIndex}]`),
+            blockIndex,
+            'image'
+          );
           return;
         }
 
@@ -496,11 +515,6 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
           if (!pendingToolUseIds || pendingToolUseIds.size === 0) {
             throw new Error(
               `messages[${messageIndex}].content[${blockIndex}] tool_result requires a preceding assistant tool_use`
-            );
-          }
-          if (userParts.length > 0) {
-            throw new Error(
-              `messages[${messageIndex}].content[${blockIndex}] tool_result blocks must come before other user content`
             );
           }
           if (typeof parsed.tool_use_id !== 'string' || parsed.tool_use_id.trim().length === 0) {
@@ -518,7 +532,6 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
               `messages[${messageIndex}].content[${blockIndex}].tool_use_id "${parsed.tool_use_id}" is duplicated`
             );
           }
-          sawToolResult = true;
           resolvedToolUseIds.add(parsed.tool_use_id);
           translatedMessages.push({
             role: 'tool',
@@ -543,7 +556,7 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
         );
       });
 
-      if (sawToolResult) {
+      if (resolvedToolUseIds.size > 0) {
         if (resolvedToolUseIds.size !== pendingToolUseIds?.size) {
           throw new Error(
             `messages[${messageIndex}].content must provide tool_result blocks for all pending tool_use ids`
@@ -551,17 +564,20 @@ function transformMessages(messagesValue: unknown): OpenAIMessage[] {
         }
         pendingToolUseIds = null;
         hasPendingToolUseIds = false;
-        return;
       }
 
       if (pendingToolUseIds && pendingToolUseIds.size > 0) {
         throw new Error(
-          `messages[${messageIndex}].content must start with tool_result blocks for pending tool_use ids`
+          `messages[${messageIndex}].content must include tool_result blocks for pending tool_use ids`
         );
       }
 
       if (userParts.length > 0) {
         flushUserContent(translatedMessages, userParts);
+      }
+
+      if (followUpParts.length > 0) {
+        flushUserContent(translatedMessages, followUpParts);
       }
       return;
     }
