@@ -5,10 +5,11 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ChevronRight, ArrowLeft, User, ExternalLink } from 'lucide-react';
-import { getAccountIdentityPresentation } from '@/lib/account-identity';
+import { getAccountIdentityPresentation, getCodexIdentityBadge } from '@/lib/account-identity';
 import { cn } from '@/lib/utils';
 import { PRIVACY_BLUR_CLASS } from '@/contexts/privacy-context';
 import type { AccountStepProps } from '../types';
+import { useTranslation } from 'react-i18next';
 
 export function AccountStep({
   accounts,
@@ -17,17 +18,20 @@ export function AccountStep({
   onAddNew,
   onBack,
 }: AccountStepProps) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
       {/* Existing accounts header */}
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-        Select an account ({accounts.length})
+        {t('setupWizard.accountStep.selectAccount', { count: accounts.length })}
       </div>
 
       {/* Scrollable account list with max-height for many accounts */}
       <div className="grid gap-2 max-h-[320px] overflow-y-auto pr-1">
         {accounts.map((acc) => {
           const identity = getAccountIdentityPresentation(acc.id, acc.email, acc.tokenFile);
+          const codexBadge =
+            acc.provider?.toLowerCase() === 'codex' ? getCodexIdentityBadge(identity) : null;
           return (
             <button
               key={acc.id}
@@ -44,26 +48,44 @@ export function AccountStep({
                     {identity.email}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    {identity.audienceLabel && (
+                    {codexBadge?.label ? (
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          'text-[10px] h-4 px-1.5 border-transparent',
+                          codexBadge.audience === 'business'
+                            ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300'
+                            : codexBadge.audience === 'free'
+                              ? 'bg-slate-200/70 text-slate-700 dark:bg-slate-700/40 dark:text-slate-200'
+                              : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+                        )}
+                      >
+                        {codexBadge.label}
+                      </Badge>
+                    ) : identity.audienceLabel ? (
                       <Badge
                         variant="outline"
                         className={cn(
                           'text-[10px] h-4 px-1.5 border-transparent',
                           identity.audience === 'business'
                             ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300'
-                            : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
+                            : identity.audience === 'free'
+                              ? 'bg-slate-200/70 text-slate-700 dark:bg-slate-700/40 dark:text-slate-200'
+                              : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
                         )}
                       >
                         {identity.audienceLabel}
                       </Badge>
-                    )}
-                    {identity.detailLabel && (
+                    ) : null}
+                    {!codexBadge?.label && identity.detailLabel && (
                       <Badge variant="outline" className="text-[10px] h-4 px-1.5">
                         {identity.detailLabel}
                       </Badge>
                     )}
                     {acc.isDefault && (
-                      <span className="text-xs text-muted-foreground">Default account</span>
+                      <span className="text-xs text-muted-foreground">
+                        {t('setupWizard.accountStep.defaultAccount')}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -80,7 +102,9 @@ export function AccountStep({
           <span className="w-full border-t" />
         </div>
         <div className="relative flex justify-center text-xs uppercase">
-          <span className="bg-background px-2 text-muted-foreground">Or</span>
+          <span className="bg-background px-2 text-muted-foreground">
+            {t('setupWizard.accountStep.or')}
+          </span>
         </div>
       </div>
 
@@ -94,15 +118,19 @@ export function AccountStep({
           <ExternalLink className="w-4 h-4 text-primary" />
         </div>
         <div>
-          <div className="font-medium text-primary">Add new account</div>
-          <div className="text-xs text-muted-foreground">Authenticate with a different account</div>
+          <div className="font-medium text-primary">
+            {t('setupWizard.accountStep.addNewAccount')}
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {t('setupWizard.accountStep.addNewAccountDesc')}
+          </div>
         </div>
       </button>
 
       <div className="flex items-center justify-between pt-2">
         <Button variant="ghost" onClick={onBack}>
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
+          {t('setupWizard.accountStep.back')}
         </Button>
       </div>
     </div>

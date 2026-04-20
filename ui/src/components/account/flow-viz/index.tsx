@@ -22,6 +22,8 @@ import { FlowVizHeader } from './flow-viz-header';
 // Re-export types for backward compatibility
 export type { AccountData, ProviderData, AccountFlowVizProps, ConnectionEvent } from './types';
 
+const SHOW_PAUSED_STORAGE_KEY = 'ccs-auth-monitor-show-paused';
+
 export function AccountFlowViz({
   providerData,
   onBack,
@@ -32,7 +34,13 @@ export function AccountFlowViz({
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredAccount, setHoveredAccount] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [showPausedAccounts, setShowPausedAccounts] = useState(true);
+  const [showPausedAccounts, setShowPausedAccounts] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(SHOW_PAUSED_STORAGE_KEY);
+      return saved !== null ? saved === 'true' : true;
+    }
+    return true;
+  });
   const [paths, setPaths] = useState<string[]>([]);
 
   const { privacyMode } = usePrivacy();
@@ -168,7 +176,11 @@ export function AccountFlowViz({
         pausedAccountsCount={pausedAccountsCount}
         onTogglePausedAccounts={() => {
           setHoveredAccount(null);
-          setShowPausedAccounts(!showPausedAccounts);
+          const newValue = !showPausedAccounts;
+          setShowPausedAccounts(newValue);
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(SHOW_PAUSED_STORAGE_KEY, String(newValue));
+          }
         }}
         hasCustomPositions={hasCustomPositions && hasVisibleCustomPositions}
         onResetPositions={resetPositions}

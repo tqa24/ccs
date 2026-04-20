@@ -3,12 +3,19 @@
  * Type definitions for WebSearch, GlobalEnv, and Proxy configurations
  */
 
-import type { CliproxyServerConfig, RemoteProxyStatus } from '@/lib/api-client';
+import type {
+  BrowserSettingsConfig,
+  BrowserStatusPayload,
+  CliproxyServerConfig,
+  RemoteProxyStatus,
+  UpdateBrowserSettingsPayload,
+} from '@/lib/api-client';
 
 // === WebSearch Types ===
 
 export interface ProviderConfig {
   enabled?: boolean;
+  url?: string;
   model?: string;
   timeout?: number;
   max_results?: number;
@@ -28,8 +35,9 @@ export interface WebSearchApiKeyState {
 export interface WebSearchProvidersConfig {
   exa?: ProviderConfig;
   tavily?: ProviderConfig;
-  duckduckgo?: ProviderConfig;
   brave?: ProviderConfig;
+  searxng?: ProviderConfig;
+  duckduckgo?: ProviderConfig;
   gemini?: ProviderConfig;
   grok?: ProviderConfig;
   opencode?: ProviderConfig;
@@ -48,7 +56,7 @@ export interface WebSearchSavePayload {
 }
 
 export interface CliStatus {
-  id: 'exa' | 'tavily' | 'duckduckgo' | 'brave' | 'gemini' | 'grok' | 'opencode';
+  id: 'exa' | 'tavily' | 'brave' | 'searxng' | 'duckduckgo' | 'gemini' | 'grok' | 'opencode';
   kind: 'backend' | 'legacy-cli';
   name?: string;
   enabled: boolean;
@@ -160,6 +168,7 @@ export interface OfficialChannelsStatus {
 // === Tab Types ===
 
 export type SettingsTab =
+  | 'browser'
   | 'websearch'
   | 'image'
   | 'channels'
@@ -190,3 +199,6 @@ export interface ThinkingConfig {
 // === Re-exports from api-client ===
 
 export type { CliproxyServerConfig, RemoteProxyStatus };
+export type BrowserConfig = BrowserSettingsConfig;
+export type BrowserStatus = BrowserStatusPayload;
+export type BrowserSavePayload = UpdateBrowserSettingsPayload;

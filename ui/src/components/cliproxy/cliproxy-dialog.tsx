@@ -72,7 +72,7 @@ const providerOptions = CLIPROXY_PROVIDERS.map((id) => ({
   label: getProviderDisplayName(id),
 }));
 const AGY_DENYLIST_MESSAGE =
-  'Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.';
+  'Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.'; // TODO i18n: use t('providerEditor.agyDenylist')
 
 function isDeniedAgyModelForProvider(provider: string, modelId: string | undefined): boolean {
   return provider === 'agy' && typeof modelId === 'string' && isDeniedAgyModelId(modelId);
@@ -152,7 +152,7 @@ export function CliproxyDialog({ open, onClose }: CliproxyDialogProps) {
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create CLIProxy Variant</DialogTitle>
+          <DialogTitle>{t('providerEditor.createVariant')}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">

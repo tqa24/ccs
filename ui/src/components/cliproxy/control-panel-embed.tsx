@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api, withApiBase } from '@/lib/api-client';
 import type { CliproxyServerConfig } from '@/lib/api-client';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
+import { useTranslation } from 'react-i18next';
 
 interface AuthTokensResponse {
   apiKey: { value: string; isCustom: boolean };
@@ -57,6 +58,7 @@ function clearLocalControlPanelSession(): void {
 }
 
 export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanelEmbedProps) {
+  const { t } = useTranslation();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [loadedFrameKey, setLoadedFrameKey] = useState<string | null>(null);
   const [iframeRevision, setIframeRevision] = useState(0);
@@ -280,7 +282,7 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
         <div className="flex items-center justify-between p-4 border-b">
           <div className="flex items-center gap-2">
             <Gauge className="w-5 h-5 text-primary" />
-            <h2 className="font-semibold">CLIProxy Control Panel</h2>
+            <h2 className="font-semibold">{t('cliproxyHeader.cliproxyControlPanel')}</h2>
           </div>
           <button
             className="inline-flex items-center gap-2 px-3 py-1.5 text-sm border rounded-md hover:bg-muted"
@@ -295,7 +297,9 @@ export function ControlPanelEmbed({ port = CLIPROXY_DEFAULT_PORT }: ControlPanel
             <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-6">
               <AlertCircle className="w-8 h-8 text-destructive" />
             </div>
-            <h3 className="text-lg font-semibold mb-2">CLIProxy Not Available</h3>
+            <h3 className="text-lg font-semibold mb-2">
+              {t('cliproxyHeader.cliproxyNotAvailable')}
+            </h3>
             <p className="text-muted-foreground mb-4">{error}</p>
             <p className="text-sm text-muted-foreground">
               Start a CLIProxy session with{' '}

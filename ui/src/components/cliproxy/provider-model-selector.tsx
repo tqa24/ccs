@@ -379,12 +379,12 @@ export function FlexibleModelSelector({
         {model.tier === 'paid' && <PaidBadge label={t('providerModelSelector.paid')} />}
         {routingHints.get(model.id.toLowerCase())?.unprefixedStatus === 'shadowed' ? (
           <Badge variant="outline" className="text-[9px] h-4 px-1">
-            Shadowed
+            {t('providerModelSelector.shadowed')}
           </Badge>
         ) : null}
         {routingHints.get(model.id.toLowerCase())?.unprefixedStatus === 'prefix-only' ? (
           <Badge variant="outline" className="text-[9px] h-4 px-1">
-            Prefix only
+            {t('providerModelSelector.prefixOnly')}
           </Badge>
         ) : null}
         {isCodexProvider && <CodexEffortBadge modelId={model.id} />}
@@ -425,12 +425,12 @@ export function FlexibleModelSelector({
           </span>
           {routingHints.get(model.id.toLowerCase())?.unprefixedStatus === 'shadowed' ? (
             <Badge variant="outline" className="text-[9px] h-4 px-1">
-              Shadowed
+              {t('providerModelSelector.shadowed')}
             </Badge>
           ) : null}
           {routingHints.get(model.id.toLowerCase())?.unprefixedStatus === 'prefix-only' ? (
             <Badge variant="outline" className="text-[9px] h-4 px-1">
-              Prefix only
+              {t('providerModelSelector.prefixOnly')}
             </Badge>
           ) : null}
           {isCodexProvider && <CodexEffortBadge modelId={model.id} />}
@@ -450,7 +450,7 @@ export function FlexibleModelSelector({
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate font-mono text-xs">{value}</span>
             <Badge variant="outline" className="text-[9px] h-4 px-1">
-              Current
+              {t('providerModelSelector.current')}
             </Badge>
           </div>
         ),
@@ -458,7 +458,7 @@ export function FlexibleModelSelector({
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate font-mono text-xs">{value}</span>
             <Badge variant="outline" className="text-[9px] h-4 px-1">
-              Current
+              {t('providerModelSelector.current')}
             </Badge>
           </div>
         ),
@@ -489,7 +489,11 @@ export function FlexibleModelSelector({
             ? [
                 {
                   key: 'current',
-                  label: <span className="text-xs text-muted-foreground">Current value</span>,
+                  label: (
+                    <span className="text-xs text-muted-foreground">
+                      {t('providerModelSelector.currentValue')}
+                    </span>
+                  ),
                 },
               ]
             : []),
@@ -531,8 +535,8 @@ export function FlexibleModelSelector({
         >
           <div className="font-medium">
             {selectedRoutingHint.pinnedAvailable
-              ? 'Preferred pinned model:'
-              : 'Pinned route status:'}{' '}
+              ? t('providerModelSelector.preferredPinnedModel')
+              : t('providerModelSelector.pinnedRouteStatus')}{' '}
             <code>
               {selectedRoutingHint.pinnedAvailable
                 ? selectedRoutingHint.recommendedModelId
@@ -544,7 +548,7 @@ export function FlexibleModelSelector({
       ) : null}
       {value && !selectedRoutingHint && normalizeModelValue(value, routing) !== value ? (
         <div className="rounded-md border border-amber-300/60 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/25 dark:text-amber-100">
-          Pinned model is not currently advertised by the proxy: <code>{value}</code>
+          {t('providerModelSelector.pinnedModelNotAdvertised', { model: value })}
         </div>
       ) : null}
     </div>

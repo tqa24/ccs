@@ -6,6 +6,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import { api } from '@/lib/api-client';
 import { isValidProvider, isDeviceCodeProvider } from '@/lib/provider-config';
 
@@ -29,6 +30,9 @@ interface StartAuthOptions {
   kiroIDCStartUrl?: string;
   kiroIDCRegion?: string;
   kiroIDCFlow?: 'authcode' | 'device';
+  gitlabAuthMode?: 'oauth' | 'pat';
+  gitlabBaseUrl?: string;
+  gitlabPersonalAccessToken?: string;
   flowType?: 'authorization_code' | 'device_code';
   startEndpoint?: 'start' | 'start-url';
   riskAcknowledgement?: {
@@ -77,6 +81,7 @@ const INITIAL_STATE: AuthFlowState = {
 };
 
 export function useCliproxyAuthFlow() {
+  const { t } = useTranslation();
   const [state, setState] = useState<AuthFlowState>(INITIAL_STATE);
   const stateRef = useRef<AuthFlowState>(INITIAL_STATE);
 
@@ -129,7 +134,7 @@ export function useCliproxyAuthFlow() {
           setState((prev) => ({
             ...prev,
             isAuthenticating: false,
-            error: 'Authentication timed out. Please try again.',
+            error: t('toasts.providerAuthTimeout'),
           }));
         }
         return;
@@ -158,7 +163,7 @@ export function useCliproxyAuthFlow() {
           const hasAccount = typeof data.account === 'object' && data.account !== null;
           if (!hasAccount) {
             stopPolling();
-            const errorMsg = 'Authenticated account could not be registered';
+            const errorMsg = t('toasts.providerAccountRegistrationFailed');
             toast.error(errorMsg);
             setState((prev) => ({
               ...prev,
@@ -173,7 +178,7 @@ export function useCliproxyAuthFlow() {
           queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
           queryClient.invalidateQueries({ queryKey: ['account-quota'] });
           invalidateCliproxyRoutingData(queryClient);
-          toast.success(`${provider} authentication successful`);
+          toast.success(t('toasts.providerAuthSuccess', { provider }));
           openedAuthUrlRef.current = false;
           setState(INITIAL_STATE);
         } else if (data.status === 'auth_url') {
@@ -194,7 +199,7 @@ export function useCliproxyAuthFlow() {
             data.user_code && data.verification_url
               ? `Open ${data.verification_url} and enter code: ${data.user_code}`
               : 'Switch to Device Code method and try again.';
-          toast.error('Provider returned Device Code flow in callback mode');
+          toast.error(t('toasts.providerDeviceCodeInCallback'));
           setState((prev) => ({
             ...prev,
             isAuthenticating: false,
@@ -225,7 +230,7 @@ export function useCliproxyAuthFlow() {
         const message =
           error instanceof Error && error.message.trim().length > 0
             ? error.message
-            : 'Lost contact with the auth status endpoint';
+            : t('toasts.providerLostStatusEndpoint');
         toast.error(message);
         setState((prev) => ({
           ...prev,
@@ -234,7 +239,7 @@ export function useCliproxyAuthFlow() {
         }));
       }
     },
-    [isActiveAttempt, queryClient, stopPolling]
+    [isActiveAttempt, queryClient, stopPolling, t]
   );
 
   const startAuth = useCallback(
@@ -242,7 +247,7 @@ export function useCliproxyAuthFlow() {
       if (!isValidProvider(provider)) {
         setState({
           ...INITIAL_STATE,
-          error: `Unknown provider: ${provider}`,
+          error: t('toasts.providerUnknown', { provider }),
         });
         return;
       }
@@ -270,6 +275,9 @@ export function useCliproxyAuthFlow() {
         kiroIDCStartUrl: options?.kiroIDCStartUrl,
         kiroIDCRegion: options?.kiroIDCRegion,
         kiroIDCFlow: options?.kiroIDCFlow,
+        gitlabAuthMode: options?.gitlabAuthMode,
+        gitlabBaseUrl: options?.gitlabBaseUrl,
+        gitlabPersonalAccessToken: options?.gitlabPersonalAccessToken,
         riskAcknowledgement: options?.riskAcknowledgement,
       };
 
@@ -317,8 +325,8 @@ export function useCliproxyAuthFlow() {
                   typeof data.error === 'string'
                     ? data.error
                     : success
-                      ? 'Authenticated account could not be registered'
-                      : 'Authentication failed';
+                      ? t('toasts.providerAccountRegistrationFailed')
+                      : t('auth.loginFailed');
                 toast.error(errorMsg);
                 setState((prev) => ({
                   ...prev,
@@ -363,7 +371,8 @@ export function useCliproxyAuthFlow() {
           const success = data.success === true;
 
           if (!response.ok || !success) {
-            const errorMsg = typeof data.error === 'string' ? data.error : 'Failed to start OAuth';
+            const errorMsg =
+              typeof data.error === 'string' ? data.error : t('toasts.providerStartOAuthFailed');
             throw new Error(errorMsg);
           }
 
@@ -410,7 +419,7 @@ export function useCliproxyAuthFlow() {
           setState(INITIAL_STATE);
           return;
         }
-        const message = error instanceof Error ? error.message : 'Authentication failed';
+        const message = error instanceof Error ? error.message : t('auth.loginFailed');
         toast.error(message);
         setState((prev) => ({
           ...prev,
@@ -419,7 +428,7 @@ export function useCliproxyAuthFlow() {
         }));
       }
     },
-    [isActiveAttempt, pollStatus, stopPolling, queryClient]
+    [isActiveAttempt, pollStatus, stopPolling, queryClient, t]
   );
 
   const cancelAuth = useCallback(() => {
@@ -475,27 +484,28 @@ export function useCliproxyAuthFlow() {
           queryClient.invalidateQueries({ queryKey: ['cliproxy-accounts'] });
           queryClient.invalidateQueries({ queryKey: ['account-quota'] });
           invalidateCliproxyRoutingData(queryClient);
-          toast.success(`${currentProvider} authentication successful`);
+          toast.success(t('toasts.providerAuthSuccess', { provider: currentProvider }));
           setState(INITIAL_STATE);
         } else {
           const errorMsg =
             typeof data.error === 'string'
               ? data.error
               : success
-                ? 'Authenticated account could not be registered'
-                : 'Callback submission failed';
+                ? t('toasts.providerAccountRegistrationFailed')
+                : t('toasts.providerCallbackFailed');
           throw new Error(errorMsg);
         }
       } catch (error) {
         if (!isActiveAttempt(attemptId)) {
           return;
         }
-        const message = error instanceof Error ? error.message : 'Failed to submit callback';
+        const message =
+          error instanceof Error ? error.message : t('toasts.providerSubmitCallbackFailed');
         toast.error(message);
         setState((prev) => ({ ...prev, isSubmittingCallback: false, error: message }));
       }
     },
-    [isActiveAttempt, state.provider, queryClient, stopPolling]
+    [isActiveAttempt, state.provider, queryClient, stopPolling, t]
   );
 
   return useMemo(

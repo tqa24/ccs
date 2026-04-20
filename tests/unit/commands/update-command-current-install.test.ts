@@ -1,12 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { handleUpdateCommand, type UpdateCommandDeps } from '../../../src/commands/update-command';
+import { beforeEach, describe, expect, it } from 'bun:test';
+import type { UpdateCommandDeps } from '../../../src/commands/update-command';
 import type { UpdateResult } from '../../../src/utils/update-checker';
 
 let logLines: string[] = [];
 let spawnCalls: Array<{ command: string; args: string[]; env?: NodeJS.ProcessEnv }> = [];
 let exitCodes: number[] = [];
-let originalConsoleLog: typeof console.log;
-let originalProcessExit: typeof process.exit;
 
 type InstalledState = {
   version: string | null;
@@ -39,6 +37,12 @@ function createDeps(overrides: Partial<UpdateCommandDeps> = {}): UpdateCommandDe
   return {
     initUI: async () => {},
     getVersion: () => '7.67.0-dev.5',
+    log: (...args: unknown[]) => {
+      logLines.push(args.map(String).join(' '));
+    },
+    exit: ((code?: number) => {
+      exitCodes.push(code ?? 0);
+    }) as typeof process.exit,
     detectCurrentInstall: () => currentInstallOverride,
     buildPackageManagerEnv: () => {
       if (currentInstallOverride.manager === 'npm') {
@@ -95,6 +99,13 @@ function createDeps(overrides: Partial<UpdateCommandDeps> = {}): UpdateCommandDe
   };
 }
 
+async function loadHandleUpdateCommand() {
+  const mod = await import(
+    `../../../src/commands/update-command?test=${Date.now()}-${Math.random()}`
+  );
+  return mod.handleUpdateCommand;
+}
+
 beforeEach(() => {
   logLines = [];
   spawnCalls = [];
@@ -110,26 +121,11 @@ beforeEach(() => {
     latest: '7.67.0-dev.9',
   };
   currentInstallOverride = installDescriptor();
-
-  originalConsoleLog = console.log;
-  originalProcessExit = process.exit;
-
-  console.log = (...args: unknown[]) => {
-    logLines.push(args.map(String).join(' '));
-  };
-
-  process.exit = ((code?: number) => {
-    exitCodes.push(code ?? 0);
-  }) as typeof process.exit;
-});
-
-afterEach(() => {
-  console.log = originalConsoleLog;
-  process.exit = originalProcessExit;
 });
 
 describe('update-command current install handling', () => {
   it('updates through the current install manager and prefix', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     await handleUpdateCommand({ beta: true }, createDeps());
 
     const installCall = spawnCalls.find((call) => call.args.includes('install'));
@@ -141,6 +137,7 @@ describe('update-command current install handling', () => {
   });
 
   it('fails when another manager updated elsewhere but the current binary stayed stale', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     scenario = {
       beforeState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
       afterState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
@@ -156,6 +153,7 @@ describe('update-command current install handling', () => {
   });
 
   it('keeps force mode under exact target-version verification', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     scenario = {
       beforeState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
       afterState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
@@ -168,6 +166,7 @@ describe('update-command current install handling', () => {
   });
 
   it('warns but succeeds when target resolution says no update and the current install stays unchanged', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     scenario = {
       beforeState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
       afterState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
@@ -181,6 +180,7 @@ describe('update-command current install handling', () => {
   });
 
   it('warns but succeeds when target version resolution fails and the current install stays unchanged', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     scenario = {
       beforeState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
       afterState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
@@ -194,6 +194,7 @@ describe('update-command current install handling', () => {
   });
 
   it('uses the injected version in the no-update message', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     updateCheckResult = { status: 'no_update' };
 
     await handleUpdateCommand(
@@ -208,6 +209,7 @@ describe('update-command current install handling', () => {
   });
 
   it('accepts a newer installed version when the dist-tag moves during update', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     scenario = {
       beforeState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
       afterState: { version: '7.67.1-dev.0', packageJsonMtimeMs: 200, scriptMtimeMs: 200 },
@@ -220,6 +222,7 @@ describe('update-command current install handling', () => {
   });
 
   it('accepts force reinstall when the version stays the same but the current install files change', async () => {
+    const handleUpdateCommand = await loadHandleUpdateCommand();
     scenario = {
       beforeState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 100, scriptMtimeMs: 100 },
       afterState: { version: '7.67.0-dev.5', packageJsonMtimeMs: 200, scriptMtimeMs: 200 },
@@ -241,6 +244,7 @@ describe('update-command current install handling', () => {
   ])(
     'routes updates through the current %s install and env',
     async (manager, expectedArg, envKey, envValue) => {
+      const handleUpdateCommand = await loadHandleUpdateCommand();
       currentInstallOverride = {
         ...installDescriptor(),
         manager: manager as 'bun' | 'yarn' | 'pnpm',

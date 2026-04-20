@@ -28,8 +28,16 @@ import type {
 } from '../../types';
 import { ProviderCard, type ProviderFieldConfig } from './provider-card';
 
-type ProviderId = 'exa' | 'tavily' | 'brave' | 'duckduckgo' | 'gemini' | 'opencode' | 'grok';
-type ProviderFieldKey = 'model' | 'timeout' | 'max_results';
+type ProviderId =
+  | 'exa'
+  | 'tavily'
+  | 'brave'
+  | 'searxng'
+  | 'duckduckgo'
+  | 'gemini'
+  | 'opencode'
+  | 'grok';
+type ProviderFieldKey = 'model' | 'timeout' | 'max_results' | 'url';
 
 interface ProviderFieldDefinition {
   key: ProviderFieldKey;
@@ -54,14 +62,17 @@ interface ProviderDefinition {
   fields?: ProviderFieldDefinition[];
 }
 
+// TODO i18n: missing keys for CHAIN_STEPS titles
 const CHAIN_STEPS = [
   { id: 'exa', title: 'Exa', defaultEnabled: false },
   { id: 'tavily', title: 'Tavily', defaultEnabled: false },
   { id: 'brave', title: 'Brave', defaultEnabled: false },
+  { id: 'searxng', title: 'SearXNG', defaultEnabled: false },
   { id: 'duckduckgo', title: 'DuckDuckGo', defaultEnabled: true },
   { id: 'legacy', title: 'Legacy CLI', defaultEnabled: false },
 ] as const;
 
+// TODO i18n: missing keys for BACKEND_PROVIDERS titles, descriptions, badges, footerNotes, field labels, helpTexts, placeholders
 const BACKEND_PROVIDERS: ProviderDefinition[] = [
   {
     id: 'exa',
@@ -131,6 +142,37 @@ const BACKEND_PROVIDERS: ProviderDefinition[] = [
     ],
   },
   {
+    id: 'searxng',
+    title: 'SearXNG',
+    description: 'Configurable JSON backend for self-hosted or public SearXNG instances.',
+    badge: 'SELF-HOSTED',
+    badgeTone: 'cyan',
+    defaultEnabled: false,
+    fallbackDetail: 'Set a valid base URL',
+    footerNote: 'Runs after Brave and before DuckDuckGo when enabled and ready.',
+    fields: [
+      {
+        key: 'url',
+        label: 'Base URL',
+        type: 'text',
+        placeholder: 'https://search.example.com',
+        helpText:
+          'Paste the instance base URL only. CCS appends /search?format=json for you and rejects embedded credentials.',
+        defaultValue: '',
+      },
+      {
+        key: 'max_results',
+        label: 'Max results',
+        type: 'number',
+        placeholder: '5',
+        helpText: 'Clamp between 1 and 10 results.',
+        defaultValue: 5,
+        min: 1,
+        max: 10,
+      },
+    ],
+  },
+  {
     id: 'duckduckgo',
     title: 'DuckDuckGo',
     description: 'Zero-setup floor. Keep this on unless you want no built-in fallback at all.',
@@ -154,6 +196,7 @@ const BACKEND_PROVIDERS: ProviderDefinition[] = [
   },
 ];
 
+// TODO i18n: missing keys for LEGACY_PROVIDERS titles, descriptions, badges, footerNotes, field labels, helpTexts, placeholders
 const LEGACY_PROVIDERS: ProviderDefinition[] = [
   {
     id: 'gemini',
@@ -252,6 +295,7 @@ function getStatusTone(
   return 'idle';
 }
 
+// TODO i18n: missing keys for getStatusLabel return values ("Ready", "Needs setup", "Disabled")
 function getStatusLabel(provider: CliStatus | undefined, enabled: boolean): string {
   if (enabled && provider?.available) {
     return 'Ready';
@@ -335,6 +379,7 @@ function isApiKeyProvider(providerId: ProviderId): providerId is WebSearchApiKey
   return providerId === 'exa' || providerId === 'tavily' || providerId === 'brave';
 }
 
+// TODO i18n: missing keys for getApiKeySummary return values
 function getApiKeySummary(apiKeyState: WebSearchApiKeyState | undefined): string {
   if (!apiKeyState?.configured) {
     return 'Not stored';
@@ -397,6 +442,7 @@ export default function WebSearchSection() {
   const legacyReady = legacyEnabled.some((provider) => providerStatus.get(provider.id)?.available);
 
   const legacySummary =
+    // TODO i18n: missing keys for legacy summary format strings ("Off", "X enabled", "N enabled")
     legacyEnabled.length === 0
       ? 'Off'
       : legacyEnabled.length === 1
@@ -584,6 +630,7 @@ export default function WebSearchSection() {
                     <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-primary/20 bg-primary/8 text-primary">
                       <Globe className="h-4 w-4" />
                     </div>
+                    {/* TODO i18n: missing key for "Execution chain" */}
                     <p className="text-sm font-semibold tracking-tight">Execution chain</p>
                   </div>
                   <p className="text-sm text-muted-foreground">
@@ -646,6 +693,7 @@ export default function WebSearchSection() {
                   <Globe className="h-4 w-4" />
                 </div>
                 <div>
+                  {/* TODO i18n: missing key for "Primary backends" */}
                   <h3 className="text-base font-semibold tracking-tight">Primary backends</h3>
                   <p className="text-sm text-muted-foreground">
                     Real backends run top-down before any legacy CLI fallback.
@@ -699,6 +747,7 @@ export default function WebSearchSection() {
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                  {/* TODO i18n: missing key for "API Key" */}
                                   API Key
                                 </p>
                                 <p className="mt-1 text-sm text-foreground/90">
@@ -707,12 +756,12 @@ export default function WebSearchSection() {
                                 <p className="mt-1 text-xs text-muted-foreground">
                                   {config?.apiKeys?.[apiKeyProviderId]?.maskedValue
                                     ? `${config.apiKeys[apiKeyProviderId]?.envVar} ${config.apiKeys[apiKeyProviderId]?.maskedValue}`
-                                    : `Store ${provider.badge} here so the backend is ready immediately after you enable it.`}
+                                    : /* TODO i18n: missing key for "Store X here..." */ `Store ${provider.badge} here so the backend is ready immediately after you enable it.`}
                                 </p>
                               </div>
                               {savedApiKeyProvider === provider.id && (
                                 <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                                  Saved
+                                  {/* TODO i18n: missing key for "Saved" */ 'Saved'}
                                 </span>
                               )}
                             </div>
@@ -728,8 +777,8 @@ export default function WebSearchSection() {
                               }
                               placeholder={
                                 config?.apiKeys?.[apiKeyProviderId]?.configured
-                                  ? 'Enter a new key to rotate the stored secret'
-                                  : `Paste ${provider.badge}`
+                                  ? /* TODO i18n: missing key for "Enter a new key to rotate the stored secret" */ 'Enter a new key to rotate the stored secret'
+                                  : /* TODO i18n: missing key for "Paste X" */ `Paste ${provider.badge}`
                               }
                               className="bg-background/80 font-mono text-sm"
                               disabled={saving}
@@ -746,8 +795,8 @@ export default function WebSearchSection() {
                                 }
                               >
                                 {config?.apiKeys?.[apiKeyProviderId]?.configured
-                                  ? 'Update key'
-                                  : 'Save key'}
+                                  ? /* TODO i18n: missing key for "Update key" */ 'Update key'
+                                  : /* TODO i18n: missing key for "Save key" */ 'Save key'}
                               </Button>
 
                               {(config?.apiKeys?.[apiKeyProviderId]?.source === 'global_env' ||
@@ -760,7 +809,9 @@ export default function WebSearchSection() {
                                   }}
                                   disabled={saving}
                                 >
-                                  Remove stored key
+                                  {
+                                    /* TODO i18n: missing key for "Remove stored key" */ 'Remove stored key'
+                                  }
                                 </Button>
                               )}
                             </div>
@@ -788,6 +839,7 @@ export default function WebSearchSection() {
                   <KeyRound className="h-4 w-4" />
                 </div>
                 <div>
+                  {/* TODO i18n: missing key for "Legacy CLI fallbacks" */}
                   <h3 className="text-base font-semibold tracking-tight">Legacy CLI fallbacks</h3>
                   <p className="text-sm text-muted-foreground">
                     Runs only after every enabled real backend fails.

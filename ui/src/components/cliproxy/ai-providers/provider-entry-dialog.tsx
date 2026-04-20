@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { ChevronDown, KeyRound, SlidersHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type {
   AiProviderEntryView,
   AiProviderFamilyId,
@@ -271,6 +272,7 @@ export function ProviderEntryDialog({
   onSubmit,
   isSaving,
 }: ProviderEntryDialogProps) {
+  const { t } = useTranslation();
   const guide = useMemo(() => getDialogGuide(family), [family]);
   const isEditing = Boolean(entry);
   const supportsOpenAiCompat = family === 'openai-compatibility';
@@ -382,7 +384,9 @@ export function ProviderEntryDialog({
           <div className="space-y-6 px-6 py-6">
             <section className="space-y-4">
               <div>
-                <div className="text-sm font-semibold">Required setup</div>
+                <div className="text-sm font-semibold">
+                  {t('aiProvidersEntryDialog.requiredSetup')}
+                </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   Save the smallest working configuration first.
                 </div>
@@ -391,7 +395,9 @@ export function ProviderEntryDialog({
               {supportsOpenAiCompat ? (
                 <div className="grid gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="connector-name">Connector Name</Label>
+                    <Label htmlFor="connector-name">
+                      {t('aiProvidersEntryDialog.connectorName')}
+                    </Label>
                     <Input
                       id="connector-name"
                       value={name}
@@ -440,7 +446,9 @@ export function ProviderEntryDialog({
 
             <section className="space-y-4">
               <div>
-                <div className="text-sm font-semibold">Optional routing</div>
+                <div className="text-sm font-semibold">
+                  {t('aiProvidersEntryDialog.optionalRouting')}
+                </div>
                 <div className="mt-1 text-sm text-muted-foreground">
                   Only fill these when the route needs more than the default behavior.
                 </div>

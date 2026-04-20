@@ -13,6 +13,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import type { LogsConfig, UpdateLogsConfigPayload } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+// TODO i18n: import { useTranslation } from 'react-i18next'; when keys are ready
 
 function parseInteger(value: string, fallback: number) {
   const parsed = Number.parseInt(value, 10);
@@ -32,6 +33,8 @@ export function LogsConfigCard({
   onSave: (payload: UpdateLogsConfigPayload) => void;
   isPending: boolean;
 }) {
+  // TODO i18n: uncomment when keys for Commit Changes, Rollback Draft, etc. are added
+  // const { t } = useTranslation();
   const [draft, setDraft] = useState(config);
 
   useEffect(() => {
@@ -247,6 +250,7 @@ export function LogsConfigCard({
             className="h-10 w-full gap-2 rounded-xl bg-primary text-[11px] font-semibold uppercase tracking-[0.14em] shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Save className="h-3.5 w-3.5" />
+            {/* TODO i18n: missing key for "Commit Changes" */}
             Commit Changes
           </Button>
           <Button
@@ -256,6 +260,7 @@ export function LogsConfigCard({
             className="h-9 gap-2 text-[10px] font-medium uppercase tracking-[0.12em] text-foreground/45 hover:text-foreground"
           >
             <RotateCcw className="h-3 w-3" />
+            {/* TODO i18n: missing key for "Rollback Draft" */}
             Rollback Draft
           </Button>
         </div>

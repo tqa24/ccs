@@ -12,6 +12,7 @@ import {
   type SharedGroupSummary,
 } from '@/lib/account-continuity';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 export interface AuthAccountsView {
   accounts: AuthAccountRow[];
@@ -70,12 +71,13 @@ export function useAccounts() {
 
 export function useSetDefaultAccount() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (name: string) => api.accounts.setDefault(name),
     onSuccess: (_data, name) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      toast.success(`Default account set to "${name}"`);
+      toast.success(t('toasts.defaultAccountSet', { name }));
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -85,12 +87,13 @@ export function useSetDefaultAccount() {
 
 export function useResetDefaultAccount() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: () => api.accounts.resetDefault(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      toast.success('Default account reset to CCS');
+      toast.success(t('toasts.defaultAccountReset'));
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -100,12 +103,13 @@ export function useResetDefaultAccount() {
 
 export function useDeleteAccount() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (name: string) => api.accounts.delete(name),
     onSuccess: (_data, name) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
-      toast.success(`Account "${name}" deleted`);
+      toast.success(t('toasts.accountDeleted', { name }));
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -115,6 +119,7 @@ export function useDeleteAccount() {
 
 export function useUpdateAccountContext() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: ({
@@ -130,13 +135,17 @@ export function useUpdateAccountContext() {
     }) => api.accounts.updateContext(name, { context_mode, context_group, continuity_mode }),
     onSuccess: (_data, vars) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      const normalizedGroup = (vars.context_group || 'default')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, '-');
       const contextSummary =
         vars.context_mode === 'shared'
           ? vars.continuity_mode === 'deeper'
-            ? `shared (${(vars.context_group || 'default').trim().toLowerCase().replace(/\s+/g, '-')}, deeper continuity)`
-            : `shared (${(vars.context_group || 'default').trim().toLowerCase().replace(/\s+/g, '-')}, standard)`
-          : 'isolated';
-      toast.success(`Updated "${vars.name}" context to ${contextSummary}`);
+            ? `${t('accountsPage.sharedDeeper')} (${normalizedGroup})`
+            : `${t('accountsPage.sharedStandard')} (${normalizedGroup})`
+          : t('accountsPage.isolated');
+      toast.success(t('toasts.contextUpdated', { name: vars.name, summary: contextSummary }));
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -146,6 +155,7 @@ export function useUpdateAccountContext() {
 
 export function useConfirmLegacyAccountPolicies() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: async (accounts: Account[]) => {
@@ -175,26 +185,22 @@ export function useConfirmLegacyAccountPolicies() {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       if (failedCount > 0 && updatedCount > 0) {
         toast.error(
-          `Confirmed ${updatedCount} legacy account${updatedCount > 1 ? 's' : ''}, but ${failedCount} update${failedCount > 1 ? 's' : ''} failed. Refreshed account state.`
+          t('toasts.legacyConfirmPartial', { updated: updatedCount, failed: failedCount })
         );
         return;
       }
 
       if (failedCount > 0) {
-        toast.error(
-          `Failed to confirm ${failedCount} legacy account${failedCount > 1 ? 's' : ''}. Refreshed account state.`
-        );
+        toast.error(t('toasts.legacyConfirmAllFailed', { failed: failedCount }));
         return;
       }
 
       if (updatedCount > 0) {
-        toast.success(
-          `Confirmed explicit sync mode for ${updatedCount} legacy account${updatedCount > 1 ? 's' : ''}`
-        );
+        toast.success(t('toasts.legacyConfirmSuccess', { count: updatedCount }));
         return;
       }
 
-      toast.info('No legacy accounts need confirmation');
+      toast.info(t('toasts.noLegacyAccounts'));
     },
     onError: (error: Error) => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });

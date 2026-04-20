@@ -6,6 +6,7 @@ import type { LogsSource } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import type { LogsLevelFilter, LogsSourceFilter } from '@/hooks/use-logs';
 import { getLogLevelOptions } from '@/hooks/use-logs';
+import { useTranslation } from 'react-i18next';
 
 export function LogsFilters({
   sources,
@@ -32,6 +33,7 @@ export function LogsFilters({
   onRefresh: () => void;
   isRefreshing: boolean;
 }) {
+  const { t } = useTranslation();
   const levels = getLogLevelOptions();
   const limits = [50, 100, 150, 250];
 
@@ -188,7 +190,7 @@ export function LogsFilters({
             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
             <div className="flex items-center gap-2">
               <RefreshCw className={cn('h-3.5 w-3.5', isRefreshing && 'animate-spin')} />
-              <span>Refresh Entries</span>
+              <span>{t('logsConfig.refreshEntries')}</span>
             </div>
           </Button>
         </div>

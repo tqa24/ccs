@@ -1,5 +1,6 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -116,6 +117,7 @@ export function ProviderCard({
   footerNote,
   children,
 }: ProviderCardProps) {
+  const { t } = useTranslation();
   const tone = PROVIDER_TONE_STYLES[badgeTone];
   const status = getStatusToneStyles(statusTone);
 
@@ -195,7 +197,7 @@ export function ProviderCard({
                   </Label>
                   {field.saved && (
                     <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
-                      Saved
+                      {t('settings.saved')}
                     </span>
                   )}
                 </div>
@@ -241,7 +243,7 @@ export function ProviderCard({
               className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
             >
               <ExternalLink className="h-3 w-3" />
-              View docs
+              {t('settingsWebsearch.viewDocs')}
             </a>
           )}
         </div>

@@ -52,6 +52,7 @@ import {
   Workflow,
   Zap,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 function SummaryCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -1403,6 +1404,7 @@ function EmptyEntryWorkspace({
 export function CliproxyAiProvidersPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { data, error, isLoading, isFetching, refetch } = useCliproxyAiProviders();
   const createMutation = useCreateCliproxyAiProviderEntry();
   const updateMutation = useUpdateCliproxyAiProviderEntry();
@@ -1475,7 +1477,7 @@ export function CliproxyAiProvidersPage() {
               <AlertCircle className="h-5 w-5 text-destructive" />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-lg font-semibold">Unable to load AI Providers</div>
+              <div className="text-lg font-semibold">{t('aiProvidersPage.unableToLoad')}</div>
               <div className="mt-2 text-sm text-muted-foreground">{message}</div>
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button type="button" onClick={() => void refetch()}>

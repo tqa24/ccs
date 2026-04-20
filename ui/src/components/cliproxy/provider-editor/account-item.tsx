@@ -29,8 +29,14 @@ import {
 } from 'lucide-react';
 
 import type { AccountItemProps } from './types';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
-function renderProjectId(projectId: string | undefined, privacyMode: boolean | undefined) {
+function renderProjectId(
+  projectId: string | undefined,
+  privacyMode: boolean | undefined,
+  t: TFunction
+) {
   if (projectId) {
     return (
       <TooltipProvider>
@@ -50,7 +56,7 @@ function renderProjectId(projectId: string | undefined, privacyMode: boolean | u
             </div>
           </TooltipTrigger>
           <TooltipContent side="bottom">
-            <p className="text-xs">GCP Project ID (read-only)</p>
+            <p className="text-xs">{t('providerEditor.gcpProjectIdReadonly')}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -63,13 +69,13 @@ function renderProjectId(projectId: string | undefined, privacyMode: boolean | u
         <TooltipTrigger asChild>
           <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-500">
             <AlertTriangle className="w-3 h-3" aria-label="Warning" />
-            <span>Project ID: N/A</span>
+            <span>{t('providerEditor.projectIdNA')}</span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-[250px]">
           <div className="text-xs space-y-1">
-            <p className="font-medium text-amber-600">Missing Project ID</p>
-            <p>This may cause errors. Remove the account and re-add it to fetch the project ID.</p>
+            <p className="font-medium text-amber-600">{t('providerEditor.missingProjectId')}</p>
+            <p>{t('providerEditor.missingProjectIdHint')}</p>
           </div>
         </TooltipContent>
       </Tooltip>
@@ -90,6 +96,7 @@ export function AccountItem({
   selected,
   onSelectChange,
 }: AccountItemProps) {
+  const { t } = useTranslation();
   const normalizedProvider = account.provider.toLowerCase();
   const { data: stats } = useCliproxyStats(showQuota);
   const { data: quota, isLoading: quotaLoading } = useAccountQuota(
@@ -199,7 +206,7 @@ export function AccountItem({
         beforeIdentity={beforeIdentity}
         headerEnd={headerEnd}
         bodySlot={
-          account.provider === 'agy' ? renderProjectId(account.projectId, privacyMode) : null
+          account.provider === 'agy' ? renderProjectId(account.projectId, privacyMode, t) : null
         }
         quotaInsetClassName="pl-11"
       />

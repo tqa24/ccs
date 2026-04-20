@@ -6,6 +6,11 @@ import * as path from 'path';
 import * as http from 'http';
 import type { Server } from 'http';
 import cliproxyAuthRoutes from '../../../src/web-server/routes/cliproxy-auth-routes';
+import {
+  clearQuotaCache,
+  getCachedQuota,
+  setCachedQuota,
+} from '../../../src/cliproxy/quota-response-cache';
 import { restoreFetch, mockFetch } from '../../mocks';
 
 describe('cliproxy-auth-routes manual callback nickname persistence', () => {
@@ -49,6 +54,7 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
 
   afterEach(() => {
     restoreFetch();
+    clearQuotaCache();
 
     if (originalCcsHome === undefined) {
       delete process.env.CCS_HOME;
@@ -563,5 +569,63 @@ describe('cliproxy-auth-routes manual callback nickname persistence', () => {
     };
 
     expect(registry.providers.codex.accounts['new@example.com']?.email).toBe('new@example.com');
+  });
+
+  it('clears stale Claude quota cache after polling auth success', async () => {
+    mockFetch([
+      {
+        url: /\/v0\/management\/anthropic-auth-url\?is_webui=true$/,
+        response: {
+          auth_url: 'https://auth.example.com/authorize?state=state-claude-cache-clear',
+          state: 'state-claude-cache-clear',
+        },
+      },
+      {
+        url: /\/v0\/management\/get-auth-status\?state=state-claude-cache-clear$/,
+        response: { status: 'ok' },
+      },
+    ]);
+
+    const startResponse = await postJson('/api/cliproxy/auth/claude/start-url', {});
+    expect(startResponse.status).toBe(200);
+
+    const accountId = 'claude-team@example.com';
+    setCachedQuota('claude', accountId, {
+      success: false,
+      error: 'Authentication required for policy limits',
+      needsReauth: true,
+    });
+    expect(getCachedQuota('claude', accountId)).not.toBeNull();
+
+    const tokenDir = path.join(tempHome, '.ccs', 'cliproxy', 'auth');
+    fs.mkdirSync(tokenDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(tokenDir, 'claude-claude-team@example.com.json'),
+      JSON.stringify({
+        type: 'claude',
+        email: accountId,
+        access_token: 'fresh-token',
+        refresh_token: 'refresh-token',
+        expired: '2099-01-01T00:00:00.000Z',
+      }),
+      'utf8'
+    );
+
+    const statusResponse = await getJson(
+      '/api/cliproxy/auth/claude/status?state=state-claude-cache-clear'
+    );
+
+    expect(statusResponse.status).toBe(200);
+    expect(statusResponse.body).toEqual({
+      status: 'ok',
+      account: {
+        id: accountId,
+        email: accountId,
+        nickname: 'claude-team',
+        provider: 'claude',
+        isDefault: true,
+      },
+    });
+    expect(getCachedQuota('claude', accountId)).toBeNull();
   });
 });

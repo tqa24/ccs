@@ -1,6 +1,10 @@
 import { useCallback, useState } from 'react';
 import type { OfficialChannelId, OfficialChannelsConfig, OfficialChannelsStatus } from '../types';
 
+// TODO i18n: error/success messages in this hook cannot use useTranslation
+// (not a React component). Consumer components should wrap displayed messages
+// with t() where possible, or pass translated strings as parameters.
+
 const DEFAULT_CONFIG: OfficialChannelsConfig = {
   selected: [],
   unattended: false,

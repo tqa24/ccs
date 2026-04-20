@@ -20,7 +20,11 @@ vi.mock('@/hooks/use-cliproxy-stats', async () => {
 const mockedUseAccountQuota = vi.mocked(useAccountQuota);
 const mockedUseAccountQuotas = vi.mocked(useAccountQuotas);
 
-function makeCodexQuota(planType: 'plus' | 'team', fiveHour: number, weekly: number) {
+function makeCodexQuota(
+  planType: 'free' | 'plus' | 'pro' | 'team',
+  fiveHour: number,
+  weekly: number
+) {
   return {
     success: true,
     planType,
@@ -76,7 +80,9 @@ const groupedAccount: AccountData = {
       failureCount: 0,
       audience: 'business',
       audienceLabel: 'Business',
-      detailLabel: null,
+      detailLabel: 'Workspace 04a0f049',
+      compactDetailLabel: '04a0f049',
+      inlineLabel: 'Business · Workspace 04a0f049',
     },
     {
       id: 'personal@example.com',
@@ -85,11 +91,29 @@ const groupedAccount: AccountData = {
       isDefault: true,
       successCount: 4,
       failureCount: 1,
-      audience: 'personal',
-      audienceLabel: 'Personal',
+      audience: 'free',
+      audienceLabel: 'Free',
       detailLabel: null,
+      compactDetailLabel: null,
+      inlineLabel: 'Free',
     },
   ],
+};
+
+const groupedAccountWithProPersonal: AccountData = {
+  ...groupedAccount,
+  variants: groupedAccount.variants?.map((variant) =>
+    variant.audience === 'free'
+      ? {
+          ...variant,
+          audience: 'personal',
+          audienceLabel: 'Personal',
+          detailLabel: 'Pro',
+          compactDetailLabel: 'Pro',
+          inlineLabel: 'Personal · Pro',
+        }
+      : variant
+  ),
 };
 
 describe('AccountCard grouped quota tooltip', () => {
@@ -105,13 +129,13 @@ describe('AccountCard grouped quota tooltip', () => {
         isLoading: false,
       },
       {
-        data: makeCodexQuota('plus', 64, 42),
+        data: makeCodexQuota('free', 64, 42),
         isLoading: false,
       },
     ] as ReturnType<typeof useAccountQuotas>);
   });
 
-  it('shows provider quota tooltip content for each grouped personal/business row on hover', async () => {
+  it('keeps grouped Codex account labels distinct and shows quota tooltips for each variant', async () => {
     render(
       <AccountCard
         account={groupedAccount}
@@ -130,6 +154,9 @@ describe('AccountCard grouped quota tooltip', () => {
       />
     );
 
+    expect(screen.getByTitle('Business • Free')).toBeInTheDocument();
+    expect(screen.getByText('Biz')).toBeInTheDocument();
+
     await userEvent.hover(screen.getByText('Business'));
     const businessPlan = (await screen.findAllByText('Plan: team')).find((node) =>
       node.closest('[data-slot="tooltip-content"]')
@@ -141,11 +168,42 @@ describe('AccountCard grouped quota tooltip', () => {
     expect(tooltipContent?.className).toContain('text-popover-foreground');
     expect(tooltipContent?.className).toContain('max-w-[calc(100vw-2rem)]');
 
-    await userEvent.hover(screen.getByText('Personal'));
-    const personalPlan = (await screen.findAllByText('Plan: plus')).find((node) =>
+    const freeLabels = screen.getAllByText('Free');
+    const quotaLabel = freeLabels[freeLabels.length - 1];
+    expect(quotaLabel).toBeDefined();
+    if (!quotaLabel) {
+      throw new Error('Expected a Free quota label');
+    }
+
+    await userEvent.hover(quotaLabel);
+    const personalPlan = (await screen.findAllByText('Plan: free')).find((node) =>
       node.closest('[data-slot="tooltip-content"]')
     );
     expect(personalPlan).toBeInTheDocument();
     expect(screen.getAllByText('Weekly usage limit').length).toBeGreaterThan(0);
+  });
+
+  it('keeps richer grouped personal detail when quota planType is coarser runtime evidence', () => {
+    render(
+      <AccountCard
+        account={groupedAccountWithProPersonal}
+        zone="left"
+        originalIndex={0}
+        isHovered={false}
+        isDragging={false}
+        offset={{ x: 0, y: 0 }}
+        showDetails={false}
+        privacyMode={false}
+        onMouseEnter={() => undefined}
+        onMouseLeave={() => undefined}
+        onPointerDown={() => undefined}
+        onPointerMove={() => undefined}
+        onPointerUp={() => undefined}
+      />
+    );
+
+    expect(screen.getByTitle('Business • Pro')).toBeInTheDocument();
+    expect(screen.getAllByText('Pro').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Free')).not.toBeInTheDocument();
   });
 });

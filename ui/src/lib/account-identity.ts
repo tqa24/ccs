@@ -1,10 +1,13 @@
-const PERSONAL_PLAN_PARTS = new Set(['free', 'plus', 'pro']);
+import i18n from './i18n';
+
+const FREE_PLAN_PARTS = new Set(['free']);
+const PERSONAL_PLAN_PARTS = new Set(['plus', 'pro']);
 const BUSINESS_PLAN_PARTS = new Set(['team']);
 
 // Keep variant parsing aligned with src/cliproxy/accounts/email-account-identity.ts.
 // This browser copy stays local because the server module is not bundle-safe for the UI.
 
-export type AccountAudience = 'business' | 'personal' | 'unknown';
+export type AccountAudience = 'business' | 'free' | 'personal' | 'unknown';
 
 export interface AccountIdentityPresentation {
   email: string;
@@ -13,6 +16,11 @@ export interface AccountIdentityPresentation {
   detailLabel: string | null;
   compactDetailLabel: string | null;
   inlineLabel: string | null;
+}
+
+export interface CodexIdentityBadge {
+  audience: AccountAudience;
+  label: string | null;
 }
 
 function normalizeVariantTokenPart(value: string): string {
@@ -24,7 +32,7 @@ function normalizeVariantTokenPart(value: string): string {
     .toLowerCase();
 }
 
-function formatVariantPart(part: string): string {
+export function formatAccountVariantPart(part: string): string {
   const normalized = part.trim().toLowerCase();
   if (!normalized) {
     return '';
@@ -32,13 +40,13 @@ function formatVariantPart(part: string): string {
 
   switch (normalized) {
     case 'team':
-      return 'Team';
+      return i18n.t('accountIdentity.team');
     case 'free':
-      return 'Free';
+      return i18n.t('accountIdentity.free');
     case 'plus':
-      return 'Plus';
+      return i18n.t('accountIdentity.plus');
     case 'pro':
-      return 'Pro';
+      return i18n.t('accountIdentity.pro');
     default:
       return /^[a-f0-9]{8}$/i.test(normalized)
         ? normalized
@@ -98,16 +106,21 @@ function formatWorkspaceLabel(parts: string[]): {
   const workspaceId = parts.find((part) => /^[a-f0-9]{8}$/i.test(part));
   if (workspaceId) {
     return {
-      detailLabel: `Workspace ${workspaceId.toLowerCase()}`,
+      detailLabel: i18n.t('accountIdentity.workspace', { id: workspaceId.toLowerCase() }),
       compactDetailLabel: workspaceId.toLowerCase(),
     };
   }
 
-  const extraLabel = parts.map(formatVariantPart).filter(Boolean).join(' · ');
+  const extraLabel = parts.map(formatAccountVariantPart).filter(Boolean).join(' · ');
   return {
-    detailLabel: extraLabel || 'Team',
-    compactDetailLabel: extraLabel || 'Team',
+    detailLabel: extraLabel || null,
+    compactDetailLabel: extraLabel || null,
   };
+}
+
+function formatAudienceDetail(parts: string[]): string | null {
+  const label = parts.map(formatAccountVariantPart).filter(Boolean).join(' · ');
+  return label || null;
 }
 
 export function extractAccountVariantKey(
@@ -155,34 +168,50 @@ export function getAccountIdentityPresentation(
   const suffix = parts[parts.length - 1]?.toLowerCase();
   if (suffix && BUSINESS_PLAN_PARTS.has(suffix)) {
     const workspace = formatWorkspaceLabel(parts.slice(0, -1));
-    const inlineLabel = ['Business', workspace.detailLabel].filter(Boolean).join(' · ');
+    const inlineLabel = [i18n.t('accountIdentity.business'), workspace.detailLabel]
+      .filter(Boolean)
+      .join(' · ');
     return {
       email: resolvedEmail,
       audience: 'business',
-      audienceLabel: 'Business',
+      audienceLabel: i18n.t('accountIdentity.business'),
       detailLabel: workspace.detailLabel,
       compactDetailLabel: workspace.compactDetailLabel,
       inlineLabel,
     };
   }
 
-  if (suffix && PERSONAL_PLAN_PARTS.has(suffix)) {
-    const detailParts = [formatVariantPart(suffix), ...parts.slice(0, -1).map(formatVariantPart)]
-      .filter(Boolean)
-      .join(' · ');
-    const detailLabel = detailParts || formatVariantPart(suffix);
-    const inlineLabel = ['Personal', detailLabel].filter(Boolean).join(' · ');
+  if (suffix && FREE_PLAN_PARTS.has(suffix)) {
+    const detailLabel = formatAudienceDetail(parts.slice(0, -1));
+    const inlineLabel = [i18n.t('accountIdentity.free'), detailLabel].filter(Boolean).join(' · ');
     return {
       email: resolvedEmail,
-      audience: 'personal',
-      audienceLabel: 'Personal',
+      audience: 'free',
+      audienceLabel: i18n.t('accountIdentity.free'),
       detailLabel,
       compactDetailLabel: detailLabel,
       inlineLabel,
     };
   }
 
-  const fallbackLabel = parts.map(formatVariantPart).filter(Boolean).join(' · ');
+  if (suffix && PERSONAL_PLAN_PARTS.has(suffix)) {
+    const detailLabel = [formatAccountVariantPart(suffix), formatAudienceDetail(parts.slice(0, -1))]
+      .filter(Boolean)
+      .join(' · ');
+    const inlineLabel = [i18n.t('accountIdentity.personal'), detailLabel]
+      .filter(Boolean)
+      .join(' · ');
+    return {
+      email: resolvedEmail,
+      audience: 'personal',
+      audienceLabel: i18n.t('accountIdentity.personal'),
+      detailLabel: detailLabel || formatAccountVariantPart(suffix),
+      compactDetailLabel: detailLabel || formatAccountVariantPart(suffix),
+      inlineLabel,
+    };
+  }
+
+  const fallbackLabel = parts.map(formatAccountVariantPart).filter(Boolean).join(' · ');
   return {
     email: resolvedEmail,
     audience: 'unknown',
@@ -199,6 +228,30 @@ export function formatAccountVariantLabel(
   tokenFile?: string
 ): string | null {
   return getAccountIdentityPresentation(accountId, email, tokenFile).inlineLabel;
+}
+
+export function getCodexIdentityBadge(
+  presentation: Pick<AccountIdentityPresentation, 'audience' | 'detailLabel' | 'compactDetailLabel'>
+): CodexIdentityBadge {
+  if (presentation.audience === 'business') {
+    return { audience: 'business', label: i18n.t('accountIdentity.business') };
+  }
+
+  if (presentation.audience === 'free') {
+    return { audience: 'free', label: i18n.t('accountIdentity.free') };
+  }
+
+  if (presentation.audience === 'personal') {
+    return {
+      audience: 'personal',
+      label:
+        presentation.compactDetailLabel ??
+        presentation.detailLabel ??
+        i18n.t('accountIdentity.personal'),
+    };
+  }
+
+  return { audience: 'unknown', label: null };
 }
 
 export function formatAccountDisplayName(

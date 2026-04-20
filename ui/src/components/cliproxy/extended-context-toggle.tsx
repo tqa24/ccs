@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isNativeGeminiModel } from '@/lib/extended-context-utils';
 import type { ModelEntry } from './provider-model-selector';
+import { useTranslation } from 'react-i18next';
 
 interface ExtendedContextToggleProps {
   /** Compatible selected models */
@@ -33,6 +34,7 @@ export function ExtendedContextToggle({
   disabled,
   className,
 }: ExtendedContextToggleProps) {
+  const { t } = useTranslation();
   if (models.length === 0) {
     return null;
   }
@@ -61,7 +63,7 @@ export function ExtendedContextToggle({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Zap className={cn('w-4 h-4', enabled ? 'text-primary' : 'text-muted-foreground')} />
-          <span className="text-sm font-medium">Extended Context</span>
+          <span className="text-sm font-medium">{t('extendedContext.extendedContext')}</span>
           <Badge variant={enabled ? 'default' : 'secondary'} className="text-[10px] h-5 px-1.5">
             1M tokens
           </Badge>

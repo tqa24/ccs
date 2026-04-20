@@ -25,6 +25,7 @@ describe('help command parity', () => {
 
     expect(visibleLines.length).toBeLessThanOrEqual(90);
     expect(rendered.includes('ccs help <topic>')).toBe(true);
+    expect(rendered.includes('ccs help browser')).toBe(true);
     expect(rendered.includes('ccs help completion')).toBe(true);
   });
 
@@ -50,6 +51,12 @@ describe('help command parity', () => {
     expect(rendered.includes('gemini')).toBe(true);
     expect(rendered.includes('codex')).toBe(true);
     expect(rendered.includes('ghcp')).toBe(true);
+    expect(rendered.includes('gitlab')).toBe(true);
+    expect(rendered.includes('codebuddy')).toBe(true);
+    expect(rendered.includes('kilo')).toBe(true);
+    expect(rendered.includes('--gitlab-token-login')).toBe(true);
+    expect(rendered.includes('--token-login')).toBe(true);
+    expect(rendered.includes('--gitlab-url <url>')).toBe(true);
   });
 
   test('kiro topic documents IDC and callback flags', async () => {
@@ -61,6 +68,18 @@ describe('help command parity', () => {
     expect(rendered.includes('--kiro-idc-flow <authcode|device>')).toBe(true);
     expect(rendered.includes('--paste-callback')).toBe(true);
     expect(rendered.includes('GitHub OAuth is dashboard-only')).toBe(true);
+  });
+
+  test('browser topic explains Claude attach versus Codex browser tools', async () => {
+    const rendered = await renderLines((writeLine) => handleHelpRoute(['browser'], writeLine));
+
+    expect(rendered.includes('CCS Browser Help')).toBe(true);
+    expect(rendered.includes('Claude Browser Attach reuses a local Chrome session')).toBe(true);
+    expect(rendered.includes('Codex Browser Tools inject managed Playwright MCP overrides')).toBe(
+      true
+    );
+    expect(rendered.includes('ccs browser status')).toBe(true);
+    expect(rendered.includes('ccs browser doctor')).toBe(true);
   });
 
   test('completion topic documents install and verification paths', async () => {

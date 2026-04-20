@@ -20,6 +20,7 @@ import { LogsEntryList } from '@/components/logs/logs-entry-list';
 import { LogsFilters } from '@/components/logs/logs-filters';
 import { LogsPageSkeleton } from '@/components/logs/logs-page-skeleton';
 import { getSourceLabelMap, useLogsWorkspace, useUpdateLogsConfig } from '@/hooks/use-logs';
+// TODO i18n: import { useTranslation } from 'react-i18next'; when keys are ready
 
 const DESKTOP_LOGS_BREAKPOINT = 1200;
 const LEFT_PANEL_WIDTH = 336;
@@ -66,6 +67,8 @@ function CollapsedPaneToggle({
 }
 
 export function LogsPage() {
+  // TODO i18n: uncomment when keys for Syncing/Refresh and other strings are added
+  // const { t } = useTranslation();
   const workspace = useLogsWorkspace();
   const updateConfig = useUpdateLogsConfig();
   const sourceLabels = getSourceLabelMap(workspace.sourcesQuery.data ?? []);
@@ -179,8 +182,8 @@ export function LogsPage() {
               )}
             </div>
             {workspace.entriesQuery.isFetching || workspace.sourcesQuery.isFetching
-              ? 'Syncing'
-              : 'Refresh'}
+              ? /* TODO i18n: missing key for "Syncing" */ 'Syncing'
+              : /* TODO i18n: missing key for "Refresh" */ 'Refresh'}
           </Button>
           <div className="h-7 w-px bg-border/80" />
           <Button

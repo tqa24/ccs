@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { CliproxyRoutingState, RoutingStrategy } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface RoutingGuidanceCardProps {
   className?: string;
@@ -35,6 +36,7 @@ export function RoutingGuidanceCard({
   error,
   onApply,
 }: RoutingGuidanceCardProps) {
+  const { t } = useTranslation();
   const currentStrategy = state?.strategy ?? 'round-robin';
   const [selected, setSelected] = useState<RoutingStrategy>(currentStrategy);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -114,7 +116,7 @@ export function RoutingGuidanceCard({
             <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-muted text-primary">
               <ArrowRightLeft className="h-4 w-4" />
             </div>
-            <div className="text-sm font-medium">Routing strategy</div>
+            <div className="text-sm font-medium">{t('routingGuidance.routingStrategy')}</div>
             <Badge variant="secondary">{currentStrategy}</Badge>
             {state ? <Badge variant="outline">{sourceLabel}</Badge> : null}
             {state ? <Badge variant="outline">{state.target}</Badge> : null}
@@ -164,6 +166,7 @@ export function RoutingGuidanceCard({
               ) : (
                 <ChevronDown className="mr-1 h-3.5 w-3.5" />
               )}
+              {/* TODO i18n: missing key for detail toggle */}
               {detailToggleLabel}
             </Button>
             <Button size="sm" onClick={() => onApply(selected)} disabled={saveDisabled || !!error}>
@@ -173,9 +176,9 @@ export function RoutingGuidanceCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground xl:col-span-2">
-          <span>Round robin spreads usage.</span>
+          <span>{t('routingGuidance.roundRobin')}</span>
           <span className="hidden text-border sm:inline">•</span>
-          <span>Fill first keeps backup accounts cold until they are needed.</span>
+          <span>{t('routingGuidance.fillFirst')}</span>
         </div>
 
         {error ? (

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { GripVertical, Loader2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { CodexControlCenterTab } from '@/components/compatible-cli/codex-control-center-tab';
 import { CodexDocsTab } from '@/components/compatible-cli/codex-docs-tab';
 import { useCodex } from '@/hooks/use-codex';
@@ -10,7 +11,7 @@ import { CodexOverviewTab } from '@/components/compatible-cli/codex-overview-tab
 import { RawConfigEditorPanel } from '@/components/compatible-cli/raw-json-settings-editor-panel';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  KNOWN_CODEX_FEATURES,
+  getKnownCodexFeatures,
   readCodexFeatureState,
   readCodexMcpServers,
   readCodexModelProviders,
@@ -21,6 +22,8 @@ import {
 import { safeParseTomlObject } from '@shared/toml-object';
 
 export function CodexPage() {
+  const { t } = useTranslation();
+  const featureCatalog = getKnownCodexFeatures();
   const {
     diagnostics,
     diagnosticsLoading,
@@ -52,15 +55,15 @@ export function CodexPage() {
     rawConfig?.parseError !== null ||
     rawConfig?.readError !== null;
   const controlsDisabledReason = rawConfigError
-    ? 'Structured controls unavailable: failed to load the current config.toml.'
+    ? /* TODO i18n: missing key for "Structured controls unavailable: failed to load the current config.toml." */ 'Structured controls unavailable: failed to load the current config.toml.'
     : rawConfig?.readError
-      ? `Structured controls unavailable: ${rawConfig.readError}`
+      ? /* TODO i18n: missing key for controls unavailable with read error */ `Structured controls unavailable: ${rawConfig.readError}`
       : rawConfigDirty
         ? rawEditorValidation.valid
-          ? 'Save or discard raw TOML edits before using structured controls.'
-          : 'Fix or discard raw TOML edits before using structured controls.'
+          ? /* TODO i18n: missing key for "Save or discard raw TOML edits before using structured controls." */ 'Save or discard raw TOML edits before using structured controls.'
+          : /* TODO i18n: missing key for "Fix or discard raw TOML edits before using structured controls." */ 'Fix or discard raw TOML edits before using structured controls.'
         : rawConfig?.parseError
-          ? `Structured controls disabled: ${rawConfig.parseError}`
+          ? /* TODO i18n: missing key for controls disabled with parse error */ `Structured controls disabled: ${rawConfig.parseError}`
           : null;
 
   const topLevelSettings = useMemo(
@@ -95,19 +98,19 @@ export function CodexPage() {
       );
 
       if (refreshFailed) {
-        toast.error('Failed to refresh Codex snapshot. Raw edits were kept.');
+        toast.error(t('toasts.codexRefreshFailed'));
         return;
       }
 
       setRawDraftText(null);
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to refresh Codex snapshot.');
+      toast.error((error as Error).message || t('toasts.codexRefreshError'));
     }
   };
 
   const handleSaveRawConfig = async () => {
     if (!rawEditorValidation.valid) {
-      toast.error('Fix TOML before saving.');
+      toast.error(t('toasts.codexFixToml'));
       return;
     }
 
@@ -117,13 +120,13 @@ export function CodexPage() {
         expectedMtime: rawConfig?.exists ? rawConfig.mtime : undefined,
       });
       setRawDraftText(null);
-      toast.success('Saved Codex config.toml.');
+      toast.success(t('toasts.codexSaved'));
       await refetchDiagnostics();
     } catch (error) {
       if (isApiConflictError(error)) {
-        toast.error('config.toml changed externally. Refresh and retry.');
+        toast.error(t('toasts.codexChangedExternally'));
       } else {
-        toast.error((error as Error).message || 'Failed to save Codex config.toml.');
+        toast.error((error as Error).message || t('toasts.codexSaveFailed'));
       }
     }
   };
@@ -141,9 +144,9 @@ export function CodexPage() {
       toast.success(successMessage);
     } catch (error) {
       if (isApiConflictError(error)) {
-        toast.error('config.toml changed externally. Refresh and retry.');
+        toast.error(t('toasts.codexChangedExternally'));
       } else {
-        toast.error((error as Error).message || 'Failed to update Codex config.');
+        toast.error((error as Error).message || t('toasts.codexUpdateFailed'));
       }
     }
   };
@@ -155,7 +158,9 @@ export function CodexPage() {
       return (
         <div className="flex h-full items-center justify-center text-muted-foreground">
           <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-          Loading Codex diagnostics...
+          {
+            /* TODO i18n: missing key for "Loading Codex diagnostics..." */ 'Loading Codex diagnostics...'
+          }
         </div>
       );
     }
@@ -163,7 +168,9 @@ export function CodexPage() {
     if (diagnosticsError || !diagnostics) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-destructive">
-          Failed to load Codex diagnostics.
+          {
+            /* TODO i18n: missing key for "Failed to load Codex diagnostics." */ 'Failed to load Codex diagnostics.'
+          }
         </div>
       );
     }
@@ -172,9 +179,9 @@ export function CodexPage() {
       <Tabs defaultValue="overview" className="flex h-full flex-col">
         <div className="shrink-0 px-4 pt-4">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="controls">Control Center</TabsTrigger>
-            <TabsTrigger value="docs">Docs</TabsTrigger>
+            <TabsTrigger value="overview">{t('codexPage.overview')}</TabsTrigger>
+            <TabsTrigger value="controls">{t('codexPage.controlCenter')}</TabsTrigger>
+            <TabsTrigger value="docs">{t('codexPage.docs')}</TabsTrigger>
           </TabsList>
         </div>
 
@@ -192,7 +199,7 @@ export function CodexPage() {
               profileEntries={profileEntries}
               modelProviderEntries={modelProviderEntries}
               mcpServerEntries={mcpServerEntries}
-              featureCatalog={KNOWN_CODEX_FEATURES}
+              featureCatalog={featureCatalog}
               featureState={featureState}
               disabled={structuredControlsDisabled}
               disabledReason={controlsDisabledReason}
@@ -220,6 +227,7 @@ export function CodexPage() {
         </PanelResizeHandle>
         <Panel defaultSize={55} minSize={35}>
           <RawConfigEditorPanel
+            /* TODO i18n: missing key for "Codex config.toml" title */
             title="Codex config.toml"
             pathLabel={rawConfig?.path || diagnostics?.file.path || '$CODEX_HOME/config.toml'}
             loading={rawConfigLoading}
@@ -245,10 +253,13 @@ export function CodexPage() {
             onRefresh={refreshAll}
             onDiscard={() => setRawDraftText(null)}
             language="toml"
+            /* TODO i18n: missing key for "Loading config.toml..." */
             loadingLabel="Loading config.toml..."
+            /* TODO i18n: missing key for "TOML warning" */
             parseWarningLabel="TOML warning"
             ownershipNotice={
               <div className="rounded-md border border-amber-200 bg-amber-50/60 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/20 dark:text-amber-300">
+                {/* TODO i18n: missing keys for ownership notice paragraphs */}
                 <p className="font-medium">This file is upstream-owned by Codex CLI.</p>
                 <p>
                   CCS does not keep <code>~/.codex/config.toml</code> in sync for you.

@@ -15,6 +15,7 @@ import type { LogsEntry } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { LogLevelBadge } from './log-level-badge';
 import { formatJson } from './utils';
+import { useTranslation } from 'react-i18next';
 
 function MetaRow({
   label,
@@ -52,6 +53,8 @@ export function LogsDetailPanel({
   entry: LogsEntry | null;
   sourceLabel?: string;
 }) {
+  const { t } = useTranslation();
+
   if (!entry) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center animate-in fade-in duration-1000">
@@ -63,6 +66,7 @@ export function LogsDetailPanel({
         </div>
         <div className="max-w-xs space-y-3">
           <h3 className="text-[15px] font-semibold uppercase tracking-[0.14em] text-foreground/65">
+            {/* TODO i18n: missing key for "Inspector Standby" */}
             Inspector Standby
           </h3>
           <p className="text-[13px] leading-relaxed text-muted-foreground/55 font-medium">
@@ -134,13 +138,14 @@ export function LogsDetailPanel({
                 className="min-w-0 gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] transition-all data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
               >
                 <Info className="h-3.5 w-3.5" />
-                Details
+                {t('logsDetailPanel.details')}
               </TabsTrigger>
               <TabsTrigger
                 value="raw"
                 className="min-w-0 gap-2 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] transition-all data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
               >
                 <FileJson className="h-3.5 w-3.5" />
+                {/* TODO i18n: missing key for "Raw Context" */}
                 Raw Context
               </TabsTrigger>
             </TabsList>

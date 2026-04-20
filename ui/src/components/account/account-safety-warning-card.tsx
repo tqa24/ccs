@@ -115,6 +115,7 @@ export function AccountSafetyWarningCard({
             variant="outline"
             className="border-amber-500/40 text-amber-700 dark:text-amber-300"
           >
+            {/* TODO i18n: missing key for "High Risk" badge */}
             High Risk
           </Badge>
         </div>
@@ -123,6 +124,7 @@ export function AccountSafetyWarningCard({
           <p>{firstLine}</p>
           <p className="font-medium text-amber-900 dark:text-amber-200">{secondLine}</p>
           <p className="text-xs text-muted-foreground">
+            {/* TODO i18n: missing key for disclaimer text */}
             CCS is provided as-is and does not take responsibility for suspension, bans, or access
             loss from upstream providers.
           </p>
@@ -148,6 +150,7 @@ export function AccountSafetyWarningCard({
             </a>
           )}
           <span className="rounded-md border border-border/70 bg-muted/60 px-2.5 py-1 text-xs text-muted-foreground">
+            {/* TODO i18n: missing key for "Applies to CLI and dashboard auth" */}
             Applies to CLI and dashboard auth
           </span>
         </div>
@@ -155,6 +158,7 @@ export function AccountSafetyWarningCard({
         {showAcknowledgement && onAcknowledgementTextChange && (
           <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5">
             <Label htmlFor="account-risk-ack-text" className="text-xs leading-5">
+              {/* TODO i18n: missing key */}
               Type exact phrase to continue:{' '}
               <code className="rounded bg-muted px-1 py-0.5 font-mono">
                 {acknowledgementPhrase}

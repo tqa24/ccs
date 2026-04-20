@@ -12,6 +12,12 @@ Authentication is **disabled by default** for backward compatibility. Use the CL
 
 CCS does **not** ship a default dashboard username or password. When someone opens the dashboard from a non-loopback/IP address before auth is enabled, the UI now shows a setup state instead of an ambiguous login form. The host owner must run `ccs config auth setup`, or the user should switch back to the localhost URL if they are on the same machine.
 
+Docker note: the integrated `ccs docker` stack stores its config inside the running container volume, not in the outer shell's `~/.ccs`. For Docker deployments, run auth setup inside the container:
+
+```bash
+docker exec -it ccs-cliproxy ccs config auth setup
+```
+
 When auth stays disabled, CCS now applies a localhost-only fallback on sensitive management endpoints. Remote devices can still open the dashboard UI when you intentionally bind it beyond loopback, but write-capable routes such as AI Provider management and CLIProxy auth/status helpers reject non-loopback requests until you enable dashboard auth.
 
 ## Account Context Modes (Related Feature)
@@ -192,6 +198,8 @@ dashboard_auth:
 ### "Authentication not configured"
 
 Run `ccs config auth setup` to configure credentials.
+
+If you are using the integrated Docker stack, run that command inside `ccs-cliproxy`. Running it on the outer host shell updates a different config directory and will not unlock the running dashboard.
 
 ### Forgot password
 

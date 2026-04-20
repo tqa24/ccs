@@ -116,21 +116,29 @@ export function ApiPage() {
     try {
       const result = await discoverOrphansMutation.mutateAsync();
       if (result.orphans.length === 0) {
-        toast.success('No orphan profile settings found');
+        toast.success(t('apiProfiles.noOrphansFound'));
         return;
       }
 
       const validCount = result.orphans.filter((orphan) => orphan.validation.valid).length;
       const shouldRegister = window.confirm(
-        `Found ${result.orphans.length} orphan settings file(s). Register ${validCount} valid profile(s) now?`
+        t('apiProfiles.confirmRegisterOrphans', {
+          total: result.orphans.length,
+          valid: validCount,
+        })
       );
 
       if (!shouldRegister) return;
 
       const registration = await registerOrphansMutation.mutateAsync({});
       const skippedMessage =
-        registration.skipped.length > 0 ? `, skipped ${registration.skipped.length}` : '';
-      toast.success(`Registered ${registration.registered.length} profile(s)${skippedMessage}`);
+        registration.skipped.length > 0
+          ? t('apiProfiles.registeredWithSkipped', { count: registration.skipped.length })
+          : '';
+      toast.success(
+        t('apiProfiles.registeredProfiles', { count: registration.registered.length }) +
+          skippedMessage
+      );
     } catch (error) {
       toast.error((error as Error).message);
     }
@@ -139,13 +147,13 @@ export function ApiPage() {
   const handleCopySelectedProfile = async () => {
     if (!selectedProfileData) return;
     const destinationInput = window.prompt(
-      `Copy profile "${selectedProfileData.name}" to new profile name:`,
+      t('apiProfiles.copyPrompt', { name: selectedProfileData.name }),
       `${selectedProfileData.name}-copy`
     );
     if (!destinationInput) return;
     const destination = destinationInput.trim();
     if (!destination) {
-      toast.error('Destination profile name cannot be empty');
+      toast.error(t('apiProfiles.destinationEmpty'));
       return;
     }
 
@@ -169,11 +177,9 @@ export function ApiPage() {
       const result = await exportProfileMutation.mutateAsync({ name: selectedProfileData.name });
       triggerDownload(`${selectedProfileData.name}.ccs-profile.json`, result.bundle);
       if (result.redacted) {
-        toast.info(
-          'Export created with redacted token. Use include-secrets flow in CLI if needed.'
-        );
+        toast.info(t('apiProfiles.exportRedacted'));
       } else {
-        toast.success('Profile export downloaded');
+        toast.success(t('apiProfiles.exportDownloaded'));
       }
     } catch (error) {
       toast.error((error as Error).message);
@@ -200,7 +206,7 @@ export function ApiPage() {
         toast.info(result.warnings.join('\n'));
       }
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to import profile bundle');
+      toast.error((error as Error).message || t('apiProfiles.importFailed'));
     }
   };
 
@@ -214,7 +220,7 @@ export function ApiPage() {
               <div className="flex items-center gap-2">
                 <Server className="w-5 h-5 text-primary" />
                 <div className="min-w-0">
-                  <h1 className="font-semibold">Profiles</h1>
+                  <h1 className="font-semibold">{t('apiProfiles.sidebarTitle')}</h1>
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-1">
@@ -223,8 +229,8 @@ export function ApiPage() {
                   variant="outline"
                   onClick={() => void handleDiscoverOrphans()}
                   disabled={discoverOrphansMutation.isPending || registerOrphansMutation.isPending}
-                  aria-label="Discover orphan profiles"
-                  title="Discover orphan profiles"
+                  aria-label={t('apiProfiles.discoverOrphans')}
+                  title={t('apiProfiles.discoverOrphans')}
                 >
                   <RefreshCw
                     className={`w-4 h-4 ${discoverOrphansMutation.isPending ? 'animate-spin' : ''}`}
@@ -235,8 +241,8 @@ export function ApiPage() {
                   variant="outline"
                   onClick={handleImportClick}
                   disabled={importProfileMutation.isPending}
-                  aria-label="Import profile bundle"
-                  title="Import profile bundle"
+                  aria-label={t('apiProfiles.importProfileBundle')}
+                  title={t('apiProfiles.importProfileBundle')}
                 >
                   <Upload className="w-4 h-4" />
                 </Button>
@@ -253,7 +259,7 @@ export function ApiPage() {
             </div>
 
             <p className="mb-3 text-xs leading-4 text-muted-foreground">
-              Premium APIs, local runtimes, custom endpoints
+              {t('apiProfiles.sidebarSubtitle')}
             </p>
 
             <div className="relative">

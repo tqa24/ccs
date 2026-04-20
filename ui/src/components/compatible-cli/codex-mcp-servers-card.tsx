@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Loader2, PlugZap, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -35,6 +36,8 @@ const EMPTY_MCP_SERVER_DRAFT: CodexMcpServerEntry = {
   toolTimeoutSec: null,
   enabledTools: [],
   disabledTools: [],
+  isCcsManaged: false,
+  managementSurface: null,
 };
 
 function toCsv(value: string[]) {
@@ -67,10 +70,18 @@ function McpServerEditor({
   onSave,
   onDelete,
 }: McpServerEditorProps) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState<CodexMcpServerEntry>(initialDraft);
+  const reservedManagedBrowserDraft = isNew && draft.name.trim() === 'ccs_browser';
 
   return (
     <>
+      {reservedManagedBrowserDraft ? (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+          <strong>ccs_browser</strong> is reserved for the CCS-managed browser tooling path.
+          Configure it from <code>Settings &gt; Browser</code> instead of creating it here.
+        </div>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2">
         <Input
           value={draft.name}
@@ -92,8 +103,8 @@ function McpServerEditor({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="stdio">stdio</SelectItem>
-            <SelectItem value="streamable-http">streamable-http</SelectItem>
+            <SelectItem value="stdio">{t('codex.stdio')}</SelectItem>
+            <SelectItem value="streamable-http">{t('codex.streamableHttp')}</SelectItem>
           </SelectContent>
         </Select>
         {draft.transport === 'stdio' ? (
@@ -136,6 +147,7 @@ function McpServerEditor({
               startupTimeoutSec: event.target.value ? Number(event.target.value) : null,
             }))
           }
+          // TODO i18n: missing key codex.startupTimeoutSec
           placeholder="Startup timeout (sec)"
           disabled={disabled}
         />
@@ -149,6 +161,7 @@ function McpServerEditor({
               toolTimeoutSec: event.target.value ? Number(event.target.value) : null,
             }))
           }
+          // TODO i18n: missing key codex.toolTimeoutSec
           placeholder="Tool timeout (sec)"
           disabled={disabled}
         />
@@ -172,6 +185,7 @@ function McpServerEditor({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+          {/* TODO i18n: missing key codex.enabled */}
           Enabled
           <Switch
             checked={draft.enabled}
@@ -180,6 +194,7 @@ function McpServerEditor({
           />
         </label>
         <label className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+          {/* TODO i18n: missing key codex.required */}
           Required
           <Switch
             checked={draft.required}
@@ -192,6 +207,7 @@ function McpServerEditor({
       <div className="flex justify-between gap-2">
         <Button variant="outline" onClick={onDelete} disabled={disabled || saving || !canDelete}>
           <Trash2 className="mr-2 h-4 w-4" />
+          {/* TODO i18n: missing key common.delete */}
           Delete
         </Button>
         <Button
@@ -209,9 +225,12 @@ function McpServerEditor({
               disabledTools: draft.disabledTools,
             })
           }
-          disabled={disabled || saving || draft.name.trim().length === 0}
+          disabled={
+            disabled || saving || draft.name.trim().length === 0 || reservedManagedBrowserDraft
+          }
         >
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {/* TODO i18n: missing key codex.saveMcpServer */}
           Save MCP server
         </Button>
       </div>
@@ -227,6 +246,8 @@ export function CodexMcpServersCard({
   onSave,
   onDelete,
 }: CodexMcpServersCardProps) {
+  const { t } = useTranslation();
+
   const [selectedName, setSelectedName] = useState('new');
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.name === selectedName) ?? null,
@@ -234,24 +255,35 @@ export function CodexMcpServersCard({
   );
   const draftSeed = selectedEntry ?? EMPTY_MCP_SERVER_DRAFT;
   const draftKey = JSON.stringify(draftSeed);
+  const selectedEntryIsManagedBrowser =
+    selectedEntry?.isCcsManaged && selectedEntry.managementSurface === 'browser-settings';
 
   return (
     <CodexConfigCardShell
+      // TODO i18n: missing key codex.mcpServers
       title="MCP servers"
       badge="mcp_servers"
       icon={<PlugZap className="h-4 w-4" />}
+      // TODO i18n: missing key codex.mcpServersDesc
       description="Manage the safe MCP transport fields. Keep auth headers and bearer tokens in raw TOML."
       disabledReason={disabledReason}
     >
+      {selectedEntryIsManagedBrowser ? (
+        <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+          <strong>{selectedEntry?.name}</strong> is CCS-managed. Configure browser tooling from{' '}
+          <code>Settings &gt; Browser</code>; the generic MCP editor is read-only for this entry.
+        </div>
+      ) : null}
       <Select value={selectedName} onValueChange={setSelectedName} disabled={disabled}>
         <SelectTrigger>
+          {/* TODO i18n: missing key codex.selectMcpServer */}
           <SelectValue placeholder="Select MCP server" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="new">Create new MCP server</SelectItem>
+          <SelectItem value="new">{t('codex.createNewMcpServer')}</SelectItem>
           {entries.map((entry) => (
             <SelectItem key={entry.name} value={entry.name}>
-              {entry.name}
+              {entry.isCcsManaged ? `${entry.name} (CCS managed)` : entry.name}
             </SelectItem>
           ))}
         </SelectContent>
@@ -260,9 +292,9 @@ export function CodexMcpServersCard({
         key={draftKey}
         initialDraft={draftSeed}
         isNew={selectedName === 'new'}
-        disabled={disabled}
+        disabled={disabled || Boolean(selectedEntryIsManagedBrowser)}
         saving={saving}
-        canDelete={selectedEntry !== null}
+        canDelete={selectedEntry !== null && !selectedEntryIsManagedBrowser}
         onDelete={async () => {
           if (!selectedEntry) return;
           await onDelete(selectedEntry.name);

@@ -20,6 +20,7 @@ import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import { isDeniedAgyModelId } from '@/lib/utils';
 import i18n from '@/lib/i18n';
 import { usePrivacy } from '@/contexts/privacy-context';
+import { useTranslation } from 'react-i18next';
 import { useProviderEditor } from './use-provider-editor';
 import { CustomPresetDialog } from './custom-preset-dialog';
 import { RawEditorSection } from './raw-editor-section';
@@ -55,6 +56,7 @@ export function ProviderEditor({
 }: ProviderEditorProps) {
   const [customPresetOpen, setCustomPresetOpen] = useState(false);
   const { privacyMode } = usePrivacy();
+  const { t } = useTranslation();
 
   const { data: modelsData } = useCliproxyModels();
   const { data: presetsData } = usePresets(provider);
@@ -84,8 +86,12 @@ export function ProviderEditor({
       gemini: ['google'],
       agy: ['antigravity'],
       codex: ['openai'],
+      cursor: ['cursor'],
+      gitlab: ['gitlab', 'duo'],
+      codebuddy: ['codebuddy'],
       qwen: ['alibaba', 'qwen'],
       iflow: ['iflow'],
+      kilo: ['kilo'],
       kiro: ['kiro', 'aws'],
       ghcp: ['github', 'copilot'],
       kimi: ['kimi', 'moonshot'],
@@ -158,7 +164,7 @@ export function ProviderEditor({
         updates.ANTHROPIC_DEFAULT_HAIKU_MODEL,
       ].some((modelId) => typeof modelId === 'string' && isDeniedAgyModelId(modelId))
     ) {
-      toast.error('Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.');
+      toast.error(t('providerEditor.agyDenylist'));
       return;
     }
 
@@ -178,7 +184,7 @@ export function ProviderEditor({
         isDeniedAgyModelId(modelId)
       )
     ) {
-      toast.error('Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.');
+      toast.error(t('providerEditor.agyDenylist'));
       return;
     }
 
@@ -206,7 +212,7 @@ export function ProviderEditor({
         isDeniedAgyModelId(modelId)
       )
     ) {
-      toast.error('Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.');
+      toast.error(t('providerEditor.agyDenylist'));
       return;
     }
     createPresetMutation.mutate({ profile: provider, data: { name: presetName, ...values } });
@@ -234,7 +240,7 @@ export function ProviderEditor({
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          <span className="ml-3 text-muted-foreground">Loading settings...</span>
+          <span className="ml-3 text-muted-foreground">{t('providerEditor.loadingSettings')}</span>
         </div>
       ) : (
         <div className="min-h-0 flex-1 grid grid-cols-[40%_60%] divide-x overflow-hidden">
@@ -312,7 +318,7 @@ export function ProviderEditor({
             <div className="px-6 py-2 bg-muted/30 border-b flex items-center gap-2 shrink-0 h-[45px]">
               <Code2 className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium text-muted-foreground">
-                Raw Configuration (JSON)
+                {t('rawEditorSection.rawConfig')} (JSON)
               </span>
             </div>
             <RawEditorSection

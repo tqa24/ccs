@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Layers3, Loader2, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -62,6 +63,7 @@ function ProfileEditor({
   onDelete,
   onSetActive,
 }: ProfileEditorProps) {
+  const { t } = useTranslation();
   const [nameDraft, setNameDraft] = useState(initialName);
   const [modelDraft, setModelDraft] = useState<string | null>(initialModel);
   const [providerDraft, setProviderDraft] = useState<string | null>(initialProvider);
@@ -88,10 +90,10 @@ function ProfileEditor({
           disabled={disabled}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Use global provider" />
+            <SelectValue placeholder={t('codex.useGlobalProvider')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__unset__">Use global provider</SelectItem>
+            <SelectItem value="__unset__">{t('codex.useGlobalProvider')}</SelectItem>
             {providerNames.map((name) => (
               <SelectItem key={name} value={name}>
                 {name}
@@ -105,10 +107,10 @@ function ProfileEditor({
           disabled={disabled}
         >
           <SelectTrigger>
-            <SelectValue placeholder="Use global effort" />
+            <SelectValue placeholder={t('codex.useGlobalEffort')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="__unset__">Use global effort</SelectItem>
+            <SelectItem value="__unset__">{t('codex.useGlobalEffort')}</SelectItem>
             {['minimal', 'low', 'medium', 'high', 'xhigh'].map((value) => (
               <SelectItem key={value} value={value}>
                 {value}
@@ -126,6 +128,7 @@ function ProfileEditor({
             disabled={disabled || saving || !selectedEntryName}
           >
             <Trash2 className="mr-2 h-4 w-4" />
+            {/* TODO i18n: missing key common.delete */}
             Delete
           </Button>
           <Button
@@ -135,6 +138,7 @@ function ProfileEditor({
               disabled || saving || !selectedEntryName || selectedEntryName === activeProfile
             }
           >
+            {/* TODO i18n: missing key codex.setActive */}
             Set active
           </Button>
         </div>
@@ -155,6 +159,7 @@ function ProfileEditor({
             disabled={disabled || saving || nameDraft.trim().length === 0}
           >
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {/* TODO i18n: missing key codex.saveProfile */}
             Save profile
           </Button>
           <Button
@@ -172,6 +177,7 @@ function ProfileEditor({
             disabled={disabled || saving || nameDraft.trim().length === 0}
           >
             {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            {/* TODO i18n: missing key codex.saveAndActivate */}
             Save + activate
           </Button>
         </div>
@@ -191,6 +197,8 @@ export function CodexProfilesCard({
   onDelete,
   onSetActive,
 }: CodexProfilesCardProps) {
+  const { t } = useTranslation();
+
   const [selectedName, setSelectedName] = useState('new');
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.name === selectedName) ?? null,
@@ -200,21 +208,24 @@ export function CodexProfilesCard({
 
   return (
     <CodexConfigCardShell
-      title="Profiles"
+      title={t('codex.profiles')}
       badge="profiles"
       icon={<Layers3 className="h-4 w-4" />}
+      // TODO i18n: missing key codex.profilesDesc
       description="Create reusable Codex overlays and set the active default profile."
       disabledReason={disabledReason}
     >
       <Select value={selectedName} onValueChange={setSelectedName} disabled={disabled}>
         <SelectTrigger>
+          {/* TODO i18n: missing key codex.selectProfile */}
           <SelectValue placeholder="Select profile" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="new">Create new profile</SelectItem>
+          <SelectItem value="new">{t('codex.createNewProfile')}</SelectItem>
           {entries.map((entry) => (
             <SelectItem key={entry.name} value={entry.name}>
               {entry.name}
+              {/* TODO i18n: missing key codex.activeSuffix */}
               {entry.name === activeProfile ? ' (active)' : ''}
             </SelectItem>
           ))}

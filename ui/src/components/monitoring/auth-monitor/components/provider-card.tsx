@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import type { ProviderStats } from '../types';
 import { getSuccessRate } from '../utils';
 import { InlineStatsBadge } from './inline-stats-badge';
+import { useTranslation } from 'react-i18next';
 
 interface ProviderCardProps {
   stats: ProviderStats;
@@ -30,6 +31,7 @@ export function ProviderCard({
   onMouseEnter,
   onMouseLeave,
 }: ProviderCardProps) {
+  const { t } = useTranslation();
   const successRate = getSuccessRate(stats.successCount, stats.failureCount);
   const providerColor = PROVIDER_COLORS[stats.provider.toLowerCase()] || '#6b7280';
 
@@ -59,6 +61,7 @@ export function ProviderCard({
             {stats.displayName}
           </h3>
           <p className="text-[10px] text-muted-foreground">
+            {/* TODO i18n: missing key for account count */}
             {stats.accountCount} account{stats.accountCount !== 1 ? 's' : ''}
           </p>
         </div>
@@ -73,11 +76,11 @@ export function ProviderCard({
       <div className="space-y-2">
         {/* Inline success/failure stats - immediately visible */}
         <div className="flex justify-between items-center text-xs">
-          <span className="text-muted-foreground">Stats</span>
+          <span className="text-muted-foreground">{t('authMonitorLive.stats')}</span>
           <InlineStatsBadge success={stats.successCount} failure={stats.failureCount} />
         </div>
         <div className="flex justify-between text-xs">
-          <span className="text-muted-foreground">Success Rate</span>
+          <span className="text-muted-foreground">{t('authMonitorLive.successRate')}</span>
           <span
             className="font-mono font-semibold"
             style={{
@@ -125,11 +128,11 @@ export function ProviderCard({
                     <TooltipTrigger asChild>
                       <AlertTriangle
                         className="absolute -top-1 -right-1 w-2.5 h-2.5 text-amber-500"
-                        aria-label="Missing Project ID"
+                        aria-label={t('providerCard.missingProjectIdAria')}
                       />
                     </TooltipTrigger>
                     <TooltipContent side="top" className="text-xs">
-                      Missing Project ID - re-add account to fix
+                      {/* TODO i18n: missing key */}Missing Project ID - re-add account to fix
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>

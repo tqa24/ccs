@@ -13,18 +13,16 @@ import { getCapturedFetchRequests, mockFetch, restoreFetch } from '../../mocks';
 describe('Gemini CLI Quota Fetcher', () => {
   const GEMINI_QUOTA_URL = 'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota';
   const GEMINI_CODE_ASSIST_URL = 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist';
-  const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
+  const MANAGEMENT_AUTH_FILES_URL = 'http://127.0.0.1:8317/v0/management/auth-files';
+  const MANAGEMENT_API_CALL_URL = 'http://127.0.0.1:8317/v0/management/api-call';
   let tempHome: string;
   let originalCcsHome: string | undefined;
   let originalCcsDir: string | undefined;
-  let originalGeminiClientId: string | undefined;
-  let originalGeminiClientSecret: string | undefined;
   let moduleVersion = 0;
   let buildGeminiCliBuckets: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').buildGeminiCliBuckets;
   let fetchGeminiCliQuota: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').fetchGeminiCliQuota;
   let resolveGeminiCliProjectId: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').resolveGeminiCliProjectId;
   let geminiTestExports: typeof import('../../../src/cliproxy/quota-fetcher-gemini-cli').__testExports;
-  let refreshGeminiToken: typeof import('../../../src/cliproxy/auth/gemini-token-refresh').refreshGeminiToken;
   let getProviderAuthDir: typeof import('../../../src/cliproxy/config-generator').getProviderAuthDir;
 
   function writeGeminiToken(token: Record<string, unknown>, filename = 'gemini-test.json'): string {
@@ -47,9 +45,6 @@ describe('Gemini CLI Quota Fetcher', () => {
         access_token: 'access-token',
         refresh_token: 'refresh-token',
         expiry: Date.now() + 60 * 60 * 1000,
-        client_id: 'test-client-id',
-        client_secret: 'test-client-secret',
-        token_uri: GOOGLE_TOKEN_URL,
       },
       ...overrides,
     });
@@ -60,12 +55,7 @@ describe('Gemini CLI Quota Fetcher', () => {
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-gemini-refresh-'));
     originalCcsHome = process.env.CCS_HOME;
     originalCcsDir = process.env.CCS_DIR;
-    originalGeminiClientId = process.env.CCS_GEMINI_OAUTH_CLIENT_ID;
-    originalGeminiClientSecret = process.env.CCS_GEMINI_OAUTH_CLIENT_SECRET;
     process.env.CCS_HOME = tempHome;
-
-    delete process.env.CCS_GEMINI_OAUTH_CLIENT_ID;
-    delete process.env.CCS_GEMINI_OAUTH_CLIENT_SECRET;
     delete process.env.CCS_DIR;
 
     const configGenerator = await import(
@@ -78,9 +68,6 @@ describe('Gemini CLI Quota Fetcher', () => {
       __testExports: geminiTestExports,
     } = await import(
       `../../../src/cliproxy/quota-fetcher-gemini-cli?gemini-quota-fetcher=${moduleVersion}`
-    ));
-    ({ refreshGeminiToken } = await import(
-      `../../../src/cliproxy/auth/gemini-token-refresh?gemini-refresh=${moduleVersion}`
     ));
     ({ getProviderAuthDir } = configGenerator);
   });
@@ -99,18 +86,6 @@ describe('Gemini CLI Quota Fetcher', () => {
       delete process.env.CCS_DIR;
     } else {
       process.env.CCS_DIR = originalCcsDir;
-    }
-
-    if (originalGeminiClientId === undefined) {
-      delete process.env.CCS_GEMINI_OAUTH_CLIENT_ID;
-    } else {
-      process.env.CCS_GEMINI_OAUTH_CLIENT_ID = originalGeminiClientId;
-    }
-
-    if (originalGeminiClientSecret === undefined) {
-      delete process.env.CCS_GEMINI_OAUTH_CLIENT_SECRET;
-    } else {
-      process.env.CCS_GEMINI_OAUTH_CLIENT_SECRET = originalGeminiClientSecret;
     }
   });
 
@@ -510,6 +485,12 @@ describe('Gemini CLI Quota Fetcher', () => {
 
       mockFetch([
         {
+          url: MANAGEMENT_AUTH_FILES_URL,
+          response: {
+            files: [],
+          },
+        },
+        {
           url: GEMINI_QUOTA_URL,
           method: 'POST',
           status: 401,
@@ -518,14 +499,6 @@ describe('Gemini CLI Quota Fetcher', () => {
               message: 'Session expired',
               status: 'UNAUTHENTICATED',
             },
-          },
-        },
-        {
-          url: GOOGLE_TOKEN_URL,
-          method: 'POST',
-          status: 400,
-          response: {
-            error: 'invalid_grant',
           },
         },
       ]);
@@ -667,7 +640,7 @@ describe('Gemini CLI Quota Fetcher', () => {
       expect(result.errorDetail).toBe('[HTML error response omitted]');
     });
 
-    it('refreshes the requested Gemini account instead of the default account', async () => {
+    it('uses the requested Gemini account when delegating auth recovery to CLIProxy management', async () => {
       writeGeminiToken(
         {
           type: 'gemini',
@@ -677,9 +650,6 @@ describe('Gemini CLI Quota Fetcher', () => {
             access_token: 'default-access-token',
             refresh_token: 'default-refresh-token',
             expiry: Date.now() + 60 * 60 * 1000,
-            client_id: 'default-client-id',
-            client_secret: 'default-client-secret',
-            token_uri: GOOGLE_TOKEN_URL,
           },
         },
         'gemini-default.json'
@@ -694,9 +664,6 @@ describe('Gemini CLI Quota Fetcher', () => {
             access_token: 'target-stale-token',
             refresh_token: 'target-refresh-token',
             expiry: Date.now() - 1000,
-            client_id: 'target-client-id',
-            client_secret: 'target-client-secret',
-            token_uri: GOOGLE_TOKEN_URL,
           },
         },
         'gemini-target.json'
@@ -704,16 +671,37 @@ describe('Gemini CLI Quota Fetcher', () => {
 
       mockFetch([
         {
-          url: GOOGLE_TOKEN_URL,
+          url: MANAGEMENT_AUTH_FILES_URL,
+          response: {
+            files: [
+              {
+                auth_index: 'target-auth-index',
+                provider: 'gemini-cli',
+                email: 'target@example.com',
+                name: 'target@example.com-gen-lang-client-target-project.json',
+              },
+            ],
+          },
+        },
+        {
+          url: MANAGEMENT_API_CALL_URL,
           method: 'POST',
-          response: { access_token: 'target-fresh-token', expires_in: 1800 },
+          response: {
+            status_code: 200,
+            body: JSON.stringify({
+              buckets: [{ model_id: 'gemini-3-flash-preview', remaining_fraction: 0.88 }],
+            }),
+          },
         },
         {
           url: GEMINI_QUOTA_URL,
           method: 'POST',
-          status: 200,
+          status: 401,
           response: {
-            buckets: [{ model_id: 'gemini-3-flash-preview', remaining_fraction: 0.88 }],
+            error: {
+              message: 'Session expired',
+              status: 'UNAUTHENTICATED',
+            },
           },
         },
         {
@@ -728,14 +716,15 @@ describe('Gemini CLI Quota Fetcher', () => {
 
       expect(result.success).toBe(true);
 
-      const [refreshRequest, quotaRequest] = getCapturedFetchRequests();
-      expect(refreshRequest.url).toBe(GOOGLE_TOKEN_URL);
-      expect(refreshRequest.body).toContain('refresh_token=target-refresh-token');
-      expect(refreshRequest.body).not.toContain('default-refresh-token');
-      expect(quotaRequest.headers.Authorization).toBe('Bearer target-fresh-token');
+      const [, managedLookupRequest, managedQuotaRequest] = getCapturedFetchRequests();
+      expect(managedLookupRequest.url).toBe(MANAGEMENT_AUTH_FILES_URL);
+      expect(managedQuotaRequest.url).toBe(MANAGEMENT_API_CALL_URL);
+      expect(managedQuotaRequest.body).toContain('"auth_index":"target-auth-index"');
+      expect(managedQuotaRequest.body).toContain('"Authorization":"Bearer $TOKEN$"');
+      expect(managedQuotaRequest.body).not.toContain('default-refresh-token');
     });
 
-    it('retries a 401 quota failure after a transient proactive refresh failure', async () => {
+    it('retries a 401 quota failure through the management API instead of refreshing locally', async () => {
       writeGeminiToken(
         {
           type: 'gemini',
@@ -745,20 +734,12 @@ describe('Gemini CLI Quota Fetcher', () => {
             access_token: 'retry-stale-token',
             refresh_token: 'retry-refresh-token',
             expiry: Date.now() + 60 * 1000,
-            client_id: 'retry-client-id',
-            client_secret: 'retry-client-secret',
-            token_uri: GOOGLE_TOKEN_URL,
           },
         },
         'gemini-retry.json'
       );
 
       mockFetch([
-        {
-          url: GOOGLE_TOKEN_URL,
-          method: 'POST',
-          response: { access_token: 'unused-default', expires_in: 1800 },
-        },
         {
           url: GEMINI_QUOTA_URL,
           method: 'POST',
@@ -776,49 +757,63 @@ describe('Gemini CLI Quota Fetcher', () => {
       ]);
 
       const originalFetch = globalThis.fetch;
-      let refreshAttempt = 0;
       let quotaAttempt = 0;
+      let managedLookupAttempt = 0;
+      let managedRequestAttempt = 0;
       globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
         const url =
           typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 
-        if (url === GOOGLE_TOKEN_URL) {
-          refreshAttempt += 1;
-          return refreshAttempt === 1
-            ? new Response(JSON.stringify({ error: 'temporarily_unavailable' }), {
-                status: 503,
-                headers: { 'Content-Type': 'application/json' },
-              })
-            : new Response(JSON.stringify({ access_token: 'retry-fresh-token', expires_in: 1800 }), {
-                status: 200,
-                headers: { 'Content-Type': 'application/json' },
-              });
-        }
-
         if (url === GEMINI_QUOTA_URL) {
           quotaAttempt += 1;
-          return quotaAttempt === 1
-            ? new Response(
-                JSON.stringify({
-                  error: {
-                    message: 'Session expired',
-                    status: 'UNAUTHENTICATED',
-                  },
-                }),
+          return new Response(
+            JSON.stringify({
+              error: {
+                message: 'Session expired',
+                status: 'UNAUTHENTICATED',
+              },
+            }),
+            {
+              status: 401,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+
+        if (url === MANAGEMENT_AUTH_FILES_URL) {
+          managedLookupAttempt += 1;
+          return new Response(
+            JSON.stringify({
+              files: [
                 {
-                  status: 401,
-                  headers: { 'Content-Type': 'application/json' },
-                }
-              )
-            : new Response(
-                JSON.stringify({
-                  buckets: [{ model_id: 'gemini-3-flash-preview', remaining_fraction: 0.9 }],
-                }),
-                {
-                  status: 200,
-                  headers: { 'Content-Type': 'application/json' },
-                }
-              );
+                  auth_index: 'retry-auth-index',
+                  provider: 'gemini-cli',
+                  email: 'retry@example.com',
+                  name: 'retry@example.com-gen-lang-client-retry-project.json',
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+
+        if (url === MANAGEMENT_API_CALL_URL) {
+          managedRequestAttempt += 1;
+          return new Response(
+            JSON.stringify({
+              status_code: 200,
+              body: JSON.stringify({
+                buckets: [{ model_id: 'gemini-3-flash-preview', remaining_fraction: 0.9 }],
+              }),
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
         }
 
         return originalFetch(input, init);
@@ -828,13 +823,85 @@ describe('Gemini CLI Quota Fetcher', () => {
         const result = await fetchGeminiCliQuota('retry@example.com');
 
         expect(result.success).toBe(true);
-        expect(refreshAttempt).toBe(2);
-        expect(quotaAttempt).toBe(2);
+        expect(quotaAttempt).toBe(1);
+        expect(managedLookupAttempt).toBe(1);
+        expect(managedRequestAttempt).toBe(1);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
 
-        const storedToken = JSON.parse(
-          fs.readFileSync(path.join(getProviderAuthDir('gemini'), 'gemini-retry.json'), 'utf8')
-        ) as { token?: { access_token?: string } };
-        expect(storedToken.token?.access_token).toBe('retry-fresh-token');
+    it('reports a retryable management failure instead of reauth when delegated auth is unavailable', async () => {
+      writeGeminiToken(
+        {
+          type: 'gemini',
+          email: 'managed-failure@example.com',
+          project_id: 'managed-failure-project',
+          token: {
+            access_token: 'expired-token',
+            refresh_token: 'refresh-token',
+            expiry: Date.now() - 1000,
+          },
+        },
+        'gemini-managed-failure.json'
+      );
+
+      mockFetch([
+        {
+          url: GEMINI_CODE_ASSIST_URL,
+          method: 'POST',
+          status: 503,
+          response: { error: { message: 'supplementary unavailable' } },
+        },
+      ]);
+
+      const originalFetch = globalThis.fetch;
+      let directQuotaAttempt = 0;
+      let managedLookupAttempt = 0;
+      let managedRequestAttempt = 0;
+      globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+
+        if (url === MANAGEMENT_AUTH_FILES_URL) {
+          managedLookupAttempt += 1;
+          return new Response('lookup unavailable', { status: 503 });
+        }
+
+        if (url === MANAGEMENT_API_CALL_URL) {
+          managedRequestAttempt += 1;
+          return new Response('should not be called', { status: 500 });
+        }
+
+        if (url === GEMINI_QUOTA_URL) {
+          directQuotaAttempt += 1;
+          return new Response(
+            JSON.stringify({
+              error: {
+                message: 'Session expired',
+                status: 'UNAUTHENTICATED',
+              },
+            }),
+            {
+              status: 401,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+
+        return originalFetch(input, init);
+      }) as typeof fetch;
+
+      try {
+        const result = await fetchGeminiCliQuota('managed-failure@example.com');
+
+        expect(result.success).toBe(false);
+        expect(result.needsReauth).toBeUndefined();
+        expect(result.retryable).toBe(true);
+        expect(result.errorCode).toBe('managed_auth_unavailable');
+        expect(directQuotaAttempt).toBe(1);
+        expect(managedLookupAttempt).toBe(1);
+        expect(managedRequestAttempt).toBe(0);
       } finally {
         globalThis.fetch = originalFetch;
       }
@@ -934,84 +1001,4 @@ describe('Gemini CLI Quota Fetcher', () => {
     });
   });
 
-  describe('refreshGeminiToken', () => {
-    it('uses OAuth client metadata stored in the token file', async () => {
-      writeGeminiToken({
-        type: 'gemini',
-        email: 'file@example.com',
-        token: {
-          access_token: 'old-token',
-          refresh_token: 'refresh-from-file',
-          expiry: Date.now() - 1000,
-          client_id: 'file-client-id',
-          client_secret: 'file-client-secret',
-          token_uri: 'https://oauth2.googleapis.com/token',
-        },
-      });
-
-      mockFetch([
-        {
-          url: 'https://oauth2.googleapis.com/token',
-          method: 'POST',
-          response: { access_token: 'fresh-token', expires_in: 1800 },
-        },
-      ]);
-
-      const result = await refreshGeminiToken();
-
-      expect(result.success).toBe(true);
-      const [request] = getCapturedFetchRequests();
-      expect(request.body).toContain('client_id=file-client-id');
-      expect(request.body).toContain('client_secret=file-client-secret');
-      expect(request.body).toContain('refresh_token=refresh-from-file');
-    });
-
-    it('falls back to CCS_GEMINI_OAUTH_CLIENT_* env vars when token metadata is missing', async () => {
-      process.env.CCS_GEMINI_OAUTH_CLIENT_ID = 'env-client-id';
-      process.env.CCS_GEMINI_OAUTH_CLIENT_SECRET = 'env-client-secret';
-
-      writeGeminiToken({
-        type: 'gemini',
-        email: 'env@example.com',
-        token: {
-          access_token: 'old-token',
-          refresh_token: 'refresh-from-file',
-          expiry: Date.now() - 1000,
-        },
-      });
-
-      mockFetch([
-        {
-          url: 'https://oauth2.googleapis.com/token',
-          method: 'POST',
-          response: { access_token: 'fresh-token', expires_in: 1800 },
-        },
-      ]);
-
-      const result = await refreshGeminiToken();
-
-      expect(result.success).toBe(true);
-      const [request] = getCapturedFetchRequests();
-      expect(request.body).toContain('client_id=env-client-id');
-      expect(request.body).toContain('client_secret=env-client-secret');
-    });
-
-    it('returns a clear error when no refresh client credentials are available', async () => {
-      writeGeminiToken({
-        type: 'gemini',
-        email: 'missing@example.com',
-        token: {
-          access_token: 'old-token',
-          refresh_token: 'refresh-from-file',
-          expiry: Date.now() - 1000,
-        },
-      });
-
-      const result = await refreshGeminiToken();
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('CCS_GEMINI_OAUTH_CLIENT_ID');
-      expect(result.error).toContain('CCS_GEMINI_OAUTH_CLIENT_SECRET');
-    });
-  });
 });

@@ -1,10 +1,12 @@
 import { Shield, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuth } from '@/contexts/auth-context';
+import { useTranslation } from 'react-i18next';
 
 export function LocalhostDisclaimer() {
   const [dismissed, setDismissed] = useState(false);
   const { authEnabled, authConfigured, isLocalAccess, loading } = useAuth();
+  const { t } = useTranslation();
 
   const isRemoteReadonly = !isLocalAccess && !authEnabled;
 
@@ -21,30 +23,25 @@ export function LocalhostDisclaimer() {
       {authConfigured ? (
         <>
           <span className="hidden sm:inline">
-            Remote dashboard access is read-only because dashboard auth is currently disabled on the
-            host. Re-enable dashboard auth on the host to unlock remote changes.
+            {t('localhostDisclaimer.remoteReadonlyAuthDisabledLong')}
           </span>
           <span className="sm:hidden">
-            Remote dashboard is read-only until dashboard auth is re-enabled on the host.
+            {t('localhostDisclaimer.remoteReadonlyAuthDisabledShort')}
           </span>
         </>
       ) : (
         <>
           <span className="hidden sm:inline">
-            Remote dashboard access is read-only until you run ccs config auth setup on the host.
+            {t('localhostDisclaimer.remoteReadonlySetupLong')}
           </span>
-          <span className="sm:hidden">
-            Remote dashboard is read-only until host auth is configured.
-          </span>
+          <span className="sm:hidden">{t('localhostDisclaimer.remoteReadonlySetupShort')}</span>
         </>
       )}
     </>
   ) : (
     <>
-      <span className="hidden sm:inline">
-        This dashboard runs locally. All data stays on your machine.
-      </span>
-      <span className="sm:hidden">Local dashboard - data stays on your device.</span>
+      <span className="hidden sm:inline">{t('localhostDisclaimer.localLong')}</span>
+      <span className="sm:hidden">{t('localhostDisclaimer.localShort')}</span>
     </>
   );
 
@@ -59,7 +56,7 @@ export function LocalhostDisclaimer() {
           <button
             onClick={() => setDismissed(true)}
             className={`flex-shrink-0 rounded p-1 transition-colors ${dismissClasses}`}
-            aria-label="Dismiss disclaimer"
+            aria-label={t('localhostDisclaimer.dismiss')}
           >
             <X className="w-4 h-4" />
           </button>

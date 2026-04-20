@@ -97,7 +97,7 @@ export async function executeCursorProfile(
   if (!config.enabled) {
     console.error(fail('Cursor integration is not enabled.'));
     console.error('');
-    console.error('Enable it first: ccs cursor enable');
+    console.error('Enable it first: ccs legacy cursor enable');
     return 1;
   }
 
@@ -105,13 +105,13 @@ export async function executeCursorProfile(
   if (!authStatus.authenticated) {
     console.error(fail('Cursor credentials not found.'));
     console.error('');
-    console.error('Authenticate first: ccs cursor auth');
+    console.error('Authenticate first: ccs legacy cursor auth');
     return 1;
   }
   if (authStatus.expired) {
     console.error(fail('Cursor credentials have expired.'));
     console.error('');
-    console.error('Refresh them with: ccs cursor auth');
+    console.error('Refresh them with: ccs legacy cursor auth');
     return 1;
   }
 
@@ -133,7 +133,7 @@ export async function executeCursorProfile(
       console.error(fail('Cursor daemon is not running.'));
       console.error('');
       console.error('Start the daemon:');
-      console.error('  ccs cursor start');
+      console.error('  ccs legacy cursor start');
       console.error('Or enable auto_start in the Cursor config section.');
       return 1;
     }

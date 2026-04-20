@@ -59,7 +59,7 @@ describe('LoginPage', () => {
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith('/settings', { replace: true });
     });
-    expect(screen.queryByRole('heading', { name: 'Remote access needs host setup' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Remote access needs auth setup' })).toBeNull();
   });
 
   it('renders the incomplete setup copy when auth is enabled without credentials', () => {
@@ -80,7 +80,7 @@ describe('LoginPage', () => {
 
     expect(
       screen.getAllByText(
-        'Dashboard auth is turned on, but the host setup is incomplete. Finish the host configuration before signing in.'
+        'Dashboard auth is turned on, but the setup is incomplete. Finish the configuration for this CCS instance before signing in.'
       )
     ).not.toHaveLength(0);
     expect(
@@ -88,6 +88,10 @@ describe('LoginPage', () => {
         'Create or re-enable dashboard credentials, then reopen this page from the remote device.'
       )
     ).toBeVisible();
+    expect(
+      screen.getByText('Docker deployment? Run the setup inside the running container:')
+    ).toBeVisible();
+    expect(screen.getByText('docker exec -it ccs-cliproxy ccs config auth setup')).toBeVisible();
     expect(screen.queryByLabelText('Username')).not.toBeInTheDocument();
   });
 

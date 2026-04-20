@@ -207,6 +207,12 @@ export function LoginPage() {
                       <code className="mt-4 block rounded-xl border border-border/70 bg-muted/60 px-3 py-2 font-mono text-[13px] text-foreground">
                         ccs config auth setup
                       </code>
+                      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                        {t('auth.dockerStepDescription')}
+                      </p>
+                      <code className="mt-2 block rounded-xl border border-border/70 bg-muted/60 px-3 py-2 font-mono text-[13px] text-foreground">
+                        docker exec -it ccs-cliproxy ccs config auth setup
+                      </code>
                     </div>
 
                     <div className="rounded-2xl border border-border/70 bg-background/75 p-4">

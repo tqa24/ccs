@@ -62,6 +62,8 @@ environment:
   CCS_DASHBOARD_PASSWORD_HASH: "<bcrypt-hash>"
 ```
 
+Running `ccs config auth setup` on the outer host shell updates that machine's own `~/.ccs`, not the Docker volume mounted into `ccs-cliproxy`. For the integrated stack, configure auth inside the container or provide the auth env vars in Compose.
+
 Generate a bcrypt hash:
 
 ```bash

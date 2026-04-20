@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { Loader2, Code2, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 
 import { HeaderSection } from './header-section';
 import { FriendlyUISection } from './friendly-ui-section';
@@ -24,6 +25,7 @@ export function ProfileEditor({
   onDelete,
   onHasChangesUpdate,
 }: ProfileEditorProps) {
+  const { t } = useTranslation();
   const [localEdits, setLocalEdits] = useState<Record<string, string>>({});
   const [conflictDialog, setConflictDialog] = useState(false);
   const [rawJsonEdits, setRawJsonEdits] = useState<string | null>(null);
@@ -299,15 +301,15 @@ export function ProfileEditor({
       {isLoading ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-          <span className="ml-3 text-muted-foreground">Loading settings...</span>
+          <span className="ml-3 text-muted-foreground">{t('settingsDialog.loadingSettings')}</span>
         </div>
       ) : isError ? (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
-            <p className="text-sm text-muted-foreground">Failed to load settings.</p>
+            <p className="text-sm text-muted-foreground">{t('settingsPage.failedLoad')}</p>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               <RefreshCw className="w-4 h-4 mr-1" />
-              Retry
+              {t('apiProfiles.retry')}
             </Button>
           </div>
         </div>
@@ -332,7 +334,7 @@ export function ProfileEditor({
             <div className="px-6 py-2 bg-muted/30 border-b flex items-center gap-2 shrink-0 h-[45px]">
               <Code2 className="w-4 h-4 text-muted-foreground" />
               <span className="text-sm font-medium text-muted-foreground">
-                Raw Configuration (JSON)
+                {t('rawEditorSection.rawConfig')}
               </span>
             </div>
             <RawEditorSection
@@ -355,9 +357,9 @@ export function ProfileEditor({
 
       <ConfirmDialog
         open={conflictDialog}
-        title="File Modified Externally"
-        description="Overwrite with your changes or discard?"
-        confirmText="Overwrite"
+        title={t('settingsDialog.conflictTitle')}
+        description={t('settingsDialog.conflictDesc')}
+        confirmText={t('settingsDialog.overwrite')}
         variant="destructive"
         onConfirm={() => handleConflictResolve(true)}
         onCancel={() => handleConflictResolve(false)}

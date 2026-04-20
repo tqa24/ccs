@@ -742,14 +742,27 @@ describe('Message Translation', () => {
 
 describe('Request Encoding', () => {
   describe('generateCursorBody', () => {
-    it('should encode basic text message', () => {
+    it('should encode a raw top-level request protobuf for basic text messages', () => {
       const result = generateCursorBody([{ role: 'user', content: 'Hello' }], 'gpt-4', [], null);
+      const topLevel = decodeMessage(result);
+      const requestPayload = topLevel.get(FIELD.Request.REQUEST)?.[0]?.value as Uint8Array;
+      const chatRequest = decodeMessage(requestPayload);
+      const encodedMessages = (chatRequest.get(FIELD.Chat.MESSAGES) || []).map((entry) =>
+        decodeMessage(entry.value as Uint8Array)
+      );
+      const decoder = new TextDecoder();
 
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result.length).toBeGreaterThan(0);
+      expect(Array.from(result.slice(0, 5))).not.toEqual([0, 0, 0, 1, 107]);
+      expect(topLevel.has(FIELD.Request.REQUEST)).toBe(true);
+      expect(encodedMessages).toHaveLength(1);
+      expect(decoder.decode(encodedMessages[0].get(FIELD.Message.CONTENT)?.[0]?.value as Uint8Array)).toBe(
+        'Hello'
+      );
     });
 
-    it('should encode message with tools', () => {
+    it('should encode message with tools into the raw request payload', () => {
       const tools = [
         {
           type: 'function' as const,
@@ -773,9 +786,14 @@ describe('Request Encoding', () => {
         tools,
         null
       );
+      const topLevel = decodeMessage(result);
+      const requestPayload = topLevel.get(FIELD.Request.REQUEST)?.[0]?.value as Uint8Array;
+      const chatRequest = decodeMessage(requestPayload);
 
       expect(result).toBeInstanceOf(Uint8Array);
       expect(result.length).toBeGreaterThan(0);
+      expect(topLevel.has(FIELD.Request.REQUEST)).toBe(true);
+      expect((chatRequest.get(FIELD.Chat.MCP_TOOLS) || []).length).toBe(1);
     });
 
     it('should preserve flattened tool_result blocks through protobuf encoding', () => {
@@ -806,10 +824,7 @@ describe('Request Encoding', () => {
       );
 
       const body = generateCursorBody(translated.messages, 'gpt-4', [], null);
-      const frame = parseConnectRPCFrame(Buffer.from(body));
-      expect(frame).not.toBeNull();
-
-      const topLevel = decodeMessage(frame!.payload);
+      const topLevel = decodeMessage(body);
       const requestPayload = topLevel.get(FIELD.Request.REQUEST)?.[0]?.value as Uint8Array;
       const chatRequest = decodeMessage(requestPayload);
       const encodedMessages = (chatRequest.get(FIELD.Chat.MESSAGES) || []).map((entry) =>
@@ -831,7 +846,7 @@ describe('Request Encoding', () => {
   });
 
   describe('Edge cases', () => {
-    it('should handle malformed frame gracefully', () => {
+    it('should reject malformed frame headers', async () => {
       const executor = new CursorExecutor();
 
       // Incomplete frame header (only 3 bytes instead of 5)
@@ -841,11 +856,13 @@ describe('Request Encoding', () => {
         messages: [],
       });
 
-      // Should return valid response even with malformed input
-      expect(result.status).toBe(200);
+      expect(result.status).toBe(502);
+      const body = JSON.parse(await result.text());
+      expect(body.error.type).toBe('server_error');
+      expect(body.error.message).toContain('Truncated Cursor ConnectRPC frame');
     });
 
-    it('should handle truncated payload', () => {
+    it('should reject truncated payloads', async () => {
       const executor = new CursorExecutor();
 
       // Frame header says payload is 100 bytes but only 5 bytes follow
@@ -857,8 +874,10 @@ describe('Request Encoding', () => {
         messages: [],
       });
 
-      // Should handle gracefully
-      expect(result.status).toBe(200);
+      expect(result.status).toBe(502);
+      const body = JSON.parse(await result.text());
+      expect(body.error.type).toBe('server_error');
+      expect(body.error.message).toContain('Truncated Cursor ConnectRPC frame');
     });
 
     it('should handle multi-frame buffer', () => {
@@ -1042,6 +1061,29 @@ describe('CursorExecutor', () => {
       expect(body.error.type).toBe('rate_limit_error');
     });
 
+    it('should map unavailable end-stream errors to 503', async () => {
+      const unavailableFrame = buildFrame(
+        new TextEncoder().encode(
+          JSON.stringify({
+            error: {
+              code: 'unavailable',
+              message: 'upstream down',
+            },
+          })
+        ),
+        0x02
+      );
+
+      const result = executor.transformProtobufToJSON(unavailableFrame, 'gpt-4', {
+        messages: [],
+      });
+
+      expect(result.status).toBe(503);
+      const body = JSON.parse(await result.text());
+      expect(body.error.type).toBe('api_error');
+      expect(body.error.message).toContain('upstream down');
+    });
+
     it('should surface reasoning_content when thinking payload is present', async () => {
       const textContent = 'Final answer';
       const thinkingContent = 'Internal reasoning trail';
@@ -1177,7 +1219,7 @@ describe('CursorExecutor', () => {
   });
 
   describe('decompressPayload error handling', () => {
-    it('should return empty buffer on decompression failure', () => {
+    it('returns an explicit executor error on decompression failure', async () => {
       // Create invalid gzip data
       const invalidGzip = Buffer.from([0x1f, 0x8b, 0x08, 0x00, 0xff, 0xff]);
       const frame = new Uint8Array(5 + invalidGzip.length);
@@ -1192,13 +1234,15 @@ describe('CursorExecutor', () => {
         messages: [],
       });
 
-      // Should handle gracefully and return valid response
-      expect(result.status).toBe(200);
+      expect(result.status).toBe(502);
+      const body = JSON.parse(await result.text());
+      expect(body.error.type).toBe('server_error');
+      expect(body.error.message).toContain('decompress');
     });
   });
 
   describe('error handling', () => {
-    it('should return empty buffer on decompression failure', () => {
+    it('returns an explicit error for invalid compressed payloads', async () => {
       const executor = new CursorExecutor();
 
       // Invalid compressed payload (not actually gzipped)
@@ -1217,13 +1261,80 @@ describe('CursorExecutor', () => {
 
       const buffer = Buffer.from(frame);
 
-      // Should not crash - decompression failure returns empty buffer
       const result = executor.transformProtobufToJSON(buffer, 'test-model', {
         messages: [],
         stream: false,
       });
 
+      expect(result.status).toBe(502);
+      const body = JSON.parse(await result.text());
+      expect(body.error.type).toBe('server_error');
+      expect(body.error.message).toContain('decompress');
+    });
+
+    it('surfaces first-frame protocol errors in SSE mode without pretending success', async () => {
+      const executor = new CursorExecutor();
+      const invalidGzipPayload = new Uint8Array([1, 2, 3, 4, 5]);
+      const frame = buildFrame(invalidGzipPayload, 0x01);
+
+      const result = executor.transformProtobufToSSE(frame, 'test-model', {
+        messages: [],
+        stream: true,
+      });
+
+      expect(result.status).toBe(502);
+      const body = JSON.parse(await result.text());
+      expect(body.error.type).toBe('server_error');
+      expect(body.error.message).toContain('decompress');
+    });
+
+    it('emits an SSE error event without [DONE] when a later frame fails', async () => {
+      const executor = new CursorExecutor();
+      const combined = Buffer.concat([
+        buildTextFrame('Before failure'),
+        buildFrame(new Uint8Array([1, 2, 3, 4, 5]), 0x01),
+      ]);
+
+      const result = executor.transformProtobufToSSE(combined, 'test-model', {
+        messages: [],
+        stream: true,
+      });
+
       expect(result.status).toBe(200);
+      const body = await result.text();
+      expect(body).toContain('Before failure');
+      expect(body).toContain('event: error');
+      expect(body).toContain('"type":"server_error"');
+      expect(body).not.toContain('data: [DONE]');
+    });
+
+    it('emits an SSE error event when trailing bytes leave a truncated frame', async () => {
+      const executor = new CursorExecutor();
+      const combined = Buffer.concat([buildTextFrame('Partial success'), Buffer.from([0x00, 0x00, 0x00])]);
+
+      const result = executor.transformProtobufToSSE(combined, 'test-model', {
+        messages: [],
+        stream: true,
+      });
+
+      expect(result.status).toBe(200);
+      const body = await result.text();
+      expect(body).toContain('Partial success');
+      expect(body).toContain('event: error');
+      expect(body).toContain('Truncated Cursor ConnectRPC frame');
+      expect(body).not.toContain('data: [DONE]');
+    });
+
+    it('returns an explicit error for unknown ConnectRPC frame flags', async () => {
+      const executor = new CursorExecutor();
+      const result = executor.transformProtobufToJSON(buildFrame(new Uint8Array([0x01]), 0x04), 'gpt-4', {
+        messages: [],
+      });
+
+      expect(result.status).toBe(502);
+      const body = JSON.parse(await result.text());
+      expect(body.error.type).toBe('server_error');
+      expect(body.error.message).toContain('0x04');
     });
 
     it('should log unknown message roles in debug mode', () => {
@@ -1418,6 +1529,55 @@ describe('StreamingFrameParser', () => {
     }
   });
 
+  it('should surface end-stream JSON errors instead of treating them as gzip', () => {
+    const parser = new StreamingFrameParser();
+    const endStreamError = buildFrame(
+      new TextEncoder().encode(
+        JSON.stringify({
+          error: {
+            code: 'invalid_argument',
+            message: 'parse binary: illegal tag: field no 0 wire type 0',
+          },
+        })
+      ),
+      0x02
+    );
+
+    const results = parser.push(endStreamError);
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('error');
+    if (results[0].type === 'error') {
+      expect(results[0].status).toBe(400);
+      expect(results[0].errorType).toBe('api_error');
+      expect(results[0].message).toContain('illegal tag');
+    }
+  });
+
+  it('should map unavailable end-stream errors to 503 in the parser', () => {
+    const parser = new StreamingFrameParser();
+    const endStreamError = buildFrame(
+      new TextEncoder().encode(
+        JSON.stringify({
+          error: {
+            code: 'unavailable',
+            message: 'upstream down',
+          },
+        })
+      ),
+      0x02
+    );
+
+    const results = parser.push(endStreamError);
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('error');
+    if (results[0].type === 'error') {
+      expect(results[0].status).toBe(503);
+      expect(results[0].errorType).toBe('api_error');
+    }
+  });
+
   it('should parse thinking frames', () => {
     const parser = new StreamingFrameParser();
     const frame = buildThinkingFrame('Think step by step');
@@ -1458,8 +1618,36 @@ describe('StreamingFrameParser', () => {
     expect(results.length).toBe(1);
     expect(results[0].type).toBe('error');
     if (results[0].type === 'error') {
+      expect(results[0].status).toBe(502);
       expect(results[0].errorType).toBe('server_error');
       expect(results[0].message).toContain('Malformed protobuf response');
+    }
+  });
+
+  it('should reject invalid gzip-compressed frames explicitly', () => {
+    const parser = new StreamingFrameParser();
+    const invalidCompressedFrame = buildFrame(new Uint8Array([1, 2, 3, 4, 5]), 0x01);
+    const results = parser.push(invalidCompressedFrame);
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('error');
+    if (results[0].type === 'error') {
+      expect(results[0].status).toBe(502);
+      expect(results[0].errorType).toBe('server_error');
+      expect(results[0].message).toContain('decompress');
+    }
+  });
+
+  it('should reject unknown ConnectRPC frame flag bits', () => {
+    const parser = new StreamingFrameParser();
+    const results = parser.push(buildFrame(new Uint8Array([0x01]), 0x04));
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('error');
+    if (results[0].type === 'error') {
+      expect(results[0].status).toBe(502);
+      expect(results[0].errorType).toBe('server_error');
+      expect(results[0].message).toContain('0x04');
     }
   });
 
@@ -1481,6 +1669,20 @@ describe('StreamingFrameParser', () => {
     parser2.push(emptyFrame);
     expect(parser2.hasPartial()).toBe(false);
   });
+
+  it('should surface truncated trailing bytes when the stream finishes', () => {
+    const parser = new StreamingFrameParser();
+    parser.push(Buffer.from([0x00, 0x00, 0x00]));
+
+    const results = parser.finish();
+
+    expect(results.length).toBe(1);
+    expect(results[0].type).toBe('error');
+    if (results[0].type === 'error') {
+      expect(results[0].status).toBe(502);
+      expect(results[0].message).toContain('Truncated Cursor ConnectRPC frame');
+    }
+  });
 });
 
 describe('decompressPayload', () => {
@@ -1496,10 +1698,18 @@ describe('decompressPayload', () => {
     expect(result).toEqual(errorPayload);
   });
 
-  it('should return empty buffer on invalid gzip data', () => {
+  it('should throw on invalid gzip data', () => {
     const invalidGzip = Buffer.from([0x01, 0x02, 0x03, 0x04, 0x05]);
-    const result = decompressPayload(invalidGzip, 0x01);
-    expect(result.length).toBe(0);
+    expect(() => decompressPayload(invalidGzip, 0x01)).toThrow(
+      'Failed to decompress Cursor ConnectRPC frame.'
+    );
+  });
+
+  it('should throw on unknown ConnectRPC frame flags', () => {
+    const payload = Buffer.from('payload');
+    expect(() => decompressPayload(payload, 0x04)).toThrow(
+      'Unsupported ConnectRPC frame flags: 0x04'
+    );
   });
 
   it('should decompress valid gzip payload', () => {
@@ -1511,12 +1721,12 @@ describe('decompressPayload', () => {
     expect(result.toString()).toBe('Hello compressed world');
   });
 
-  it('should handle GZIP_ALT and GZIP_BOTH flags', () => {
+  it('should not decompress plain end-stream trailers and should handle compressed end-stream trailers', () => {
     const zlib = require('zlib');
     const original = Buffer.from('test data');
     const compressed = zlib.gzipSync(original);
 
-    expect(decompressPayload(compressed, 0x02).toString()).toBe('test data');
+    expect(decompressPayload(original, 0x02)).toEqual(original);
     expect(decompressPayload(compressed, 0x03).toString()).toBe('test data');
   });
 });

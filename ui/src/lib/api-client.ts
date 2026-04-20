@@ -10,6 +10,7 @@ import type {
   UpsertAiProviderEntryInput,
 } from '../../../src/cliproxy/ai-providers';
 import type { ProviderEntitlementEvidence } from '../../../src/cliproxy/provider-entitlement-types';
+import type { BrowserRuntimeEnv } from '../../../src/utils/browser/chrome-reuse';
 
 export const API_BASE_URL = '/api';
 export const API_CONFLICT_ERROR_CODE = 'CONFLICT';
@@ -231,6 +232,67 @@ export interface UpdateImageAnalysisSettingsPayload {
   providerModels?: Record<string, string | null>;
   fallbackBackend?: string | null;
   profileBackends?: Record<string, string>;
+}
+
+export interface BrowserSettingsConfig {
+  claude: {
+    enabled: boolean;
+    userDataDir: string;
+    devtoolsPort: number;
+  };
+  codex: {
+    enabled: boolean;
+  };
+}
+
+export interface BrowserLaunchCommands {
+  darwin: string;
+  linux: string;
+  win32: string;
+}
+
+export interface ClaudeBrowserStatus {
+  enabled: boolean;
+  source: 'config' | 'CCS_BROWSER_USER_DATA_DIR' | 'CCS_BROWSER_PROFILE_DIR';
+  overrideActive: boolean;
+  state: 'disabled' | 'path_missing' | 'browser_not_running' | 'endpoint_unreachable' | 'ready';
+  title: string;
+  detail: string;
+  nextStep: string;
+  effectiveUserDataDir: string;
+  recommendedUserDataDir: string;
+  devtoolsPort: number;
+  managedMcpServerName: string;
+  managedMcpServerPath: string;
+  launchCommands: BrowserLaunchCommands;
+  runtimeEnv?: BrowserRuntimeEnv;
+}
+
+export interface CodexBrowserStatus {
+  enabled: boolean;
+  state: 'disabled' | 'enabled' | 'unsupported_build';
+  title: string;
+  detail: string;
+  nextStep: string;
+  serverName: string;
+  supportsConfigOverrides: boolean;
+  binaryPath: string | null;
+  version?: string;
+}
+
+export interface BrowserStatusPayload {
+  claude: ClaudeBrowserStatus;
+  codex: CodexBrowserStatus;
+}
+
+export interface BrowserDashboardPayload {
+  config: BrowserSettingsConfig;
+  status: BrowserStatusPayload;
+}
+
+export interface UpdateBrowserSettingsPayload {
+  claude?: Partial<BrowserSettingsConfig['claude']>;
+  codex?: Partial<BrowserSettingsConfig['codex']>;
 }
 
 export interface Profile {
@@ -610,8 +672,8 @@ export interface CodexQuotaResult {
   windows: CodexQuotaWindow[];
   /** Explicit core usage windows (5h + weekly) for easier reset display */
   coreUsage?: CodexCoreUsageSummary;
-  /** Plan type: free, plus, team, or null if unknown */
-  planType: 'free' | 'plus' | 'team' | null;
+  /** Plan type: free, plus, pro, team, or null if unknown */
+  planType: 'free' | 'plus' | 'pro' | 'team' | null;
   /** Timestamp of fetch */
   lastUpdated: number;
   /** Upstream HTTP status when available */
@@ -1086,6 +1148,15 @@ export const api = {
     get: () => request<ImageAnalysisDashboardData>('/image-analysis'),
     update: (data: UpdateImageAnalysisSettingsPayload) =>
       request<ImageAnalysisDashboardData>('/image-analysis', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+  },
+  browser: {
+    get: () => request<BrowserDashboardPayload>('/browser'),
+    getStatus: () => request<BrowserStatusPayload>('/browser/status'),
+    update: (data: UpdateBrowserSettingsPayload) =>
+      request<{ success: boolean; browser: BrowserDashboardPayload }>('/browser', {
         method: 'PUT',
         body: JSON.stringify(data),
       }),

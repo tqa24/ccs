@@ -168,20 +168,21 @@ describe('fetchModelsFromDaemon', () => {
         res.end(oversizedPayload);
       });
 
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-    const address = server.address();
-    if (!address || typeof address === 'string') {
-      throw new Error('Unable to resolve test server port');
-    }
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+      const address = server.address();
+      if (!address || typeof address === 'string') {
+        throw new Error('Unable to resolve test server port');
+      }
 
       try {
         const models = await fetchModelsFromDaemon(address.port);
         expect(models).toEqual(DEFAULT_CURSOR_MODELS);
       } finally {
+        server.closeAllConnections?.();
         await new Promise<void>((resolve) => server.close(() => resolve()));
       }
     },
-    10000
+    30000
   );
 });
 

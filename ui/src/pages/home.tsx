@@ -187,7 +187,7 @@ export function HomePage() {
               <ScrollText className="h-5 w-5 text-muted-foreground" />
             </div>
             <div className="space-y-1">
-              <h2 className="text-lg font-semibold">Logs moved to a dedicated workspace</h2>
+              <h2 className="text-lg font-semibold">{t('homePageV2.logsMoved')}</h2>
               <p className="max-w-2xl text-sm text-muted-foreground">
                 Use the unified logs page for source-level filtering, structured entry inspection,
                 and retention policy edits without crowding the home dashboard.
@@ -195,6 +195,7 @@ export function HomePage() {
             </div>
           </div>
           <Button variant="outline" className="gap-2" onClick={() => navigate('/logs')}>
+            {/* TODO i18n: missing key for "Open logs" */}
             Open logs
             <ArrowRight className="h-4 w-4" />
           </Button>

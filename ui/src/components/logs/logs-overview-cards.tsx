@@ -2,6 +2,7 @@ import { Activity, Archive, Database, RadioTower } from 'lucide-react';
 import type { LogsConfig, LogsEntry, LogsSource } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { formatCount, formatLogTimestamp, formatRelativeLogTime } from './utils';
+// TODO i18n: import { useTranslation } from 'react-i18next'; when keys are ready
 
 function MetricCard({
   label,
@@ -43,12 +44,15 @@ export function LogsOverviewCards({
   entries: LogsEntry[];
   latestTimestamp: string | null;
 }) {
+  // TODO i18n: uncomment when keys for Pipeline/Retention/Coverage/Visible Entries are added
+  // const { t } = useTranslation();
   const nativeSources = sources.filter((source) => source.kind === 'native').length;
   const legacySources = sources.length - nativeSources;
   const errorCount = entries.filter((entry) => entry.level === 'error').length;
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {/* TODO i18n: missing keys for Pipeline/Retention/Coverage/Visible Entries labels and detail strings */}
       <MetricCard
         label="Pipeline"
         value={config.enabled ? 'Enabled' : 'Disabled'}

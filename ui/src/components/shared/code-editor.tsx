@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { isSensitiveKey } from '@/lib/sensitive-keys';
 import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from 'react-i18next';
 
 interface CodeEditorProps {
   value: string;
@@ -99,6 +100,7 @@ export function CodeEditor({
   heightMode = 'content',
 }: CodeEditorProps) {
   const { isDark } = useTheme();
+  const { t } = useTranslation();
   const [isFocused, setIsFocused] = useState(false);
   const [isMasked, setIsMasked] = useState(true);
   const isFillParent = heightMode === 'fill-parent';
@@ -238,7 +240,7 @@ export function CodeEditor({
             size="icon"
             className="h-6 w-6 bg-background/50 hover:bg-background border shadow-sm rounded-full"
             onClick={() => setIsMasked(!isMasked)}
-            title={isMasked ? 'Reveal sensitive values' : 'Mask sensitive values'}
+            title={isMasked ? t('codeEditor.revealSensitive') : t('codeEditor.maskSensitive')}
           >
             {isMasked ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
           </Button>
@@ -250,7 +252,7 @@ export function CodeEditor({
         {validation.valid ? (
           <span className="flex items-center gap-1 text-muted-foreground">
             <CheckCircle2 className="w-3 h-3 text-green-500" />
-            Valid {language.toUpperCase()}
+            {t('codeEditor.valid', { language: language.toUpperCase() })}
           </span>
         ) : (
           <span className="flex items-center gap-1 text-destructive">
@@ -259,7 +261,9 @@ export function CodeEditor({
             {validation.line && ` (line ${validation.line})`}
           </span>
         )}
-        {readonly && <span className="ml-auto text-muted-foreground">(Read-only)</span>}
+        {readonly && (
+          <span className="ml-auto text-muted-foreground">{t('codeEditor.readOnly')}</span>
+        )}
       </div>
     </div>
   );

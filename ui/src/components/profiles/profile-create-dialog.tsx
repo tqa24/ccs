@@ -230,7 +230,7 @@ export function ProfileCreateDialog({
     setValue('haikuModel', model.id);
     setModelSearch(model.name);
     // Show feedback that model was applied to all tiers
-    toast.success(`Applied "${model.name}" to all model tiers`, {
+    toast.success(t('profileCreateDialog.appliedModelToTiers', { model: model.name }), {
       duration: 2000,
     });
   };
@@ -268,11 +268,11 @@ export function ProfileCreateDialog({
     };
     try {
       await createMutation.mutateAsync(finalData);
-      toast.success(`Profile "${finalData.name}" created`);
+      toast.success(t('profileCreateDialog.profileCreated', { name: finalData.name }));
       onSuccess(finalData.name);
       onOpenChange(false);
     } catch (error) {
-      toast.error((error as Error).message || 'Failed to create profile');
+      toast.error((error as Error).message || t('profileCreateDialog.failedCreate'));
     }
   };
 
@@ -289,11 +289,9 @@ export function ProfileCreateDialog({
         <DialogHeader className="p-6 pb-4 border-b">
           <DialogTitle className="flex items-center gap-2">
             <Plus className="w-5 h-5 text-primary" />
-            Create API Profile
+            {t('profileCreateDialog.createProfile')}
           </DialogTitle>
-          <DialogDescription>
-            Choose a provider preset or configure a custom API endpoint.
-          </DialogDescription>
+          <DialogDescription>{t('profileCreateDialog.chooseProviderHint')}</DialogDescription>
         </DialogHeader>
 
         <form
@@ -361,7 +359,7 @@ export function ProfileCreateDialog({
 
               <div className="space-y-2">
                 <Label className="text-xs font-medium uppercase tracking-[0.12em] text-foreground/70">
-                  Local Runtimes
+                  {t('openrouterQuickStart.localRuntimesTitle')}
                 </Label>
                 <div className="flex flex-wrap gap-2">
                   {LOCAL_RUNTIME_PRESETS.map((preset) => (
@@ -386,13 +384,13 @@ export function ProfileCreateDialog({
             <div className="px-6 pt-4">
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="basic" className="relative">
-                  Basic Information
+                  {t('profileCreateDialog.basicInformation')}
                   {hasBasicErrors && (
                     <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-destructive animate-pulse" />
                   )}
                 </TabsTrigger>
                 <TabsTrigger value="models" className="relative">
-                  Model Configuration
+                  {t('profileCreateDialog.modelConfiguration')}
                   {hasModelErrors && (
                     <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-destructive animate-pulse" />
                   )}
@@ -405,19 +403,19 @@ export function ProfileCreateDialog({
                 {/* Profile Name */}
                 <div className="space-y-1.5">
                   <Label htmlFor="name">
-                    Profile Name <span className="text-destructive">*</span>
+                    {t('profileDialog.name')} <span className="text-destructive">*</span>
                   </Label>
                   <Input
                     id="name"
                     {...register('name')}
-                    placeholder="my-api"
+                    placeholder={t('profileDialog.namePlaceholder')}
                     className="font-mono"
                   />
                   {errors.name ? (
                     <p className="text-xs text-destructive">{errors.name.message}</p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Used in CLI:{' '}
+                      {t('profileCreateDialog.usedInCli')}{' '}
                       <code className="bg-muted px-1 rounded text-[10px]">ccs my-api "prompt"</code>
                     </p>
                   )}
@@ -425,11 +423,11 @@ export function ProfileCreateDialog({
 
                 {/* Base URL - always editable, pre-filled from preset */}
                 <div className="space-y-1.5">
-                  <Label htmlFor="baseUrl">API Base URL</Label>
+                  <Label htmlFor="baseUrl">{t('profileCreateDialog.apiBaseUrl')}</Label>
                   <Input
                     id="baseUrl"
                     {...register('baseUrl')}
-                    placeholder="https://api.example.com/v1"
+                    placeholder={t('profileCreateDialog.baseUrlPlaceholder')}
                   />
                   {errors.baseUrl ? (
                     <p className="text-xs text-destructive">{errors.baseUrl.message}</p>
@@ -441,12 +439,12 @@ export function ProfileCreateDialog({
                   ) : currentPreset ? (
                     <p className="text-xs text-muted-foreground">
                       {currentPreset.baseUrl
-                        ? `Pre-filled from ${currentPreset.name}. You can customize if needed.`
-                        : `Optional for ${currentPreset.name}. Leave blank to use native Anthropic auth.`}
+                        ? t('profileCreateDialog.prefilledFromPreset', { name: currentPreset.name })
+                        : t('profileCreateDialog.optionalForPreset', { name: currentPreset.name })}
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      The endpoint that accepts OpenAI-compatible and Anthropic requests
+                      {t('profileCreateDialog.endpointHint')}
                     </p>
                   )}
                 </div>
@@ -454,12 +452,14 @@ export function ProfileCreateDialog({
                 {/* API Key - optional for presets that don't require it */}
                 <div className="space-y-1.5">
                   <Label htmlFor="apiKey">
-                    API Key{' '}
+                    {t('profileDialog.apiKey')}{' '}
                     {currentPreset?.requiresApiKey !== false && (
                       <span className="text-destructive">*</span>
                     )}
                     {currentPreset?.requiresApiKey === false && (
-                      <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+                      <span className="text-muted-foreground text-xs font-normal">
+                        {t('profileCreateDialog.optional')}
+                      </span>
                     )}
                   </Label>
                   <div className="relative">
@@ -469,8 +469,9 @@ export function ProfileCreateDialog({
                       {...register('apiKey')}
                       placeholder={
                         currentPreset?.requiresApiKey === false
-                          ? 'Optional - only if auth is enabled'
-                          : (currentPreset?.apiKeyPlaceholder ?? 'sk-...')
+                          ? t('profileCreateDialog.apiKeyOptionalPlaceholder')
+                          : (currentPreset?.apiKeyPlaceholder ??
+                            t('profileCreateDialog.apiKeyPlaceholder'))
                       }
                       className="pr-10"
                     />
@@ -489,7 +490,7 @@ export function ProfileCreateDialog({
                     <p className="text-xs text-destructive">{errors.apiKey.message}</p>
                   ) : currentPreset?.requiresApiKey === false ? (
                     <p className="text-xs text-muted-foreground">
-                      Only needed if your local endpoint has authentication enabled
+                      {t('profileCreateDialog.apiKeyOptionalHint')}
                     </p>
                   ) : (
                     currentPreset?.apiKeyHint && (
@@ -499,7 +500,7 @@ export function ProfileCreateDialog({
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="target">Default Target CLI</Label>
+                  <Label htmlFor="target">{t('codex.defaultTargetCli')}</Label>
                   <Select
                     value={targetValue}
                     onValueChange={(value) => setValue('target', value as CliTarget)}
@@ -508,9 +509,9 @@ export function ProfileCreateDialog({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="claude">Claude Code (default)</SelectItem>
-                      <SelectItem value="droid">Factory Droid</SelectItem>
-                      <SelectItem value="codex">Codex CLI</SelectItem>
+                      <SelectItem value="claude">{t('profileCard.claudeCodeDefault')}</SelectItem>
+                      <SelectItem value="droid">{t('profileCard.factoryDroid')}</SelectItem>
+                      <SelectItem value="codex">{t('profileCard.codexCli')}</SelectItem>
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
@@ -553,10 +554,9 @@ export function ProfileCreateDialog({
                 <div className="flex items-start gap-3 p-3 bg-blue-50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 rounded-md text-sm border border-blue-100 dark:border-blue-900/30">
                   <Info className="w-5 h-5 shrink-0 mt-0.5" />
                   <div>
-                    <p className="font-medium mb-1">Model Mapping</p>
+                    <p className="font-medium mb-1">{t('profileCreateDialog.modelMapping')}</p>
                     <p className="text-xs opacity-90">
-                      Map Claude Code tiers (Opus/Sonnet/Haiku) to models supported by your
-                      provider.
+                      {t('profileCreateDialog.modelMappingDesc')}
                     </p>
                   </div>
                 </div>
@@ -564,11 +564,11 @@ export function ProfileCreateDialog({
                 {/* OpenRouter Model Picker */}
                 {isOpenRouter && (
                   <div className="space-y-2">
-                    <Label>Search Models</Label>
+                    <Label>{t('openrouterModelPicker.searchModels')}</Label>
                     <Input
                       value={modelSearch}
                       onChange={(e) => setModelSearch(e.target.value)}
-                      placeholder="Type to search (e.g., opus, sonnet, gpt-4o)..."
+                      placeholder={t('profileCreateDialog.searchModelsPlaceholder')}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && filteredModels.length > 0) {
                           e.preventDefault();
@@ -580,15 +580,15 @@ export function ProfileCreateDialog({
                       {filteredModels.length === 0 ? (
                         <p className="text-sm text-muted-foreground p-3 text-center">
                           {modelSearch
-                            ? `No models found for "${modelSearch}"`
-                            : 'Loading models...'}
+                            ? t('profileCreateDialog.noModelsFound', { query: modelSearch })
+                            : t('profileCreateDialog.loadingModels')}
                         </p>
                       ) : (
                         <div className="p-1">
                           {!modelSearch && (
                             <div className="flex items-center gap-1.5 px-2 py-1 text-xs text-muted-foreground">
                               <Sparkles className="w-3 h-3 text-accent" />
-                              <span>Newest Models</span>
+                              <span>{t('openrouterModelPicker.newestModels')}</span>
                             </div>
                           )}
                           {filteredModels.map((model) => (
@@ -609,7 +609,7 @@ export function ProfileCreateDialog({
                 <div className="space-y-3">
                   <div className="space-y-1.5">
                     <Label htmlFor="model">
-                      Default Model
+                      {t('profileCreateDialog.defaultModel')}
                       <Badge variant="outline" className="ml-2 text-[10px] font-mono">
                         ANTHROPIC_MODEL
                       </Badge>
@@ -625,7 +625,7 @@ export function ProfileCreateDialog({
                   <div className="grid gap-3 pt-2 border-t">
                     <div className="space-y-1.5">
                       <Label htmlFor="sonnetModel" className="text-sm">
-                        Sonnet Mapping
+                        {t('profileCreateDialog.sonnetMapping')}
                         <Badge variant="outline" className="ml-2 text-[10px] font-mono">
                           DEFAULT_SONNET
                         </Badge>
@@ -633,14 +633,14 @@ export function ProfileCreateDialog({
                       <Input
                         id="sonnetModel"
                         {...register('sonnetModel')}
-                        placeholder="e.g. gpt-4o, claude-sonnet-4"
+                        placeholder={t('profileCreateDialog.sonnetMappingPlaceholder')}
                         className="font-mono text-sm h-9"
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="opusModel" className="text-sm">
-                        Opus Mapping
+                        {t('profileCreateDialog.opusMapping')}
                         <Badge variant="outline" className="ml-2 text-[10px] font-mono">
                           DEFAULT_OPUS
                         </Badge>
@@ -648,14 +648,14 @@ export function ProfileCreateDialog({
                       <Input
                         id="opusModel"
                         {...register('opusModel')}
-                        placeholder="e.g. o1, claude-opus-4.5"
+                        placeholder={t('profileCreateDialog.opusMappingPlaceholder')}
                         className="font-mono text-sm h-9"
                       />
                     </div>
 
                     <div className="space-y-1.5">
                       <Label htmlFor="haikuModel" className="text-sm">
-                        Haiku Mapping
+                        {t('profileCreateDialog.haikuMapping')}
                         <Badge variant="outline" className="ml-2 text-[10px] font-mono">
                           DEFAULT_HAIKU
                         </Badge>
@@ -663,7 +663,7 @@ export function ProfileCreateDialog({
                       <Input
                         id="haikuModel"
                         {...register('haikuModel')}
-                        placeholder="e.g. gpt-4o-mini, claude-3.5-haiku"
+                        placeholder={t('profileCreateDialog.haikuMappingPlaceholder')}
                         className="font-mono text-sm h-9"
                       />
                     </div>
@@ -674,7 +674,7 @@ export function ProfileCreateDialog({
 
             <DialogFooter className="p-6 pt-4 border-t bg-muted/10">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
+                {t('profileDialog.cancel')}
               </Button>
               <Button
                 type="submit"
@@ -684,12 +684,12 @@ export function ProfileCreateDialog({
                 {isCreating ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
+                    {t('cliproxyDialog.creating')}
                   </>
                 ) : (
                   <>
                     <Plus className="w-4 h-4 mr-2" />
-                    Create Profile
+                    {t('profileCreateDialog.createProfile')}
                   </>
                 )}
               </Button>
@@ -803,6 +803,7 @@ function ModelSearchItem({
   onClick: () => void;
   showAge?: boolean;
 }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
@@ -824,7 +825,7 @@ function ModelSearchItem({
             variant="secondary"
             className="text-xs group-hover:bg-accent-foreground/20 group-hover:text-accent-foreground"
           >
-            Free
+            {t('profileCreateDialog.free')}
           </Badge>
         ) : (
           <span>{formatPricingPair(model.pricing)}</span>

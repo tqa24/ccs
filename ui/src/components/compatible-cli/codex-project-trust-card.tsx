@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FolderCheck, Loader2, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -34,6 +35,7 @@ function ProjectTrustComposer({
   saving,
   onSave,
 }: ProjectTrustComposerProps) {
+  const { t } = useTranslation();
   const [pathDraft, setPathDraft] = useState(workspacePath);
   const [trustLevel, setTrustLevel] = useState('trusted');
 
@@ -50,12 +52,13 @@ function ProjectTrustComposer({
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="trusted">trusted</SelectItem>
-          <SelectItem value="untrusted">untrusted</SelectItem>
+          <SelectItem value="trusted">{t('codex.trusted')}</SelectItem>
+          <SelectItem value="untrusted">{t('codex.untrusted')}</SelectItem>
         </SelectContent>
       </Select>
       <Button onClick={() => onSave(pathDraft, trustLevel)} disabled={disabled || saving}>
         {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+        {/* TODO i18n: missing key codex.saveTrust */}
         Save trust
       </Button>
     </div>
@@ -70,15 +73,20 @@ export function CodexProjectTrustCard({
   saving = false,
   onSave,
 }: CodexProjectTrustCardProps) {
+  const { t } = useTranslation();
+
   return (
     <CodexConfigCardShell
+      // TODO i18n: missing key codex.projectTrust
       title="Project trust"
       badge="projects"
       icon={<FolderCheck className="h-4 w-4" />}
+      // TODO i18n: missing key codex.projectTrustDesc
       description="Trust current workspaces or remove stale trust entries without opening raw TOML."
       disabledReason={disabledReason}
     >
       <p className="text-xs text-muted-foreground">
+        {/* TODO i18n: missing key codex.trustPathsHint */}
         Paths must be absolute or start with <code>~/</code>. Relative paths are rejected so CCS
         does not trust the wrong folder.
       </p>
@@ -96,12 +104,13 @@ export function CodexProjectTrustCard({
         onClick={() => onSave(workspacePath, 'trusted')}
         disabled={disabled || saving}
       >
+        {/* TODO i18n: missing key codex.trustCurrentWorkspace */}
         Trust current workspace
       </Button>
 
       <div className="space-y-2">
         {entries.length === 0 ? (
-          <p className="text-xs text-muted-foreground">No explicit project trust entries saved.</p>
+          <p className="text-xs text-muted-foreground">{t('codex.noProjectTrustEntries')}</p>
         ) : (
           entries.map((entry) => (
             <div
@@ -121,6 +130,7 @@ export function CodexProjectTrustCard({
                   }
                   disabled={disabled || saving}
                 >
+                  {/* TODO i18n: missing key codex.toggle */}
                   Toggle
                 </Button>
                 <Button

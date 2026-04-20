@@ -1,4 +1,9 @@
 import type { LogsLevel } from '@/lib/api-client';
+// NOTE: This module contains utility functions that are not directly i18n-aware.
+// String literals here ("No activity yet", "Error", etc.) are used as fallbacks
+// and defaults in non-component contexts. Components consuming these values
+// should wrap them with t() calls when rendering.
+// TODO i18n: Consider making formatRelativeLogTime/formatLogTimestamp i18n-aware
 
 export function formatLogTimestamp(timestamp: string | null | undefined) {
   if (!timestamp) {

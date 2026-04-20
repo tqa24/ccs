@@ -26,6 +26,7 @@ import { getCcsDir } from '../utils/config-manager';
 import { getProfileLookupCandidates, isLegacyProfileAlias } from '../utils/profile-compat';
 import type { CLIProxyProvider } from '../cliproxy/types';
 import { CLIPROXY_PROVIDER_IDS, isCLIProxyProvider } from '../cliproxy/provider-capabilities';
+import { LEGACY_CURSOR_PROFILE_NAME } from '../cursor/constants';
 import { normalizeCopilotModelId } from '../copilot/copilot-model-normalizer';
 import type { TargetType } from '../targets/target-adapter';
 import type { ProfileType } from '../types/profile';
@@ -253,9 +254,8 @@ class ProfileDetector {
    * Detect profile type and return routing information
    *
    * Priority order:
-   * 0. Hardcoded CLIProxy profiles (gemini, codex, agy, qwen)
-   * 0.5. Copilot profile (if enabled in config)
-   * 0.75. Cursor profile (if enabled in config)
+   * 0. Hardcoded special runtime profiles (copilot, cursor)
+   * 0.5. Hardcoded CLIProxy profiles (gemini, codex, agy, qwen, ...)
    * 1. Unified config profiles (if config.yaml exists or CCS_UNIFIED_CONFIG=1)
    * 2. User-defined CLIProxy variants (config.cliproxy section) [legacy]
    * 3. Settings-based profiles (config.profiles section) [legacy]
@@ -267,16 +267,7 @@ class ProfileDetector {
       return this.resolveDefaultProfile();
     }
 
-    // Priority 0: Check CLIProxy profiles (gemini, codex, agy, qwen) - OAuth-based, zero config
-    if (isCLIProxyProvider(profileName)) {
-      return {
-        type: 'cliproxy',
-        name: profileName,
-        provider: profileName,
-      };
-    }
-
-    // Priority 0.5: Check Copilot profile - GitHub Copilot subscription via copilot-api
+    // Priority 0: Check Copilot profile - GitHub Copilot subscription via copilot-api
     if (profileName === 'copilot') {
       const unifiedConfig = this.readUnifiedConfig();
       const copilotConfig = unifiedConfig?.copilot;
@@ -306,17 +297,17 @@ class ProfileDetector {
       };
     }
 
-    // Priority 0.75: Check Cursor profile - local Cursor daemon runtime
-    if (profileName === 'cursor') {
+    // Priority 0.25: Check explicit legacy Cursor bridge profile.
+    if (profileName === LEGACY_CURSOR_PROFILE_NAME) {
       const cursorConfig = getCursorConfig();
 
       if (!cursorConfig?.enabled) {
         const error = new Error(
-          'Cursor profile is not enabled.\n\n' +
+          'Legacy Cursor profile is not enabled.\n\n' +
             'To enable Cursor integration:\n' +
-            '  1. Run: ccs cursor enable\n' +
-            '  2. Import auth: ccs cursor auth\n' +
-            '  3. Start daemon: ccs cursor start\n\n' +
+            '  1. Run: ccs legacy cursor enable\n' +
+            '  2. Import auth: ccs legacy cursor auth\n' +
+            '  3. Start daemon: ccs legacy cursor start\n\n' +
             'Or manually edit ~/.ccs/config.yaml:\n' +
             '  cursor:\n' +
             '    enabled: true'
@@ -329,8 +320,17 @@ class ProfileDetector {
 
       return {
         type: 'cursor',
-        name: 'cursor',
+        name: LEGACY_CURSOR_PROFILE_NAME,
         cursorConfig,
+      };
+    }
+
+    // Priority 0.5: Check CLIProxy profiles (gemini, codex, agy, qwen, ...)
+    if (isCLIProxyProvider(profileName)) {
+      return {
+        type: 'cliproxy',
+        name: profileName,
+        provider: profileName,
       };
     }
 

@@ -192,14 +192,14 @@ export function QuickSetupWizard({ open, onClose }: QuickSetupWizardProps) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-primary" />
-            Quick Setup Wizard
+            {i18n.t('setupWizard.title')}
           </DialogTitle>
           <DialogDescription>
-            {step === 'provider' && 'Select a provider to get started'}
-            {step === 'auth' && 'Authenticate with your provider'}
-            {step === 'account' && 'Select which account to use'}
-            {step === 'variant' && 'Create your custom variant'}
-            {step === 'success' && 'Setup complete!'}
+            {step === 'provider' && i18n.t('setupWizard.stepProviderDesc')}
+            {step === 'auth' && i18n.t('setupWizard.stepAuthDesc')}
+            {step === 'account' && i18n.t('setupWizard.stepAccountDesc')}
+            {step === 'variant' && i18n.t('setupWizard.stepVariantDesc')}
+            {step === 'success' && i18n.t('setupWizard.stepSuccessDesc')}
           </DialogDescription>
         </DialogHeader>
 

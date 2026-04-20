@@ -1,7 +1,7 @@
 import { render, screen } from '@tests/setup/test-utils';
 import { describe, expect, it } from 'vitest';
 import { AccountSurfaceCard } from '@/components/account/shared/account-surface-card';
-import type { GeminiCliQuotaResult } from '@/lib/api-client';
+import type { CodexQuotaResult, GeminiCliQuotaResult } from '@/lib/api-client';
 
 function createGeminiQuotaResult(
   overrides: Partial<GeminiCliQuotaResult> = {}
@@ -29,6 +29,16 @@ function createGeminiQuotaResult(
   };
 }
 
+function createCodexQuotaResult(overrides: Partial<CodexQuotaResult> = {}): CodexQuotaResult {
+  return {
+    success: true,
+    windows: [],
+    planType: 'free',
+    lastUpdated: Date.now(),
+    ...overrides,
+  };
+}
+
 describe('AccountSurfaceCard', () => {
   it('prefers live quota entitlement tier over a stale account tier for Gemini badges', () => {
     render(
@@ -45,5 +55,95 @@ describe('AccountSurfaceCard', () => {
     );
 
     expect(screen.getByText('pro')).toBeInTheDocument();
+  });
+
+  it('shows free Codex accounts as a single standalone audience badge', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="codex"
+        accountId="user@example.com#free"
+        email="user@example.com"
+        displayEmail="user@example.com"
+        tokenFile="codex-user@example.com-free.json"
+        showQuota={false}
+      />
+    );
+
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.getByTitle('Free')).toBeInTheDocument();
+    expect(screen.queryByText('Pers')).not.toBeInTheDocument();
+  });
+
+  it('keeps token-derived personal detail when live quota planType is coarser', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="codex"
+        accountId="user@example.com#pro"
+        email="user@example.com"
+        displayEmail="user@example.com"
+        tokenFile="codex-user@example.com-pro.json"
+        quota={createCodexQuotaResult({ planType: 'free' })}
+        showQuota={false}
+      />
+    );
+
+    expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(screen.queryByText('Free')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pers')).not.toBeInTheDocument();
+  });
+
+  it('falls back to a single free badge when Codex quota detects a free plan', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="codex"
+        accountId="user@example.com"
+        email="user@example.com"
+        displayEmail="user@example.com"
+        quota={createCodexQuotaResult({ planType: 'free' })}
+        showQuota={false}
+      />
+    );
+
+    expect(screen.getByText('Free')).toBeInTheDocument();
+    expect(screen.queryByText('Pers')).not.toBeInTheDocument();
+  });
+
+  it('falls back to plus or pro detail when Codex quota exposes a paid plan', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="codex"
+        accountId="user@example.com"
+        email="user@example.com"
+        displayEmail="user@example.com"
+        quota={createCodexQuotaResult({ planType: 'pro' })}
+        showQuota={false}
+      />
+    );
+
+    expect(screen.getByText('Pro')).toBeInTheDocument();
+    expect(screen.queryByText('Pers')).not.toBeInTheDocument();
+  });
+
+  it('lets live paid Codex plans override stale free identity badges', () => {
+    render(
+      <AccountSurfaceCard
+        mode="compact"
+        provider="codex"
+        accountId="user@example.com#free"
+        email="user@example.com"
+        displayEmail="user@example.com"
+        tokenFile="codex-user@example.com-free.json"
+        quota={createCodexQuotaResult({ planType: 'plus' })}
+        showQuota={false}
+      />
+    );
+
+    expect(screen.getByText('Plus')).toBeInTheDocument();
+    expect(screen.queryByText('Pers')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Free')).not.toBeInTheDocument();
   });
 });

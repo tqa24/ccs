@@ -13,6 +13,7 @@ import { ExtendedContextToggle } from '../extended-context-toggle';
 import { stripExtendedContextSuffix } from '@/lib/extended-context-utils';
 import { findCatalogModel, getResolvedCatalogModels } from '@/lib/model-catalogs';
 import type { ModelConfigSectionProps } from './types';
+import { useTranslation } from 'react-i18next';
 
 type CatalogPresetModel = NonNullable<ModelConfigSectionProps['catalog']>['models'][number];
 
@@ -53,6 +54,7 @@ export function ModelConfigSection({
   onDeletePreset,
   isDeletePending,
 }: ModelConfigSectionProps) {
+  const { t } = useTranslation();
   const pinningReady = (routing?.models ?? []).some((hint) => hint.pinnedAvailable);
   const routingHintMap = useMemo(
     () =>
@@ -118,9 +120,10 @@ export function ModelConfigSection({
         <div>
           <h3 className="text-sm font-medium mb-2 flex items-center gap-2">
             <Sparkles className="w-4 h-4" />
+            {/* TODO i18n: missing key for "Presets" */}
             Presets
           </h3>
-          <p className="text-xs text-muted-foreground mb-3">Apply pre-configured model mappings</p>
+          <p className="text-xs text-muted-foreground mb-3">{t('providerEditor.presets')}</p>
           <div className="space-y-4">
             {presetGroups.map((group) => (
               <div key={group.key}>
@@ -204,7 +207,7 @@ export function ModelConfigSection({
 
       {/* Model Mapping */}
       <div>
-        <h3 className="text-sm font-medium mb-2">Model Mapping</h3>
+        <h3 className="text-sm font-medium mb-2">{t('providerEditor.modelMapping')}</h3>
         <p className="text-xs text-muted-foreground mb-4">
           Configure which models to use for each tier
         </p>

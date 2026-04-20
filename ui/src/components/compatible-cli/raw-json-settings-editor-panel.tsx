@@ -67,6 +67,7 @@ export function RawConfigEditorPanel({
             {title}
             {dirty && (
               <Badge variant="secondary" className="text-[10px]">
+                {/* TODO i18n: missing key rawJsonSettingsEditor.unsaved */}
                 Unsaved
               </Badge>
             )}
@@ -80,15 +81,18 @@ export function RawConfigEditorPanel({
             ) : (
               <Save className="h-4 w-4 mr-1" />
             )}
+            {/* TODO i18n: missing key rawJsonSettingsEditor.save */}
             Save
           </Button>
           {onDiscard ? (
             <Button variant="outline" size="sm" onClick={onDiscard} disabled={!dirty || loading}>
+              {/* TODO i18n: missing key rawJsonSettingsEditor.discard */}
               Discard
             </Button>
           ) : null}
           <Button variant="outline" size="sm" onClick={handleCopy} disabled={!value}>
             <Copy className="h-4 w-4 mr-1" />
+            {/* TODO i18n: missing keys rawJsonSettingsEditor.copied / rawJsonSettingsEditor.copy */}
             {copied ? 'Copied' : 'Copy'}
           </Button>
           <Button variant="outline" size="sm" onClick={onRefresh} aria-label="Refresh raw config">
@@ -113,6 +117,7 @@ export function RawConfigEditorPanel({
             )}
             {readWarning && (
               <div className="mx-4 mt-4 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                {/* TODO i18n: missing key rawJsonSettingsEditor.readOnly */}
                 Read-only: {readWarning}
               </div>
             )}

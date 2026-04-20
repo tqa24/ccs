@@ -3,6 +3,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import type { LogsEntry } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { LogLevelBadge } from './log-level-badge';
+import { useTranslation } from 'react-i18next';
 
 export function LogsEntryList({
   entries,
@@ -19,6 +20,8 @@ export function LogsEntryList({
   isLoading: boolean;
   isFetching: boolean;
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-background/50 backdrop-blur-sm">
       <div className="flex shrink-0 items-center justify-between border-b border-border bg-card/40 px-6 py-3 shadow-sm">
@@ -53,13 +56,23 @@ export function LogsEntryList({
       </div>
 
       <div className="flex items-center gap-0 border-b border-border bg-muted/30 px-0 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-foreground/45">
-        <div className="w-[6.5rem] shrink-0 px-6">Time</div>
-        <div className="w-14 shrink-0 border-l border-border/10 px-2 text-center">Lvl</div>
-        <div className="w-[15rem] shrink-0 border-l border-border/10 px-4">Source</div>
-        <div className="flex-1 border-l border-border/10 px-4">Message</div>
-        <div className="w-[5.5rem] shrink-0 border-l border-border/10 px-2 text-center">Proc</div>
-        <div className="w-[5.5rem] shrink-0 border-l border-border/10 px-3 text-center">Run</div>
-        <div className="w-11 shrink-0 border-l border-border/10 px-2 text-center">Open</div>
+        <div className="w-[6.5rem] shrink-0 px-6">{t('logsConfig.time')}</div>
+        <div className="w-14 shrink-0 border-l border-border/10 px-2 text-center">
+          {t('logsConfig.level')}
+        </div>
+        <div className="w-[15rem] shrink-0 border-l border-border/10 px-4">
+          {t('logsConfig.source')}
+        </div>
+        <div className="flex-1 border-l border-border/10 px-4">{t('logsConfig.message')}</div>
+        <div className="w-[5.5rem] shrink-0 border-l border-border/10 px-2 text-center">
+          {t('logsConfig.proc')}
+        </div>
+        <div className="w-[5.5rem] shrink-0 border-l border-border/10 px-3 text-center">
+          {t('logsConfig.run')}
+        </div>
+        <div className="w-11 shrink-0 border-l border-border/10 px-2 text-center">
+          {t('logsConfig.open')}
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">

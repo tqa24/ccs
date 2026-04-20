@@ -7,6 +7,7 @@ import { lazy, Suspense } from 'react';
 import { Loader2, X, AlertTriangle } from 'lucide-react';
 import { GlobalEnvIndicator } from '@/components/shared/global-env-indicator';
 import type { RawEditorSectionProps } from './types';
+import { useTranslation } from 'react-i18next';
 
 // Lazy load CodeEditor
 const CodeEditor = lazy(() =>
@@ -21,6 +22,7 @@ export function RawEditorSection({
   profileEnv,
   missingRequiredFields = [],
 }: RawEditorSectionProps) {
+  const { t } = useTranslation();
   const hasMissingFields = missingRequiredFields.length > 0;
 
   return (
@@ -28,7 +30,7 @@ export function RawEditorSection({
       fallback={
         <div className="flex items-center justify-center h-full">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">Loading editor...</span>
+          <span className="ml-2 text-muted-foreground">{t('providerEditor.loadingEditor')}</span>
         </div>
       }
     >

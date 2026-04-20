@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as childProcess from 'child_process';
 import { expandPath } from '../utils/helpers';
-import { escapeShellArg } from '../utils/shell-executor';
+import { escapeShellArg, getWindowsEscapedCommandShell } from '../utils/shell-executor';
 import type { TargetBinaryInfo } from './target-adapter';
 
 const CODEX_CONFIG_OVERRIDE_FEATURE = 'config-overrides';
@@ -10,17 +10,26 @@ const CODEX_CONFIG_OVERRIDE_PROBE_ARGS = ['-c', 'model="gpt-5"', '--version'];
 function buildWindowsCodexCandidates(matches: string[]): string[] {
   const shellCandidates = matches.filter((entry) => /\.(exe|cmd|bat|ps1)$/i.test(entry));
   const bareCandidates = matches.filter((entry) => !/\.(exe|cmd|bat|ps1)$/i.test(entry));
-  const prioritized: string[] = [];
-
-  for (const entry of shellCandidates) {
-    if (/\.(cmd|bat)$/i.test(entry)) {
-      prioritized.push(entry.replace(/\.(cmd|bat)$/i, '.ps1'));
+  const prioritized = shellCandidates.map((entry) => {
+    if (!/\.ps1$/i.test(entry)) {
+      return entry;
     }
-    prioritized.push(entry);
-  }
 
-  prioritized.push(...bareCandidates);
-  return [...new Set(prioritized)];
+    for (const preferredExtension of ['.cmd', '.bat', '.exe']) {
+      const siblingCandidate = entry.replace(/\.ps1$/i, preferredExtension);
+      try {
+        if (fs.statSync(siblingCandidate).isFile()) {
+          return siblingCandidate;
+        }
+      } catch {
+        // Ignore missing sibling wrappers and keep the original PowerShell path.
+      }
+    }
+
+    return entry;
+  });
+
+  return [...new Set([...prioritized, ...bareCandidates])];
 }
 
 function runCodexProbe(codexPath: string, args: string[]): string | undefined {
@@ -44,12 +53,14 @@ function runCodexProbe(codexPath: string, args: string[]): string | undefined {
 
     if (needsShell) {
       const cmdString = [codexPath, ...args].map(escapeShellArg).join(' ');
-      return childProcess.execFileSync('cmd.exe', ['/d', '/s', '/c', cmdString], {
+      const result = childProcess.spawnSync(cmdString, {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'ignore'],
         timeout: 5000,
         windowsHide: true,
+        shell: getWindowsEscapedCommandShell(),
       });
+      return result.status === 0 ? result.stdout : undefined;
     }
 
     return childProcess.execFileSync(codexPath, args, {

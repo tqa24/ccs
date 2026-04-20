@@ -36,7 +36,18 @@ import {
   syncImageAnalysisMcpToConfigDir,
   appendThirdPartyImageAnalysisToolArgs,
 } from './utils/image-analysis';
-import { getGlobalEnvConfig, getOfficialChannelsConfig } from './config/unified-config-loader';
+import {
+  appendBrowserToolArgs,
+  ensureBrowserMcpOrThrow,
+  getEffectiveClaudeBrowserAttachConfig,
+  resolveOptionalBrowserAttachRuntime,
+  syncBrowserMcpToConfigDir,
+} from './utils/browser';
+import {
+  getBrowserConfig,
+  getGlobalEnvConfig,
+  getOfficialChannelsConfig,
+} from './config/unified-config-loader';
 import {
   ensureProfileHooks as ensureImageAnalyzerHooks,
   removeImageAnalysisProfileHook,
@@ -58,7 +69,8 @@ import {
   resolveOfficialChannelsLaunchPlan,
 } from './channels/official-channels-runtime';
 import { getOfficialChannelReadiness } from './channels/official-channels-store';
-import { isCursorSubcommandToken } from './cursor/constants';
+import { isCursorSubcommandToken, LEGACY_CURSOR_PROFILE_NAME } from './cursor/constants';
+import { isCLIProxyProvider } from './cliproxy/provider-capabilities';
 
 // Import centralized error handling
 import { handleError, runCleanup } from './errors';
@@ -69,6 +81,8 @@ import { execClaude } from './utils/shell-executor';
 import { isDeprecatedGlmtProfileName, normalizeDeprecatedGlmtEnv } from './utils/glmt-deprecation';
 import { maybeWarnAboutResumeLaneMismatch } from './auth/resume-lane-warning';
 import { createLogger } from './services/logging';
+import { buildCodexBrowserMcpOverrides } from './utils/browser-codex-overrides';
+import type { ProfileDetectionResult } from './auth/profile-detector';
 
 // Import target adapter system
 import {
@@ -89,6 +103,11 @@ import {
 } from './targets/droid-reasoning-runtime';
 import { DroidCommandRouterError, routeDroidCommandArgs } from './targets/droid-command-router';
 import { resolveCliproxyBridgeMetadata } from './api/services/cliproxy-profile-bridge';
+import {
+  buildOpenAICompatProxyEnv,
+  resolveOpenAICompatProfileConfig,
+  startOpenAICompatProxy,
+} from './proxy';
 
 // Version and Update check utilities
 import { getVersion } from './utils/version';
@@ -117,6 +136,15 @@ interface RuntimeReasoningResolution {
 const CODEX_RUNTIME_REASONING_LEVELS = new Set(['minimal', 'low', 'medium', 'high', 'xhigh']);
 const CODEX_NATIVE_PASSTHROUGH_FLAGS = new Set(['--help', '-h', '--version', '-v']);
 
+function resolveCodexRuntimeConfigOverrides(
+  target: ReturnType<typeof resolveTargetType>
+): string[] {
+  if (target !== 'codex' || !getBrowserConfig().codex.enabled) {
+    return [];
+  }
+  return buildCodexBrowserMcpOverrides();
+}
+
 /**
  * Smart profile detection
  */
@@ -128,6 +156,26 @@ function detectProfile(args: string[]): DetectedProfile {
     // First arg doesn't start with '-' → treat as profile name
     return { profile: args[0], remainingArgs: args.slice(1) };
   }
+}
+
+function normalizeLegacyCursorArgs(args: string[]): string[] {
+  if (args[0] === 'legacy' && args[1] === 'cursor') {
+    return [LEGACY_CURSOR_PROFILE_NAME, ...args.slice(2)];
+  }
+
+  return args;
+}
+
+function printCursorLegacySubcommandDeprecation(subcommand: string): void {
+  console.error(
+    info(`\`ccs cursor ${subcommand}\` is deprecated for the legacy Cursor IDE bridge.`)
+  );
+  console.error(
+    info(
+      `Use \`ccs legacy cursor ${subcommand}\` for the old bridge, or \`ccs cursor --auth|--accounts|--config\` for the CLIProxy provider.`
+    )
+  );
+  console.error('');
 }
 
 function resolveRuntimeReasoningFlags(
@@ -324,7 +372,7 @@ async function main(): Promise<void> {
   registerTarget(new CodexAdapter());
   const cliLogger = createLogger('cli');
 
-  const args = process.argv.slice(2);
+  let args = process.argv.slice(2);
   const isCompletionCommand = args[0] === '__complete';
 
   // Initialize UI colors early to ensure consistent colored output
@@ -400,6 +448,8 @@ async function main(): Promise<void> {
     return;
   }
 
+  args = normalizeLegacyCursorArgs(args);
+
   cliLogger.info('command.start', 'CLI invocation started', {
     command: args[0] || 'default',
     argCount: args.length,
@@ -467,6 +517,17 @@ async function main(): Promise<void> {
     return;
   }
 
+  if (
+    typeof firstArg === 'string' &&
+    isCLIProxyProvider(firstArg) &&
+    args.length > 1 &&
+    (args.includes('--help') || args.includes('-h'))
+  ) {
+    const { showProviderShortcutHelp } = await import('./commands/help-command');
+    await showProviderShortcutHelp(firstArg);
+    return;
+  }
+
   // Special case: copilot command (GitHub Copilot integration)
   // Route known subcommands to command handler, keep all other args as profile passthrough.
   if (firstArg === 'copilot' && args.length > 1) {
@@ -480,13 +541,25 @@ async function main(): Promise<void> {
     }
   }
 
-  // Special case: cursor command (Cursor local proxy integration)
-  // Route known admin subcommands to the command handler, keep all other args as profile passthrough.
-  if (firstArg === 'cursor' && args.length > 1) {
+  // Special case: explicit legacy Cursor bridge namespace.
+  if (firstArg === LEGACY_CURSOR_PROFILE_NAME && args.length > 1) {
     const { handleCursorCommand } = await import('./commands/cursor-command');
     const cursorToken = args[1];
 
     if (isCursorSubcommandToken(cursorToken)) {
+      const exitCode = await handleCursorCommand(args.slice(1));
+      process.exit(exitCode);
+    }
+  }
+
+  // Compatibility shim: old `ccs cursor <subcommand>` still forwards to the legacy bridge
+  // for one migration window, but bare/positional `ccs cursor` now belongs to CLIProxy.
+  if (firstArg === 'cursor' && args.length > 1) {
+    const { handleCursorCommand } = await import('./commands/cursor-command');
+    const cursorToken = args[1];
+
+    if (isCursorSubcommandToken(cursorToken) && cursorToken !== '--help' && cursorToken !== '-h') {
+      printCursorLegacySubcommandDeprecation(cursorToken);
       const exitCode = await handleCursorCommand(args.slice(1));
       process.exit(exitCode);
     }
@@ -521,7 +594,7 @@ async function main(): Promise<void> {
     // Detect profile (strip --target flags before profile detection)
     const cleanArgs = stripTargetFlag(args);
     const { profile, remainingArgs } = detectProfile(cleanArgs);
-    const profileInfo = detector.detectProfileType(profile);
+    const profileInfo: ProfileDetectionResult = detector.detectProfileType(profile);
     let resolvedTarget: ReturnType<typeof resolveTargetType>;
     try {
       resolvedTarget = resolveTargetType(
@@ -624,6 +697,7 @@ async function main(): Promise<void> {
 
     // For non-claude targets, verify target binary exists once and pass it through.
     const targetBinaryInfo = targetAdapter?.detectBinary() ?? null;
+    const codexRuntimeConfigOverrides = resolveCodexRuntimeConfigOverrides(resolvedTarget);
     if (resolvedTarget !== 'claude' && !targetBinaryInfo) {
       const displayName = targetAdapter?.displayName || resolvedTarget;
       console.error(fail(`${displayName} CLI not found.`));
@@ -867,6 +941,7 @@ async function main(): Promise<void> {
             model: envVars['ANTHROPIC_MODEL'],
           }),
           reasoningOverride: runtimeReasoningOverride,
+          runtimeConfigOverrides: codexRuntimeConfigOverrides,
           envVars,
         };
 
@@ -982,8 +1057,23 @@ async function main(): Promise<void> {
       // Settings-based profiles (glm, glmt) are third-party providers
       const imageAnalysisMcpReady =
         resolvedTarget === 'claude' ? ensureImageAnalysisMcpOrThrow() : true;
+      const browserAttachConfig =
+        resolvedTarget === 'claude'
+          ? getEffectiveClaudeBrowserAttachConfig(getBrowserConfig())
+          : undefined;
+      const browserAttachRuntime =
+        resolvedTarget === 'claude' && browserAttachConfig?.enabled
+          ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+          : undefined;
+      const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
+      if (browserAttachRuntime?.warning) {
+        process.stderr.write(`${warn(browserAttachRuntime.warning)}\n`);
+      }
       if (resolvedTarget === 'claude') {
         ensureWebSearchMcpOrThrow();
+        if (browserRuntimeEnv) {
+          ensureBrowserMcpOrThrow();
+        }
       }
 
       // Display WebSearch status (single line, equilibrium UX)
@@ -1007,6 +1097,15 @@ async function main(): Promise<void> {
       const inheritedClaudeConfigDir = continuityInheritance.claudeConfigDir;
       syncWebSearchMcpToConfigDir(inheritedClaudeConfigDir);
       syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir);
+      if (
+        browserRuntimeEnv &&
+        inheritedClaudeConfigDir &&
+        !syncBrowserMcpToConfigDir(inheritedClaudeConfigDir)
+      ) {
+        throw new Error(
+          'Browser MCP is enabled, but CCS could not sync the browser MCP config into the inherited Claude instance.'
+        );
+      }
       const expandedSettingsPath =
         resolvedSettingsPath ??
         (profileInfo.settingsPath
@@ -1014,6 +1113,7 @@ async function main(): Promise<void> {
           : getSettingsPath(profileInfo.name));
       const settings = resolvedSettings ?? loadSettings(expandedSettingsPath);
       const cliproxyBridge = resolvedCliproxyBridge ?? resolveCliproxyBridgeMetadata(settings);
+
       let imageAnalysisFallbackHookReady: boolean | undefined;
       if (resolvedTarget === 'claude') {
         if (imageAnalysisMcpReady) {
@@ -1214,6 +1314,7 @@ async function main(): Promise<void> {
         ...(inheritedClaudeConfigDir ? { CLAUDE_CONFIG_DIR: inheritedClaudeConfigDir } : {}),
         ...webSearchEnv,
         ...imageAnalysisEnv,
+        ...(browserRuntimeEnv || {}),
         CCS_PROFILE_TYPE: 'settings',
       };
 
@@ -1238,6 +1339,7 @@ async function main(): Promise<void> {
             model: settingsEnv['ANTHROPIC_MODEL'],
           }),
           reasoningOverride: runtimeReasoningOverride,
+          runtimeConfigOverrides: codexRuntimeConfigOverrides,
           envVars,
         };
         await adapter.prepareCredentials(creds);
@@ -1254,10 +1356,60 @@ async function main(): Promise<void> {
       const imageAnalysisArgs = imageAnalysisMcpReady
         ? appendThirdPartyImageAnalysisToolArgs(remainingArgs)
         : remainingArgs;
+      const browserArgs = browserRuntimeEnv
+        ? appendBrowserToolArgs(imageAnalysisArgs)
+        : imageAnalysisArgs;
+      const openAICompatProfile = resolveOpenAICompatProfileConfig(
+        profileInfo.name,
+        expandedSettingsPath,
+        settingsEnv
+      );
+      if (openAICompatProfile) {
+        const proxyStart = await startOpenAICompatProxy(openAICompatProfile, {
+          insecure: openAICompatProfile.insecure,
+        });
+        if (!proxyStart.success) {
+          console.error(fail(proxyStart.error || 'Failed to start local OpenAI-compatible proxy'));
+          process.exit(1);
+        }
+
+        console.error(
+          info(
+            `Using local OpenAI-compatible proxy for "${profileInfo.name}" on port ${proxyStart.port}`
+          )
+        );
+
+        const proxyEnv = {
+          ...envVars,
+          ...buildOpenAICompatProxyEnv(
+            openAICompatProfile,
+            proxyStart.port,
+            proxyStart.authToken || '',
+            inheritedClaudeConfigDir
+          ),
+        };
+        delete proxyEnv.ANTHROPIC_API_KEY;
+
+        const launchArgs = [
+          '--settings',
+          expandedSettingsPath,
+          ...appendThirdPartyWebSearchToolArgs(browserArgs),
+        ];
+        const traceEnv = createWebSearchTraceContext({
+          launcher: 'ccs.settings-profile.proxy',
+          args: launchArgs,
+          profile: profileInfo.name,
+          profileType: profileInfo.type,
+          settingsPath: expandedSettingsPath,
+        });
+
+        execClaude(claudeCli, launchArgs, { ...proxyEnv, ...traceEnv });
+        return;
+      }
       const launchArgs = [
         '--settings',
         expandedSettingsPath,
-        ...appendThirdPartyWebSearchToolArgs(imageAnalysisArgs),
+        ...appendThirdPartyWebSearchToolArgs(browserArgs),
       ];
       const traceEnv = createWebSearchTraceContext({
         launcher: 'ccs.settings-profile',
@@ -1266,6 +1418,7 @@ async function main(): Promise<void> {
         profileType: profileInfo.type,
         settingsPath: expandedSettingsPath,
       });
+
       execClaude(claudeCli, launchArgs, { ...envVars, ...traceEnv });
     } else if (profileInfo.type === 'account') {
       // NEW FLOW: Account-based profile (work, personal)
@@ -1314,8 +1467,24 @@ async function main(): Promise<void> {
         CCS_WEBSEARCH_SKIP: '1',
         CCS_IMAGE_ANALYSIS_SKIP: '1',
       };
+      const browserAttachConfig =
+        resolvedTarget === 'claude'
+          ? getEffectiveClaudeBrowserAttachConfig(getBrowserConfig())
+          : undefined;
+      const browserAttachRuntime =
+        resolvedTarget === 'claude' && browserAttachConfig?.enabled
+          ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+          : undefined;
+      const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
+      if (browserAttachRuntime?.warning) {
+        process.stderr.write(`${warn(browserAttachRuntime.warning)}\n`);
+      }
 
       if (resolvedTarget === 'claude') {
+        if (browserRuntimeEnv) {
+          ensureBrowserMcpOrThrow();
+          Object.assign(envVars, browserRuntimeEnv);
+        }
         const defaultContinuityInheritance = await resolveProfileContinuityInheritance({
           profileName: profileInfo.name,
           profileType: profileInfo.type,
@@ -1330,6 +1499,14 @@ async function main(): Promise<void> {
         }
         if (defaultContinuityInheritance.claudeConfigDir) {
           envVars.CLAUDE_CONFIG_DIR = defaultContinuityInheritance.claudeConfigDir;
+          if (
+            browserRuntimeEnv &&
+            !syncBrowserMcpToConfigDir(defaultContinuityInheritance.claudeConfigDir)
+          ) {
+            throw new Error(
+              'Browser MCP is enabled, but CCS could not sync the browser MCP config into the inherited Claude instance.'
+            );
+          }
         }
       }
 
@@ -1355,6 +1532,8 @@ async function main(): Promise<void> {
             model: process.env['ANTHROPIC_MODEL'],
           }),
           reasoningOverride: runtimeReasoningOverride,
+          runtimeConfigOverrides: codexRuntimeConfigOverrides,
+          browserRuntimeEnv,
         };
         if (resolvedTarget === 'droid' && (!creds.baseUrl || !creds.apiKey)) {
           console.error(
@@ -1377,7 +1556,7 @@ async function main(): Promise<void> {
       }
 
       const launchArgs = resolveNativeClaudeLaunchArgs(
-        remainingArgs,
+        browserRuntimeEnv ? appendBrowserToolArgs(remainingArgs) : remainingArgs,
         'default',
         envVars.CLAUDE_CONFIG_DIR
       );

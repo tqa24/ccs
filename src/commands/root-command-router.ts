@@ -106,6 +106,13 @@ export const ROOT_COMMAND_ROUTES: readonly NamedCommandRoute[] = [
     },
   },
   {
+    name: 'browser',
+    handle: async (args) => {
+      const { handleBrowserCommand } = await import('./browser-command');
+      await handleBrowserCommand(args);
+    },
+  },
+  {
     name: 'cleanup',
     aliases: ['--cleanup'],
     handle: async (args) => {
@@ -134,6 +141,13 @@ export const ROOT_COMMAND_ROUTES: readonly NamedCommandRoute[] = [
     handle: async (args) => {
       const { handleCliproxyCommand } = await import('./cliproxy-command');
       await handleCliproxyCommand(args);
+    },
+  },
+  {
+    name: 'proxy',
+    handle: async (args) => {
+      const { handleProxyCommand } = await import('./proxy-command');
+      process.exit(await handleProxyCommand(args));
     },
   },
   {

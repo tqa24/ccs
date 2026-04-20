@@ -33,6 +33,7 @@ function renderSecretBadge(entry: AiProviderEntryView) {
           : 'bg-muted text-muted-foreground hover:bg-muted'
       )}
     >
+      {/* TODO i18n: missing keys for 'Configured' / 'Missing secret' */}
       {entry.secretConfigured ? 'Configured' : 'Missing secret'}
     </Badge>
   );
@@ -47,6 +48,7 @@ export function ProviderEntryCard({
   isSelected = false,
   variant = 'detail',
 }: ProviderEntryCardProps) {
+  // i18n: most strings in this file lack keys. See TODO comments below.
   const hasAdvancedRouting = entry.prefix || entry.proxyUrl || entry.excludedModels.length > 0;
 
   if (variant === 'row') {

@@ -396,7 +396,7 @@ function resolveBackend(
     };
   }
 
-  if (profileType === 'cursor' || profileName === 'cursor') {
+  if (profileType === 'cursor') {
     return {
       backendId: null,
       backendDisplayName: null,

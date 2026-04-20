@@ -1,8 +1,13 @@
 import { COPILOT_SUBCOMMANDS } from '../copilot/constants';
-import { CURSOR_SUBCOMMANDS } from '../cursor/constants';
 import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
 
-export type HelpTopicName = 'profiles' | 'providers' | 'kiro' | 'completion' | 'targets';
+export type HelpTopicName =
+  | 'profiles'
+  | 'providers'
+  | 'kiro'
+  | 'browser'
+  | 'completion'
+  | 'targets';
 
 export interface HelpTopicEntry {
   name: HelpTopicName;
@@ -26,6 +31,7 @@ export const ROOT_HELP_TOPICS: readonly HelpTopicEntry[] = [
   { name: 'profiles', summary: 'Account profiles, API profiles, and CLIProxy variants' },
   { name: 'providers', summary: 'Built-in OAuth providers and runtime shortcuts' },
   { name: 'kiro', summary: 'Kiro auth methods, IDC flags, and callback guidance' },
+  { name: 'browser', summary: 'Claude Browser Attach and Codex Browser Tools guidance' },
   { name: 'completion', summary: 'Shell completion install, refresh, and testing' },
   { name: 'targets', summary: 'Claude, Droid, and Codex target routing' },
 ] as const;
@@ -105,7 +111,19 @@ export const ROOT_COMMAND_CATALOG: readonly RootCommandEntry[] = [
   },
   {
     name: 'cursor',
-    summary: 'Run or manage the Cursor bridge',
+    summary: 'Run Cursor via CLIProxy or manage Cursor provider auth',
+    group: 'runtime',
+    visibility: 'public',
+  },
+  {
+    name: 'proxy',
+    summary: 'Start or inspect the OpenAI-compatible local proxy',
+    group: 'runtime',
+    visibility: 'public',
+  },
+  {
+    name: 'browser',
+    summary: 'Inspect Claude Browser Attach and Codex Browser Tools readiness',
     group: 'runtime',
     visibility: 'public',
   },
@@ -183,6 +201,10 @@ export const BUILTIN_PROVIDER_SHORTCUTS: readonly ShortcutEntry[] = CLIPROXY_PRO
         ghcp: 'GitHub Copilot via CLIProxy OAuth',
         claude: 'Claude via CLIProxy OAuth',
         kimi: 'Kimi via CLIProxy OAuth',
+        cursor: 'Cursor via CLIProxy OAuth',
+        gitlab: 'GitLab Duo via CLIProxy OAuth',
+        codebuddy: 'CodeBuddy via CLIProxy OAuth',
+        kilo: 'Kilo AI via CLIProxy OAuth',
       }[name] || 'CLIProxy OAuth provider',
   })
 );
@@ -252,6 +274,7 @@ export const CLIPROXY_SUBCOMMANDS = [
 ] as const;
 export const CONFIG_SUBCOMMANDS = ['auth', 'channels', 'image-analysis', 'thinking'] as const;
 export const DOCKER_SUBCOMMANDS = ['up', 'down', 'status', 'update', 'logs', 'config'] as const;
+export const PROXY_SUBCOMMANDS = ['start', 'stop', 'status', 'activate'] as const;
 export const TOKENS_FLAGS = [
   '--show',
   '--api-key',
@@ -297,6 +320,7 @@ export const COMMAND_FLAG_SUGGESTIONS: Readonly<Record<string, readonly string[]
   config: ['--help', '-h', '--port', '-p', '--host', '-H', '--dev'],
   cursor: ['--help', '-h'],
   doctor: ['--fix', '-f', '--help', '-h'],
+  browser: ['status', 'doctor', '--help', '-h'],
   docker: ['--help', '-h', '--host'],
   env: ['--format', '--shell', '--ide', '--help', '-h'],
   migrate: MIGRATE_FLAGS,
@@ -304,7 +328,14 @@ export const COMMAND_FLAG_SUGGESTIONS: Readonly<Record<string, readonly string[]
   update: ['--force', '--beta', '--dev', '--help', '-h'],
 };
 
-export const CURSOR_COMPLETION_SUBCOMMANDS = [...CURSOR_SUBCOMMANDS] as const;
+export const CURSOR_COMPLETION_SUBCOMMANDS = [
+  '--auth',
+  '--accounts',
+  '--config',
+  '--logout',
+  '--help',
+  '-h',
+] as const;
 export const COPILOT_COMPLETION_SUBCOMMANDS = [...COPILOT_SUBCOMMANDS, 'help'] as const;
 
 export function getPublicRootCommands(): readonly RootCommandEntry[] {

@@ -1,5 +1,6 @@
 import { ArrowUpRight, Image as ImageIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -15,33 +16,38 @@ interface ImageAnalysisStatusSectionProps {
   onToggleNativeRead?: (enabled: boolean) => void;
 }
 
-const TARGET_LABELS: Record<CliTarget, string> = {
-  claude: 'Claude Code',
-  droid: 'Factory Droid',
-  codex: 'Codex CLI',
-};
-
 function getPreviewLabel(
+  t: (key: string) => string,
   source: 'saved' | 'editor',
   previewState: ImageAnalysisStatusSectionProps['previewState']
 ) {
-  if (previewState === 'refreshing') return 'Refreshing preview';
-  if (previewState === 'invalid') return 'Saved status';
-  return source === 'editor' ? 'Live preview' : 'Saved status';
+  if (previewState === 'refreshing') return t('imageAnalysisStatus.refreshingPreview');
+  if (previewState === 'invalid') return t('imageAnalysisStatus.savedStatus');
+  return source === 'editor'
+    ? t('imageAnalysisStatus.livePreview')
+    : t('imageAnalysisStatus.savedStatus');
 }
 
-function getHeaderLabel(status: ImageAnalysisStatus, target: CliTarget): string {
-  if (status.status === 'disabled') return 'Disabled globally';
-  if (target !== 'claude') return `${TARGET_LABELS[target]} bypasses the hook`;
-  if (status.nativeReadPreference) return 'Native image reading';
-  if (status.status === 'hook-missing') return 'Setup needed';
-  if (status.authReadiness === 'missing') return 'Needs auth';
-  if (status.proxyReadiness === 'unavailable') return 'Needs proxy';
-  if (status.effectiveRuntimeMode === 'native-read') return 'Native fallback';
-  return 'Transformer ready';
+function getHeaderLabel(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  status: ImageAnalysisStatus,
+  target: CliTarget
+): string {
+  if (status.status === 'disabled') return t('imageAnalysisStatus.disabledGlobally');
+  if (target !== 'claude')
+    return t('imageAnalysisStatus.targetBypassesHook', {
+      target: t(`imageAnalysisStatus.targetLabel.${target}`),
+    });
+  if (status.nativeReadPreference) return t('imageAnalysisStatus.nativeImageReading');
+  if (status.status === 'hook-missing') return t('imageAnalysisStatus.setupNeeded');
+  if (status.authReadiness === 'missing') return t('imageAnalysisStatus.needsAuth');
+  if (status.proxyReadiness === 'unavailable') return t('imageAnalysisStatus.needsProxy');
+  if (status.effectiveRuntimeMode === 'native-read') return t('imageAnalysisStatus.nativeFallback');
+  return t('imageAnalysisStatus.transformerReady');
 }
 
 function getHeaderBadge(
+  t: (key: string) => string,
   status: ImageAnalysisStatus,
   target: CliTarget
 ): {
@@ -50,75 +56,93 @@ function getHeaderBadge(
 } {
   if (status.status === 'disabled') {
     return {
-      label: 'Disabled',
+      label: t('imageAnalysisStatus.badgeDisabled'),
       className: 'border-border/80 bg-background/85 text-muted-foreground',
     };
   }
   if (target !== 'claude') {
     return {
-      label: 'Bypassed',
+      label: t('imageAnalysisStatus.badgeBypassed'),
       className: 'border-sky-500/25 bg-sky-500/10 text-sky-800 dark:text-sky-200',
     };
   }
   if (status.nativeReadPreference) {
     return {
-      label: 'Native',
+      label: t('imageAnalysisStatus.badgeNative'),
       className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200',
     };
   }
   if (status.status === 'hook-missing' || status.authReadiness === 'missing') {
     return {
-      label: status.status === 'hook-missing' ? 'Setup' : 'Auth',
+      label:
+        status.status === 'hook-missing'
+          ? t('imageAnalysisStatus.badgeSetup')
+          : t('imageAnalysisStatus.badgeAuth'),
       className: 'border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-200',
     };
   }
   if (status.proxyReadiness === 'unavailable') {
     return {
-      label: 'Proxy',
+      label: t('imageAnalysisStatus.badgeProxy'),
       className: 'border-amber-500/25 bg-amber-500/10 text-amber-800 dark:text-amber-200',
     };
   }
   return {
-    label: 'Ready',
+    label: t('imageAnalysisStatus.badgeReady'),
     className: 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200',
   };
 }
 
-function getToggleSummary(status: ImageAnalysisStatus, target: CliTarget): string {
+function getToggleSummary(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  status: ImageAnalysisStatus,
+  target: CliTarget
+): string {
   if (status.nativeReadPreference) {
     if (status.profileModel && status.nativeImageCapable) {
-      return `${status.profileModel} looks image-ready. CCS will bypass the transformer here.`;
+      return t('imageAnalysisStatus.toggleSummaryNativeCapable', { model: status.profileModel });
     }
     if (status.profileModel) {
-      return `CCS will prefer native reading for ${status.profileModel}.`;
+      return t('imageAnalysisStatus.toggleSummaryNativeModel', { model: status.profileModel });
     }
-    return 'CCS will prefer native image reading for this profile.';
+    return t('imageAnalysisStatus.toggleSummaryNativeDefault');
   }
 
   if (!status.backendDisplayName && target === 'claude') {
-    return 'This profile currently stays on native file access.';
+    return t('imageAnalysisStatus.toggleSummaryNativeFileAccess');
   }
 
   if (!status.backendDisplayName) {
-    return `Saved Claude-side image routing is inactive while ${TARGET_LABELS[target]} is selected.`;
+    return t('imageAnalysisStatus.toggleSummaryInactiveTarget', {
+      target: t(`imageAnalysisStatus.targetLabel.${target}`),
+    });
   }
 
   const modelSuffix = status.model ? ` · ${status.model}` : '';
-  return `Transformer route: ${status.backendDisplayName}${modelSuffix}.`;
+  return t('imageAnalysisStatus.toggleSummaryTransformerRoute', {
+    backend: status.backendDisplayName,
+    modelSuffix,
+  });
 }
 
-function getExceptionalNote(status: ImageAnalysisStatus, target: CliTarget): string | null {
+function getExceptionalNote(
+  t: (key: string, options?: Record<string, unknown>) => string,
+  status: ImageAnalysisStatus,
+  target: CliTarget
+): string | null {
   if (status.status === 'disabled') {
-    return 'Image is disabled globally in CCS settings.';
+    return t('imageAnalysisStatus.noteDisabledGlobally');
   }
   if (target !== 'claude') {
-    return `Current target ${TARGET_LABELS[target]} bypasses the Claude Read hook.`;
+    return t('imageAnalysisStatus.noteTargetBypassesHook', {
+      target: t(`imageAnalysisStatus.targetLabel.${target}`),
+    });
   }
   if (status.nativeReadPreference) {
     return status.nativeImageCapable === true ? null : status.nativeImageReason;
   }
   if (status.status === 'hook-missing') {
-    return 'Persist the profile hook before transformer routing can run here.';
+    return t('imageAnalysisStatus.notePersistHook');
   }
   if (status.authReadiness === 'missing') {
     return status.authReason;
@@ -137,6 +161,8 @@ export function ImageAnalysisStatusSection({
   nativeReadPreferenceOverride,
   onToggleNativeRead,
 }: ImageAnalysisStatusSectionProps) {
+  const { t } = useTranslation();
+
   if (!status) {
     return (
       <div className="rounded-2xl border bg-muted/20 px-4 py-3" aria-live="polite">
@@ -148,12 +174,12 @@ export function ImageAnalysisStatusSection({
 
   const nativeReadChecked = nativeReadPreferenceOverride ?? status.nativeReadPreference;
   const effectiveStatus = { ...status, nativeReadPreference: nativeReadChecked };
-  const headerBadge = getHeaderBadge(effectiveStatus, target);
-  const note = getExceptionalNote(effectiveStatus, target);
+  const headerBadge = getHeaderBadge(t, effectiveStatus, target);
+  const note = getExceptionalNote(t, effectiveStatus, target);
   const capabilityLabel = status.nativeImageCapable
-    ? 'Verified'
+    ? t('imageAnalysisStatus.capabilityVerified')
     : status.profileModel
-      ? 'Unknown'
+      ? t('imageAnalysisStatus.capabilityUnknown')
       : null;
 
   return (
@@ -166,13 +192,14 @@ export function ImageAnalysisStatusSection({
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-semibold">Image</h3>
+                <h3 className="text-sm font-semibold">{t('imageAnalysisStatus.sectionTitle')}</h3>
                 <Badge className={cn('h-5 border px-1.5 text-[10px]', headerBadge.className)}>
                   {headerBadge.label}
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                {getPreviewLabel(source, previewState)} · {getHeaderLabel(effectiveStatus, target)}
+                {getPreviewLabel(t, source, previewState)} ·{' '}
+                {getHeaderLabel(t, effectiveStatus, target)}
               </p>
             </div>
           </div>
@@ -180,7 +207,7 @@ export function ImageAnalysisStatusSection({
 
         <Button size="sm" variant="outline" className="h-8 shrink-0" asChild>
           <Link to="/settings?tab=image">
-            Open Settings
+            {t('imageAnalysisStatus.openSettings')}
             <ArrowUpRight className="ml-1 h-3.5 w-3.5" />
           </Link>
         </Button>
@@ -190,7 +217,9 @@ export function ImageAnalysisStatusSection({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="text-sm font-medium text-foreground">Use native image reading</div>
+              <div className="text-sm font-medium text-foreground">
+                {t('imageAnalysisStatus.useNativeImageReading')}
+              </div>
               {capabilityLabel && (
                 <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
                   {capabilityLabel}
@@ -198,7 +227,7 @@ export function ImageAnalysisStatusSection({
               )}
             </div>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              {getToggleSummary(effectiveStatus, target)}
+              {getToggleSummary(t, effectiveStatus, target)}
             </p>
           </div>
 
@@ -206,7 +235,7 @@ export function ImageAnalysisStatusSection({
             checked={nativeReadChecked}
             onCheckedChange={onToggleNativeRead}
             disabled={!onToggleNativeRead}
-            aria-label="Use native image reading"
+            aria-label={t('imageAnalysisStatus.useNativeImageReading')}
           />
         </div>
       </div>

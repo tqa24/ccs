@@ -146,17 +146,27 @@ export function AuthMonitor() {
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent dark:from-emerald-500/10">
         <div className="flex items-center gap-2">
           <LivePulse />
-          <span className="text-xs font-semibold tracking-tight text-foreground">LIVE</span>
-          <span className="text-[10px] text-muted-foreground">Account Monitor</span>
+          <span className="text-xs font-semibold tracking-tight text-foreground">
+            {t('authMonitorLive.live')}
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {t('authMonitorLive.accountMonitor')}
+          </span>
         </div>
         <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Radio className="w-3 h-3 animate-pulse" />
-            <span>Updated {timeSinceUpdate || 'now'}</span>
+            <span>
+              {timeSinceUpdate
+                ? t('authMonitorLive.updated', { time: timeSinceUpdate })
+                : t('authMonitorLive.updatedNow')}
+            </span>
           </div>
           <span className="text-muted-foreground/50">|</span>
           <span>{t('authMonitor.accountsCount', { count: displayedAccountCount })}</span>
-          <span className="font-mono">{displayedTotalRequests.toLocaleString()} req</span>
+          <span className="font-mono">
+            {displayedTotalRequests.toLocaleString()} {t('authMonitorLive.requestsLabel')}
+          </span>
         </div>
       </div>
 
@@ -210,6 +220,7 @@ export function AuthMonitor() {
           />
         ) : (
           <div className="p-6">
+            {/* TODO i18n: missing key for "Request Distribution by Provider" */}
             <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-4">
               Request Distribution by Provider
             </div>

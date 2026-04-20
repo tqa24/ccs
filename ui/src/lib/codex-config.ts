@@ -1,3 +1,5 @@
+import i18n from '@/lib/i18n';
+
 export interface CodexTopLevelSettingsView {
   model: string | null;
   modelReasoningEffort: string | null;
@@ -43,6 +45,8 @@ export interface CodexMcpServerEntry {
   toolTimeoutSec: number | null;
   enabledTools: string[];
   disabledTools: string[];
+  isCcsManaged: boolean;
+  managementSurface: 'browser-settings' | null;
 }
 
 export interface CodexFeatureCatalogEntry {
@@ -58,46 +62,73 @@ base_url = "http://127.0.0.1:8317/api/provider/codex"
 env_key = "CLIPROXY_API_KEY"
 wire_api = "responses"`;
 
-export const KNOWN_CODEX_FEATURES: CodexFeatureCatalogEntry[] = [
-  {
-    name: 'multi_agent',
-    label: 'Multi-agent',
-    description: 'Enable subagent collaboration tools.',
-  },
-  {
-    name: 'unified_exec',
-    label: 'Unified exec',
-    description: 'Use the PTY-backed unified exec tool.',
-  },
-  {
-    name: 'shell_snapshot',
-    label: 'Shell snapshot',
-    description: 'Reuse shell environment snapshots.',
-  },
-  {
-    name: 'apply_patch_freeform',
-    label: 'Apply patch',
-    description: 'Enable freeform apply_patch edits.',
-  },
-  { name: 'js_repl', label: 'JS REPL', description: 'Enable the Node-backed JavaScript REPL.' },
-  {
-    name: 'runtime_metrics',
-    label: 'Runtime metrics',
-    description: 'Collect Codex runtime metrics.',
-  },
-  {
-    name: 'prevent_idle_sleep',
-    label: 'Prevent idle sleep',
-    description: 'Keep the machine awake while active.',
-  },
-  { name: 'fast_mode', label: 'Fast mode', description: 'Allow the fast service tier path.' },
-  { name: 'apps', label: 'Apps', description: 'Enable ChatGPT Apps and connectors support.' },
-  {
-    name: 'smart_approvals',
-    label: 'Smart approvals',
-    description: 'Route eligible approvals through the guardian flow.',
-  },
-];
+export const KNOWN_CODEX_FEATURE_NAMES = [
+  'multi_agent',
+  'unified_exec',
+  'shell_snapshot',
+  'apply_patch_freeform',
+  'js_repl',
+  'runtime_metrics',
+  'prevent_idle_sleep',
+  'fast_mode',
+  'apps',
+  'smart_approvals',
+] as const;
+
+export function getKnownCodexFeatures(): CodexFeatureCatalogEntry[] {
+  return [
+    {
+      name: 'multi_agent',
+      label: i18n.t('codex.featureMultiAgentLabel'),
+      description: i18n.t('codex.featureMultiAgentDesc'),
+    },
+    {
+      name: 'unified_exec',
+      label: i18n.t('codex.featureUnifiedExecLabel'),
+      description: i18n.t('codex.featureUnifiedExecDesc'),
+    },
+    {
+      name: 'shell_snapshot',
+      label: i18n.t('codex.featureShellSnapshotLabel'),
+      description: i18n.t('codex.featureShellSnapshotDesc'),
+    },
+    {
+      name: 'apply_patch_freeform',
+      label: i18n.t('codex.featureApplyPatchLabel'),
+      description: i18n.t('codex.featureApplyPatchDesc'),
+    },
+    {
+      name: 'js_repl',
+      label: i18n.t('codex.featureJsReplLabel'),
+      description: i18n.t('codex.featureJsReplDesc'),
+    },
+    {
+      name: 'runtime_metrics',
+      label: i18n.t('codex.featureRuntimeMetricsLabel'),
+      description: i18n.t('codex.featureRuntimeMetricsDesc'),
+    },
+    {
+      name: 'prevent_idle_sleep',
+      label: i18n.t('codex.featurePreventIdleSleepLabel'),
+      description: i18n.t('codex.featurePreventIdleSleepDesc'),
+    },
+    {
+      name: 'fast_mode',
+      label: i18n.t('codex.featureFastModeLabel'),
+      description: i18n.t('codex.featureFastModeDesc'),
+    },
+    {
+      name: 'apps',
+      label: i18n.t('codex.featureAppsLabel'),
+      description: i18n.t('codex.featureAppsDesc'),
+    },
+    {
+      name: 'smart_approvals',
+      label: i18n.t('codex.featureSmartApprovalsLabel'),
+      description: i18n.t('codex.featureSmartApprovalsDesc'),
+    },
+  ];
+}
 
 function asObject(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -210,6 +241,8 @@ export function readCodexMcpServers(config: Record<string, unknown> | null): Cod
         toolTimeoutSec: asNumber(server.tool_timeout_sec),
         enabledTools: asStringArray(server.enabled_tools),
         disabledTools: asStringArray(server.disabled_tools),
+        isCcsManaged: name === 'ccs_browser',
+        managementSurface: name === 'ccs_browser' ? 'browser-settings' : null,
       };
     })
     .filter((entry): entry is CodexMcpServerEntry => entry !== null)
@@ -222,9 +255,9 @@ export function readCodexFeatureState(
   const features = asObject(config?.features);
   const state: Record<string, boolean | null> = {};
 
-  for (const feature of KNOWN_CODEX_FEATURES) {
-    const value = features?.[feature.name];
-    state[feature.name] = typeof value === 'boolean' ? value : null;
+  for (const featureName of KNOWN_CODEX_FEATURE_NAMES) {
+    const value = features?.[featureName];
+    state[featureName] = typeof value === 'boolean' ? value : null;
   }
 
   if (features) {

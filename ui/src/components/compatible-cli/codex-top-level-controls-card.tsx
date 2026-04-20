@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { CircleAlert, Loader2, SlidersHorizontal } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,6 +94,8 @@ function TopLevelControlsForm({
   saving,
   onSave,
 }: TopLevelControlsFormProps) {
+  const { t } = useTranslation();
+
   const [draft, setDraft] = useState<CodexTopLevelSettingsView>(initialValues);
   const reasoningOptions = withCurrentValue(
     ['minimal', 'low', 'medium', 'high', 'xhigh'],
@@ -121,7 +124,7 @@ function TopLevelControlsForm({
     <>
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
-          <p className="text-xs font-medium">Model</p>
+          <p className="text-xs font-medium">{t('codex.model')}</p>
           <Input
             value={draft.model ?? ''}
             onChange={(event) =>
@@ -133,7 +136,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="space-y-1">
-          <p className="text-xs font-medium">Reasoning effort</p>
+          <p className="text-xs font-medium">{t('codex.reasoningEffort')}</p>
           <Select
             value={toSelectValue(draft.modelReasoningEffort)}
             onValueChange={(next) =>
@@ -145,10 +148,10 @@ function TopLevelControlsForm({
             disabled={disabled}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Use default" />
+              <SelectValue placeholder={t('codex.useDefault')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>Use default</SelectItem>
+              <SelectItem value={UNSET}>{t('codex.useDefault')}</SelectItem>
               {reasoningOptions.map((value) => (
                 <SelectItem key={value} value={value}>
                   {value}
@@ -159,7 +162,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="space-y-1">
-          <p className="text-xs font-medium">Default provider</p>
+          <p className="text-xs font-medium">{t('codex.defaultProvider')}</p>
           <Select
             value={toSelectValue(draft.modelProvider)}
             onValueChange={(next) =>
@@ -168,10 +171,10 @@ function TopLevelControlsForm({
             disabled={disabled}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Use Codex default" />
+              <SelectValue placeholder={t('codex.useCodexDefault')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>Use Codex default</SelectItem>
+              <SelectItem value={UNSET}>{t('codex.useCodexDefault')}</SelectItem>
               {providerOptions.map((name) => (
                 <SelectItem key={name} value={name}>
                   {name}
@@ -182,7 +185,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="space-y-1">
-          <p className="text-xs font-medium">Approval policy</p>
+          <p className="text-xs font-medium">{t('codex.approvalPolicy')}</p>
           <Select
             value={toSelectValue(draft.approvalPolicy)}
             onValueChange={(next) =>
@@ -191,10 +194,10 @@ function TopLevelControlsForm({
             disabled={disabled}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Use default" />
+              <SelectValue placeholder={t('codex.useDefault')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>Use default</SelectItem>
+              <SelectItem value={UNSET}>{t('codex.useDefault')}</SelectItem>
               {approvalOptions.map((value) => (
                 <SelectItem key={value} value={value}>
                   {value}
@@ -205,7 +208,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="space-y-1">
-          <p className="text-xs font-medium">Sandbox mode</p>
+          <p className="text-xs font-medium">{t('codex.sandboxMode')}</p>
           <Select
             value={toSelectValue(draft.sandboxMode)}
             onValueChange={(next) =>
@@ -214,10 +217,10 @@ function TopLevelControlsForm({
             disabled={disabled}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Use default" />
+              <SelectValue placeholder={t('codex.useDefault')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>Use default</SelectItem>
+              <SelectItem value={UNSET}>{t('codex.useDefault')}</SelectItem>
               {sandboxOptions.map((value) => (
                 <SelectItem key={value} value={value}>
                   {value}
@@ -228,7 +231,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="space-y-1">
-          <p className="text-xs font-medium">Web search</p>
+          <p className="text-xs font-medium">{t('codex.webSearch')}</p>
           <Select
             value={toSelectValue(draft.webSearch)}
             onValueChange={(next) =>
@@ -237,10 +240,10 @@ function TopLevelControlsForm({
             disabled={disabled}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Use default" />
+              <SelectValue placeholder={t('codex.useDefault')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>Use default</SelectItem>
+              <SelectItem value={UNSET}>{t('codex.useDefault')}</SelectItem>
               {webSearchOptions.map((value) => (
                 <SelectItem key={value} value={value}>
                   {value}
@@ -251,7 +254,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="space-y-1">
-          <p className="text-xs font-medium">Tool output token limit</p>
+          <p className="text-xs font-medium">{t('codex.toolOutputTokenLimit')}</p>
           <Input
             type="number"
             min={1}
@@ -268,7 +271,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="space-y-1">
-          <p className="text-xs font-medium">Personality</p>
+          <p className="text-xs font-medium">{t('codex.personality')}</p>
           <Select
             value={toSelectValue(draft.personality)}
             onValueChange={(next) =>
@@ -277,10 +280,10 @@ function TopLevelControlsForm({
             disabled={disabled}
           >
             <SelectTrigger>
-              <SelectValue placeholder="Use default" />
+              <SelectValue placeholder={t('codex.useDefault')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={UNSET}>Use default</SelectItem>
+              <SelectItem value={UNSET}>{t('codex.useDefault')}</SelectItem>
               {personalityOptions.map((value) => (
                 <SelectItem key={value} value={value}>
                   {value}
@@ -296,21 +299,24 @@ function TopLevelControlsForm({
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <CircleAlert className="h-4 w-4 text-amber-600 dark:text-amber-300" />
-              <p className="text-sm font-semibold">Long context override</p>
+              <p className="text-sm font-semibold">{t('codex.longContextOverride')}</p>
               <Badge
                 variant="outline"
                 className="border-amber-500/40 bg-background/80 text-[10px] uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300"
               >
+                {/* TODO i18n: missing key codex.manualOptInOnly */}
                 Manual opt-in only
               </Badge>
               <Badge
                 variant="secondary"
                 className="text-[10px] uppercase tracking-[0.16em] text-muted-foreground"
               >
+                {/* TODO i18n: missing keys codex.gpt54Selected / codex.gpt54Reference */}
                 {isGpt54Selected ? 'GPT-5.4 selected' : 'GPT-5.4 reference'}
               </Badge>
             </div>
             <p className="text-xs text-muted-foreground">
+              {/* TODO i18n: missing key codex.draftValuesOnly */}
               Draft values only. Nothing applies until Save.
             </p>
           </div>
@@ -329,6 +335,7 @@ function TopLevelControlsForm({
                 }))
               }
             >
+              {/* TODO i18n: missing key codex.fillCautiousPair */}
               Fill cautious pair
             </Button>
             <Button
@@ -343,6 +350,7 @@ function TopLevelControlsForm({
                 }))
               }
             >
+              {/* TODO i18n: missing key codex.setOfficialMaxWindow */}
               Set official max window
             </Button>
             <Button
@@ -358,6 +366,7 @@ function TopLevelControlsForm({
                 }))
               }
             >
+              {/* TODO i18n: missing key codex.clear */}
               Clear
             </Button>
           </div>
@@ -366,26 +375,31 @@ function TopLevelControlsForm({
         <div className="grid gap-2 sm:grid-cols-3">
           <div className="rounded-lg border bg-background/85 px-3 py-3 shadow-sm shadow-black/5">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {/* TODO i18n: missing key codex.officialMax */}
               Official max
             </p>
             <p className="mt-1 font-mono text-base font-semibold text-foreground">1.05M / 1M</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">GPT-5.4 context cap</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{t('codex.gptContextCap')}</p>
           </div>
           <div className="rounded-lg border bg-background/85 px-3 py-3 shadow-sm shadow-black/5">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {/* TODO i18n: missing key codex.standardWindow */}
               Standard window
             </p>
             <p className="mt-1 font-mono text-base font-semibold text-foreground">
               {formatInteger(GPT_54_STANDARD_CONTEXT_WINDOW)}
             </p>
-            <p className="mt-1 text-[11px] text-muted-foreground">Normal usage window</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{t('codex.normalUsageWindow')}</p>
           </div>
           <div className="rounded-lg border bg-background/85 px-3 py-3 shadow-sm shadow-black/5">
             <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {/* TODO i18n: missing key codex.above272k */}
               Above 272K
             </p>
-            <p className="mt-1 font-mono text-base font-semibold text-foreground">Counts 2x</p>
-            <p className="mt-1 text-[11px] text-muted-foreground">Usage-limit cost above 272K</p>
+            <p className="mt-1 font-mono text-base font-semibold text-foreground">
+              {t('codex.counts2x')}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">{t('codex.usageLimitCost')}</p>
           </div>
         </div>
 
@@ -393,12 +407,15 @@ function TopLevelControlsForm({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                {/* TODO i18n: missing key codex.oneCautiousPair */}
                 One cautious pair
               </p>
               <div className="rounded-full border bg-background px-2.5 py-1 font-mono text-[11px] font-medium">
+                {/* TODO i18n: missing key codex.context */}
                 Context {formatInteger(CCS_GPT_54_STARTER_CONTEXT_WINDOW)}
               </div>
               <div className="rounded-full border bg-background px-2.5 py-1 font-mono text-[11px] font-medium">
+                {/* TODO i18n: missing key codex.autoCompact */}
                 Auto-compact {formatInteger(CCS_GPT_54_STARTER_AUTO_COMPACT_TOKEN_LIMIT)}
               </div>
             </div>
@@ -407,20 +424,23 @@ function TopLevelControlsForm({
                 variant="outline"
                 className="border-border/70 bg-background/80 text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
               >
+                {/* TODO i18n: missing key codex.notOfficial */}
                 Not official
               </Badge>
               <Badge
                 variant="outline"
                 className="border-border/70 bg-background/80 text-[10px] uppercase tracking-[0.14em] text-muted-foreground"
               >
+                {/* TODO i18n: missing key codex.draftOnly */}
                 Draft only
               </Badge>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
-            <span>Quick-fill only. Review before saving.</span>
+            <span>{t('codex.quickFillWarning')}</span>
             {!isGpt54Selected && draft.model ? (
               <span>
+                {/* TODO i18n: missing key codex.shouldBeCheckedSeparately */}
                 <code>{draft.model}</code> should be checked separately.
               </span>
             ) : null}
@@ -429,9 +449,9 @@ function TopLevelControlsForm({
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
-            <p className="text-xs font-medium">Model context window</p>
+            <p className="text-xs font-medium">{t('codex.modelContextWindow')}</p>
             <Input
-              aria-label="Model context window"
+              aria-label={t('codex.modelContextWindow')}
               type="number"
               min={1}
               value={draft.modelContextWindow ?? ''}
@@ -441,18 +461,20 @@ function TopLevelControlsForm({
                   modelContextWindow: parseOptionalInteger(event.target.value),
                 }))
               }
+              // TODO i18n: missing key codex.unset
               placeholder="Unset"
               disabled={disabled}
             />
             <p className="text-xs text-muted-foreground">
+              {/* TODO i18n: missing key codex.writesModelContextWindow */}
               Writes <code>model_context_window</code>. Leave unset to keep Codex defaults.
             </p>
           </div>
 
           <div className="space-y-1">
-            <p className="text-xs font-medium">Auto-compact token limit</p>
+            <p className="text-xs font-medium">{t('codex.autoCompactTokenLimit')}</p>
             <Input
-              aria-label="Auto-compact token limit"
+              aria-label={t('codex.autoCompactTokenLimit')}
               type="number"
               min={1}
               value={draft.modelAutoCompactTokenLimit ?? ''}
@@ -462,10 +484,12 @@ function TopLevelControlsForm({
                   modelAutoCompactTokenLimit: parseOptionalInteger(event.target.value),
                 }))
               }
+              // TODO i18n: missing key codex.unset
               placeholder="Unset"
               disabled={disabled}
             />
             <p className="text-xs text-muted-foreground">
+              {/* TODO i18n: missing key codex.writesAutoCompactTokenLimit */}
               Writes <code>model_auto_compact_token_limit</code>. Leave unset to keep model
               defaults.
             </p>
@@ -473,6 +497,7 @@ function TopLevelControlsForm({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+          {/* TODO i18n: missing key codex.docs */}
           <span className="text-[10px] uppercase tracking-[0.14em]">Docs</span>
           <a
             href="https://developers.openai.com/api/docs/models/gpt-5.4"
@@ -480,6 +505,7 @@ function TopLevelControlsForm({
             rel="noreferrer"
             className="underline underline-offset-2 hover:text-foreground"
           >
+            {/* TODO i18n: missing key codex.gpt54ModelPage */}
             GPT-5.4 model page
           </a>
           <a
@@ -488,6 +514,7 @@ function TopLevelControlsForm({
             rel="noreferrer"
             className="underline underline-offset-2 hover:text-foreground"
           >
+            {/* TODO i18n: missing key codex.releaseNotes */}
             Release notes
           </a>
           <a
@@ -496,6 +523,7 @@ function TopLevelControlsForm({
             rel="noreferrer"
             className="underline underline-offset-2 hover:text-foreground"
           >
+            {/* TODO i18n: missing key codex.configReference */}
             Config reference
           </a>
         </div>
@@ -504,6 +532,7 @@ function TopLevelControlsForm({
       <div className="flex justify-end">
         <Button onClick={() => onSave(patch)} disabled={disabled || saving || !hasChanges}>
           {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          {/* TODO i18n: missing key codex.saveTopLevelSettings */}
           Save top-level settings
         </Button>
       </div>
@@ -521,9 +550,11 @@ export function CodexTopLevelControlsCard({
 }: CodexTopLevelControlsCardProps) {
   return (
     <CodexConfigCardShell
+      // TODO i18n: missing key codex.topLevelControls
       title="Top-level controls"
       badge="config.toml"
       icon={<SlidersHorizontal className="h-4 w-4" />}
+      // TODO i18n: missing key codex.topLevelControlsDesc
       description="Structured controls for the stable top-level Codex settings users touch most often. Unsupported upstream shapes stay untouched and should be edited in raw TOML."
       disabledReason={disabledReason}
     >

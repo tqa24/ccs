@@ -1,6 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferredValue, useMemo, useState } from 'react';
 import { toast } from 'sonner';
+import { useTranslation } from 'react-i18next';
 import {
   api,
   type LogsEntry,
@@ -100,6 +101,7 @@ export function useLogsWorkspace() {
 
 export function useUpdateLogsConfig() {
   const queryClient = useQueryClient();
+  const { t } = useTranslation();
 
   return useMutation({
     mutationFn: (payload: UpdateLogsConfigPayload) => api.logs.updateConfig(payload),
@@ -109,10 +111,10 @@ export function useUpdateLogsConfig() {
         queryClient.invalidateQueries({ queryKey: SOURCES_QUERY_KEY }),
         queryClient.invalidateQueries({ queryKey: ['logs', 'entries'] }),
       ]);
-      toast.success('Logging configuration saved.');
+      toast.success(t('toasts.loggingConfigSaved'));
     },
     onError: (error: Error) => {
-      toast.error(error.message || 'Failed to save logging configuration.');
+      toast.error(error.message || t('toasts.loggingConfigSaveFailed'));
     },
   });
 }

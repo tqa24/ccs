@@ -6,6 +6,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import i18n from '@/lib/i18n';
 import type { SettingsResponse, UseProviderEditorReturn } from './types';
 import type { ProviderCatalog } from '../provider-model-selector';
 import {
@@ -14,6 +15,7 @@ import {
   isAnthropicModelEnvKey,
 } from '@/lib/extended-context-utils';
 import { supportsExtendedContext } from '@/lib/model-catalogs';
+import { isValidProvider } from '@/lib/provider-config';
 
 /** Required env vars for CLIProxy providers (informational only - runtime fills defaults) */
 const REQUIRED_ENV_KEYS = ['ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN'] as const;
@@ -38,12 +40,18 @@ export function useProviderEditor(
     queryFn: async () => {
       const res = await fetch(`/api/settings/${provider}/raw`);
       if (!res.ok) {
+        const fallbackPath =
+          provider === 'cursor'
+            ? `~/.ccs/cliproxy/providers/${provider}.settings.json`
+            : isValidProvider(provider)
+              ? `~/.ccs/${provider}.settings.json`
+              : `~/.ccs/profiles/${provider}/settings.json`;
         // Return empty settings for unconfigured providers
         return {
           profile: provider,
           settings: { env: {} },
           mtime: Date.now(),
-          path: `~/.ccs/profiles/${provider}/settings.json`,
+          path: fallbackPath,
         };
       }
       return res.json();
@@ -177,11 +185,11 @@ export function useProviderEditor(
       setRawJsonEdits(null);
       // Show warning if fields missing (runtime uses defaults)
       if (responseData?.warning) {
-        toast.success('Settings saved', {
+        toast.success(i18n.t('settings.saved'), {
           description: responseData.warning,
         });
       } else {
-        toast.success('Settings saved');
+        toast.success(i18n.t('settings.saved'));
       }
     },
     onError: (error: Error) => {

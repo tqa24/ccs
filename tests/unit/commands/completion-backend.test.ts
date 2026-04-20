@@ -82,6 +82,9 @@ describe('completion backend', () => {
     expect(values).toContain('cursor');
     expect(values).toContain('copilot');
     expect(values).toContain('gemini');
+    expect(values).toContain('gitlab');
+    expect(values).toContain('codebuddy');
+    expect(values).toContain('kilo');
     expect(values).toContain('localglm');
     expect(values).toContain('work');
     expect(values).toContain('my-codex');
@@ -135,6 +138,15 @@ describe('completion backend', () => {
   test('includes live doctor and cliproxy flags from the shared catalog', () => {
     expect(suggestionValues(['doctor'])).toEqual(expect.arrayContaining(['--fix', '-f']));
     expect(suggestionValues(['cliproxy'])).toEqual(expect.arrayContaining(['remove', '--backend']));
+  });
+
+  test('treats cursor as a provider shortcut in completion', () => {
+    const values = suggestionValues(['cursor']);
+    expect(values).toEqual(
+      expect.arrayContaining(['--auth', '--accounts', '--config', '--logout'])
+    );
+    expect(values).not.toContain('probe');
+    expect(values).not.toContain('start');
   });
 
   test('filters suggestions by the current token prefix', () => {

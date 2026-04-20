@@ -1,4 +1,5 @@
 import { FileCode2, History, PenLine, Settings2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { CodexFeaturesCard } from '@/components/compatible-cli/codex-features-card';
 import { CodexMcpServersCard } from '@/components/compatible-cli/codex-mcp-servers-card';
 import { CodexModelProvidersCard } from '@/components/compatible-cli/codex-model-providers-card';
@@ -51,6 +52,8 @@ export function CodexControlCenterTab({
   saving,
   onPatch,
 }: CodexControlCenterTabProps) {
+  const { t } = useTranslation();
+
   return (
     <ScrollArea className="h-full">
       <div className="space-y-6 pr-1 pb-6">
@@ -65,7 +68,7 @@ export function CodexControlCenterTab({
                 </div>
                 <div>
                   <h2 className="text-base font-semibold tracking-tight text-foreground">
-                    Structured controls boundary
+                    {t('codex.controlCenter')}
                   </h2>
                 </div>
               </div>
@@ -74,6 +77,7 @@ export function CodexControlCenterTab({
                 <li className="flex items-start gap-2.5">
                   <PenLine className="h-4 w-4 shrink-0 text-muted-foreground/60 mt-0.5" />
                   <span className="leading-relaxed">
+                    {/* TODO i18n: missing key codex.writesUserLayer */}
                     Writes exclusively to user-layer{' '}
                     <code className="text-[11px] bg-muted/70 px-1.5 py-0.5 rounded border border-border/50">
                       config.toml
@@ -83,6 +87,7 @@ export function CodexControlCenterTab({
                 <li className="flex items-start gap-2.5">
                   <History className="h-4 w-4 shrink-0 text-muted-foreground/60 mt-0.5" />
                   <span className="leading-relaxed">
+                    {/* TODO i18n: missing key codex.noRepoTrustReflection */}
                     Does not reflect repo trust layers or CLI overrides
                   </span>
                 </li>
@@ -95,9 +100,11 @@ export function CodexControlCenterTab({
                   <FileCode2 className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
                   <div className="space-y-1">
                     <p className="text-[11px] font-bold text-amber-700 dark:text-amber-300 uppercase tracking-wider">
+                      {/* TODO i18n: missing key codex.formattingNote */}
                       Formatting Note
                     </p>
                     <p className="text-[13px] leading-relaxed text-amber-800/80 dark:text-amber-200/70">
+                      {/* TODO i18n: missing key codex.formattingNoteDesc */}
                       Saves normalize TOML formatting and strip comments. Switch to the raw editor
                       if exact layout matters.
                     </p>
@@ -115,7 +122,7 @@ export function CodexControlCenterTab({
           disabledReason={disabledReason}
           saving={saving}
           onSave={(values: CodexTopLevelSettingsPatch) =>
-            onPatch({ kind: 'top-level', values }, 'Saved top-level Codex settings.')
+            onPatch({ kind: 'top-level', values }, t('toasts.codexSaved'))
           }
         />
 
@@ -128,6 +135,7 @@ export function CodexControlCenterTab({
           onSave={(projectPath, trustLevel) =>
             onPatch(
               { kind: 'project-trust', path: projectPath, trustLevel },
+              // TODO i18n: missing keys codex.savedProjectTrust / codex.removedProjectTrust
               trustLevel ? 'Saved project trust entry.' : 'Removed project trust entry.'
             )
           }
@@ -143,14 +151,23 @@ export function CodexControlCenterTab({
           onSave={(name, values: CodexProfilePatchValues, setAsActive) =>
             onPatch(
               { kind: 'profile', action: 'upsert', name, values, setAsActive },
+              // TODO i18n: missing key codex.savedProfile
               'Saved profile.'
             )
           }
           onDelete={(name) =>
-            onPatch({ kind: 'profile', action: 'delete', name }, 'Deleted profile.')
+            onPatch(
+              { kind: 'profile', action: 'delete', name },
+              // TODO i18n: missing key codex.deletedProfile
+              'Deleted profile.'
+            )
           }
           onSetActive={(name) =>
-            onPatch({ kind: 'profile', action: 'set-active', name }, 'Set active profile.')
+            onPatch(
+              { kind: 'profile', action: 'set-active', name },
+              // TODO i18n: missing key codex.setActiveProfile
+              'Set active profile.'
+            )
           }
         />
 
@@ -162,11 +179,16 @@ export function CodexControlCenterTab({
           onSave={(name, values) =>
             onPatch(
               { kind: 'model-provider', action: 'upsert', name, values },
+              // TODO i18n: missing key codex.savedModelProvider
               'Saved model provider.'
             )
           }
           onDelete={(name) =>
-            onPatch({ kind: 'model-provider', action: 'delete', name }, 'Deleted model provider.')
+            onPatch(
+              { kind: 'model-provider', action: 'delete', name },
+              // TODO i18n: missing key codex.deletedModelProvider
+              'Deleted model provider.'
+            )
           }
         />
 
@@ -176,10 +198,18 @@ export function CodexControlCenterTab({
           disabledReason={disabledReason}
           saving={saving}
           onSave={(name, values) =>
-            onPatch({ kind: 'mcp-server', action: 'upsert', name, values }, 'Saved MCP server.')
+            onPatch(
+              { kind: 'mcp-server', action: 'upsert', name, values },
+              // TODO i18n: missing key codex.savedMcpServer
+              'Saved MCP server.'
+            )
           }
           onDelete={(name) =>
-            onPatch({ kind: 'mcp-server', action: 'delete', name }, 'Deleted MCP server.')
+            onPatch(
+              { kind: 'mcp-server', action: 'delete', name },
+              // TODO i18n: missing key codex.deletedMcpServer
+              'Deleted MCP server.'
+            )
           }
         />
 
@@ -189,7 +219,11 @@ export function CodexControlCenterTab({
           disabled={disabled}
           disabledReason={disabledReason}
           onToggle={(feature, enabled) =>
-            onPatch({ kind: 'feature', feature, enabled }, 'Saved feature toggle.')
+            onPatch(
+              { kind: 'feature', feature, enabled },
+              // TODO i18n: missing key codex.savedFeatureToggle
+              'Saved feature toggle.'
+            )
           }
         />
       </div>

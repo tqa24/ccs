@@ -58,22 +58,38 @@ describe('codex-detector', () => {
     process.env.CCS_CODEX_PATH = fakeCodex;
     Object.defineProperty(process, 'platform', { value: 'win32' });
 
-    const execFileSyncSpy = spyOn(childProcess, 'execFileSync').mockImplementation((command, args) => {
-      return String(command).includes('cmd.exe') && Array.isArray(args) && args.join(' ').includes('--help')
-        ? 'Codex CLI\n  -c, --config <key=value>\n'
-        : 'codex-cli 0.118.0-alpha.3';
+    const spawnSyncSpy = spyOn(childProcess, 'spawnSync').mockImplementation((command) => {
+      const commandString = String(command);
+      return {
+        pid: 123,
+        output: ['', '', ''],
+        stdout: commandString.includes('--help')
+          ? 'Codex CLI\n  -c, --config <key=value>\n'
+          : 'codex-cli 0.118.0-alpha.3',
+        stderr: '',
+        status: 0,
+        signal: null,
+      } as unknown as ReturnType<typeof childProcess.spawnSync>;
     });
 
     const info = getCodexBinaryInfo();
+    const calls = spawnSyncSpy.mock.calls;
+    const cmdWrapperProbeCall = calls.find(([command]) => {
+      return String(command).includes(fakeCodex);
+    });
 
-    expect(execFileSyncSpy).toHaveBeenCalled();
+    expect(spawnSyncSpy).toHaveBeenCalled();
+    expect(cmdWrapperProbeCall).toBeDefined();
+    expect((cmdWrapperProbeCall?.[1] as Record<string, unknown> | undefined)?.shell).toBe(
+      'cmd.exe'
+    );
     expect(info?.needsShell).toBe(true);
     expect(info?.features).toContain('config-overrides');
 
-    execFileSyncSpy.mockRestore();
+    spawnSyncSpy.mockRestore();
   });
 
-  it('prefers a sibling PowerShell wrapper over cmd when Windows PATH only exposes codex.cmd', () => {
+  it('keeps the cmd wrapper when Windows PATH exposes codex.cmd and a sibling ps1 also exists', () => {
     const fakeCmdCodex = path.join(tmpDir, 'codex.cmd');
     const fakePsCodex = path.join(tmpDir, 'codex.ps1');
     fs.writeFileSync(fakeCmdCodex, '');
@@ -82,7 +98,21 @@ describe('codex-detector', () => {
 
     const execSyncSpy = spyOn(childProcess, 'execSync').mockImplementation(() => `${fakeCmdCodex}\n`);
 
-    expect(detectCodexCli()).toBe(fakePsCodex);
+    expect(detectCodexCli()).toBe(fakeCmdCodex);
+
+    execSyncSpy.mockRestore();
+  });
+
+  it('replaces a Windows PowerShell wrapper with a sibling cmd shim when PATH returns codex.ps1', () => {
+    const fakeCmdCodex = path.join(tmpDir, 'codex.cmd');
+    const fakePsCodex = path.join(tmpDir, 'codex.ps1');
+    fs.writeFileSync(fakeCmdCodex, '');
+    fs.writeFileSync(fakePsCodex, '');
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+
+    const execSyncSpy = spyOn(childProcess, 'execSync').mockImplementation(() => `${fakePsCodex}\n`);
+
+    expect(detectCodexCli()).toBe(fakeCmdCodex);
 
     execSyncSpy.mockRestore();
   });

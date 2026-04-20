@@ -42,7 +42,7 @@ describe('LocalhostDisclaimer', () => {
 
     expect(
       screen.getByText(
-        'Remote dashboard access is read-only until you run ccs config auth setup on the host.'
+        'Remote dashboard access is read-only until you run ccs config auth setup for this CCS instance. Docker deployments must run it inside the container.'
       )
     ).toBeVisible();
     expect(screen.queryByLabelText('Dismiss disclaimer')).toBeNull();
@@ -60,7 +60,7 @@ describe('LocalhostDisclaimer', () => {
 
     expect(
       screen.getByText(
-        'Remote dashboard access is read-only because dashboard auth is currently disabled on the host. Re-enable dashboard auth on the host to unlock remote changes.'
+        'Remote dashboard access is read-only because dashboard auth is currently disabled for this CCS instance. Re-enable it on the CCS host. Docker deployments must do that inside the running container.'
       )
     ).toBeVisible();
     expect(screen.queryByLabelText('Dismiss disclaimer')).toBeNull();

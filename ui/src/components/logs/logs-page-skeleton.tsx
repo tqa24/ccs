@@ -1,9 +1,12 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTranslation } from 'react-i18next';
 
 export function LogsPageSkeleton() {
+  const { t } = useTranslation();
+
   return (
-    <div className="space-y-6" aria-label="Loading logs workspace">
+    <div className="space-y-6" aria-label={t('logsPageSkeleton.loadingLogs')}>
       <Card className="gap-4">
         <CardHeader className="space-y-3">
           <Skeleton className="h-4 w-28" />

@@ -16,7 +16,7 @@ function makeAccount(overrides: Partial<OAuthAccount> & Pick<OAuthAccount, 'id' 
 }
 
 describe('buildAccountVisualGroups', () => {
-  it('orders grouped codex variants by audience consistently', () => {
+  it('preserves grouped codex variant identity details while ordering by audience', () => {
     const groups = buildAccountVisualGroups([
       makeAccount({
         id: 'kaidu.kd@gmail.com#free',
@@ -33,9 +33,36 @@ describe('buildAccountVisualGroups', () => {
       'business',
       'personal',
     ]);
+    expect(groups[0]?.variants?.map((variant) => variant.inlineLabel)).toEqual([
+      'Business · Workspace 04a0f049',
+      'Personal · Free',
+    ]);
+    expect(groups[0]?.variants?.map((variant) => variant.compactDetailLabel)).toEqual([
+      '04a0f049',
+      'Free',
+    ]);
     expect(groups[0]?.memberIds).toEqual([
       'kaidu.kd@gmail.com#04a0f049-team',
       'kaidu.kd@gmail.com#free',
+    ]);
+  });
+
+  it('keeps multiple personal codex plans distinct inside the same grouped card', () => {
+    const groups = buildAccountVisualGroups([
+      makeAccount({
+        id: 'kaidu.kd@gmail.com#plus',
+        tokenFile: 'codex-kaidu.kd@gmail.com-plus.json',
+      }),
+      makeAccount({
+        id: 'kaidu.kd@gmail.com#free',
+        tokenFile: 'codex-kaidu.kd@gmail.com-free.json',
+      }),
+    ]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.variants?.map((variant) => variant.inlineLabel)).toEqual([
+      'Personal · Free',
+      'Personal · Plus',
     ]);
   });
 });

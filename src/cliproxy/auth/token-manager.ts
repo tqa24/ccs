@@ -14,6 +14,7 @@ import { getProviderAuthDir } from '../config-generator';
 import { getProviderAccounts, getDefaultAccount } from '../account-manager';
 import { deleteTokenFile, extractAccountIdFromTokenFile } from '../accounts/token-file-ops';
 import { buildEmailBackedAccountId } from '../accounts/email-account-identity';
+import { getTokenRefreshOwnership } from '../provider-capabilities';
 import {
   AuthStatus,
   PROVIDER_AUTH_PREFIXES,
@@ -507,14 +508,16 @@ export function displayAuthStatus(): void {
  */
 export async function ensureTokenValid(
   provider: CLIProxyProvider,
-  verbose = false
+  _verbose = false
 ): Promise<{ valid: boolean; refreshed: boolean; error?: string }> {
-  if (provider === 'gemini') {
-    const { ensureGeminiTokenValid } = await import('./gemini-token-refresh');
-    return ensureGeminiTokenValid(verbose);
+  if (getTokenRefreshOwnership(provider) === 'ccs') {
+    return {
+      valid: false,
+      refreshed: false,
+      error: `CCS-managed token validation is not available for ${provider}`,
+    };
   }
 
-  // For CLIProxy-delegated providers, token refresh is handled by CLIProxyAPIPlus.
-  // CCS only verifies the token file exists (authentication state).
+  // Runtime-managed providers refresh upstream. CCS only verifies auth material exists locally.
   return { valid: isAuthenticated(provider), refreshed: false };
 }

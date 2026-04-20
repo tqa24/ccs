@@ -139,6 +139,7 @@ function resolveGeminiPreviewModelId(
 }
 
 /** Model catalog data - mirrors src/cliproxy/model-catalog.ts */
+// TODO i18n: missing keys for MODEL_CATALOGS displayNames, model names, and descriptions
 export const MODEL_CATALOGS: Record<string, ProviderCatalog> = {
   agy: {
     provider: 'agy',

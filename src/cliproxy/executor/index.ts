@@ -17,7 +17,7 @@ import * as path from 'path';
 import { ProgressIndicator } from '../../utils/progress-indicator';
 import { ok, fail, info, warn } from '../../utils/ui';
 import { getCcsDir } from '../../utils/config-manager';
-import { escapeShellArg } from '../../utils/shell-executor';
+import { escapeShellArg, getWindowsEscapedCommandShell } from '../../utils/shell-executor';
 import { ensureCLIProxyBinary } from '../binary-manager';
 import {
   generateConfig,
@@ -63,7 +63,18 @@ import {
   syncImageAnalysisMcpToConfigDir,
   appendThirdPartyImageAnalysisToolArgs,
 } from '../../utils/image-analysis';
-import { loadOrCreateUnifiedConfig, getThinkingConfig } from '../../config/unified-config-loader';
+import {
+  appendBrowserToolArgs,
+  ensureBrowserMcpOrThrow,
+  getEffectiveClaudeBrowserAttachConfig,
+  resolveOptionalBrowserAttachRuntime,
+  syncBrowserMcpToConfigDir,
+} from '../../utils/browser';
+import {
+  getBrowserConfig,
+  loadOrCreateUnifiedConfig,
+  getThinkingConfig,
+} from '../../config/unified-config-loader';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
 import {
   isKiroAuthMethod,
@@ -143,6 +154,14 @@ export function readOptionValue(
   }
 
   return { present: true, value: next.trim(), missingValue: false };
+}
+
+export function hasGitLabTokenLoginFlag(args: string[]): boolean {
+  return args.includes('--gitlab-token-login') || args.includes('--token-login');
+}
+
+function getGitLabTokenLoginFlagName(args: string[]): '--gitlab-token-login' | '--token-login' {
+  return args.includes('--gitlab-token-login') ? '--gitlab-token-login' : '--token-login';
 }
 
 /**
@@ -245,6 +264,17 @@ export async function execClaudeWithCLIProxy(
   // Setup first-class CCS WebSearch runtime
   ensureWebSearchMcpOrThrow();
   const imageAnalysisMcpReady = ensureImageAnalysisMcpOrThrow();
+  const browserAttachConfig = getEffectiveClaudeBrowserAttachConfig(getBrowserConfig());
+  const browserAttachRuntime = browserAttachConfig.enabled
+    ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+    : undefined;
+  const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
+  if (browserAttachRuntime?.warning) {
+    process.stderr.write(`${warn(browserAttachRuntime.warning)}\n`);
+  }
+  if (browserRuntimeEnv) {
+    ensureBrowserMcpOrThrow();
+  }
   displayWebSearchStatus();
 
   const providerConfig = getProviderConfig(provider);
@@ -310,7 +340,7 @@ export async function execClaudeWithCLIProxy(
     spinner.start();
 
     try {
-      binaryPath = await ensureCLIProxyBinary(verbose);
+      binaryPath = await ensureCLIProxyBinary(verbose, { skipAutoUpdate: true });
       spinner.succeed('CLIProxy binary ready');
     } catch (error) {
       spinner.fail('Failed to prepare CLIProxy');
@@ -342,6 +372,7 @@ export async function execClaudeWithCLIProxy(
   const addAccount = argsWithoutProxy.includes('--add');
   const showAccounts = argsWithoutProxy.includes('--accounts');
   const forceImport = argsWithoutProxy.includes('--import');
+  const gitlabTokenLogin = hasGitLabTokenLoginFlag(argsWithoutProxy);
   const acceptAgyRisk = hasAntigravityRiskAcceptanceFlag(argsWithoutProxy);
 
   const incognitoFlag = argsWithoutProxy.includes('--incognito');
@@ -433,6 +464,16 @@ export async function execClaudeWithCLIProxy(
     kiroIDCFlow = normalizeKiroIDCFlow(normalized);
   }
 
+  let gitlabBaseUrl: string | undefined;
+  const gitlabBaseUrlValue = readOptionValue(argsWithoutProxy, '--gitlab-url');
+  if (gitlabBaseUrlValue.present && gitlabBaseUrlValue.value) {
+    gitlabBaseUrl = gitlabBaseUrlValue.value.trim();
+  } else if (gitlabBaseUrlValue.present) {
+    console.error(fail('--gitlab-url requires a value'));
+    process.exitCode = 1;
+    return;
+  }
+
   if (kiroAuthMethod && provider !== 'kiro' && !compositeProviders.includes('kiro')) {
     console.error(fail('--kiro-auth-method is only valid for ccs kiro'));
     process.exitCode = 1;
@@ -476,6 +517,15 @@ export async function execClaudeWithCLIProxy(
         '--kiro-idc-start-url, --kiro-idc-region, and --kiro-idc-flow require --kiro-auth-method idc'
       )
     );
+    process.exitCode = 1;
+    return;
+  }
+
+  if ((gitlabTokenLogin || gitlabBaseUrl) && provider !== 'gitlab') {
+    const flagName = gitlabTokenLogin
+      ? getGitLabTokenLoginFlagName(argsWithoutProxy)
+      : '--gitlab-url';
+    console.error(fail(`${flagName} is only valid for ccs gitlab`));
     process.exitCode = 1;
     return;
   }
@@ -719,6 +769,8 @@ export async function execClaudeWithCLIProxy(
             ...(kiroIDCStartUrl && p === 'kiro' ? { kiroIDCStartUrl } : {}),
             ...(kiroIDCRegion && p === 'kiro' ? { kiroIDCRegion } : {}),
             ...(kiroIDCFlow && p === 'kiro' ? { kiroIDCFlow } : {}),
+            ...(gitlabTokenLogin && p === 'gitlab' ? { gitlabAuthMode: 'pat' as const } : {}),
+            ...(gitlabBaseUrl && p === 'gitlab' ? { gitlabBaseUrl } : {}),
             ...(forceHeadless ? { headless: true } : {}),
             ...(setNickname ? { nickname: setNickname } : {}),
             ...(noIncognito ? { noIncognito: true } : {}),
@@ -764,6 +816,8 @@ export async function execClaudeWithCLIProxy(
         ...(kiroIDCStartUrl ? { kiroIDCStartUrl } : {}),
         ...(kiroIDCRegion ? { kiroIDCRegion } : {}),
         ...(kiroIDCFlow ? { kiroIDCFlow } : {}),
+        ...(gitlabTokenLogin ? { gitlabAuthMode: 'pat' as const } : {}),
+        ...(gitlabBaseUrl ? { gitlabBaseUrl } : {}),
         ...(forceHeadless ? { headless: true } : {}),
         ...(setNickname ? { nickname: setNickname } : {}),
         ...(noIncognito ? { noIncognito: true } : {}),
@@ -1006,6 +1060,15 @@ export async function execClaudeWithCLIProxy(
   }
 
   syncImageAnalysisMcpToConfigDir(inheritedClaudeConfigDir);
+  if (
+    browserRuntimeEnv &&
+    inheritedClaudeConfigDir &&
+    !syncBrowserMcpToConfigDir(inheritedClaudeConfigDir)
+  ) {
+    throw new Error(
+      'Browser MCP is enabled, but CCS could not sync the browser MCP config into the inherited Claude instance.'
+    );
+  }
 
   // Build initial env vars to get ANTHROPIC_BASE_URL
   const initialEnvVars = buildClaudeEnvironment({
@@ -1128,6 +1191,7 @@ export async function execClaudeWithCLIProxy(
     compositeDefaultTier: cfg.compositeDefaultTier,
     claudeConfigDir: inheritedClaudeConfigDir,
     imageAnalysisEnv,
+    browserRuntimeEnv,
   });
 
   if (cfg.isComposite && cfg.compositeTiers && cfg.compositeDefaultTier) {
@@ -1143,6 +1207,14 @@ export async function execClaudeWithCLIProxy(
   }
 
   const webSearchEnv = getWebSearchHookEnv();
+  if (process.env.CCS_DEBUG) {
+    console.error(
+      `[cliproxy-browser-debug] keys=${Object.keys(env)
+        .filter((key) => key.startsWith('CCS_BROWSER_'))
+        .sort()
+        .join(',')} ws=${env.CCS_BROWSER_DEVTOOLS_WS_URL || ''}`
+    );
+  }
   logEnvironment(env, webSearchEnv, verbose);
   if (imageAnalysisWarning) {
     console.error(info(imageAnalysisWarning));
@@ -1222,10 +1294,13 @@ export async function execClaudeWithCLIProxy(
   const imageAnalysisArgs = imageAnalysisMcpReady
     ? appendThirdPartyImageAnalysisToolArgs(claudeArgs)
     : claudeArgs;
+  const browserArgs = browserRuntimeEnv
+    ? appendBrowserToolArgs(imageAnalysisArgs)
+    : imageAnalysisArgs;
   const launchArgs = [
     '--settings',
     settingsPath,
-    ...appendThirdPartyWebSearchToolArgs(imageAnalysisArgs),
+    ...appendThirdPartyWebSearchToolArgs(browserArgs),
   ];
   const traceEnv = createWebSearchTraceContext({
     launcher: 'cliproxy.executor',
@@ -1241,7 +1316,7 @@ export async function execClaudeWithCLIProxy(
     claude = spawn(cmdString, {
       stdio: 'inherit',
       windowsHide: true,
-      shell: true,
+      shell: getWindowsEscapedCommandShell(),
       env: tracedEnv,
     });
   } else {

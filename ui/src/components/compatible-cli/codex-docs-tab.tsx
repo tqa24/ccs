@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { ExternalLink, ShieldCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -85,6 +86,8 @@ interface CodexDocsTabProps {
 }
 
 export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
+  const { t } = useTranslation();
+
   const docsReference = diagnostics.docsReference ?? {
     notes: [],
     links: [],
@@ -103,15 +106,18 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldCheck className="h-4 w-4" />
+              {/* TODO i18n: missing key codex.ccsBridgeRecipe */}
               CCS bridge recipe
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <div className="space-y-1.5">
               <p>
+                {/* TODO i18n: missing key codex.builtInLabel */}
                 <strong>Built-in:</strong> Use <code>ccsxp</code> for the CCS provider shortcut.
               </p>
               <p>
+                {/* TODO i18n: missing key codex.nativeLabelRecipe */}
                 <strong>Native:</strong> Configure the recipe below to use CLIProxy directly with{' '}
                 <code>codex</code>.
               </p>
@@ -121,15 +127,23 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
             </pre>
             <ol className="ml-4 list-decimal space-y-1.5 [&>li]:pl-1">
               <li>
+                {/* TODO i18n: missing key codex.saveCliproxyProvider */}
                 Save the <code>cliproxy</code> provider in your user config.
               </li>
               <li>
+                {/* TODO i18n: missing key codex.setTopLevelModelProvider */}
                 Set top-level <code>model_provider</code> to <code>cliproxy</code>.
               </li>
               <li>
+                {/* TODO i18n: missing key codex.exportCliproxyApiKey */}
                 Export <code>CLIPROXY_API_KEY</code> before launching native Codex.
               </li>
             </ol>
+            <p>
+              CCS-managed browser tooling belongs to <code>Settings &gt; Browser</code>. Do not edit
+              the <code>ccs_browser</code> entry from the generic MCP card unless you are
+              intentionally overriding the managed path in raw TOML.
+            </p>
           </CardContent>
         </Card>
 
@@ -137,6 +151,7 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldCheck className="h-4 w-4" />
+              {/* TODO i18n: missing key codex.upstreamNotes */}
               Upstream notes
             </CardTitle>
           </CardHeader>
@@ -150,7 +165,9 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
             )}
             <Separator />
             <div className="space-y-2">
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">Codex docs</p>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {t('codex.codexDocs')}
+              </p>
               <div className="space-y-1.5">
                 {docsLinks.map((link) => (
                   <a
@@ -175,6 +192,7 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
             <Separator />
             <div className="space-y-2">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                {/* TODO i18n: missing key codex.providerBridgeReference */}
                 Provider / bridge reference
               </p>
               <div className="space-y-1.5">
@@ -204,12 +222,14 @@ export function CodexDocsTab({ diagnostics }: CodexDocsTabProps) {
               <>
                 <Separator />
                 <p className="text-xs text-muted-foreground">
+                  {/* TODO i18n: missing key codex.providerValues */}
                   Provider values: {docsReference.providerValues.join(', ')}
                 </p>
               </>
             )}
             {docsReference.settingsHierarchy.length > 0 && (
               <p className="text-xs text-muted-foreground">
+                {/* TODO i18n: missing key codex.settingsHierarchy */}
                 Settings hierarchy: {docsReference.settingsHierarchy.join(' -> ')}
               </p>
             )}

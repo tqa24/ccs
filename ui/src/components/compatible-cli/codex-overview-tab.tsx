@@ -8,6 +8,7 @@ import {
   TerminalSquare,
   XCircle,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { QuickCommands } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -59,6 +60,8 @@ interface CodexOverviewTabProps {
 }
 
 export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
+  const { t } = useTranslation();
+
   const inspectProfileCommand = diagnostics.config.activeProfile
     ? `codex --profile ${diagnostics.config.activeProfile}`
     : 'codex';
@@ -71,25 +74,23 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Info className="h-4 w-4" />
-              How Codex works in CCS
+              {t('codex.howCodexWorks')}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             <ul className="ml-4 list-disc space-y-1.5 [&>li]:pl-1">
-              <li>Codex is a first-class, runtime-only target in CCS v1.</li>
+              <li>{t('codex.nativeDesc')}</li>
               <li>
-                <strong>Native config:</strong> <code>ccs-codex</code> and <code>ccsx</code> launch
-                native Codex using your saved defaults.
+                <strong>{t('codex.nativeConfigLabel')}</strong> {t('codex.nativeConfigDesc')}
               </li>
               <li>
-                <strong>Transient overrides:</strong> <code>ccsxp</code> (or{' '}
-                <code>ccs codex --target codex</code>) uses the CCS provider shortcut.
+                <strong>{t('codex.transientOverridesLabel')}</strong>{' '}
+                {t('codex.transientOverridesDesc')}
               </li>
               <li>
-                <strong>CLIProxy default:</strong> To make plain <code>codex</code> use CLIProxy,
-                set <code>model_provider = "cliproxy"</code> and add the recipe below.
+                <strong>{t('codex.cliproxyDefaultLabel')}</strong> {t('codex.cliproxyDefaultDesc')}
               </li>
-              <li>API profiles continue to default to Claude or Droid.</li>
+              <li>{t('codex.apiProfilesDefault')}</li>
             </ul>
           </CardContent>
         </Card>
@@ -98,30 +99,42 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <TerminalSquare className="h-4 w-4" />
-              Runtime install
+              {t('codex.runtimeInstall')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Status</span>
+              <span className="text-sm text-muted-foreground">{t('codex.status')}</span>
               <Badge variant={diagnostics.binary.installed ? 'default' : 'secondary'}>
-                {diagnostics.binary.installed ? 'Detected' : 'Not found'}
+                {diagnostics.binary.installed ? t('codex.detected') : t('codex.notFound')}
               </Badge>
             </div>
-            <DetailRow label="Detection source" value={diagnostics.binary.source} mono />
-            <DetailRow label="Binary path" value={diagnostics.binary.path || 'Not found'} mono />
+            <DetailRow label={t('codex.detectionSource')} value={diagnostics.binary.source} mono />
             <DetailRow
-              label="Install directory"
+              label={t('codex.binaryPath')}
+              value={diagnostics.binary.path || t('codex.notFound')}
+              mono
+            />
+            <DetailRow
+              label={t('codex.installDirectory')}
               value={diagnostics.binary.installDir || 'N/A'}
               mono
             />
-            <DetailRow label="Version" value={diagnostics.binary.version || 'Unknown'} mono />
-            <DetailRow label="Native aliases" value="ccs-codex, ccsx" mono />
-            <DetailRow label="CCS provider shortcut" value="ccsxp" mono />
+            <DetailRow
+              label={t('codex.versionLabel')}
+              value={diagnostics.binary.version || 'Unknown'}
+              mono
+            />
+            <DetailRow label={t('codex.nativeAliases')} value="ccs-codex, ccsx" mono />
+            <DetailRow label={t('codex.ccsProviderShortcut')} value="ccsxp" mono />
             <div className="flex items-center justify-between rounded-md border px-3 py-2">
-              <span className="text-sm text-muted-foreground">--config override support</span>
+              <span className="text-sm text-muted-foreground">
+                {t('codex.configOverrideSupport')}
+              </span>
               <Badge variant={diagnostics.binary.supportsConfigOverrides ? 'default' : 'secondary'}>
-                {diagnostics.binary.supportsConfigOverrides ? 'Available' : 'Missing'}
+                {diagnostics.binary.supportsConfigOverrides
+                  ? t('codex.available')
+                  : t('codex.missing')}
               </Badge>
             </div>
           </CardContent>
@@ -131,7 +144,7 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Route className="h-4 w-4" />
-              CLIProxy-backed native Codex
+              {t('codex.cliproxyNativeCodex')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
@@ -139,45 +152,31 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
               <>
                 <div className="space-y-1.5">
                   <p>
-                    <strong>Two supported paths:</strong>
+                    <strong>{t('codex.twoSupportedPaths')}</strong>
                   </p>
                   <ul className="ml-4 list-disc space-y-1 [&>li]:pl-1">
                     <li>
-                      <strong>Built-in:</strong> Use <code>ccsxp</code> for the CCS provider
-                      shortcut.
+                      <strong>{t('codex.builtInLabel')}</strong> {t('codex.builtInCcsxpDesc')}
                     </li>
                     <li>
-                      <strong>Native:</strong> Configure the recipe below to use CLIProxy directly
-                      with <code>codex</code>.
+                      <strong>{t('codex.nativeRecipeLabel')}</strong> {t('codex.nativeRecipeDesc')}
                     </li>
                   </ul>
                 </div>
                 <div className="rounded-md border bg-muted/20 p-3">
-                  <p className="font-medium text-foreground">Saved native Codex recipe</p>
+                  <p className="font-medium text-foreground">{t('codex.codexNativeRecipe')}</p>
                   <pre className="mt-2 overflow-x-auto rounded-md bg-background p-3 text-xs text-foreground">
                     {CLIPROXY_NATIVE_CODEX_RECIPE}
                   </pre>
                 </div>
                 <ol className="ml-4 list-decimal space-y-1.5 [&>li]:pl-1">
-                  <li>
-                    Save a provider named <code>cliproxy</code> with the base URL and env key above.
-                  </li>
-                  <li>
-                    In <strong>Top-level settings</strong>, set <strong>Default provider</strong> to{' '}
-                    <code>cliproxy</code>.
-                  </li>
-                  <li>
-                    Export <code>CLIPROXY_API_KEY</code> in your shell before launching native
-                    Codex.
-                  </li>
+                  <li>{t('codex.saveProviderNamedCliproxy')}</li>
+                  <li>{t('codex.inTopLevelSetDefault')}</li>
+                  <li>{t('codex.exportCliproxyApiKey')}</li>
                 </ol>
               </>
             ) : (
-              <p>
-                This Codex build can still use the native path, but CCS-backed Codex routing via{' '}
-                <code>ccsxp</code> or <code>ccs codex --target codex</code> stays unavailable until
-                the detected Codex binary exposes <code>--config</code> overrides.
-              </p>
+              <p>{t('codex.noConfigOverrides')}</p>
             )}
           </CardContent>
         </Card>
@@ -186,31 +185,34 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Folder className="h-4 w-4" />
-              Config file
+              {t('codex.configFile')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="rounded-md border p-3 space-y-1.5">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-sm">User config</span>
+                <span className="font-medium text-sm">{t('codex.userConfig')}</span>
                 {diagnostics.file.exists ? (
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                 ) : (
                   <XCircle className="h-4 w-4 text-muted-foreground" />
                 )}
               </div>
-              <DetailRow label="Path" value={diagnostics.file.path} mono />
-              <DetailRow label="Resolved" value={diagnostics.file.resolvedPath} mono />
-              <DetailRow label="Size" value={formatBytes(diagnostics.file.sizeBytes)} />
-              <DetailRow label="Last modified" value={formatTimestamp(diagnostics.file.mtimeMs)} />
+              <DetailRow label={t('codex.path')} value={diagnostics.file.path} mono />
+              <DetailRow label={t('codex.resolved')} value={diagnostics.file.resolvedPath} mono />
+              <DetailRow label={t('codex.size')} value={formatBytes(diagnostics.file.sizeBytes)} />
+              <DetailRow
+                label={t('codex.lastModified')}
+                value={formatTimestamp(diagnostics.file.mtimeMs)}
+              />
               {diagnostics.file.parseError && (
                 <p className="text-xs text-amber-600">
-                  TOML warning: {diagnostics.file.parseError}
+                  {t('codex.tomlWarning')}: {diagnostics.file.parseError}
                 </p>
               )}
               {diagnostics.file.readError && (
                 <p className="text-xs text-destructive">
-                  Read warning: {diagnostics.file.readError}
+                  {t('codex.readWarning')}: {diagnostics.file.readError}
                 </p>
               )}
             </div>
@@ -221,51 +223,61 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <ShieldCheck className="h-4 w-4" />
-              Current user-layer summary
+              {t('codex.currentUserLayerSummary')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <DetailRow label="Model" value={diagnostics.config.model || 'Not set'} mono />
             <DetailRow
-              label="Model provider"
-              value={diagnostics.config.modelProvider || 'Not set'}
+              label={t('codex.model')}
+              value={diagnostics.config.model || t('codex.notSet')}
               mono
             />
             <DetailRow
-              label="Active profile"
-              value={diagnostics.config.activeProfile || 'Not set'}
+              label={t('codex.defaultProvider')}
+              value={diagnostics.config.modelProvider || t('codex.notSet')}
               mono
             />
             <DetailRow
-              label="Approval policy"
-              value={diagnostics.config.approvalPolicy || 'Not set'}
+              label={t('codex.activeProfile')}
+              value={diagnostics.config.activeProfile || t('codex.notSet')}
               mono
             />
             <DetailRow
-              label="Sandbox mode"
-              value={diagnostics.config.sandboxMode || 'Not set'}
+              label={t('codex.approvalPolicy')}
+              value={diagnostics.config.approvalPolicy || t('codex.notSet')}
               mono
             />
-            <DetailRow label="Web search" value={diagnostics.config.webSearch || 'Not set'} mono />
+            <DetailRow
+              label={t('codex.sandboxMode')}
+              value={diagnostics.config.sandboxMode || t('codex.notSet')}
+              mono
+            />
+            <DetailRow
+              label={t('codex.webSearch')}
+              value={diagnostics.config.webSearch || t('codex.notSet')}
+              mono
+            />
             <Separator />
             <div className="grid grid-cols-2 gap-2 text-xs">
               <Badge variant="outline" className="justify-center">
-                providers: {diagnostics.config.modelProviderCount}
+                {t('codex.providersCount', { count: diagnostics.config.modelProviderCount })}
               </Badge>
               <Badge variant="outline" className="justify-center">
-                profiles: {diagnostics.config.profileCount}
+                {t('codex.profilesCount', { count: diagnostics.config.profileCount })}
               </Badge>
               <Badge variant="outline" className="justify-center">
-                enabled features: {diagnostics.config.enabledFeatures.length}
+                {t('codex.enabledFeaturesCount', {
+                  count: diagnostics.config.enabledFeatures.length,
+                })}
               </Badge>
               <Badge variant="outline" className="justify-center">
-                MCP servers: {diagnostics.config.mcpServerCount}
+                {t('codex.mcpServersCount', { count: diagnostics.config.mcpServerCount })}
               </Badge>
             </div>
             {diagnostics.config.topLevelKeys.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                  User-layer keys present
+                  {t('codex.userLayerKeysPresent')}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {diagnostics.config.topLevelKeys.map((key) => (
@@ -282,28 +294,28 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
         <QuickCommands
           snippets={[
             {
-              label: 'Native short alias',
+              label: t('codex.nativeShortAlias'),
               command: 'ccsx',
               description: 'Launch the short native Codex runtime alias.',
             },
             {
-              label: 'CCS Codex shortcut',
+              label: t('codex.ccsCodexShortcut'),
               command: 'ccsxp "your prompt"',
               description: supportsManagedRouting
-                ? 'Run the built-in CCS Codex provider on native Codex.'
+                ? t('codex.runBuiltInCodex')
                 : 'Requires a Codex build that exposes --config overrides.',
             },
             {
-              label: 'Explicit provider route',
+              label: t('codex.explicitProviderRoute'),
               command: 'ccs codex --target codex "your prompt"',
               description: supportsManagedRouting
-                ? 'Use the explicit built-in Codex provider route.'
+                ? t('codex.runBuiltInCodexExplicit')
                 : 'Requires a Codex build that exposes --config overrides.',
             },
             {
               label: diagnostics.config.activeProfile
                 ? 'Inspect active profile'
-                : 'Open native Codex',
+                : t('codex.openNativeCodex'),
               command: inspectProfileCommand,
               description: diagnostics.config.activeProfile
                 ? 'Inspect the active named profile directly in native Codex.'
@@ -316,12 +328,12 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-base">
               <Route className="h-4 w-4" />
-              Runtime vs provider
+              {t('codex.runtimeVsProvider')}
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             <div className="flex flex-col rounded-md border p-3 text-sm">
-              <p className="font-medium text-foreground">Native Codex runtime</p>
+              <p className="font-medium text-foreground">{t('codex.nativeCodexRuntime')}</p>
               <ul className="mt-2 flex-grow list-disc space-y-1.5 pl-4 text-muted-foreground [&>li]:pl-1">
                 <li>
                   <code>ccs-codex</code>
@@ -334,11 +346,11 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
                 </li>
               </ul>
               <Badge variant="secondary" className="mt-4 w-fit justify-center font-normal">
-                Honors saved native user config
+                {t('codex.honorsSavedNativeConfig')}
               </Badge>
             </div>
             <div className="flex flex-col rounded-md border p-3 text-sm">
-              <p className="font-medium text-foreground">CCS Codex provider / bridge</p>
+              <p className="font-medium text-foreground">{t('codex.ccsCodexProvider')}</p>
               {supportsManagedRouting ? (
                 <>
                   <ul className="mt-2 flex-grow list-disc space-y-1.5 pl-4 text-muted-foreground [&>li]:pl-1">
@@ -350,13 +362,11 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
                     </li>
                   </ul>
                   <Badge variant="secondary" className="mt-4 w-fit justify-center font-normal">
-                    Uses transient overrides
+                    {t('codex.usesTransientOverrides')}
                   </Badge>
                 </>
               ) : (
-                <p className="mt-2 text-muted-foreground">
-                  Unavailable (Codex build lacks <code>--config</code> support).
-                </p>
+                <p className="mt-2 text-muted-foreground">{t('codex.unavailableNoConfig')}</p>
               )}
             </div>
           </CardContent>
@@ -364,15 +374,15 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
 
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Supported flows</CardTitle>
+            <CardTitle className="text-base">{t('codex.supportedFlows')}</CardTitle>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Flow</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead>{t('codex.flow')}</TableHead>
+                  <TableHead>{t('codex.status')}</TableHead>
+                  <TableHead>{t('codex.notes')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -381,7 +391,7 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
                     <TableCell className="font-mono text-xs">{entry.label}</TableCell>
                     <TableCell>
                       <Badge variant={entry.supported ? 'default' : 'secondary'}>
-                        {entry.supported ? 'Yes' : 'No'}
+                        {entry.supported ? t('codex.yes') : t('codex.no')}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">{entry.notes}</TableCell>
@@ -397,7 +407,7 @@ export function CodexOverviewTab({ diagnostics }: CodexOverviewTabProps) {
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-base">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
-                Warnings
+                {t('codex.warningsTitle')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1.5">

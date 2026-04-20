@@ -64,7 +64,7 @@ const providerOptions = CLIPROXY_PROVIDERS.map((id) => ({
 
 const COMPOSITE_TIERS = ['opus', 'sonnet', 'haiku'] as const;
 const AGY_DENYLIST_MESSAGE =
-  'Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.';
+  'Antigravity denylist: Claude Opus 4.5 and Claude Sonnet 4.5 are deprecated.'; // TODO i18n: use t('providerEditor.agyDenylist')
 
 function normalizeOptionalValue(value?: string): string | undefined {
   const trimmed = value?.trim();

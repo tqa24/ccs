@@ -91,6 +91,9 @@ export function AddAccountDialog({
   const [kiroIDCStartUrl, setKiroIDCStartUrl] = useState('');
   const [kiroIDCRegion, setKiroIDCRegion] = useState('');
   const [kiroIDCFlow, setKiroIDCFlow] = useState<KiroIDCFlow>(DEFAULT_KIRO_IDC_FLOW);
+  const [gitlabAuthMode, setGitlabAuthMode] = useState<'oauth' | 'pat'>('oauth');
+  const [gitlabBaseUrl, setGitlabBaseUrl] = useState('');
+  const [gitlabPersonalAccessToken, setGitlabPersonalAccessToken] = useState('');
   const { t } = useTranslation();
   const wasAuthenticatingRef = useRef(false);
   const powerUserModeRequestIdRef = useRef(0);
@@ -99,6 +102,7 @@ export function AddAccountDialog({
   const kiroImportMutation = useKiroImport();
 
   const isKiro = provider === 'kiro';
+  const isGitLab = provider === 'gitlab';
   const supportsPowerUserMode = provider === 'agy' || provider === 'gemini';
   const requiresGeminiSafetyAcknowledgement = provider === 'gemini' && !powerUserModeEnabled;
   const requiresAgyResponsibilityFlow = provider === 'agy' && !powerUserModeEnabled;
@@ -120,6 +124,8 @@ export function AddAccountDialog({
   const nicknameTrimmed = nickname.trim();
   const kiroIDCStartUrlTrimmed = kiroIDCStartUrl.trim();
   const kiroIDCRegionTrimmed = kiroIDCRegion.trim();
+  const gitlabBaseUrlTrimmed = gitlabBaseUrl.trim();
+  const gitlabPersonalAccessTokenTrimmed = gitlabPersonalAccessToken.trim();
   const errorMessage = localError || authFlow.error;
 
   const fetchPowerUserModeState = useCallback(async (): Promise<boolean> => {
@@ -191,6 +197,9 @@ export function AddAccountDialog({
     setKiroIDCStartUrl('');
     setKiroIDCRegion('');
     setKiroIDCFlow(DEFAULT_KIRO_IDC_FLOW);
+    setGitlabAuthMode('oauth');
+    setGitlabBaseUrl('');
+    setGitlabPersonalAccessToken('');
     powerUserModeRequestIdRef.current += 1;
     powerUserModeLoadErrorShownRef.current = false;
     wasAuthenticatingRef.current = false;
@@ -294,6 +303,7 @@ export function AddAccountDialog({
     }
     if (requiresAgyResponsibilityFlow && !isAgyRiskChecklistComplete) {
       setLocalError(
+        // TODO i18n: missing key for AGY responsibility error
         'Complete all Antigravity responsibility steps before authenticating this provider.'
       );
       return;
@@ -309,6 +319,10 @@ export function AddAccountDialog({
       setLocalError('IDC Start URL is required for Kiro IAM Identity Center login.');
       return;
     }
+    if (isGitLab && gitlabAuthMode === 'pat' && !gitlabPersonalAccessTokenTrimmed) {
+      setLocalError(t('addAccountDialog.gitlabPatRequired'));
+      return;
+    }
     wasAuthenticatingRef.current = true;
     authFlow.startAuth(provider, {
       nickname: nicknameTrimmed || undefined,
@@ -316,8 +330,18 @@ export function AddAccountDialog({
       kiroIDCStartUrl: isKiroIdc ? kiroIDCStartUrlTrimmed : undefined,
       kiroIDCRegion: isKiroIdc && kiroIDCRegionTrimmed ? kiroIDCRegionTrimmed : undefined,
       kiroIDCFlow: isKiroIdc ? kiroIDCFlow : undefined,
+      gitlabAuthMode: isGitLab ? gitlabAuthMode : undefined,
+      gitlabBaseUrl: isGitLab && gitlabBaseUrlTrimmed ? gitlabBaseUrlTrimmed : undefined,
+      gitlabPersonalAccessToken:
+        isGitLab && gitlabAuthMode === 'pat' && gitlabPersonalAccessTokenTrimmed
+          ? gitlabPersonalAccessTokenTrimmed
+          : undefined,
       flowType: isKiro ? selectedKiroFlowType : undefined,
-      startEndpoint: isKiro ? selectedKiroStartEndpoint : undefined,
+      startEndpoint: isKiro
+        ? selectedKiroStartEndpoint
+        : isGitLab && gitlabAuthMode === 'pat'
+          ? 'start'
+          : undefined,
       riskAcknowledgement: requiresAgyResponsibilityFlow
         ? {
             version: ANTIGRAVITY_ACK_VERSION,
@@ -431,6 +455,7 @@ export function AddAccountDialog({
               <p className="text-xs text-muted-foreground">{kiroMethodOption.description}</p>
               {isKiroSocial && (
                 <p className="text-xs text-muted-foreground">
+                  {/* TODO i18n: missing key for Kiro social browser hint */}
                   If your browser does not return automatically after login, CCS can accept the
                   final
                   <span className="mx-1 rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
@@ -445,7 +470,9 @@ export function AddAccountDialog({
           {isKiroIdc && !showAuthUI && (
             <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
               <div className="space-y-2">
-                <Label htmlFor="kiro-idc-start-url">IDC Start URL</Label>
+                <Label htmlFor="kiro-idc-start-url">
+                  {/* TODO i18n: missing key */}IDC Start URL
+                </Label>
                 <Input
                   id="kiro-idc-start-url"
                   value={kiroIDCStartUrl}
@@ -457,12 +484,12 @@ export function AddAccountDialog({
                   disabled={isPending}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Required for organization IAM Identity Center login.
+                  {/* TODO i18n: missing key */}Required for organization IAM Identity Center login.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="kiro-idc-region">IDC Region</Label>
+                <Label htmlFor="kiro-idc-region">{/* TODO i18n: missing key */}IDC Region</Label>
                 <Input
                   id="kiro-idc-region"
                   value={kiroIDCRegion}
@@ -474,12 +501,13 @@ export function AddAccountDialog({
                   disabled={isPending}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Optional. Leave blank to use the upstream default region.
+                  {/* TODO i18n: missing key */}Optional. Leave blank to use the upstream default
+                  region.
                 </p>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="kiro-idc-flow">IDC Flow</Label>
+                <Label htmlFor="kiro-idc-flow">{/* TODO i18n: missing key */}IDC Flow</Label>
                 <Select
                   value={kiroIDCFlow}
                   onValueChange={(value) => {
@@ -488,18 +516,86 @@ export function AddAccountDialog({
                   }}
                 >
                   <SelectTrigger id="kiro-idc-flow">
-                    <SelectValue placeholder="Select IDC flow" />
+                    <SelectValue placeholder="{/* TODO i18n: missing key */}Select IDC flow" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="authcode">Authorization Code</SelectItem>
-                    <SelectItem value="device">Device Code</SelectItem>
+                    <SelectItem value="authcode">
+                      {/* TODO i18n: missing key */}Authorization Code
+                    </SelectItem>
+                    <SelectItem value="device">
+                      {/* TODO i18n: missing key */}Device Code
+                    </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Auth Code opens a browser and may need the final callback URL pasted back. Device
-                  Code shows a verification code instead.
+                  {/* TODO i18n: missing key */}Auth Code opens a browser and may need the final
+                  callback URL pasted back. Device Code shows a verification code instead.
                 </p>
               </div>
+            </div>
+          )}
+
+          {isGitLab && !showAuthUI && (
+            <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+              <div className="space-y-2">
+                <Label htmlFor="gitlab-auth-mode">{t('addAccountDialog.gitlabAuthMethod')}</Label>
+                <Select
+                  value={gitlabAuthMode}
+                  onValueChange={(value) => {
+                    setGitlabAuthMode(value as 'oauth' | 'pat');
+                    setLocalError(null);
+                  }}
+                >
+                  <SelectTrigger id="gitlab-auth-mode">
+                    <SelectValue placeholder={t('addAccountDialog.selectGitlabAuthMethod')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="oauth">{t('addAccountDialog.gitlabAuthOAuth')}</SelectItem>
+                    <SelectItem value="pat">{t('addAccountDialog.gitlabAuthPat')}</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {t('addAccountDialog.gitlabAuthHint')}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="gitlab-base-url">{t('addAccountDialog.gitlabUrl')}</Label>
+                <Input
+                  id="gitlab-base-url"
+                  value={gitlabBaseUrl}
+                  onChange={(e) => {
+                    setGitlabBaseUrl(e.target.value);
+                    setLocalError(null);
+                  }}
+                  placeholder={t('addAccountDialog.gitlabUrlPlaceholder')}
+                  disabled={isPending}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {t('addAccountDialog.gitlabUrlHint')}
+                </p>
+              </div>
+
+              {gitlabAuthMode === 'pat' && (
+                <div className="space-y-2">
+                  <Label htmlFor="gitlab-pat">{t('addAccountDialog.gitlabPat')}</Label>
+                  <Input
+                    id="gitlab-pat"
+                    type="password"
+                    value={gitlabPersonalAccessToken}
+                    onChange={(e) => {
+                      setGitlabPersonalAccessToken(e.target.value);
+                      setLocalError(null);
+                    }}
+                    placeholder={t('addAccountDialog.gitlabPatPlaceholder')}
+                    disabled={isPending}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {t('addAccountDialog.gitlabPatHint')} <span className="font-mono">api</span> and{' '}
+                    <span className="font-mono">read_user</span> scopes.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
@@ -540,7 +636,8 @@ export function AddAccountDialog({
                   {authFlow.isDeviceCodeFlow
                     ? t('addAccountDialog.deviceCodeHint')
                     : isKiroSocial
-                      ? 'Complete sign-in in your browser. If it does not return automatically, paste the final kiro:// callback URL below.'
+                      ? // TODO i18n: missing key for Kiro social callback hint
+                        'Complete sign-in in your browser. If it does not return automatically, paste the final kiro:// callback URL below.'
                       : t('addAccountDialog.browserHint')}
                 </p>
               </div>
@@ -590,7 +687,8 @@ export function AddAccountDialog({
                   <div className="space-y-2">
                     <Label htmlFor="callback-url" className="text-xs">
                       {isKiroSocial
-                        ? 'Browser did not return? Paste the final kiro:// callback URL:'
+                        ? // TODO i18n: missing key
+                          'Browser did not return? Paste the final kiro:// callback URL:'
                         : t('addAccountDialog.redirectPasteLabel')}
                     </Label>
                     <Input
@@ -626,7 +724,8 @@ export function AddAccountDialog({
               {!authFlow.authUrl && !authFlow.isDeviceCodeFlow && (
                 <p className="text-xs text-center text-muted-foreground">
                   {isKiroSocial
-                    ? 'Preparing the Kiro sign-in URL. If it does not open automatically, it will appear here shortly.'
+                    ? // TODO i18n: missing key for Kiro social preparing URL
+                      'Preparing the Kiro sign-in URL. If it does not open automatically, it will appear here shortly.'
                     : t('addAccountDialog.preparingUrl')}
                 </p>
               )}

@@ -93,6 +93,12 @@ describe('ProfileDetector', () => {
       expect(result.provider).toBe('gemini');
     });
 
+    it('should detect newly added cliproxy providers', () => {
+      expect(detector.detectProfileType('gitlab').provider).toBe('gitlab');
+      expect(detector.detectProfileType('codebuddy').provider).toBe('codebuddy');
+      expect(detector.detectProfileType('kilo').provider).toBe('kilo');
+    });
+
     it('should detect settings-based profile from unified config', () => {
       const settingsPath = path.join(tempDir, 'glm.settings.json');
       fs.writeFileSync(settingsPath, JSON.stringify({ env: { ANTHROPIC_MODEL: 'glm-4' } }));
@@ -196,7 +202,14 @@ describe('ProfileDetector', () => {
       }
     });
 
-    it('should detect cursor as a first-class runtime profile when enabled', () => {
+    it('should detect cursor as a CLIProxy provider shortcut', () => {
+      const result = detector.detectProfileType('cursor');
+      expect(result.type).toBe('cliproxy');
+      expect(result.name).toBe('cursor');
+      expect(result.provider).toBe('cursor');
+    });
+
+    it('should detect legacy-cursor as a first-class runtime profile when enabled', () => {
       const isUnifiedModeSpy = spyOn(unifiedConfigLoader, 'isUnifiedMode').mockReturnValue(true);
       const getCursorConfigSpy = spyOn(unifiedConfigLoader, 'getCursorConfig').mockReturnValue({
         enabled: true,
@@ -207,9 +220,9 @@ describe('ProfileDetector', () => {
       });
 
       try {
-        const result = detector.detectProfileType('cursor');
+        const result = detector.detectProfileType('legacy-cursor');
         expect(result.type).toBe('cursor');
-        expect(result.name).toBe('cursor');
+        expect(result.name).toBe('legacy-cursor');
         expect(result.cursorConfig?.auto_start).toBe(true);
       } finally {
         isUnifiedModeSpy.mockRestore();
@@ -217,7 +230,7 @@ describe('ProfileDetector', () => {
       }
     });
 
-    it('should merge default cursor fields when enabled via partial unified config', () => {
+    it('should merge default legacy cursor fields when enabled via partial unified config', () => {
       const originalCcsHome = process.env.CCS_HOME;
       process.env.CCS_HOME = tempDir;
       const ccsDir = path.join(tempDir, '.ccs');
@@ -229,7 +242,7 @@ describe('ProfileDetector', () => {
 
       try {
         const localDetector = new ProfileDetector();
-        const result = localDetector.detectProfileType('cursor');
+        const result = localDetector.detectProfileType('legacy-cursor');
         expect(result.type).toBe('cursor');
         expect(result.cursorConfig).toEqual({
           enabled: true,
@@ -247,7 +260,7 @@ describe('ProfileDetector', () => {
       }
     });
 
-    it('should throw a helpful error when cursor profile is disabled', () => {
+    it('should throw a helpful error when legacy cursor profile is disabled', () => {
       const isUnifiedModeSpy = spyOn(unifiedConfigLoader, 'isUnifiedMode').mockReturnValue(true);
       const getCursorConfigSpy = spyOn(unifiedConfigLoader, 'getCursorConfig').mockReturnValue({
         enabled: false,
@@ -258,7 +271,9 @@ describe('ProfileDetector', () => {
       });
 
       try {
-        expect(() => detector.detectProfileType('cursor')).toThrow(/Cursor profile is not enabled/);
+        expect(() => detector.detectProfileType('legacy-cursor')).toThrow(
+          /Legacy Cursor profile is not enabled/
+        );
       } finally {
         isUnifiedModeSpy.mockRestore();
         getCursorConfigSpy.mockRestore();

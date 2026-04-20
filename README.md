@@ -50,6 +50,40 @@ ccs glm
 ccs ollama
 ```
 
+## OpenAI-Compatible Routing
+
+CCS can now bridge Claude Code into OpenAI-compatible providers through a local
+Anthropic-compatible proxy instead of requiring a native Anthropic upstream.
+
+```bash
+ccs api create --preset hf
+ccs hf
+```
+
+Need to manage the proxy manually?
+
+```bash
+ccs proxy start hf
+eval "$(ccs proxy activate)"
+```
+
+The proxy also supports request-time `profile:model` selectors, scenario-based
+model routing through `proxy.routing`, and explicit activation helpers such as
+`ccs proxy activate --fish`.
+
+Guide: [OpenAI-Compatible Provider Routing](./docs/openai-compatible-providers.md)
+
+### Related Project: claude-code-router
+
+[claude-code-router](https://github.com/musistudio/claude-code-router) is an
+excellent standalone tool for routing Claude Code requests to OpenAI-compatible
+providers. CCS's local proxy and SSE transformation work was directly informed
+by CCR's transformer architecture.
+
+Use CCR when you want a standalone router without CCS profile management.
+Use CCS when you want the routing flow integrated with CCS profiles, runtime
+bridges, and the existing `ccs` command surface.
+
 Need the full setup path instead of the short version?
 
 | Need | Start here |
@@ -93,8 +127,10 @@ Deep dive:
 ![WebSearch Fallback](assets/screenshots/websearch.webp)
 
 CCS can provision first-class local tools like WebSearch and image analysis for
-third-party launches instead of leaving you to wire them by hand. Deep dive:
-[WebSearch](https://docs.ccs.kaitran.ca/features/ai/websearch).
+third-party launches instead of leaving you to wire them by hand. Browser
+automation now has a first-class setup path as well. Deep dive:
+[WebSearch](https://docs.ccs.kaitran.ca/features/ai/websearch) |
+[Browser Automation](./docs/browser-automation.md).
 
 ## Docs Matrix
 
@@ -110,6 +146,7 @@ reference material.
 | Compare OAuth providers, Claude accounts, and API profiles | [Provider Overview](https://docs.ccs.kaitran.ca/providers/concepts/overview) |
 | Learn the dashboard structure and feature pages | [Dashboard Overview](https://docs.ccs.kaitran.ca/features/dashboard/overview) |
 | Configure profiles, paths, and environment variables | [Configuration](https://docs.ccs.kaitran.ca/getting-started/configuration) |
+| Understand browser attach vs Codex browser tooling | [Browser Automation](./docs/browser-automation.md) |
 | Keep OpenCode aligned with your live CCS setup | [OpenCode Sync Plugin](https://docs.ccs.kaitran.ca/features/workflow/opencode-sync) |
 | Browse every command and flag | [CLI Commands](https://docs.ccs.kaitran.ca/reference/cli-commands) |
 | Recover from install, auth, or provider failures | [Troubleshooting](https://docs.ccs.kaitran.ca/reference/troubleshooting) |
