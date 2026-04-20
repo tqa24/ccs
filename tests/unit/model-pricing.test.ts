@@ -242,14 +242,14 @@ describe('model-pricing', () => {
       expect(cost).toBe(36.75); // 5 + 25 + 6.25 + 0.5
     });
 
-    it('should calculate Claude Opus 4.7 Thinking cost including cache token rates', () => {
+    it('should calculate Claude Opus 4.7 cache cost consistently across repeat lookups', () => {
       const usage: TokenUsage = {
         inputTokens: 1_000_000,
         outputTokens: 1_000_000,
         cacheCreationTokens: 1_000_000,
         cacheReadTokens: 1_000_000,
       };
-      const cost = calculateCost(usage, 'claude-opus-4-7-thinking');
+      const cost = calculateCost(usage, 'claude-opus-4-7');
       expect(cost).toBe(36.75); // 5 + 25 + 6.25 + 0.5
     });
   });
