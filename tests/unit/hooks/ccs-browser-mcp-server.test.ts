@@ -5695,6 +5695,28 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(responses.find((message) => message.id === 1019))).toContain('pageIndex and pageId cannot be used together');
   });
 
+  it('rolls back recording state when recorder injection fails', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Broken Recording Page',
+          currentUrl: 'https://example.com/broken-recording',
+          recording: {
+            injectionError: 'recording injection failed',
+          },
+        },
+      ],
+      [
+        { jsonrpc: '2.0', id: 1020, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1020_1, method: 'tools/call', params: { name: 'browser_get_recording', arguments: {} } },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1020))).toContain('recording injection failed');
+    expect(getResponseText(responses.find((message) => message.id === 1020_1))).toContain('no recording available');
+  });
+
   it('normalizes type, press_key, scroll, and warnings in a recording result', async () => {
     const responses = await runMcpRequests(
       [
