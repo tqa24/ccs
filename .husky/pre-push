@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Husky v9 invokes hooks via `sh -e` (see .husky/_/h), ignoring this shebang.
+# Re-exec under bash so `set -o pipefail` and `[[ ... ]]` below work portably.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 # Protected branches keep the full CI parity gate.
