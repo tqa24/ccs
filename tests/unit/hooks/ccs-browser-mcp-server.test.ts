@@ -132,6 +132,78 @@ type MockDragPlan = {
   recordedActions?: MockPointerActionRecord[];
 };
 
+type MockRecordedEvent =
+  | {
+      kind: 'click';
+      selector: string;
+      nth?: number;
+      frameSelector?: string;
+      pierceShadow?: boolean;
+      button?: 'left' | 'middle' | 'right';
+      clickCount?: number;
+      offsetX?: number;
+      offsetY?: number;
+      timestamp?: number;
+    }
+  | {
+      kind: 'type';
+      selector: string;
+      text: string;
+      nth?: number;
+      frameSelector?: string;
+      pierceShadow?: boolean;
+      timestamp?: number;
+    }
+  | {
+      kind: 'press_key';
+      key: string;
+      modifiers?: string[];
+      timestamp?: number;
+    }
+  | {
+      kind: 'scroll';
+      selector?: string;
+      deltaX?: number;
+      deltaY?: number;
+      frameSelector?: string;
+      pierceShadow?: boolean;
+      timestamp?: number;
+    }
+  | {
+      kind: 'drag_element';
+      selector: string;
+      targetSelector?: string;
+      targetX?: number;
+      targetY?: number;
+      nth?: number;
+      targetNth?: number;
+      frameSelector?: string;
+      pierceShadow?: boolean;
+      timestamp?: number;
+    }
+  | {
+      kind: 'pointer_action';
+      actions: Array<{
+        type: 'move' | 'down' | 'up' | 'pause';
+        selector?: string;
+        x?: number;
+        y?: number;
+        button?: 'left' | 'middle' | 'right';
+        durationMs?: number;
+      }>;
+      timestamp?: number;
+    };
+
+type MockRecordingWarning = {
+  message: string;
+};
+
+type MockRecordingPlan = {
+  events?: MockRecordedEvent[];
+  warnings?: MockRecordingWarning[];
+  injectionError?: string;
+};
+
 type MockFrameState = {
   selector: string;
   query?: Record<string, MockQueryPlan>;
@@ -200,6 +272,7 @@ type MockPageState = {
   shadowRoots?: MockShadowRootState[];
   dropzones?: Record<string, MockDropzonePlan>;
   drag?: MockDragPlan;
+  recording?: MockRecordingPlan;
   events?: MockPageEventPlan;
   intercept?: MockInterceptState;
   screenshot?: {
@@ -433,6 +506,36 @@ function parseParsedJsonArrayArgument<T>(expression: string, key: string): T[] {
   return [];
 }
 
+function parseParsedJsonObjectArgument<T>(expression: string, key: string): T | null {
+  const marker = `const ${key} = JSON.parse(`;
+  const start = expression.indexOf(marker);
+  if (start === -1) {
+    return null;
+  }
+
+  const quoteStart = start + marker.length;
+  const quote = expression[quoteStart];
+  if (quote !== '"' && quote !== "'") {
+    return null;
+  }
+
+  let index = quoteStart + 1;
+  while (index < expression.length) {
+    if (expression[index] === '\\') {
+      index += 2;
+      continue;
+    }
+    if (expression[index] === quote) {
+      const encoded = expression.slice(quoteStart, index + 1);
+      const decoded = JSON.parse(encoded) as string;
+      return JSON.parse(decoded) as T;
+    }
+    index += 1;
+  }
+
+  return null;
+}
+
 function pickMockMatch<T>(
   plan: T | T[] | undefined,
   nth = 0
@@ -498,6 +601,11 @@ function pushPointerAction(page: MockPageState, action: MockPointerActionRecord)
   page.drag = page.drag || {};
   page.drag.recordedActions = page.drag.recordedActions || [];
   page.drag.recordedActions.push(action);
+}
+
+function getMockRecordingPlan(page: MockPageState): MockRecordingPlan {
+  page.recording = page.recording || {};
+  return page.recording;
 }
 
 function shiftPageText(page: MockPageState): string {
@@ -961,6 +1069,46 @@ function createMockBrowser(pagesInput: MockPageState[]) {
         }
 
         const expression = String(message.params?.expression || '');
+        const recordingPayload = parseParsedJsonObjectArgument<{
+          events?: MockRecordedEvent[];
+          warnings?: MockRecordingWarning[];
+        }>(expression, 'recordingPayload');
+
+        if (expression.includes('globalThis.__CCS_BROWSER_RECORDING_RECORDER__ =')) {
+          const plan = getMockRecordingPlan(page);
+          if (plan.injectionError) {
+            reply({
+              result: {
+                type: 'object',
+                subtype: 'error',
+                description: plan.injectionError,
+              },
+            });
+            return;
+          }
+
+          if (recordingPayload && (recordingPayload.events?.length || recordingPayload.warnings?.length)) {
+            plan.events = recordingPayload.events || [];
+            plan.warnings = recordingPayload.warnings || [];
+          }
+
+          reply({ result: { type: 'object', value: { installed: true } } });
+          return;
+        }
+
+        if (expression.includes('globalThis.__CCS_BROWSER_RECORDING_RECORDER__ || { events: [], warnings: [] }')) {
+          const plan = getMockRecordingPlan(page);
+          reply({
+            result: {
+              type: 'object',
+              value: {
+                events: plan.events || [],
+                warnings: plan.warnings || [],
+              },
+            },
+          });
+          return;
+        }
 
         if (expression.includes('new DragEvent') && expression.includes('new DataTransfer()')) {
           const selector = parseJsonArgument(expression, 'selector') || '';
@@ -1677,6 +1825,10 @@ describe('ccs-browser MCP server', () => {
       'browser_drag_files',
       'browser_drag_element',
       'browser_pointer_action',
+      'browser_start_recording',
+      'browser_stop_recording',
+      'browser_get_recording',
+      'browser_clear_recording',
       'browser_take_screenshot',
       'browser_wait_for',
       'browser_eval',
@@ -1784,6 +1936,19 @@ describe('ccs-browser MCP server', () => {
 
     const pointerTool = tools.find((tool) => tool.name === 'browser_pointer_action');
     expect(pointerTool?.inputSchema?.properties?.actions).toMatchObject({ type: 'array' });
+
+    const startRecordingTool = tools.find((tool) => tool.name === 'browser_start_recording');
+    expect(startRecordingTool?.inputSchema?.properties?.pageIndex).toMatchObject({ type: 'integer' });
+    expect(startRecordingTool?.inputSchema?.properties?.pageId).toMatchObject({ type: 'string' });
+
+    const stopRecordingTool = tools.find((tool) => tool.name === 'browser_stop_recording');
+    expect(stopRecordingTool?.inputSchema).toMatchObject({ type: 'object' });
+
+    const getRecordingTool = tools.find((tool) => tool.name === 'browser_get_recording');
+    expect(getRecordingTool?.inputSchema).toMatchObject({ type: 'object' });
+
+    const clearRecordingTool = tools.find((tool) => tool.name === 'browser_clear_recording');
+    expect(clearRecordingTool?.inputSchema).toMatchObject({ type: 'object' });
 
     const queryTool = tools.find((tool) => tool.name === 'browser_query');
     expect(queryTool?.inputSchema?.properties?.fields).toMatchObject({
@@ -5436,6 +5601,197 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(responses.find((message) => message.id === 71))).toContain(
       'pageIndex and pageId cannot be used together'
     );
+  });
+
+  it('starts, stops, reads, and clears a recording session', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Recording Page',
+          currentUrl: 'https://example.com/recording',
+          recording: {
+            events: [
+              {
+                kind: 'click',
+                selector: '#submit',
+                button: 'left',
+                clickCount: 1,
+                offsetX: 12,
+                offsetY: 8,
+                timestamp: 1710000000000,
+              },
+            ],
+          },
+        },
+      ],
+      [
+        { jsonrpc: '2.0', id: 1001, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1002, method: 'tools/call', params: { name: 'browser_stop_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1003, method: 'tools/call', params: { name: 'browser_get_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1004, method: 'tools/call', params: { name: 'browser_clear_recording', arguments: {} } },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1001))).toContain('status: recording');
+    expect(getResponseText(responses.find((message) => message.id === 1002))).toContain('status: stopped');
+    expect(getResponseText(responses.find((message) => message.id === 1003))).toContain('type: click');
+    expect(getResponseText(responses.find((message) => message.id === 1004))).toContain('status: cleared');
+  });
+
+  it('rejects invalid recording lifecycle operations', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Recording Page',
+          currentUrl: 'https://example.com/recording',
+        },
+      ],
+      [
+        { jsonrpc: '2.0', id: 1011, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1012, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1013, method: 'tools/call', params: { name: 'browser_stop_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1014, method: 'tools/call', params: { name: 'browser_stop_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1015, method: 'tools/call', params: { name: 'browser_clear_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1016, method: 'tools/call', params: { name: 'browser_get_recording', arguments: {} } },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1012))).toContain('recording already active');
+    expect(getResponseText(responses.find((message) => message.id === 1014))).toContain('no active recording');
+    expect(getResponseText(responses.find((message) => message.id === 1016))).toContain('no recording available');
+  });
+
+  it('routes recording start by pageId and rejects page conflicts', async () => {
+    const responses = await runMcpRequests(
+      [
+        { id: 'page-1', title: 'First', currentUrl: 'https://example.com/1' },
+        { id: 'page-2', title: 'Second', currentUrl: 'https://example.com/2' },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1017,
+          method: 'tools/call',
+          params: { name: 'browser_start_recording', arguments: { pageId: 'page-2' } },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1018,
+          method: 'tools/call',
+          params: { name: 'browser_clear_recording', arguments: {} },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1019,
+          method: 'tools/call',
+          params: { name: 'browser_start_recording', arguments: { pageIndex: 0, pageId: 'page-1' } },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1017))).toContain('pageIndex: 1');
+    expect(getResponseText(responses.find((message) => message.id === 1019))).toContain('pageIndex and pageId cannot be used together');
+  });
+
+  it('normalizes type, press_key, scroll, and warnings in a recording result', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Normalize Page',
+          currentUrl: 'https://example.com/normalize',
+          recording: {
+            events: [
+              { kind: 'type', selector: '#email', text: 'walker@example.com', timestamp: 1710000000100 },
+              { kind: 'press_key', key: 'Enter', modifiers: ['Shift'], timestamp: 1710000000200 },
+              { kind: 'scroll', selector: '#results', deltaX: 0, deltaY: 320, timestamp: 1710000000300 },
+            ],
+            warnings: [{ message: 'cross-origin frame events were skipped' }],
+          },
+        },
+      ],
+      [
+        { jsonrpc: '2.0', id: 1021, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1022, method: 'tools/call', params: { name: 'browser_stop_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1023, method: 'tools/call', params: { name: 'browser_get_recording', arguments: {} } },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 1023));
+    expect(text).toContain('type: type');
+    expect(text).toContain('selector: #email');
+    expect(text).toContain('type: press_key');
+    expect(text).toContain('type: scroll');
+    expect(text).toContain('cross-origin frame events were skipped');
+  });
+
+  it('normalizes drag_element and pointer_action recordings', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Drag Recording Page',
+          currentUrl: 'https://example.com/drag-recording',
+          recording: {
+            events: [
+              {
+                kind: 'drag_element',
+                selector: '#card-a',
+                targetSelector: '#lane-b',
+                timestamp: 1710000000400,
+              },
+              {
+                kind: 'pointer_action',
+                actions: [
+                  { type: 'move', x: 10, y: 20 },
+                  { type: 'down', button: 'left' },
+                  { type: 'up', button: 'left' },
+                ],
+                timestamp: 1710000000500,
+              },
+            ],
+          },
+        },
+      ],
+      [
+        { jsonrpc: '2.0', id: 1031, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1032, method: 'tools/call', params: { name: 'browser_stop_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1033, method: 'tools/call', params: { name: 'browser_get_recording', arguments: {} } },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 1033));
+    expect(text).toContain('type: drag_element');
+    expect(text).toContain('selector: #card-a');
+    expect(text).toContain('targetSelector: "#lane-b"');
+    expect(text).toContain('type: pointer_action');
+    expect(text).toContain('actions:');
+  });
+
+  it('stops recording with a warning when the target page becomes unavailable', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Closing Page',
+          currentUrl: 'https://example.com/closing',
+          recording: {
+            events: [{ kind: 'click', selector: '#submit', timestamp: 1710000000600 }],
+          },
+        },
+      ],
+      [
+        { jsonrpc: '2.0', id: 1034, method: 'tools/call', params: { name: 'browser_start_recording', arguments: {} } },
+        { jsonrpc: '2.0', id: 1035, method: 'tools/call', params: { name: 'browser_close_page', arguments: { pageId: 'page-1' } } },
+        { jsonrpc: '2.0', id: 1036, method: 'tools/call', params: { name: 'browser_get_recording', arguments: {} } },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 1036));
+    expect(text).toContain('status: stopped');
+    expect(text).toContain('recording stopped because target page was closed');
   });
 
   it('drags local files onto normal, frame, and shadow dropzones', async () => {
