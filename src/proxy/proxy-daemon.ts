@@ -42,6 +42,11 @@ export interface StartOpenAICompatProxyResult {
   error?: string;
 }
 
+interface OpenAICompatProxyLaunchResult extends StartOpenAICompatProxyResult {
+  commitState?: () => void;
+  stop?: () => Promise<void>;
+}
+
 function generateProxyAuthToken(): string {
   return crypto.randomBytes(24).toString('hex');
 }
@@ -91,6 +96,30 @@ async function isPortOccupied(port: number): Promise<boolean> {
       finish(false);
     });
   });
+}
+
+async function terminateDaemonProcess(pid?: number): Promise<void> {
+  if (!pid) {
+    return;
+  }
+
+  try {
+    process.kill(pid, 'SIGTERM');
+    let attempts = 0;
+    while (attempts < 10) {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      try {
+        process.kill(pid, 0);
+        attempts += 1;
+      } catch {
+        return;
+      }
+    }
+
+    process.kill(pid, 'SIGKILL');
+  } catch {
+    // Best-effort cleanup for a daemon we just spawned.
+  }
 }
 
 async function findOpenAICompatProxyPort(
@@ -397,17 +426,35 @@ export async function startOpenAICompatProxy(
       };
     }
 
-    const startOnPort = (port: number): Promise<StartOpenAICompatProxyResult> =>
+    const launchOnPort = (
+      port: number,
+      persistState: boolean
+    ): Promise<OpenAICompatProxyLaunchResult> =>
       new Promise((resolve) => {
         let resolved = false;
         let timeout: NodeJS.Timeout | null = null;
         const authToken = generateProxyAuthToken();
+        const commitState = () => {
+          if (proc.pid) {
+            writeOpenAICompatProxyPid(profile.profileName, proc.pid);
+          }
+          writeOpenAICompatProxySession({
+            profileName: profile.profileName,
+            settingsPath: profile.settingsPath,
+            host,
+            port,
+            baseUrl: profile.baseUrl,
+            authToken,
+            model: profile.model,
+            insecure: options.insecure,
+          });
+        };
 
-        const finish = (result: StartOpenAICompatProxyResult) => {
+        const finish = (result: OpenAICompatProxyLaunchResult) => {
           if (resolved) return;
           resolved = true;
           if (timeout) clearTimeout(timeout);
-          if (!result.success) {
+          if (!result.success && persistState) {
             removeOpenAICompatProxyPid(profile.profileName);
             removeOpenAICompatProxySession(profile.profileName);
           }
@@ -435,25 +482,28 @@ export async function startOpenAICompatProxy(
         );
 
         proc.unref();
-        if (proc.pid) {
-          writeOpenAICompatProxyPid(profile.profileName, proc.pid);
+        if (persistState) {
+          commitState();
         }
-        writeOpenAICompatProxySession({
-          profileName: profile.profileName,
-          settingsPath: profile.settingsPath,
-          host,
-          port,
-          baseUrl: profile.baseUrl,
-          authToken,
-          model: profile.model,
-          insecure: options.insecure,
-        });
 
         let attempts = 0;
         const poll = async () => {
           attempts += 1;
           if (await isOpenAICompatProxyRunning(port)) {
-            finish({ success: true, pid: proc.pid, port, authToken });
+            finish({
+              success: true,
+              pid: proc.pid,
+              port,
+              authToken,
+              ...(persistState
+                ? {}
+                : {
+                    commitState,
+                    stop: async () => {
+                      await terminateDaemonProcess(proc.pid);
+                    },
+                  }),
+            });
             return;
           }
           if (attempts >= 30) {
@@ -496,40 +546,64 @@ export async function startOpenAICompatProxy(
         });
       });
 
-    if (requiresExactPort) {
-      return startOnPort(preferredPort);
-    }
+    const launchProxy = async (persistState: boolean): Promise<OpenAICompatProxyLaunchResult> => {
+      if (requiresExactPort) {
+        return launchOnPort(preferredPort, persistState);
+      }
 
-    const attemptedPorts = new Set<number>();
-    let lastResult: StartOpenAICompatProxyResult | null = null;
-    for (let attempt = 0; attempt < 3; attempt += 1) {
-      const port = await findOpenAICompatProxyPortNear(preferredPort, attemptedPorts);
-      if (port === 0) {
-        return {
+      const attemptedPorts = new Set<number>();
+      let lastResult: OpenAICompatProxyLaunchResult | null = null;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const port = await findOpenAICompatProxyPortNear(preferredPort, attemptedPorts);
+        if (port === 0) {
+          return {
+            success: false,
+            port: preferredPort,
+            error: `No free proxy port found in range ${OPENAI_COMPAT_PROXY_DEFAULT_PORT}-${OPENAI_COMPAT_PROXY_DEFAULT_PORT + 10}`,
+          };
+        }
+
+        const result = await launchOnPort(port, persistState);
+        if (result.success) {
+          return result;
+        }
+
+        lastResult = result;
+        attemptedPorts.add(port);
+        if (!(await isPortOccupied(port))) {
+          return result;
+        }
+      }
+
+      return (
+        lastResult ?? {
           success: false,
           port: preferredPort,
-          error: `No free proxy port found in range ${OPENAI_COMPAT_PROXY_DEFAULT_PORT}-${OPENAI_COMPAT_PROXY_DEFAULT_PORT + 10}`,
+          error: 'Failed to start proxy',
+        }
+      );
+    };
+
+    if (status.running) {
+      const launched = await launchProxy(false);
+      if (!launched.success) {
+        return launched;
+      }
+
+      const stopped = await stopOpenAICompatProxyUnlocked(profile.profileName);
+      if (!stopped.success) {
+        await launched.stop?.();
+        return {
+          success: false,
+          port: launched.port,
+          error: stopped.error || 'Failed to replace the running proxy',
         };
       }
 
-      const result = await startOnPort(port);
-      if (result.success) {
-        return result;
-      }
-
-      lastResult = result;
-      attemptedPorts.add(port);
-      if (!(await isPortOccupied(port))) {
-        return result;
-      }
+      launched.commitState?.();
+      return launched;
     }
 
-    return (
-      lastResult ?? {
-        success: false,
-        port: preferredPort,
-        error: 'Failed to start proxy',
-      }
-    );
+    return launchProxy(true);
   });
 }

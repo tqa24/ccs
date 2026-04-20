@@ -133,29 +133,55 @@ async function handleStatus(args: string[] = []): Promise<number> {
     return showHelp();
   }
   const profileName = findPositionalArg(args);
-  const running = profileName
-    ? [await getOpenAICompatProxyStatus(profileName)].filter((status) => status.running)
-    : (await listOpenAICompatProxyStatuses()).filter((status) => status.running);
-  if (running.length === 0) {
-    console.log(info('Proxy is not running'));
-    return 0;
-  }
-
-  for (const status of running) {
-    console.log(ok(`Proxy running on port ${status.port}`));
-    if (status.host) {
+  const printStatus = (status: Awaited<ReturnType<typeof getOpenAICompatProxyStatus>>) => {
+    console.log(
+      status.running
+        ? ok(`Proxy running on port ${status.port}`)
+        : info(`Proxy is not running${status.port ? ` (last known port ${status.port})` : ''}`)
+    );
+    if (status.host && status.port) {
       console.log(`  Host: ${status.host}`);
       console.log(`  Local URL: http://${status.host}:${status.port}`);
     }
-    console.log(`  Profile: ${status.profileName}`);
-    console.log(`  Base URL: ${status.baseUrl}`);
+    if (status.profileName) {
+      console.log(`  Profile: ${status.profileName}`);
+    }
+    if (status.baseUrl) {
+      console.log(`  Base URL: ${status.baseUrl}`);
+    }
     if (status.model) {
       console.log(`  Model: ${status.model}`);
     }
     if (status.pid) {
       console.log(`  PID: ${status.pid}`);
     }
+  };
+
+  if (profileName) {
+    const status = await getOpenAICompatProxyStatus(profileName);
+    if (!status.running && !status.profileName) {
+      console.log(info('Proxy is not running'));
+      return 0;
+    }
+    printStatus(status);
+    return 0;
   }
+
+  const status = await getOpenAICompatProxyStatus();
+  if (!status.running && !status.profileName) {
+    console.log(info('Proxy is not running'));
+    return 0;
+  }
+
+  if (status.running && !status.profileName) {
+    const running = (await listOpenAICompatProxyStatuses()).filter((entry) => entry.running);
+    for (const entry of running) {
+      printStatus(entry);
+    }
+    return 0;
+  }
+
+  printStatus(status);
   return 0;
 }
 

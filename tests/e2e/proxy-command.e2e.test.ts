@@ -52,6 +52,34 @@ describe('proxy command e2e', () => {
     expect(help.stdout).toContain('stop [profile]    Stop the running proxy (or all proxies when omitted)');
   });
 
+  it('shows the last-known proxy state when no proxy is currently running', async () => {
+    const stalePort = await getPort();
+    const proxyDir = path.join(tempDir, '.ccs', 'proxy');
+    fs.mkdirSync(proxyDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(proxyDir, 'stale.session.json'),
+      JSON.stringify(
+        {
+          profileName: 'stale',
+          settingsPath: path.join(tempDir, '.ccs', 'stale.settings.json'),
+          host: '127.0.0.1',
+          port: stalePort,
+          baseUrl: 'http://127.0.0.1:11434',
+          authToken: 'deadbeef',
+          model: 'qwen3-coder',
+        },
+        null,
+        2
+      ) + '\n',
+      'utf8'
+    );
+
+    const status = runCli(['proxy', 'status']);
+    expect(status.status).toBe(0);
+    expect(status.stdout).toContain(`Proxy is not running (last known port ${stalePort})`);
+    expect(status.stdout).toContain('Profile: stale');
+  });
+
   it('starts, reports status, activates, and stops via the built CLI', async () => {
     const port = await getPort();
     const ccsDir = path.join(tempDir, '.ccs');

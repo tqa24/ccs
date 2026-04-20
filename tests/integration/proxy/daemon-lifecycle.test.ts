@@ -303,4 +303,53 @@ describe('openai proxy daemon lifecycle', () => {
       server.stop(true);
     }
   });
+
+  it('keeps the existing proxy running if replacement startup fails', async () => {
+    const firstPort = await getPort();
+    const occupiedPort = await getPort();
+    const busyServer = Bun.serve({
+      port: occupiedPort,
+      hostname: '127.0.0.1',
+      fetch: () => new Response('busy'),
+    });
+
+    try {
+      const settingsPath = path.join(tempDir, 'rollback.settings.json');
+      fs.writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          env: {
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+            ANTHROPIC_AUTH_TOKEN: 'ollama-rollback',
+            ANTHROPIC_MODEL: 'qwen3-coder',
+            CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+          },
+        }),
+        'utf8'
+      );
+
+      const profile = resolveOpenAICompatProfileConfig('rollback', settingsPath, {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+        ANTHROPIC_AUTH_TOKEN: 'ollama-rollback',
+        ANTHROPIC_MODEL: 'qwen3-coder',
+        CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+      });
+      if (!profile) {
+        throw new Error('Expected a rollback OpenAI-compatible profile');
+      }
+
+      const firstStart = await startOpenAICompatProxy(profile, { port: firstPort });
+      expect(firstStart.success).toBe(true);
+
+      const restarted = await startOpenAICompatProxy(profile, { port: occupiedPort });
+      expect(restarted.success).toBe(false);
+
+      const status = await getOpenAICompatProxyStatus('rollback');
+      expect(status.running).toBe(true);
+      expect(status.port).toBe(firstPort);
+      expect((await fetch(`http://127.0.0.1:${firstPort}/health`)).status).toBe(200);
+    } finally {
+      busyServer.stop(true);
+    }
+  });
 });
