@@ -7511,6 +7511,264 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(responses.find((message) => message.id === 1617))).toContain('artifact not found');
   });
 
+  it('runs select_page_then_run and executes the inner single-page block on the selected page', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Home',
+          currentUrl: 'https://example.com/',
+        },
+        {
+          id: 'page-2',
+          title: 'Docs',
+          currentUrl: 'https://example.com/docs',
+          query: {
+            '#status': {
+              exists: true,
+              connected: true,
+              innerText: 'ready state',
+              textContent: 'ready state',
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+              rect: {
+                x: 20,
+                y: 80,
+                width: 100,
+                height: 40,
+                top: 80,
+                right: 120,
+                bottom: 120,
+                left: 20,
+              },
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1701,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_orchestration',
+            arguments: {
+              blocks: [
+                createOrchestrationBlock({
+                  type: 'select_page_then_run',
+                  args: {
+                    select: { pageIndex: 1 },
+                    run: {
+                      type: 'assert_query',
+                      args: {
+                        query: { selector: '#status', fields: ['innerText'] },
+                        assertions: [{ field: 'innerText', op: 'contains', value: 'ready' }],
+                      },
+                    },
+                  },
+                }),
+              ],
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1701))).toContain('status: completed');
+  });
+
+  it('runs open_page_then_run and executes the inner block on the newly opened page', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1702,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_orchestration',
+            arguments: {
+              blocks: [
+                createOrchestrationBlock({
+                  type: 'open_page_then_run',
+                  args: {
+                    open: { url: 'https://example.com/docs' },
+                    run: {
+                      type: 'wait_for_then_press_key',
+                      args: {
+                        wait: { condition: { kind: 'text', includes: 'New page visible text' }, timeoutMs: 1000 },
+                        pressKey: { key: 'Enter' },
+                      },
+                    },
+                  },
+                }),
+              ],
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1702))).toContain('status: completed');
+  });
+
+  it('runs close_page_then_continue and then continues with the remaining blocks', async () => {
+    const responses = await runMcpRequests(
+      [
+        { id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' },
+        {
+          id: 'page-2',
+          title: 'Docs',
+          currentUrl: 'https://example.com/docs',
+          query: {
+            '#status': {
+              exists: true,
+              connected: true,
+              innerText: 'ready state',
+              textContent: 'ready state',
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+              rect: {
+                x: 20,
+                y: 80,
+                width: 100,
+                height: 40,
+                top: 80,
+                right: 120,
+                bottom: 120,
+                left: 20,
+              },
+            },
+          },
+        },
+      ],
+      [
+        { jsonrpc: '2.0', id: 1703, method: 'tools/call', params: { name: 'browser_select_page', arguments: { pageId: 'page-2' } } },
+        {
+          jsonrpc: '2.0',
+          id: 1704,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_orchestration',
+            arguments: {
+              blocks: [
+                createOrchestrationBlock({
+                  type: 'close_page_then_continue',
+                  args: { close: { pageId: 'page-2' } },
+                }),
+                createOrchestrationBlock({
+                  type: 'select_page_then_run',
+                  args: {
+                    select: { pageIndex: 0 },
+                    run: {
+                      type: 'assert_query',
+                      args: {
+                        query: { selector: '#status', fields: ['innerText'] },
+                        assertions: [{ field: 'innerText', op: 'contains', value: 'ready' }],
+                      },
+                    },
+                  },
+                  continueOnError: true,
+                }),
+              ],
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1704))).toContain('completedBlocks: 2');
+  });
+
+  it('rejects missing run payloads and nested cross-page blocks', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1705,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_orchestration',
+            arguments: {
+              blocks: [createOrchestrationBlock({ type: 'select_page_then_run', args: { select: { pageIndex: 0 } } })],
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1706,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_orchestration',
+            arguments: {
+              blocks: [
+                createOrchestrationBlock({
+                  type: 'select_page_then_run',
+                  args: {
+                    select: { pageIndex: 0 },
+                    run: createOrchestrationBlock({
+                      type: 'open_page_then_run',
+                      args: { open: { url: 'https://example.com' }, run: { type: 'assert_query', args: {} } },
+                    }),
+                  },
+                }),
+              ],
+            },
+          },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1705))).toContain('cross-page run block is required');
+    expect(getResponseText(responses.find((message) => message.id === 1706))).toContain('nested cross-page blocks are not supported');
+  });
+
+  it('fails when select_page_then_run targets a missing page', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Home', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1707,
+          method: 'tools/call',
+          params: {
+            name: 'browser_start_orchestration',
+            arguments: {
+              blocks: [
+                createOrchestrationBlock({
+                  type: 'select_page_then_run',
+                  args: {
+                    select: { pageId: 'page-9' },
+                    run: {
+                      type: 'assert_query',
+                      args: {
+                        query: { selector: '#status', fields: ['innerText'] },
+                        assertions: [{ field: 'innerText', op: 'contains', value: 'ready' }],
+                      },
+                    },
+                  },
+                }),
+              ],
+            },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1708,
+          method: 'tools/call',
+          params: { name: 'browser_get_orchestration', arguments: {} },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 1708));
+    expect(text).toContain('status: failed');
+    expect(text).toContain('page not found: page-9');
+  });
+
   it('drags local files onto normal, frame, and shadow dropzones', async () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-drag-files-'));
     const invoicePath = join(tempDir, 'invoice.pdf');
