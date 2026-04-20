@@ -23,12 +23,12 @@ enabled. A recent Chrome update alone is not sufficient.
 The managed `ccs-browser` runtime currently exposes seven tool groups:
 
 - **Session inspection**: `browser_get_session_info`, `browser_get_url_and_title`, `browser_get_visible_text`, `browser_get_dom_snapshot`
-- **Navigation and interaction**: `browser_navigate`, `browser_click`, `browser_type`, `browser_press_key`, `browser_scroll`, `browser_select_page`, `browser_open_page`, `browser_close_page`, `browser_take_screenshot`
+- **Navigation and interaction**: `browser_navigate`, `browser_click`, `browser_type`, `browser_press_key`, `browser_scroll`, `browser_select_page`, `browser_open_page`, `browser_close_page`, `browser_take_screenshot`, `browser_drag_element`, `browser_pointer_action`
 - **Hover diagnostics**: `browser_hover`, `browser_query`, `browser_take_element_screenshot`
 - **Readiness and page evaluation**: `browser_wait_for`, `browser_eval`
 - **Event observation**: `browser_wait_for_event`
 - **Network interception**: `browser_add_intercept_rule`, `browser_remove_intercept_rule`, `browser_list_intercept_rules`, `browser_list_requests`
-- **File transfer**: `browser_set_download_behavior`, `browser_list_downloads`, `browser_cancel_download`, `browser_set_file_input`
+- **File transfer**: `browser_set_download_behavior`, `browser_list_downloads`, `browser_cancel_download`, `browser_set_file_input`, `browser_drag_files`
 
 Notable Phase 1 capability details:
 
@@ -84,6 +84,23 @@ Phase 8 capability details:
 - download controls are browser-scoped because they map to Chrome's Browser domain; file input uploads remain page-scoped selector actions
 - download behavior and recent download summaries are session-local runtime state and are not persisted across runtime restarts
 
+Phase 9 capability details:
+
+- `browser_drag_files` drags one or more local files onto a matched drop target by constructing page-side `File` objects and a `DataTransfer` payload, then dispatching `dragenter`, `dragover`, and `drop`
+- `browser_drag_files` reuses the existing selected-page, `pageIndex`, `pageId`, `nth`, `frameSelector`, and `pierceShadow` selector-routing semantics, and returns only a result summary rather than file contents
+- `browser_drag_element` drags a matched source element either to another matched target element or to explicit coordinates using browser-level mouse events
+- `browser_drag_element` and `browser_pointer_action` both honor selected-page routing plus explicit `pageIndex` or `pageId`; `pageIndex` and `pageId` remain mutually exclusive
+- `browser_pointer_action` is a limited fallback primitive for `move`, `down`, `up`, and `pause`; it is not a recording format, scripting DSL, or multi-pointer gesture system
+- Phase 9 remains session-local and does not add recording, replay, orchestration, touch gestures, or cross-page drag semantics
+
+Phase 10A capability details:
+
+- `browser_start_recording`, `browser_stop_recording`, `browser_get_recording`, and `browser_clear_recording` add a minimal recording workflow on top of the existing Browser MCP tool surface
+- recording state is session-local and is not persisted across runtime restarts
+- Phase 10A records structured steps only; replay and orchestration remain out of scope for this phase
+- high-level recording prefers `click`, `type`, `press_key`, `scroll`, and `drag_element`; unresolved interactions may be represented as `pointer_action` or warnings
+- only one active recording session is allowed per MCP runtime; if the recorded page is closed, the session stops and keeps the captured result plus a warning summary
+
 Minimal multi-tab workflow examples:
 
 ```json
@@ -131,9 +148,12 @@ A common hover-debug workflow is:
 
 Scoped selector notes:
 
-- `browser_click`, `browser_hover`, `browser_query`, `browser_wait_for`, and `browser_take_element_screenshot` accept optional `frameSelector` for same-origin iframes whose `contentDocument` is accessible
+- `browser_click`, `browser_hover`, `browser_query`, `browser_wait_for`, `browser_take_element_screenshot`, `browser_set_file_input`, `browser_drag_files`, `browser_drag_element`, and selector-based `browser_pointer_action` moves accept optional `frameSelector` for same-origin iframes whose `contentDocument` is accessible
 - the same selector-based tools accept optional `pierceShadow: true` for open shadow-root traversal
-- closed shadow roots, frame-index routing, cross-page shared rules, request body matching, and advanced boolean matcher groups are still out of scope
+- Phase 10A recording keeps reusing the existing selected-page routing model; recorded steps may preserve selector context such as `frameSelector` and `pierceShadow` when the target can be resolved stably
+- `browser_drag_element` reuses the same source/target selector scope for element-to-element drags; coordinate targets remain page-viewport coordinates
+- `browser_pointer_action` selector-based `move` steps resolve a matched element center before dispatching browser-level mouse events
+- closed shadow roots, frame-index routing, cross-page shared rules, request body matching, advanced boolean matcher groups, recording/replay orchestration, and touch/multi-pointer gestures are still out of scope
 
 Example event wait:
 
