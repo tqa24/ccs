@@ -84,6 +84,7 @@ type MockDownloadState = {
   guid?: string;
   url: string;
   suggestedFilename: string;
+  frameId?: string;
   progress?: MockDownloadProgressState[];
 };
 
@@ -253,12 +254,19 @@ type MockInterceptState = {
   pauseDispatchDelayMs?: number;
 };
 
+type MockFrameTree = {
+  frame: { id: string };
+  childFrames?: MockFrameTree[];
+};
+
 type MockPageState = {
   id: string;
   title: string;
   currentUrl: string;
   fileInputs?: Record<string, MockFileInputPlan>;
   browser?: MockBrowserState;
+  frameTree?: MockFrameTree;
+  frameTreeSequence?: MockFrameTree[];
   readyStateSequence?: string[];
   visibleText?: string;
   domSnapshot?: string;
@@ -781,6 +789,7 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             browserState.canceledDownloadGuids = browserState.canceledDownloadGuids || [];
             browserState.canceledDownloadGuids.push(String(message.params?.guid || ''));
             reply({});
+            return;
           }
         });
 
@@ -792,7 +801,7 @@ function createMockBrowser(pagesInput: MockPageState[]) {
                 JSON.stringify({
                   method: 'Browser.downloadWillBegin',
                   params: {
-                    frameId: `frame-${page.id}`,
+                    frameId: download.frameId || `frame-${page.id}`,
                     guid,
                     url: download.url,
                     suggestedFilename: download.suggestedFilename,
@@ -862,6 +871,12 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             page.readyStateSequence = [...(navigatePlan.readyStates || ['loading', 'interactive'])];
           }
           reply({ frameId: 'frame-1' });
+          return;
+        }
+
+        if (message.method === 'Page.getFrameTree') {
+          const nextFrameTree = page.frameTreeSequence?.shift();
+          reply({ frameTree: nextFrameTree || page.frameTree || { frame: { id: `frame-${page.id}` } } });
           return;
         }
 
@@ -8399,6 +8414,167 @@ describe('ccs-browser MCP server', () => {
     expect(text).toContain('status: observed');
     expect(text).toContain('"url":"https://example.com/checkout"');
     expect(text).not.toContain('embedded-checkout');
+  });
+
+  it('filters download events by the selected page frame when pageIndex is provided', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'First Page',
+          currentUrl: 'https://example.com/one',
+          events: {
+            downloads: [
+              {
+                url: 'https://example.com/first-report.csv',
+                suggestedFilename: 'first-report.csv',
+                frameId: 'frame-page-1',
+              },
+            ],
+          },
+        },
+        {
+          id: 'page-2',
+          title: 'Second Page',
+          currentUrl: 'https://example.com/two',
+          events: {
+            downloads: [
+              {
+                url: 'https://example.com/second-report.csv',
+                suggestedFilename: 'second-report.csv',
+                frameId: 'frame-page-2',
+              },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 59,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              pageIndex: 1,
+              timeoutMs: 1000,
+              event: { kind: 'download', suggestedFilenameIncludes: 'second-report' },
+            },
+          },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 59));
+    expect(text).toContain('status: observed');
+    expect(text).toContain('"suggestedFilename":"second-report.csv"');
+    expect(text).not.toContain('first-report.csv');
+  });
+
+  it('matches download events from child frames within the selected page', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Framed Page',
+          currentUrl: 'https://example.com/frame-host',
+          frameTree: {
+            frame: { id: 'frame-page-1' },
+            childFrames: [{ frame: { id: 'frame-page-1-child' } }],
+          },
+          events: {
+            downloads: [
+              {
+                url: 'https://example.com/embedded-report.csv',
+                suggestedFilename: 'embedded-report.csv',
+                frameId: 'frame-page-1-child',
+              },
+            ],
+          },
+        },
+        {
+          id: 'page-2',
+          title: 'Other Page',
+          currentUrl: 'https://example.com/other',
+          events: {
+            downloads: [
+              {
+                url: 'https://example.com/other-report.csv',
+                suggestedFilename: 'other-report.csv',
+                frameId: 'frame-page-2',
+              },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 60,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              pageIndex: 0,
+              timeoutMs: 1000,
+              event: { kind: 'download', suggestedFilenameIncludes: 'embedded-report' },
+            },
+          },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 60));
+    expect(text).toContain('status: observed');
+    expect(text).toContain('"suggestedFilename":"embedded-report.csv"');
+    expect(text).not.toContain('other-report.csv');
+  });
+
+  it('refreshes frame ids when a download comes from a newly attached child frame', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Dynamic Frame Page',
+          currentUrl: 'https://example.com/dynamic',
+          frameTreeSequence: [
+            { frame: { id: 'frame-page-1' } },
+            {
+              frame: { id: 'frame-page-1' },
+              childFrames: [{ frame: { id: 'frame-page-1-late-child' } }],
+            },
+          ],
+          events: {
+            downloads: [
+              {
+                url: 'https://example.com/late-report.csv',
+                suggestedFilename: 'late-report.csv',
+                frameId: 'frame-page-1-late-child',
+              },
+            ],
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 61,
+          method: 'tools/call',
+          params: {
+            name: 'browser_wait_for_event',
+            arguments: {
+              pageIndex: 0,
+              timeoutMs: 1000,
+              event: { kind: 'download', suggestedFilenameIncludes: 'late-report' },
+            },
+          },
+        },
+      ]
+    );
+
+    const text = getResponseText(responses.find((message) => message.id === 61));
+    expect(text).toContain('status: observed');
+    expect(text).toContain('"suggestedFilename":"late-report.csv"');
   });
 
   it('captures element screenshots using the post-scroll visible clip and reports failures', async () => {
