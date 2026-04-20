@@ -52,9 +52,7 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Ensure dependencies
-        run: |
-          [ -d node_modules ] || bun install --frozen-lockfile
-          [ -d ui/node_modules ] || (cd ui && bun install --frozen-lockfile)
+        run: bash scripts/ensure-deps.sh
 
       - name: Run ${{ matrix.check.name }}
         run: ${{ matrix.check.cmd }}
@@ -88,9 +86,7 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Ensure dependencies
-        run: |
-          [ -d node_modules ] || bun install --frozen-lockfile
-          [ -d ui/node_modules ] || (cd ui && bun install --frozen-lockfile)
+        run: bash scripts/ensure-deps.sh
 
       - name: Build
         run: bun run build:all
@@ -133,9 +129,7 @@ jobs:
             ${{ runner.os }}-bun-
 
       - name: Ensure dependencies
-        run: |
-          [ -d node_modules ] || bun install --frozen-lockfile
-          [ -d ui/node_modules ] || (cd ui && bun install --frozen-lockfile)
+        run: bash scripts/ensure-deps.sh
 
       - name: Download dist artifact
         uses: actions/download-artifact@v4
