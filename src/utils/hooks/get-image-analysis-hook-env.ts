@@ -114,7 +114,9 @@ export function getImageAnalysisHookEnv(
       : '';
   const runtimePath = skipImageAnalysis ? '' : status.runtimePath || '';
   const runtimeBaseUrl =
-    skipImageAnalysis || typeof context !== 'object' ? '' : context.cliproxyBridge?.currentBaseUrl || '';
+    skipImageAnalysis || typeof context !== 'object'
+      ? ''
+      : context.cliproxyBridge?.currentBaseUrl || '';
 
   return {
     CCS_IMAGE_ANALYSIS_ENABLED: config.enabled ? '1' : '0',
