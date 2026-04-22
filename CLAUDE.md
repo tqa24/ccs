@@ -41,12 +41,6 @@ gh pr checks <n>
 ### Absolute rule
 AI MUST NOT declare a task done, close a session, or move to the next task while CI is red or still running. Leaving a PR red and moving on is the primary failure mode this protocol prevents.
 
-### Self-Hosted Runner Awareness
-
-- If `gh pr checks` or `gh run watch` stays queued for more than 10 minutes, assume the self-hosted runner is offline.
-- Confirm on the maintainer host with `ssh docker "systemctl status actions-runner"`.
-- Treat runner outages as infrastructure issues, not code failures. Do not blindly rerun local commands and hope the queue clears.
-
 ### Dev Release vs Push CI
 
 - `CI` is the pull-request quality gate for contributor branches.

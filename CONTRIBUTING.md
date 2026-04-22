@@ -86,7 +86,7 @@ CCS now uses three separate automation lanes:
 
 If `Dev Release` is red but your PR checks were green, check `Push CI` before assuming the merged code is broken.
 
-If `CI` or `Push CI` stays queued for more than 10 minutes, the self-hosted runner is probably offline. That is a maintainer issue, not a contributor mistake.
+If `CI` or `Push CI` stays queued for a long time, it is a maintainer infrastructure issue, not a contributor mistake. Leave a comment on your PR and a maintainer will address it.
 
 ## AI Agent Rules
 
@@ -97,9 +97,8 @@ If `CI` or `Push CI` stays queued for more than 10 minutes, the self-hosted runn
 CCS PR review no longer depends on `anthropics/claude-code-action`. The repository review lane is self-hosted PR-Agent:
 
 - The retained `.github/workflows/ai-review.yml` runs PR-Agent in GitHub Actions.
-- PR-Agent reviews run on the existing self-hosted `cliproxy` runner.
 - Use `/review` on the PR when you need a fresh pass after follow-up commits.
-- Only the trusted `/review` comment path is enabled on the privileged self-hosted runner.
+- Only the trusted `/review` comment path is enabled.
 - Keep repository-level reviewer instructions in the root `.pr_agent.toml`.
 - Keep runtime wiring and defaults in `ai-review.yml`, which still maps the existing `AI_REVIEW_BASE_URL`, `AI_REVIEW_MODEL`, and `AI_REVIEW_API_KEY` integrations onto PR-Agent's `OPENAI.*` and `config.*` settings.
 - If you change review defaults, update the workflow or `.pr_agent.toml` alongside the contributor or architecture docs in the same PR.
