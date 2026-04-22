@@ -24,6 +24,12 @@ const slowTests = [
   'tests/unit/web-server/cursor-routes.test.ts',
   'tests/unit/web-server/websearch-routes.test.ts',
 ];
+// CommonJS-heavy JS suites stay slow by default because many of them mutate
+// module cache or process state. Opt them into `test:fast` only after they are
+// proven stable in the mixed fast bucket.
+const fastJsTests = new Set([
+  'tests/unit/flag-parsing-simple.test.js',
+]);
 
 const filePattern = /(\.test\.(c|m)?[jt]s|\.spec\.(c|m)?[jt]s|-test\.(c|m)?[jt]s)$/;
 
@@ -56,6 +62,10 @@ function getDiscoveredTests() {
 
 function shouldForceSlow(file) {
   if (file.startsWith('tests/npm/')) {
+    return true;
+  }
+
+  if (/\.(c|m)?js$/.test(file) && !fastJsTests.has(file)) {
     return true;
   }
 
@@ -149,6 +159,7 @@ if (require.main === module) {
 
 module.exports = {
   slowTests,
+  fastJsTests,
   readsBuiltDist,
   shouldForceSlow,
   getDiscoveredTests,

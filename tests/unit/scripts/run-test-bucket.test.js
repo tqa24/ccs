@@ -18,6 +18,10 @@ describe('run-test-bucket', () => {
     expect(bucket.shouldForceSlow('tests/unit/flag-parsing-simple.test.js')).toBe(false);
   });
 
+  test('keeps non-allowlisted javascript tests in the slow bucket', () => {
+    expect(bucket.shouldForceSlow('tests/unit/commands/persist-command.test.js')).toBe(true);
+  });
+
   test('still forces dist-dependent tests into the slow bucket', () => {
     expect(bucket.shouldForceSlow('tests/unit/config-dir-override.test.js')).toBe(true);
   });
