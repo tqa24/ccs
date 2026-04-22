@@ -10,6 +10,7 @@ import { Info, Shield } from 'lucide-react';
 import { UsageCommand } from './usage-command';
 import type { SettingsResponse } from './types';
 import type { AuthStatus, CliTarget } from '@/lib/api-client';
+import { getProviderSection, isPlusExtraProvider } from '@/lib/provider-config';
 import { useTranslation } from 'react-i18next';
 
 interface ProviderInfoTabProps {
@@ -33,6 +34,7 @@ export function ProviderInfoTab({
   const resolvedTarget = defaultTarget || 'claude';
   const isDroidTarget = resolvedTarget === 'droid';
   const isCodexProvider = provider === 'codex';
+  const providerSection = getProviderSection(provider);
   const managementPrefix =
     resolvedTarget === 'claude' ? `ccs ${provider}` : `ccs ${provider} --target claude`;
   const changeModelCommand = `${managementPrefix} --config`;
@@ -101,6 +103,20 @@ export function ProviderInfoTab({
               </span>
               <span className="font-mono">{resolvedTarget}</span>
             </div>
+            {providerSection && (
+              <div className="grid grid-cols-[100px_1fr] gap-2 text-sm items-start">
+                <span className="font-medium text-muted-foreground">Track</span>
+                <div className="space-y-1">
+                  <span className="font-mono">{providerSection.label}</span>
+                  <p className="text-xs text-muted-foreground">
+                    {providerSection.hint}
+                    {isPlusExtraProvider(provider)
+                      ? ' Requires the optional Plus backend while that track remains community-maintained.'
+                      : ''}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

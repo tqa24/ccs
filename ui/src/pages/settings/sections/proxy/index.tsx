@@ -29,14 +29,17 @@ import { ProxyStatusWidget } from '@/components/monitoring/proxy-status-widget';
 import { api } from '@/lib/api-client';
 import { CLIPROXY_DEFAULT_PORT } from '@/lib/preset-utils';
 import { RISK_ACK_PHRASE } from '@/components/account/antigravity-responsibility-constants';
+import {
+  CORE_CLIPROXY_PROVIDERS,
+  PLUS_EXTRA_CLIPROXY_PROVIDERS,
+  getProviderDisplayName,
+  isPlusExtraProvider,
+} from '@/lib/provider-config';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 
 /** LocalStorage key for debug mode preference */
 const DEBUG_MODE_KEY = 'ccs_debug_mode';
-
-/** Providers only available on CLIProxyAPIPlus */
-const PLUS_ONLY_PROVIDERS = ['kiro', 'ghcp', 'cursor', 'gitlab', 'codebuddy', 'kilo'];
 
 function normalizeRiskAckPhrase(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toUpperCase();
@@ -196,6 +199,8 @@ export default function ProxySection() {
   const updateBackendMutation = useUpdateBackend();
   const { data: proxyStatus } = useProxyStatus();
   const isProxyRunning = proxyStatus?.running ?? false;
+  const coreProviderNames = CORE_CLIPROXY_PROVIDERS.map(getProviderDisplayName).join(', ');
+  const plusProviderNames = PLUS_EXTRA_CLIPROXY_PROVIDERS.map(getProviderDisplayName).join(', ');
 
   // Fetch backend setting
   const fetchBackend = useCallback(async () => {
@@ -211,7 +216,7 @@ export default function ProxySection() {
   const checkPlusOnlyVariants = useCallback(async () => {
     try {
       const result = await api.cliproxy.list();
-      const hasIncompatible = result.variants.some((v) => PLUS_ONLY_PROVIDERS.includes(v.provider));
+      const hasIncompatible = result.variants.some((v) => isPlusExtraProvider(v.provider));
       setHasKiroGhcpVariants(hasIncompatible);
     } catch (err) {
       console.error('[Proxy] Failed to check variants:', err);
@@ -491,7 +496,13 @@ export default function ProxySection() {
                 <div className="flex items-center gap-3 mb-2">
                   <span className="font-medium">{t('settingsProxy.backendPlusApi')}</span>
                 </div>
-                <p className="text-xs text-muted-foreground">{t('settingsProxy.plusDesc')}</p>
+                <p className="text-xs text-muted-foreground">
+                  Optional track for extra providers. Still supported, but currently
+                  community-maintained instead of upstream-maintained.
+                </p>
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {plusProviderNames}
+                </p>
               </button>
 
               {/* Original Backend Card */}
@@ -510,15 +521,20 @@ export default function ProxySection() {
                     {t('settingsProxy.default')}
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground">{t('settingsProxy.originalDesc')}</p>
+                <p className="text-xs text-muted-foreground">
+                  Default, always-available backend for the core provider track.
+                </p>
+                <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                  {coreProviderNames}
+                </p>
               </button>
             </div>
             {backend === 'plus' && (
               <Alert className="py-2 border-amber-200 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-900/20 [&>svg]:top-2.5">
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                 <AlertDescription className="text-amber-700 dark:text-amber-400">
-                  CLIProxyAPIPlus upstream is currently unavailable. Local CLIProxy will use the
-                  original backend until issue #1062 is resolved.
+                  The Plus provider track is not deprecated, but local CLIProxy still falls back to
+                  the original backend while the maintained fork path is being brought back.
                 </AlertDescription>
               </Alert>
             )}
@@ -526,7 +542,10 @@ export default function ProxySection() {
             {backend === 'original' && hasKiroGhcpVariants && (
               <Alert variant="destructive" className="py-2">
                 <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>{t('settingsProxy.variantsIncompatible')}</AlertDescription>
+                <AlertDescription>
+                  Existing plus-extra variants ({plusProviderNames}) will not run on the original
+                  backend. Keep them visible for reference, but switch to Plus before using them.
+                </AlertDescription>
               </Alert>
             )}
           </div>
