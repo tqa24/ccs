@@ -1,4 +1,8 @@
-import { installCliproxyVersion, resolveLocalBackend } from '../../cliproxy/binary-manager';
+import {
+  installCliproxyVersion,
+  resolveLocalBackend,
+  syncPlusFallbackStateIfNeeded,
+} from '../../cliproxy/binary-manager';
 import { ensureCliproxyService, type ServiceStartResult } from '../../cliproxy/service-manager';
 import { getProxyStatus as getProxyProcessStatus } from '../../cliproxy/session-tracker';
 import { isCliproxyRunning } from '../../cliproxy/stats-fetcher';
@@ -52,6 +56,7 @@ export async function installDashboardCliproxyVersion(
   backend: CLIProxyBackend,
   deps: InstallDashboardCliproxyVersionDeps = defaultDeps
 ): Promise<DashboardCliproxyInstallResult> {
+  syncPlusFallbackStateIfNeeded(backend);
   const effectiveBackend = resolveLocalBackend(backend, { warnOnFallback: true });
   const backendLabel = effectiveBackend === 'plus' ? 'CLIProxy Plus' : 'CLIProxy';
   const shouldRestoreService = await wasProxyRunning(deps);

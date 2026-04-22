@@ -31,16 +31,16 @@ beforeAll(async () => {
   ));
 
   const ccsDir = path.join(tempHome, '.ccs');
-  const originalBinDir = path.join(ccsDir, 'cliproxy', 'bin', 'original');
-  fs.mkdirSync(originalBinDir, { recursive: true });
+  const plusBinDir = path.join(ccsDir, 'cliproxy', 'bin', 'plus');
+  fs.mkdirSync(plusBinDir, { recursive: true });
   setGlobalConfigDir(ccsDir);
 
   const config = createEmptyUnifiedConfig();
   config.cliproxy = { backend: 'plus' };
   saveUnifiedConfig(config);
 
-  writeInstalledVersion(originalBinDir, '6.6.80');
-  writeVersionCache('6.6.89', 'original');
+  writeInstalledVersion(plusBinDir, '6.6.80');
+  writeVersionCache('6.6.89', 'plus');
   writeVersionListCache(
     {
       versions: ['6.6.89', '6.6.88', '6.6.81', '6.6.80'],
@@ -48,7 +48,7 @@ beforeAll(async () => {
       latest: '6.6.89',
       checkedAt: Date.now(),
     },
-    'original'
+    'plus'
   );
 
   ({ default: cliproxyStatsRoutes } = await import(

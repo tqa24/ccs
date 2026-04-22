@@ -40,8 +40,8 @@ import { getProxyStatus as getProxyProcessStatus, stopProxy } from '../../clipro
 import { ensureCliproxyService } from '../../cliproxy/service-manager';
 import {
   checkCliproxyUpdate,
-  getConfiguredBackend,
   getInstalledCliproxyVersion,
+  getStoredConfiguredBackend,
 } from '../../cliproxy/binary-manager';
 import {
   fetchAllVersions,
@@ -146,7 +146,7 @@ export function shouldCacheQuotaResult(result: {
 }
 
 function buildUpdateCheckFallback(
-  backend: ReturnType<typeof getConfiguredBackend>,
+  backend: ReturnType<typeof getStoredConfiguredBackend>,
   getInstalledVersionFn: typeof getInstalledCliproxyVersion = getInstalledCliproxyVersion
 ) {
   const currentVersion = getInstalledVersionFn(backend);
@@ -170,7 +170,7 @@ function buildUpdateCheckFallback(
 }
 
 function buildVersionsFallback(
-  backend: ReturnType<typeof getConfiguredBackend>,
+  backend: ReturnType<typeof getStoredConfiguredBackend>,
   getInstalledVersionFn: typeof getInstalledCliproxyVersion = getInstalledCliproxyVersion
 ) {
   const currentVersion = getInstalledVersionFn(backend);
@@ -198,7 +198,7 @@ interface ResolveVersionsDeps {
 }
 
 export async function resolveCliproxyUpdateCheckPayload(
-  backend: ReturnType<typeof getConfiguredBackend>,
+  backend: ReturnType<typeof getStoredConfiguredBackend>,
   deps: ResolveUpdateCheckDeps = {}
 ) {
   const checkCliproxyUpdateFn = deps.checkCliproxyUpdateFn ?? checkCliproxyUpdate;
@@ -210,7 +210,7 @@ export async function resolveCliproxyUpdateCheckPayload(
 }
 
 export async function resolveCliproxyVersionsPayload(
-  backend: ReturnType<typeof getConfiguredBackend>,
+  backend: ReturnType<typeof getStoredConfiguredBackend>,
   deps: ResolveVersionsDeps = {}
 ) {
   const fetchAllVersionsFn = deps.fetchAllVersionsFn ?? fetchAllVersions;
@@ -401,7 +401,7 @@ router.post('/proxy-stop', async (_req: Request, res: Response): Promise<void> =
  */
 router.get('/update-check', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const backend = getConfiguredBackend({ warnOnFallback: true });
+    const backend = getStoredConfiguredBackend();
     const result = await resolveCliproxyUpdateCheckPayload(backend);
 
     res.json(result);
@@ -1011,7 +1011,7 @@ router.get('/quota/:provider/:accountId', async (req: Request, res: Response): P
  */
 router.get('/versions', async (_req: Request, res: Response): Promise<void> => {
   try {
-    const backend = getConfiguredBackend({ warnOnFallback: true });
+    const backend = getStoredConfiguredBackend();
     res.json(await resolveCliproxyVersionsPayload(backend));
   } catch (error) {
     console.error(`[cliproxy-stats] ${(error as Error).message}`);
@@ -1065,7 +1065,7 @@ router.post('/install', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const backend = getConfiguredBackend({ warnOnFallback: true });
+    const backend = getStoredConfiguredBackend();
     const installResult = await installDashboardCliproxyVersion(version, backend);
 
     res.json({

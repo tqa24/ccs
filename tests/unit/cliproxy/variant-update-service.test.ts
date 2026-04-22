@@ -102,6 +102,19 @@ cliproxy:
     expect(error).toContain('issues/1062');
   });
 
+  it('leaves the settings file unchanged when a plus-only provider update is rejected', () => {
+    const settingsPath = path.join(tmpDir, 'gemini-demo.settings.json');
+    const before = fs.readFileSync(settingsPath, 'utf-8');
+
+    const result = updateVariant('demo', {
+      provider: 'ghcp',
+      model: 'gpt-5.4-mini',
+    });
+
+    expect(result.success).toBe(false);
+    expect(fs.readFileSync(settingsPath, 'utf-8')).toBe(before);
+  });
+
   it('updates provider and regenerates provider-specific core env in same settings file', () => {
     const result = updateVariant('demo', {
       provider: 'codex',

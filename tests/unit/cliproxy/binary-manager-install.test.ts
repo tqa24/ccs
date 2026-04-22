@@ -73,6 +73,32 @@ describe('installCliproxyVersion', () => {
     expect(writes.join('')).toContain('backend: original');
   });
 
+  it('reuses plus binary and pin state when local runtime falls back to original', async () => {
+    const { createEmptyUnifiedConfig } = await import('../../../src/config/unified-config-types');
+    const { saveUnifiedConfig } = await import('../../../src/config/unified-config-loader');
+    const { savePinnedVersion } = await import('../../../src/cliproxy/binary/version-cache');
+    const { getExecutableName } = await import('../../../src/cliproxy/platform-detector');
+    const binaryService = await import(
+      `../../../src/cliproxy/services/binary-service?binary-service-plus-migration=${Date.now()}`
+    );
+
+    const config = createEmptyUnifiedConfig();
+    config.cliproxy = { ...config.cliproxy, backend: 'plus' };
+    saveUnifiedConfig(config);
+
+    const plusBinDir = path.join(tempHome, '.ccs', 'cliproxy', 'bin', 'plus');
+    fs.mkdirSync(plusBinDir, { recursive: true });
+    fs.writeFileSync(path.join(plusBinDir, getExecutableName('plus')), 'fake-binary');
+    fs.writeFileSync(path.join(plusBinDir, '.version'), '6.6.80-0');
+    savePinnedVersion('6.6.80-0', 'plus');
+
+    const status = binaryService.getBinaryStatus();
+
+    expect(status.installed).toBe(true);
+    expect(status.pinnedVersion).toBe('6.6.80-0');
+    expect(status.binaryPath).toContain('/original/');
+  });
+
   it('attempts to stop the proxy even when there is no tracked running session', async () => {
     const calls = {
       stopProxy: 0,

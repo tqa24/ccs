@@ -278,6 +278,13 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
       }
     }
 
+    if (updates.provider !== undefined) {
+      const backendError = validateProviderBackend(updates.provider);
+      if (backendError) {
+        return { success: false, error: backendError };
+      }
+    }
+
     // Update settings file
     if (existing.settings) {
       const settingsPath = existing.settings.replace(/^~/, os.homedir());
@@ -300,14 +307,6 @@ export function updateVariant(name: string, updates: UpdateVariantOptions): Vari
     // Update config entry if provider/account/target changed
     if (updates.provider !== undefined || updates.account !== undefined || targetChanged) {
       const newProvider = updates.provider ?? existing.provider;
-
-      // Validate provider/backend compatibility on provider change
-      if (updates.provider !== undefined) {
-        const backendError = validateProviderBackend(updates.provider);
-        if (backendError) {
-          return { success: false, error: backendError };
-        }
-      }
       const newAccount = updates.account !== undefined ? updates.account : existing.account;
       const newTarget = updates.target ?? existingTarget;
 

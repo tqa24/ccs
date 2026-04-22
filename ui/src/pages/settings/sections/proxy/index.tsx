@@ -36,7 +36,7 @@ import { useTranslation } from 'react-i18next';
 const DEBUG_MODE_KEY = 'ccs_debug_mode';
 
 /** Providers only available on CLIProxyAPIPlus */
-const PLUS_ONLY_PROVIDERS = ['kiro', 'ghcp'];
+const PLUS_ONLY_PROVIDERS = ['kiro', 'ghcp', 'cursor', 'gitlab', 'codebuddy', 'kilo'];
 
 function normalizeRiskAckPhrase(value: string): string {
   return value.trim().replace(/\s+/g, ' ').toUpperCase();

@@ -6,7 +6,7 @@
  */
 
 import { CLIProxyBackend } from '../../cliproxy/types';
-import { getConfiguredBackend, resolveLocalBackend } from '../../cliproxy/binary-manager';
+import { getStoredConfiguredBackend } from '../../cliproxy/binary-manager';
 import {
   type QuotaSupportedProvider,
   QUOTA_PROVIDER_HELP_TEXT,
@@ -70,13 +70,10 @@ function parseBackendArg(args: string[]): {
 }
 
 /**
- * Get effective backend (CLI flag > config.yaml > default)
+ * Get selected backend input (CLI flag > config.yaml > default)
  */
 function getEffectiveBackend(cliBackend?: CLIProxyBackend): CLIProxyBackend {
-  if (cliBackend) {
-    return resolveLocalBackend(cliBackend, { warnOnFallback: true });
-  }
-  return getConfiguredBackend({ warnOnFallback: true });
+  return cliBackend ?? getStoredConfiguredBackend();
 }
 
 /**
