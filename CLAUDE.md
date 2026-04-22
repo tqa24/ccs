@@ -272,7 +272,7 @@ bun run validate            # Step 3: Final check (must pass)
 - `prepack` runs `build:all`
 - PR `CI` runs `typecheck`, `lint`, `format`, `build`, `test:all`, and `test:e2e`
 - `Push CI` runs the same quality suite on `dev` after merge, separate from release publishing
-- `Dev Release` still runs build + validate + tests before publishing and still requires `PAT_TOKEN` to push back to protected `dev`
+- `Dev Release` still runs build + fast validation + slow tests + e2e before publishing and still requires `PAT_TOKEN` to push back to protected `dev`
 - husky `pre-commit` runs quick lint/type/format checks
 - husky `pre-push` runs the full `bun run validate:ci-parity` gate on `main`/`dev`/hotfix branches
 - husky `pre-push` runs a faster feature-branch gate (`typecheck` + `lint` + `format:check` + `test:fast`) plus targeted checks based on changed files

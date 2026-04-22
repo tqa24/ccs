@@ -6,7 +6,7 @@
 
 Use what applies. If you skipped something, add a short note instead of forcing it.
 
-- [ ] `bun run format && bun run validate`
+- [ ] `bun run format && bun run lint:fix && bun run validate`
 - [ ] `bun run validate:ci-parity` before requesting review
 - [ ] `bun run test:e2e` if this PR touches command routing, proxy flows, or workflow/release logic
 - [ ] `cd ui && bun run validate` if UI changed
