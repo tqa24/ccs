@@ -1,3 +1,11 @@
+## [7.73.1](https://github.com/kaitranntt/ccs/compare/v7.73.0...v7.73.1) (2026-04-22)
+
+### Hotfixes
+
+* **cliproxy:** fallback from deleted CLIProxyAPIPlus to original backend ([60cbdce](https://github.com/kaitranntt/ccs/commit/60cbdce83dd429aeb6df5f1439ba99edd96acc3a)), closes [#1062](https://github.com/kaitranntt/ccs/issues/1062)
+* close cliproxy plus fallback gaps ([7b1a7f3](https://github.com/kaitranntt/ccs/commit/7b1a7f3a09b5c6394897b5f95ad32bc9109e6a21))
+* preserve plus fallback state and guard variant updates ([5b5f4a5](https://github.com/kaitranntt/ccs/commit/5b5f4a5ef52f91cb6d4bc7fd3413eac714945d4a))
+
 ## [7.73.0](https://github.com/kaitranntt/ccs/compare/v7.72.1...v7.73.0) (2026-04-19)
 
 ### Features
