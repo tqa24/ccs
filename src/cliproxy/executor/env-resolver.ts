@@ -28,7 +28,7 @@ import {
 import { resolveImageAnalysisRuntimeStatus } from '../../utils/hooks/image-analysis-runtime-status';
 import { hasImageAnalysisProfileHook } from '../../utils/hooks/image-analyzer-profile-hook-injector';
 import { hasImageAnalyzerHook } from '../../utils/hooks/image-analyzer-hook-installer';
-import { stripClaudeCodeEnv } from '../../utils/shell-executor';
+import { stripBrowserEnv, stripClaudeCodeEnv } from '../../utils/shell-executor';
 import { CodexReasoningProxy } from '../codex-reasoning-proxy';
 import { ToolSanitizationProxy } from '../tool-sanitization-proxy';
 import { HttpsTunnelProxy } from '../https-tunnel-proxy';
@@ -383,8 +383,11 @@ export function buildClaudeEnvironment(config: ProxyChainConfig): Record<string,
   const imageAnalysisEnv = resolvedImageAnalysisEnv ?? getImageAnalysisHookEnv(provider);
 
   // Merge all environment variables (filter undefined values)
-  const baseEnv = Object.fromEntries(
-    Object.entries(process.env).filter(([, v]) => v !== undefined)
+  const baseEnv = stripBrowserEnv(
+    Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<
+      string,
+      string
+    >
   ) as Record<string, string>;
 
   const effectiveEnvVarsFiltered = Object.fromEntries(

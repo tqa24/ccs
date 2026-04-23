@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { mutateUnifiedConfig } from '../../config/unified-config-loader';
-import type { BrowserConfig } from '../../config/unified-config-types';
+import type { BrowserConfig, BrowserEvalMode } from '../../config/unified-config-types';
 import { getBrowserStatus } from '../../utils/browser';
 import { getUserFacingBrowserConfig } from '../../utils/browser/browser-status';
 import { requireLocalAccessWhenAuthDisabled } from '../middleware/auth-middleware';
@@ -15,10 +15,12 @@ interface BrowserRouteBody {
     policy?: 'auto' | 'manual';
     userDataDir?: string;
     devtoolsPort?: number;
+    evalMode?: BrowserEvalMode;
   };
   codex?: {
     enabled?: boolean;
     policy?: 'auto' | 'manual';
+    evalMode?: BrowserEvalMode;
   };
 }
 
@@ -28,6 +30,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 
 function isValidBrowserPolicy(value: string): value is 'auto' | 'manual' {
   return value === 'auto' || value === 'manual';
+}
+
+function isValidBrowserEvalMode(value: string): value is BrowserEvalMode {
+  return value === 'disabled' || value === 'readonly' || value === 'readwrite';
 }
 
 function isValidDevtoolsPort(value: number): boolean {
@@ -88,7 +94,11 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
   }
   const unknownClaudeKeys = Object.keys(claude ?? {}).filter(
     (key) =>
-      key !== 'enabled' && key !== 'policy' && key !== 'userDataDir' && key !== 'devtoolsPort'
+      key !== 'enabled' &&
+      key !== 'policy' &&
+      key !== 'userDataDir' &&
+      key !== 'devtoolsPort' &&
+      key !== 'evalMode'
   );
   if (unknownClaudeKeys.length > 0) {
     res.status(400).json({
@@ -97,7 +107,7 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
   const unknownCodexKeys = Object.keys(codex ?? {}).filter(
-    (key) => key !== 'enabled' && key !== 'policy'
+    (key) => key !== 'enabled' && key !== 'policy' && key !== 'evalMode'
   );
   if (unknownCodexKeys.length > 0) {
     res.status(400).json({
@@ -129,6 +139,15 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
     });
     return;
   }
+  if (
+    claude?.evalMode !== undefined &&
+    (typeof claude.evalMode !== 'string' || !isValidBrowserEvalMode(claude.evalMode))
+  ) {
+    res.status(400).json({
+      error: 'Invalid value for claude.evalMode. Must be one of: disabled, readonly, readwrite.',
+    });
+    return;
+  }
   if (codex?.enabled !== undefined && typeof codex.enabled !== 'boolean') {
     res.status(400).json({ error: 'Invalid value for codex.enabled. Must be a boolean.' });
     return;
@@ -138,6 +157,15 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
     (typeof codex.policy !== 'string' || !isValidBrowserPolicy(codex.policy))
   ) {
     res.status(400).json({ error: 'Invalid value for codex.policy. Must be auto or manual.' });
+    return;
+  }
+  if (
+    codex?.evalMode !== undefined &&
+    (typeof codex.evalMode !== 'string' || !isValidBrowserEvalMode(codex.evalMode))
+  ) {
+    res.status(400).json({
+      error: 'Invalid value for codex.evalMode. Must be one of: disabled, readonly, readwrite.',
+    });
     return;
   }
 
@@ -152,10 +180,12 @@ router.put('/', async (req: Request, res: Response): Promise<void> => {
           policy: claude?.policy ?? current.claude.policy,
           user_data_dir: nextClaudeUserDataDir,
           devtools_port: claude?.devtoolsPort ?? current.claude.devtools_port,
+          eval_mode: claude?.evalMode ?? current.claude.eval_mode,
         },
         codex: {
           enabled: codex?.enabled ?? current.codex.enabled,
           policy: codex?.policy ?? current.codex.policy,
+          eval_mode: codex?.evalMode ?? current.codex.eval_mode,
         },
       };
     });
@@ -181,10 +211,12 @@ function toBrowserRouteConfig(config: BrowserConfig) {
       policy: config.claude.policy,
       userDataDir: config.claude.user_data_dir,
       devtoolsPort: config.claude.devtools_port,
+      evalMode: config.claude.eval_mode ?? 'readonly',
     },
     codex: {
       enabled: config.codex.enabled,
       policy: config.codex.policy,
+      evalMode: config.codex.eval_mode ?? 'readonly',
     },
   };
 }

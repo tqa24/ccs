@@ -27,6 +27,22 @@ export function stripAnthropicEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
 }
 
 /**
+ * Strip inherited browser attach/runtime env vars from a process environment.
+ *
+ * Browser capability is opt-in and launch-scoped. Stale CCS_BROWSER_* values
+ * from the parent process must never bleed into a browser-off child launch.
+ */
+export function stripBrowserEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const result: NodeJS.ProcessEnv = {};
+  for (const key of Object.keys(env)) {
+    if (!key.toUpperCase().startsWith('CCS_BROWSER_')) {
+      result[key] = env[key];
+    }
+  }
+  return result;
+}
+
+/**
  * Strip Claude Code nested-session guard env var from a process environment.
  *
  * Note: Windows env keys are case-insensitive, so remove case-insensitively
@@ -142,10 +158,11 @@ export function execClaude(
   // with native Claude API routing. Settings-based profiles explicitly inject
   // their own ANTHROPIC_* values, so they don't need this protection.
   const profileType = envVars?.CCS_PROFILE_TYPE;
-  const baseEnv =
+  const inheritedEnv =
     profileType === 'account' || profileType === 'default'
       ? stripAnthropicEnv(process.env)
       : process.env;
+  const baseEnv = stripBrowserEnv(inheritedEnv);
 
   // Prepare environment (merge with base env if envVars provided)
   const mergedEnv = envVars

@@ -234,17 +234,20 @@ export interface UpdateImageAnalysisSettingsPayload {
   profileBackends?: Record<string, string>;
 }
 
+export type BrowserToolPolicy = 'auto' | 'manual';
 export type BrowserEvalMode = 'disabled' | 'readonly' | 'readwrite';
 
 export interface BrowserSettingsConfig {
   claude: {
     enabled: boolean;
+    policy: BrowserToolPolicy;
     userDataDir: string;
     devtoolsPort: number;
     evalMode: BrowserEvalMode;
   };
   codex: {
     enabled: boolean;
+    policy: BrowserToolPolicy;
     evalMode: BrowserEvalMode;
   };
 }
@@ -257,6 +260,7 @@ export interface BrowserLaunchCommands {
 
 export interface ClaudeBrowserStatus {
   enabled: boolean;
+  policy: BrowserToolPolicy;
   source: 'config' | 'CCS_BROWSER_USER_DATA_DIR' | 'CCS_BROWSER_PROFILE_DIR';
   overrideActive: boolean;
   state: 'disabled' | 'path_missing' | 'browser_not_running' | 'endpoint_unreachable' | 'ready';
@@ -275,6 +279,7 @@ export interface ClaudeBrowserStatus {
 
 export interface CodexBrowserStatus {
   enabled: boolean;
+  policy: BrowserToolPolicy;
   state: 'disabled' | 'enabled' | 'unsupported_build';
   title: string;
   detail: string;

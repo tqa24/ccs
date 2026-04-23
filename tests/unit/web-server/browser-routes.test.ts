@@ -153,24 +153,62 @@ describe('browser routes', () => {
         policy: 'manual',
         userDataDir: join(tempHome, '.ccs', 'browser', 'chrome-user-data'),
         devtoolsPort: 9222,
+        evalMode: 'readonly',
       },
       codex: {
         enabled: false,
         policy: 'manual',
+        evalMode: 'readonly',
       },
     });
     expect(payload.status.claude).toMatchObject({
       state: 'disabled',
       policy: 'manual',
+      evalMode: 'readonly',
       managedMcpServerName: 'ccs-browser',
     });
     expect(payload.status.codex).toMatchObject({
       enabled: false,
       state: 'disabled',
       policy: 'manual',
+      evalMode: 'readonly',
       serverName: 'ccs_browser',
     });
     expect(payload.status.codex.detail).toContain('off by default');
+  });
+
+  it('returns evalMode through the standalone browser status route', async () => {
+    const updateResponse = await fetch(`${baseUrl}/api/browser`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        claude: {
+          enabled: true,
+          policy: 'manual',
+          evalMode: 'readwrite',
+        },
+        codex: {
+          enabled: true,
+          policy: 'auto',
+          evalMode: 'disabled',
+        },
+      }),
+    });
+
+    expect(updateResponse.status).toBe(200);
+
+    const response = await fetch(`${baseUrl}/api/browser/status`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      claude: {
+        policy: 'manual',
+        evalMode: 'readwrite',
+      },
+      codex: {
+        policy: 'auto',
+        evalMode: 'disabled',
+      },
+    });
   });
 
   it('updates the saved browser config through the dashboard route', async () => {
@@ -183,10 +221,12 @@ describe('browser routes', () => {
           policy: 'manual',
           userDataDir: '/tmp/ccs-browser',
           devtoolsPort: 9333,
+          evalMode: 'readwrite',
         },
         codex: {
-          enabled: false,
-          policy: 'manual',
+          enabled: true,
+          policy: 'auto',
+          evalMode: 'disabled',
         },
       }),
     });
@@ -199,10 +239,22 @@ describe('browser routes', () => {
         policy: 'manual',
         userDataDir: '/tmp/ccs-browser',
         devtoolsPort: 9333,
+        evalMode: 'readwrite',
       },
       codex: {
-        enabled: false,
+        enabled: true,
+        policy: 'auto',
+        evalMode: 'disabled',
+      },
+    });
+    expect(payload.browser.status).toMatchObject({
+      claude: {
         policy: 'manual',
+        evalMode: 'readwrite',
+      },
+      codex: {
+        policy: 'auto',
+        evalMode: 'disabled',
       },
     });
 
@@ -213,11 +265,54 @@ describe('browser routes', () => {
         policy: 'manual',
         user_data_dir: '/tmp/ccs-browser',
         devtools_port: 9333,
+        eval_mode: 'readwrite',
       },
       codex: {
-        enabled: false,
-        policy: 'manual',
+        enabled: true,
+        policy: 'auto',
+        eval_mode: 'disabled',
       },
+    });
+  });
+
+  it('updates evalMode without changing the saved policy', async () => {
+    const firstResponse = await fetch(`${baseUrl}/api/browser`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codex: {
+          enabled: true,
+          policy: 'auto',
+          evalMode: 'readonly',
+        },
+      }),
+    });
+
+    expect(firstResponse.status).toBe(200);
+
+    const secondResponse = await fetch(`${baseUrl}/api/browser`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        codex: {
+          evalMode: 'readwrite',
+        },
+      }),
+    });
+
+    expect(secondResponse.status).toBe(200);
+    const payload = await secondResponse.json();
+    expect(payload.browser.config.codex).toMatchObject({
+      enabled: true,
+      policy: 'auto',
+      evalMode: 'readwrite',
+    });
+
+    const config = loadOrCreateUnifiedConfig();
+    expect(config.browser?.codex).toMatchObject({
+      enabled: true,
+      policy: 'auto',
+      eval_mode: 'readwrite',
     });
   });
 
@@ -231,6 +326,7 @@ describe('browser routes', () => {
           policy: 'manual',
           userDataDir: '/tmp/ccs-browser-custom',
           devtoolsPort: 9333,
+          evalMode: 'readonly',
         },
       }),
     });
@@ -254,9 +350,11 @@ describe('browser routes', () => {
       policy: 'manual',
       userDataDir: join(tempHome, '.ccs', 'browser', 'chrome-user-data'),
       devtoolsPort: 9333,
+      evalMode: 'readonly',
     });
     expect(payload.browser.status.claude.state).toBe('browser_not_running');
     expect(payload.browser.status.claude.detail).toContain('CCS created the managed browser profile');
+    expect(payload.browser.status.claude.evalMode).toBe('readonly');
     expect(existsSync(join(tempHome, '.ccs', 'browser', 'chrome-user-data'))).toBe(true);
 
     const config = loadOrCreateUnifiedConfig();
@@ -266,6 +364,7 @@ describe('browser routes', () => {
         policy: 'manual',
         user_data_dir: join(tempHome, '.ccs', 'browser', 'chrome-user-data'),
         devtools_port: 9333,
+        eval_mode: 'readonly',
       },
     });
   });
@@ -333,6 +432,23 @@ describe('browser routes', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
       error: 'Invalid value for codex.policy. Must be auto or manual.',
+    });
+  });
+
+  it('rejects invalid browser evalMode values at the route boundary', async () => {
+    const response = await fetch(`${baseUrl}/api/browser`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        claude: {
+          evalMode: 'always',
+        },
+      }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'Invalid value for claude.evalMode. Must be one of: disabled, readonly, readwrite.',
     });
   });
 

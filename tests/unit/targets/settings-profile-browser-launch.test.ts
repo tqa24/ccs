@@ -131,6 +131,7 @@ describe('settings profile browser launch', () => {
 printf "%s\n" "$@" > "${claudeArgsLogPath}"
 {
   printf "userDataDir=%s\n" "$CCS_BROWSER_USER_DATA_DIR"
+  printf "legacyProfileDir=%s\n" "$CCS_BROWSER_PROFILE_DIR"
   printf "host=%s\n" "$CCS_BROWSER_DEVTOOLS_HOST"
   printf "port=%s\n" "$CCS_BROWSER_DEVTOOLS_PORT"
   printf "httpUrl=%s\n" "$CCS_BROWSER_DEVTOOLS_HTTP_URL"
@@ -251,6 +252,30 @@ server.listen(0, '127.0.0.1', () => {
     expect(launchedEnv).not.toContain(`port=${port}`);
     expect(launchedEnv).not.toContain(`httpUrl=http://127.0.0.1:${port}`);
     expect(launchedEnv).not.toContain('wsUrl=ws://127.0.0.1/devtools/browser/browser-target');
+  });
+
+  it('scrubs inherited CCS_BROWSER_* env from browser-off settings-profile launches', () => {
+    if (process.platform === 'win32') return;
+
+    const result = runCcs(['glm', 'smoke'], {
+      ...baseEnv,
+      CCS_BROWSER_USER_DATA_DIR: '/tmp/stale-settings-browser-runtime',
+      CCS_BROWSER_PROFILE_DIR: '/tmp/stale-settings-browser-legacy',
+      CCS_BROWSER_DEVTOOLS_HOST: '127.0.0.1',
+      CCS_BROWSER_DEVTOOLS_PORT: '9666',
+      CCS_BROWSER_DEVTOOLS_HTTP_URL: 'http://127.0.0.1:9666',
+      CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/stale-settings-env',
+    });
+
+    expect(result.status).toBe(0);
+    const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
+    expect(launchedArgs).not.toContain(BROWSER_PROMPT_SNIPPET);
+
+    const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
+    expect(launchedEnv).not.toContain('/tmp/stale-settings-browser-runtime');
+    expect(launchedEnv).not.toContain('/tmp/stale-settings-browser-legacy');
+    expect(launchedEnv).not.toContain('9666');
+    expect(launchedEnv).not.toContain('stale-settings-env');
   });
 
   it('skips managed browser attach for settings-profile launches when the default CCS browser profile directory is missing', () => {

@@ -3,7 +3,7 @@
  * Session-based auth with httpOnly cookies for CCS dashboard.
  */
 
-import type { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
 import { getDashboardAuthConfig, isDashboardAuthEnabled } from '../../config/unified-config-loader';
@@ -84,7 +84,7 @@ export const loginRateLimiter = rateLimit({
 /**
  * Create session middleware configured for CCS dashboard.
  */
-export function createSessionMiddleware() {
+export function createSessionMiddleware(): RequestHandler {
   const authConfig = getDashboardAuthConfig();
   const maxAge = (authConfig.session_timeout_hours ?? 24) * 60 * 60 * 1000;
 
