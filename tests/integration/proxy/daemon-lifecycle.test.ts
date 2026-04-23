@@ -9,6 +9,7 @@ import {
   startOpenAICompatProxy,
   stopOpenAICompatProxy,
 } from '../../../src/proxy/proxy-daemon';
+import { resolveOpenAICompatProxyPreferredPort } from '../../../src/proxy/proxy-port-resolver';
 import { resolveOpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
 import {
   getLegacyOpenAICompatProxyPidPath,
@@ -157,6 +158,34 @@ describe('openai proxy daemon lifecycle', () => {
 
     const secondHealth = await fetch(`http://127.0.0.1:${secondPort}/health`);
     expect(secondHealth.status).toBe(200);
+  });
+
+  it('uses an adaptive implicit port instead of defaulting to 3456 for shared defaults', async () => {
+    const settingsPath = path.join(tempDir, 'adaptive-default.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
+          ANTHROPIC_AUTH_TOKEN: 'sk-adaptive-default',
+          ANTHROPIC_MODEL: 'gpt-4.1',
+        },
+      }),
+      'utf8'
+    );
+
+    const profile = resolveOpenAICompatProfileConfig('adaptive-default', settingsPath, {
+      ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'sk-adaptive-default',
+      ANTHROPIC_MODEL: 'gpt-4.1',
+    });
+    if (!profile) {
+      throw new Error('Expected adaptive-default OpenAI-compatible profile');
+    }
+
+    const started = await startOpenAICompatProxy(profile);
+    expect(started.success).toBe(true);
+    expect(started.port).not.toBe(3456);
   });
 
   it('keeps a legacy singleton daemon visible across upgrade', async () => {
@@ -317,6 +346,54 @@ describe('openai proxy daemon lifecycle', () => {
     }
   });
 
+  it('falls back when a configured shared proxy.port is occupied', async () => {
+    const occupiedPort = await getPort();
+    const server = Bun.serve({
+      port: occupiedPort,
+      hostname: '127.0.0.1',
+      fetch: () => new Response('busy'),
+    });
+
+    try {
+      mutateUnifiedConfig((config) => {
+        config.proxy = {
+          ...(config.proxy ?? {}),
+          port: occupiedPort,
+        };
+      });
+
+      const settingsPath = path.join(tempDir, 'shared-port.settings.json');
+      fs.writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          env: {
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+            ANTHROPIC_AUTH_TOKEN: 'ollama-shared-port',
+            ANTHROPIC_MODEL: 'qwen3-coder',
+            CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+          },
+        }),
+        'utf8'
+      );
+
+      const profile = resolveOpenAICompatProfileConfig('shared-port', settingsPath, {
+        ANTHROPIC_BASE_URL: 'http://127.0.0.1:11434',
+        ANTHROPIC_AUTH_TOKEN: 'ollama-shared-port',
+        ANTHROPIC_MODEL: 'qwen3-coder',
+        CCS_DROID_PROVIDER: 'generic-chat-completion-api',
+      });
+      if (!profile) {
+        throw new Error('Expected shared-port OpenAI-compatible profile');
+      }
+
+      const started = await startOpenAICompatProxy(profile);
+      expect(started.success).toBe(true);
+      expect(started.port).not.toBe(occupiedPort);
+    } finally {
+      server.stop(true);
+    }
+  });
+
   it('keeps the existing proxy running if replacement startup fails', async () => {
     const firstPort = await getPort();
     const occupiedPort = await getPort();
@@ -366,8 +443,8 @@ describe('openai proxy daemon lifecycle', () => {
     }
   });
 
-  it('reuses the last-known port even when it is outside the default fallback range', async () => {
-    const preferredPort = await getPort();
+  it('returns to the adaptive canonical port after a stale fallback session', async () => {
+    const stalePort = await getPort();
     const settingsPath = path.join(tempDir, 'outside-range.settings.json');
     fs.writeFileSync(
       settingsPath,
@@ -400,7 +477,7 @@ describe('openai proxy daemon lifecycle', () => {
           profileName: profile.profileName,
           settingsPath: profile.settingsPath,
           host: '127.0.0.1',
-          port: preferredPort,
+          port: stalePort,
           baseUrl: profile.baseUrl,
           authToken: 'stale-token',
           model: profile.model,
@@ -413,7 +490,57 @@ describe('openai proxy daemon lifecycle', () => {
 
     const started = await startOpenAICompatProxy(profile);
     expect(started.success).toBe(true);
-    expect(started.port).toBe(preferredPort);
+    expect(started.port).toBe(resolveOpenAICompatProxyPreferredPort('outside-range'));
+    expect(started.port).not.toBe(stalePort);
+  });
+
+  it('does not keep a stopped shared-default profile anchored to legacy port 3456', async () => {
+    const settingsPath = path.join(tempDir, 'legacy-shared-default.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
+          ANTHROPIC_AUTH_TOKEN: 'sk-legacy-shared-default',
+          ANTHROPIC_MODEL: 'gpt-4.1',
+        },
+      }),
+      'utf8'
+    );
+
+    const profile = resolveOpenAICompatProfileConfig('legacy-shared-default', settingsPath, {
+      ANTHROPIC_BASE_URL: 'https://api.openai.com/v1',
+      ANTHROPIC_AUTH_TOKEN: 'sk-legacy-shared-default',
+      ANTHROPIC_MODEL: 'gpt-4.1',
+    });
+    if (!profile) {
+      throw new Error('Expected legacy-shared-default OpenAI-compatible profile');
+    }
+
+    fs.mkdirSync(path.dirname(getOpenAICompatProxySessionPath('legacy-shared-default')), {
+      recursive: true,
+    });
+    fs.writeFileSync(
+      getOpenAICompatProxySessionPath('legacy-shared-default'),
+      JSON.stringify(
+        {
+          profileName: profile.profileName,
+          settingsPath: profile.settingsPath,
+          host: '127.0.0.1',
+          port: 3456,
+          baseUrl: profile.baseUrl,
+          authToken: 'stale-token',
+          model: profile.model,
+        },
+        null,
+        2
+      ) + '\n',
+      'utf8'
+    );
+
+    const started = await startOpenAICompatProxy(profile);
+    expect(started.success).toBe(true);
+    expect(started.port).not.toBe(3456);
   });
 
   it('stops legacy daemons even when the legacy session is missing a profile name', async () => {

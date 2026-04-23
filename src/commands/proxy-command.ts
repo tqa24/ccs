@@ -64,7 +64,7 @@ function showHelp(): number {
   console.log('  activate [profile] Print shell exports for the running proxy');
   console.log('');
   console.log('Options:');
-  console.log('  --port <n>        Override the local proxy port (default: 3456)');
+  console.log('  --port <n>        Pin an exact local proxy port for this launch');
   console.log('  --host <addr>     Bind the proxy server to a specific host (default: 127.0.0.1)');
   console.log('  --shell <name>    activate only: auto|bash|zsh|fish|powershell');
   console.log('  --fish            activate only: shorthand for --shell fish');
@@ -104,7 +104,19 @@ async function handleStart(args: string[]): Promise<number> {
 
   const portValue = parseOptionValue(args, '--port');
   const host = parseOptionValue(args, '--host');
-  const port = portValue ? Number.parseInt(portValue, 10) || 3456 : undefined;
+  const parsedPort = portValue ? Number(portValue) : undefined;
+  if (
+    portValue &&
+    (parsedPort === undefined ||
+      !/^\d+$/.test(portValue) ||
+      !Number.isInteger(parsedPort) ||
+      parsedPort < 1 ||
+      parsedPort > 65535)
+  ) {
+    console.error(fail(`Invalid port: ${portValue}`));
+    return 1;
+  }
+  const port = parsedPort;
   let profile;
   try {
     profile = resolveProfile(profileName);

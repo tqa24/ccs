@@ -1,5 +1,6 @@
 import { loadSettings } from '../utils/config-manager';
 import { resolveOpenAICompatProfileConfig } from './profile-router';
+import { OPENAI_COMPAT_PROXY_DEFAULT_PORT } from './proxy-daemon-paths';
 import { startOpenAICompatProxyServer } from './server/proxy-server';
 
 interface RuntimeOptions {
@@ -12,7 +13,7 @@ interface RuntimeOptions {
 }
 
 function parseArgs(argv: string[]): RuntimeOptions {
-  let port = 3456;
+  let port = OPENAI_COMPAT_PROXY_DEFAULT_PORT;
   let host = '127.0.0.1';
   let profileName = '';
   let settingsPath = '';
