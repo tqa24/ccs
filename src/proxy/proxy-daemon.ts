@@ -6,7 +6,9 @@ import * as lockfile from 'proper-lockfile';
 import { verifyProcessOwnership } from '../cursor/daemon-process-ownership';
 import type { OpenAICompatProfileConfig } from './profile-router';
 import {
-  OPENAI_COMPAT_PROXY_DEFAULT_PORT,
+  OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_END,
+  OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_START,
+  OPENAI_COMPAT_PROXY_LEGACY_DEFAULT_PORT,
   OPENAI_COMPAT_PROXY_SERVICE_NAME,
   getOpenAICompatProxyDir,
 } from './proxy-daemon-paths';
@@ -25,7 +27,10 @@ import {
   writeOpenAICompatProxyPid,
   writeOpenAICompatProxySession,
 } from './proxy-daemon-state';
-import { resolveOpenAICompatProxyPortPreference } from './proxy-port-resolver';
+import {
+  listOpenAICompatProxyCandidatePorts as listFlexibleOpenAICompatProxyCandidatePorts,
+  resolveOpenAICompatProxyPortPreference,
+} from './proxy-port-resolver';
 
 export interface OpenAICompatProxyStatus extends Partial<OpenAICompatProxySession> {
   running: boolean;
@@ -131,6 +136,7 @@ async function terminateDaemonProcess(pid?: number): Promise<void> {
 }
 
 function listOpenAICompatProxyCandidatePorts(
+  profileName: string,
   preferredPort: number,
   exact: boolean,
   excludedPorts: ReadonlySet<number> = new Set()
@@ -139,22 +145,7 @@ function listOpenAICompatProxyCandidatePorts(
     return excludedPorts.has(preferredPort) ? [] : [preferredPort];
   }
 
-  const candidates = new Set<number>();
-  if (!excludedPorts.has(preferredPort)) {
-    candidates.add(preferredPort);
-  }
-
-  for (
-    let candidate = OPENAI_COMPAT_PROXY_DEFAULT_PORT;
-    candidate <= OPENAI_COMPAT_PROXY_DEFAULT_PORT + 10;
-    candidate += 1
-  ) {
-    if (!excludedPorts.has(candidate)) {
-      candidates.add(candidate);
-    }
-  }
-
-  return [...candidates];
+  return listFlexibleOpenAICompatProxyCandidatePorts(profileName, preferredPort, excludedPorts);
 }
 
 function isPortBindConflictMessage(message?: string): boolean {
@@ -494,11 +485,15 @@ export async function startOpenAICompatProxy(
     const host = options.host?.trim() || status.host || '127.0.0.1';
     const portPreference = resolveOpenAICompatProxyPortPreference(profile.profileName);
     const explicitPort = typeof options.port === 'number' ? options.port : undefined;
-    const preferredPort =
+    const rawPreferredPort =
       explicitPort ??
       (portPreference.source === 'profile'
         ? portPreference.port
-        : status.port || portPreference.port);
+        : portPreference.source === 'adaptive' &&
+            status.port === OPENAI_COMPAT_PROXY_LEGACY_DEFAULT_PORT
+          ? portPreference.port
+          : status.port || portPreference.port);
+    const preferredPort = rawPreferredPort;
     const requiresExactPort = explicitPort !== undefined || portPreference.source === 'profile';
     if (status.running && status.port === preferredPort && (status.host || '127.0.0.1') === host) {
       return {
@@ -670,6 +665,7 @@ export async function startOpenAICompatProxy(
       const attemptedPorts = new Set<number>();
       let lastResult: OpenAICompatProxyLaunchResult | null = null;
       const candidates = listOpenAICompatProxyCandidatePorts(
+        profile.profileName,
         preferredPort,
         requiresExactPort,
         attemptedPorts
@@ -678,7 +674,7 @@ export async function startOpenAICompatProxy(
         return {
           success: false,
           port: preferredPort,
-          error: `No free proxy port found in range ${OPENAI_COMPAT_PROXY_DEFAULT_PORT}-${OPENAI_COMPAT_PROXY_DEFAULT_PORT + 10}`,
+          error: `No free proxy port found in adaptive range ${OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_START}-${OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_END}`,
         };
       }
 
@@ -707,7 +703,7 @@ export async function startOpenAICompatProxy(
           port: preferredPort,
           error: requiresExactPort
             ? `Requested proxy port ${preferredPort} is already in use`
-            : 'No free proxy port found in the proxy port range',
+            : 'No free proxy port found in the adaptive proxy port range',
         }
       );
     };

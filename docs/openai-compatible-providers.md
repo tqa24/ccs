@@ -32,7 +32,7 @@ When to use CCS:
 
 When you launch a compatible settings profile with the Claude target, CCS now:
 
-1. Starts a local proxy on `127.0.0.1`
+1. Starts a local proxy on `127.0.0.1` using the resolved local port for that profile
 2. Accepts Anthropic `/v1/messages` traffic from Claude Code
 3. Translates requests into OpenAI chat-completions format
 4. Forwards them to your configured upstream provider
@@ -72,11 +72,17 @@ Useful variants:
 
 ```bash
 ccs proxy start hf --host 127.0.0.1
+ccs proxy start hf --port 3460
 ccs proxy activate hf
 ccs proxy activate --fish
 ccs proxy status hf
 ccs proxy stop hf
 ```
+
+By default, CCS picks a deterministic local port for each compatible profile
+and adapts automatically when that port is unavailable. Use `--port` for a
+one-off pinned port, or set `proxy.profile_ports` in config when you want a
+stable reserved port per profile.
 
 `ccs proxy activate` now prints the full local runtime contract:
 
@@ -98,14 +104,15 @@ runtime as a singleton.
   running
 - When multiple proxies are running, pass the profile explicitly to
   `activate`, `status`, or `stop`
+- `status` and `activate` always reflect the actual running port instead of an
+  assumed default
 
-If you want deterministic ports, configure them in `~/.ccs/config.yaml`:
+If you want to pin ports explicitly, configure them in `~/.ccs/config.yaml`:
 
 ```yaml
 proxy:
-  port: 3456
   profile_ports:
-    hf: 3456
+    hf: 3460
     openai: 3461
 ```
 
@@ -301,10 +308,12 @@ That flag is respected by both:
 - Add `CCS_OPENAI_PROXY_INSECURE=1` to the profile settings
 - Restart the proxy after changing the setting
 
-### Port conflict on `3456`
+### Need to pin or verify the local port
 
-- Start with a fixed port: `ccs proxy start hf --port 3457`
-- Re-run `ccs proxy activate` after changing the port
+- Check the active binding with `ccs proxy status hf`
+- Pin a one-off port with `ccs proxy start hf --port 3460`
+- Reserve a stable profile port with `proxy.profile_ports`
+- Re-run `ccs proxy activate hf` after changing the port
 
 ### Provider returns `429` or empty upstream output
 

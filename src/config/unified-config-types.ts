@@ -999,7 +999,6 @@ export const DEFAULT_CLIPROXY_SERVER_CONFIG: CliproxyServerConfig = {
 };
 
 export const DEFAULT_OPENAI_COMPAT_PROXY_CONFIG: OpenAICompatProxyConfig = {
-  port: 3456,
   profile_ports: {},
   routing: {
     longContextThreshold: 60_000,
