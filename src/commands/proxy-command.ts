@@ -64,7 +64,7 @@ function showHelp(): number {
   console.log('  activate [profile] Print shell exports for the running proxy');
   console.log('');
   console.log('Options:');
-  console.log('  --port <n>        Pin an exact local proxy port (default: adaptive)');
+  console.log('  --port <n>        Pin an exact local proxy port for this launch');
   console.log('  --host <addr>     Bind the proxy server to a specific host (default: 127.0.0.1)');
   console.log('  --shell <name>    activate only: auto|bash|zsh|fish|powershell');
   console.log('  --fish            activate only: shorthand for --shell fish');

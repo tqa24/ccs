@@ -79,10 +79,16 @@ ccs proxy status hf
 ccs proxy stop hf
 ```
 
-By default, CCS picks a deterministic local port for each compatible profile
-and adapts automatically when that port is unavailable. Use `--port` for a
-one-off pinned port, or set `proxy.profile_ports` in config when you want a
-stable reserved port per profile.
+Port selection precedence is:
+
+1. CLI `--port` for an exact one-off pin
+2. `proxy.profile_ports[profile]` for an exact per-profile pin
+3. `proxy.port` for a shared preferred starting port
+4. adaptive per-profile fallback when nothing is pinned
+
+Legacy shared `proxy.port: 3456` values are treated as unset so older configs
+move onto the adaptive path instead of staying on the hot legacy default. If
+you need an exact `3456` binding now, pin it via `--port` or `proxy.profile_ports`.
 
 `ccs proxy activate` now prints the full local runtime contract:
 
@@ -107,10 +113,11 @@ runtime as a singleton.
 - `status` and `activate` always reflect the actual running port instead of an
   assumed default
 
-If you want to pin ports explicitly, configure them in `~/.ccs/config.yaml`:
+If you want to pin or guide ports explicitly, configure them in `~/.ccs/config.yaml`:
 
 ```yaml
 proxy:
+  port: 45000
   profile_ports:
     hf: 3460
     openai: 3461

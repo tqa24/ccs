@@ -75,7 +75,7 @@ describe('proxy command e2e', () => {
     expect(help.status).toBe(0);
     expect(help.stdout).toContain('Usage: ccs proxy <start|stop|status|activate> [profile] [options]');
     expect(help.stdout).toContain('stop [profile]    Stop the running proxy (or all proxies when omitted)');
-    expect(help.stdout).toContain('Pin an exact local proxy port');
+    expect(help.stdout).toContain('Pin an exact local proxy port for this launch');
     expect(help.stdout).not.toContain('default: 3456');
   });
 

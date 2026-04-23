@@ -2,6 +2,7 @@ import { loadOrCreateUnifiedConfig } from '../config/unified-config-loader';
 import {
   OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_END,
   OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_START,
+  OPENAI_COMPAT_PROXY_LEGACY_DEFAULT_PORT,
 } from './proxy-daemon-paths';
 
 export interface OpenAICompatProxyPortPreference {
@@ -61,6 +62,12 @@ export function resolveOpenAICompatProxyPortPreference(
   }
   const sharedPort = config.proxy?.port;
   if (typeof sharedPort === 'number') {
+    if (sharedPort === OPENAI_COMPAT_PROXY_LEGACY_DEFAULT_PORT) {
+      return {
+        port: resolveOpenAICompatProxyAdaptivePort(profileName),
+        source: 'adaptive',
+      };
+    }
     return { port: sharedPort, source: 'shared' };
   }
   return {

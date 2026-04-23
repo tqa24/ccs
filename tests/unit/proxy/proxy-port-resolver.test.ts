@@ -5,6 +5,7 @@ import * as path from 'path';
 import { mutateUnifiedConfig } from '../../../src/config/unified-config-loader';
 import {
   resolveOpenAICompatProxyAdaptivePort,
+  resolveOpenAICompatProxyPortPreference,
   resolveOpenAICompatProxyPreferredPort,
 } from '../../../src/proxy/proxy-port-resolver';
 
@@ -39,7 +40,7 @@ describe('resolveOpenAICompatProxyPreferredPort', () => {
     expect(resolveOpenAICompatProxyPreferredPort('ccgm')).toBe(3461);
   });
 
-  it('preserves an explicit shared proxy port outside the adaptive default path', () => {
+  it('returns a configured shared proxy port as a shared preference', () => {
     mutateUnifiedConfig((config) => {
       config.proxy = {
         ...(config.proxy ?? {}),
@@ -48,10 +49,13 @@ describe('resolveOpenAICompatProxyPreferredPort', () => {
       };
     });
 
-    expect(resolveOpenAICompatProxyPreferredPort('ccg')).toBe(45_000);
+    expect(resolveOpenAICompatProxyPortPreference('ccg')).toEqual({
+      port: 45_000,
+      source: 'shared',
+    });
   });
 
-  it('preserves an explicit shared legacy 3456 port when the user configures it', () => {
+  it('treats legacy shared 3456 as an adaptive default on read', () => {
     mutateUnifiedConfig((config) => {
       config.proxy = {
         ...(config.proxy ?? {}),
@@ -60,7 +64,10 @@ describe('resolveOpenAICompatProxyPreferredPort', () => {
       };
     });
 
-    expect(resolveOpenAICompatProxyPreferredPort('ccg')).toBe(3456);
+    expect(resolveOpenAICompatProxyPortPreference('ccg')).toEqual({
+      port: resolveOpenAICompatProxyAdaptivePort('ccg'),
+      source: 'adaptive',
+    });
   });
 
   it('preserves an explicit shared 43456 port when the user configures it', () => {
@@ -72,14 +79,20 @@ describe('resolveOpenAICompatProxyPreferredPort', () => {
       };
     });
 
-    expect(resolveOpenAICompatProxyPreferredPort('ccg')).toBe(43_456);
+    expect(resolveOpenAICompatProxyPortPreference('ccg')).toEqual({
+      port: 43_456,
+      source: 'shared',
+    });
   });
 
   it('falls back to an adaptive shared default when no profile mapping exists', () => {
-    const preferredPort = resolveOpenAICompatProxyPreferredPort('ccg');
+    const portPreference = resolveOpenAICompatProxyPortPreference('ccg');
 
-    expect(preferredPort).toBe(resolveOpenAICompatProxyAdaptivePort('ccg'));
-    expect(preferredPort).not.toBe(3456);
+    expect(portPreference).toEqual({
+      port: resolveOpenAICompatProxyAdaptivePort('ccg'),
+      source: 'adaptive',
+    });
+    expect(resolveOpenAICompatProxyPreferredPort('ccg')).not.toBe(3456);
   });
 
   it('derives a stable adaptive default that does not keep all profiles on 3456', () => {

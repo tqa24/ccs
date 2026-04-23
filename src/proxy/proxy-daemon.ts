@@ -8,7 +8,6 @@ import type { OpenAICompatProfileConfig } from './profile-router';
 import {
   OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_END,
   OPENAI_COMPAT_PROXY_ADAPTIVE_PORT_START,
-  OPENAI_COMPAT_PROXY_LEGACY_DEFAULT_PORT,
   OPENAI_COMPAT_PROXY_SERVICE_NAME,
   getOpenAICompatProxyDir,
 } from './proxy-daemon-paths';
@@ -485,16 +484,24 @@ export async function startOpenAICompatProxy(
     const host = options.host?.trim() || status.host || '127.0.0.1';
     const portPreference = resolveOpenAICompatProxyPortPreference(profile.profileName);
     const explicitPort = typeof options.port === 'number' ? options.port : undefined;
-    const rawPreferredPort =
-      explicitPort ??
-      (portPreference.source === 'profile'
-        ? portPreference.port
-        : portPreference.source === 'adaptive' &&
-            status.port === OPENAI_COMPAT_PROXY_LEGACY_DEFAULT_PORT
-          ? portPreference.port
-          : status.port || portPreference.port);
-    const preferredPort = rawPreferredPort;
     const requiresExactPort = explicitPort !== undefined || portPreference.source === 'profile';
+    if (
+      status.running &&
+      explicitPort === undefined &&
+      portPreference.source !== 'profile' &&
+      status.port &&
+      (status.host || '127.0.0.1') === host
+    ) {
+      return {
+        success: true,
+        alreadyRunning: true,
+        pid: status.pid,
+        port: status.port,
+        authToken: status.authToken,
+      };
+    }
+
+    const preferredPort = explicitPort ?? portPreference.port;
     if (status.running && status.port === preferredPort && (status.host || '127.0.0.1') === host) {
       return {
         success: true,
