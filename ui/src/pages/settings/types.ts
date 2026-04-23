@@ -4,6 +4,8 @@
  */
 
 import type {
+  BrowserEvalMode,
+  BrowserToolPolicy,
   BrowserSettingsConfig,
   BrowserStatusPayload,
   CliproxyServerConfig,
@@ -198,7 +200,7 @@ export interface ThinkingConfig {
 
 // === Re-exports from api-client ===
 
-export type { CliproxyServerConfig, RemoteProxyStatus };
+export type { BrowserEvalMode, BrowserToolPolicy, CliproxyServerConfig, RemoteProxyStatus };
 export type BrowserConfig = BrowserSettingsConfig;
 export type BrowserStatus = BrowserStatusPayload;
 export type BrowserSavePayload = UpdateBrowserSettingsPayload;

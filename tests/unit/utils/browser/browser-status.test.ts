@@ -261,6 +261,35 @@ describe('browser status', () => {
     expect(resolution.warning).toContain('ccs browser doctor');
   });
 
+  it('keeps env override paths from implicitly enabling Claude browser attach when config is disabled', () => {
+    mutateUnifiedConfig((config) => {
+      config.browser = {
+        claude: {
+          enabled: false,
+          policy: 'manual',
+          user_data_dir: '/config-browser',
+          devtools_port: 9333,
+        },
+        codex: {
+          enabled: false,
+          policy: 'manual',
+        },
+      };
+    });
+    process.env.CCS_BROWSER_USER_DATA_DIR = '/env-browser';
+    process.env.CCS_BROWSER_DEVTOOLS_PORT = '9444';
+
+    const effective = getEffectiveClaudeBrowserAttachConfig(getBrowserConfig());
+
+    expect(effective).toMatchObject({
+      enabled: false,
+      source: 'CCS_BROWSER_USER_DATA_DIR',
+      overrideActive: true,
+      userDataDir: '/env-browser',
+      devtoolsPort: 9444,
+    });
+  });
+
   it('returns the same managed attach warning when the configured DevTools port is unreachable', async () => {
     const managedDir = join(tempHome, '.ccs', 'browser', 'chrome-user-data');
     mkdirSync(managedDir, { recursive: true });
@@ -318,6 +347,20 @@ describe('browser status', () => {
   });
 
   it('preserves legacy metadata-based port discovery when only CCS_BROWSER_PROFILE_DIR is set', async () => {
+    mutateUnifiedConfig((config) => {
+      config.browser = {
+        claude: {
+          enabled: true,
+          policy: 'manual',
+          user_data_dir: '/config-browser',
+          devtools_port: 9333,
+        },
+        codex: {
+          enabled: false,
+          policy: 'manual',
+        },
+      };
+    });
     process.env.CCS_BROWSER_PROFILE_DIR = '/legacy-browser';
 
     const runtimeSpy = spyOn(chromeReuse, 'resolveBrowserRuntimeEnv').mockResolvedValue({

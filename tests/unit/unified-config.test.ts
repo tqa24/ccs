@@ -126,10 +126,12 @@ describe('unified-config-types', () => {
           policy: 'manual',
           user_data_dir: '',
           devtools_port: 9222,
+          eval_mode: 'readonly',
         },
         codex: {
           enabled: false,
           policy: 'manual',
+          eval_mode: 'readonly',
         },
       });
     });

@@ -37,6 +37,7 @@ import type {
   OfficialChannelId,
   DashboardAuthConfig,
   BrowserConfig,
+  BrowserEvalMode,
   BrowserToolPolicy,
   ImageAnalysisConfig,
   LoggingConfig,
@@ -76,17 +77,37 @@ function normalizeBrowserPolicy(value: string | undefined): BrowserToolPolicy {
   return value === 'auto' || value === 'manual' ? value : DEFAULT_BROWSER_CONFIG.claude.policy;
 }
 
-function canonicalizeBrowserConfig(config?: BrowserConfig): BrowserConfig {
+function normalizeBrowserEvalMode(value: string | undefined): BrowserEvalMode {
+  if (value === 'disabled' || value === 'readonly' || value === 'readwrite') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_CONFIG.claude.eval_mode ?? 'readonly';
+}
+
+function canonicalizeBrowserConfig(
+  config?: BrowserConfig,
+  fallback: BrowserConfig = DEFAULT_BROWSER_CONFIG
+): BrowserConfig {
+  const claudeUserDataDir =
+    config?.claude?.user_data_dir === undefined
+      ? fallback.claude.user_data_dir || getRecommendedBrowserUserDataDir()
+      : config.claude.user_data_dir.trim() || getRecommendedBrowserUserDataDir();
+
   return {
     claude: {
-      enabled: config?.claude?.enabled ?? DEFAULT_BROWSER_CONFIG.claude.enabled,
-      policy: normalizeBrowserPolicy(config?.claude?.policy),
-      user_data_dir: config?.claude?.user_data_dir?.trim() || getRecommendedBrowserUserDataDir(),
-      devtools_port: normalizeBrowserDevtoolsPort(config?.claude?.devtools_port),
+      enabled: config?.claude?.enabled ?? fallback.claude.enabled,
+      policy: normalizeBrowserPolicy(config?.claude?.policy ?? fallback.claude.policy),
+      user_data_dir: claudeUserDataDir,
+      devtools_port: normalizeBrowserDevtoolsPort(
+        config?.claude?.devtools_port ?? fallback.claude.devtools_port
+      ),
+      eval_mode: normalizeBrowserEvalMode(config?.claude?.eval_mode ?? fallback.claude.eval_mode),
     },
     codex: {
-      enabled: config?.codex?.enabled ?? DEFAULT_BROWSER_CONFIG.codex.enabled,
-      policy: normalizeBrowserPolicy(config?.codex?.policy),
+      enabled: config?.codex?.enabled ?? fallback.codex.enabled,
+      policy: normalizeBrowserPolicy(config?.codex?.policy ?? fallback.codex.policy),
+      eval_mode: normalizeBrowserEvalMode(config?.codex?.eval_mode ?? fallback.codex.eval_mode),
     },
   };
 }
@@ -1133,7 +1154,13 @@ export function saveUnifiedConfig(config: UnifiedConfig): void {
 export function mutateUnifiedConfig(mutator: (config: UnifiedConfig) => void): UnifiedConfig {
   return withConfigWriteLock(() => {
     const current = loadUnifiedConfigWithLockHeld();
+    const previousBrowser = current.browser
+      ? canonicalizeBrowserConfig(current.browser)
+      : undefined;
     mutator(current);
+    if (current.browser) {
+      current.browser = canonicalizeBrowserConfig(current.browser, previousBrowser);
+    }
     writeUnifiedConfigWithLockHeld(current);
     return current;
   });

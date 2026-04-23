@@ -202,10 +202,12 @@ describe('migration-manager legacy kimi compatibility', () => {
         policy: 'manual',
         user_data_dir: '',
         devtools_port: 9222,
+        eval_mode: 'readonly',
       },
       codex: {
         enabled: false,
         policy: 'manual',
+        eval_mode: 'readonly',
       },
     });
   });

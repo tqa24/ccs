@@ -80,7 +80,7 @@ import { handleError, runCleanup } from './errors';
 import { tryHandleRootCommand } from './commands/root-command-router';
 
 // Import extracted utility functions
-import { execClaude, stripAnthropicRoutingEnv } from './utils/shell-executor';
+import { execClaude, stripAnthropicRoutingEnv, stripBrowserEnv } from './utils/shell-executor';
 import { isDeprecatedGlmtProfileName, normalizeDeprecatedGlmtEnv } from './utils/glmt-deprecation';
 import { maybeWarnAboutResumeLaneMismatch } from './auth/resume-lane-warning';
 import { createLogger } from './services/logging';
@@ -1329,6 +1329,10 @@ async function main(): Promise<void> {
             ...imageAnalysisEnv,
             CCS_CURRENT_PROVIDER: '',
             CCS_IMAGE_ANALYSIS_SKIP: '1',
+            CCS_IMAGE_ANALYSIS_RUNTIME_PATH: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_BASE_URL: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_API_KEY: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_ALLOW_SELF_SIGNED: '0',
           };
         } else if (imageAnalysisStatus.proxyReadiness === 'stopped') {
           const ensureServiceResult = await ensureCliproxyService(
@@ -1363,8 +1367,9 @@ async function main(): Promise<void> {
       // env free of ANTHROPIC routing/auth while preserving non-routing profile
       // env so nested Team/subagent sessions can still inherit model intent and
       // other profile-scoped runtime flags.
+      const settingsRuntimeEnv = stripBrowserEnv({ ...globalEnv, ...settingsEnv });
       const claudeRuntimeEnvVars: NodeJS.ProcessEnv = {
-        ...stripAnthropicRoutingEnv({ ...globalEnv, ...settingsEnv }),
+        ...stripAnthropicRoutingEnv(settingsRuntimeEnv),
         ...(inheritedClaudeConfigDir ? { CLAUDE_CONFIG_DIR: inheritedClaudeConfigDir } : {}),
         ...webSearchEnv,
         ...imageAnalysisEnv,
@@ -1375,8 +1380,7 @@ async function main(): Promise<void> {
 
       // Non-Claude targets still need effective credentials injected directly.
       const envVars: NodeJS.ProcessEnv = {
-        ...globalEnv,
-        ...settingsEnv,
+        ...settingsRuntimeEnv,
         ...(inheritedClaudeConfigDir ? { CLAUDE_CONFIG_DIR: inheritedClaudeConfigDir } : {}),
         ...webSearchEnv,
         ...imageAnalysisEnv,

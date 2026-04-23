@@ -3,10 +3,28 @@ const path = require('node:path');
 const bucket = require('../../../scripts/run-test-bucket.js');
 
 describe('run-test-bucket', () => {
+  const browserMcpSplitSuites = [
+    'tests/unit/hooks/browser-mcp-advanced-interactions.test.ts',
+    'tests/unit/hooks/browser-mcp-downloads-and-files.test.ts',
+    'tests/unit/hooks/browser-mcp-navigation-and-query.test.ts',
+    'tests/unit/hooks/browser-mcp-orchestration-and-artifacts.test.ts',
+    'tests/unit/hooks/browser-mcp-recording-and-replay.test.ts',
+    'tests/unit/hooks/browser-mcp-session-and-intercepts.test.ts',
+  ];
+
   test('all declared slow tests still exist on disk', () => {
     for (const relativePath of bucket.slowTests) {
       const absolutePath = path.resolve(__dirname, '../../../', relativePath);
       expect(Bun.file(absolutePath).exists()).resolves.toBe(true);
+    }
+  });
+
+  test('keeps the split Browser MCP suites in the slow bucket', () => {
+    const slowSet = bucket.getSlowSet();
+
+    expect(slowSet.has('tests/unit/hooks/ccs-browser-mcp-server.test.ts')).toBe(false);
+    for (const relativePath of browserMcpSplitSuites) {
+      expect(slowSet.has(relativePath)).toBe(true);
     }
   });
 

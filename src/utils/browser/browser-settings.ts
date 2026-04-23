@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import type { BrowserConfig } from '../../config/unified-config-types';
+import type { BrowserConfig, BrowserEvalMode } from '../../config/unified-config-types';
 import { getCcsDir, getCcsPathDisplay } from '../config-manager';
 import { expandPath } from '../helpers';
 import { type BrowserRuntimeEnv, resolveBrowserRuntimeEnv } from './chrome-reuse';
@@ -15,6 +15,7 @@ export interface EffectiveClaudeBrowserAttachConfig {
   userDataDir: string;
   devtoolsPort: number;
   hasExplicitDevtoolsPort: boolean;
+  evalMode: BrowserEvalMode;
 }
 
 export interface BrowserLaunchCommands {
@@ -230,15 +231,17 @@ export function getEffectiveClaudeBrowserAttachConfig(
   const configUserDataDir =
     resolveBrowserUserDataDir(config.claude.user_data_dir) ?? getRecommendedBrowserUserDataDir();
   const configPort = normalizeDevtoolsPort(config.claude.devtools_port);
+  const configEvalMode = config.claude.eval_mode ?? 'readonly';
 
   if (override.userDataDir) {
     return {
-      enabled: true,
+      enabled: config.claude.enabled,
       source: override.source as BrowserOverrideSource,
       overrideActive: true,
       userDataDir: override.userDataDir,
       devtoolsPort: override.devtoolsPort ?? configPort,
       hasExplicitDevtoolsPort: override.devtoolsPort !== undefined,
+      evalMode: configEvalMode,
     };
   }
 
@@ -249,6 +252,7 @@ export function getEffectiveClaudeBrowserAttachConfig(
     userDataDir: configUserDataDir,
     devtoolsPort: configPort,
     hasExplicitDevtoolsPort: true,
+    evalMode: configEvalMode,
   };
 }
 
@@ -267,11 +271,15 @@ export async function resolveOptionalBrowserAttachRuntime(
   }
 
   try {
+    const runtimeEnv = await resolveBrowserRuntimeEnv({
+      profileDir: config.userDataDir,
+      devtoolsPort: config.hasExplicitDevtoolsPort ? String(config.devtoolsPort) : undefined,
+    });
     return {
-      runtimeEnv: await resolveBrowserRuntimeEnv({
-        profileDir: config.userDataDir,
-        devtoolsPort: config.hasExplicitDevtoolsPort ? String(config.devtoolsPort) : undefined,
-      }),
+      runtimeEnv: {
+        ...runtimeEnv,
+        CCS_BROWSER_EVAL_MODE: config.evalMode,
+      },
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -12,6 +12,13 @@ describe('chrome reuse resolver', () => {
   const originalHome = process.env.HOME;
   const originalLocalAppData = process.env.LOCALAPPDATA;
   const originalUserProfile = process.env.USERPROFILE;
+  const originalBrowserUserDataDir = process.env.CCS_BROWSER_USER_DATA_DIR;
+  const originalBrowserProfileDir = process.env.CCS_BROWSER_PROFILE_DIR;
+  const originalBrowserDevtoolsPort = process.env.CCS_BROWSER_DEVTOOLS_PORT;
+  const originalBrowserDevtoolsHost = process.env.CCS_BROWSER_DEVTOOLS_HOST;
+  const originalBrowserDevtoolsHttpUrl = process.env.CCS_BROWSER_DEVTOOLS_HTTP_URL;
+  const originalBrowserDevtoolsWsUrl = process.env.CCS_BROWSER_DEVTOOLS_WS_URL;
+  const originalBrowserEvalMode = process.env.CCS_BROWSER_EVAL_MODE;
   let tempDirs: string[] = [];
   let servers: Array<{ stop: () => void }> = [];
 
@@ -71,7 +78,7 @@ describe('chrome reuse resolver', () => {
     return server;
   }
 
-  async function reserveClosedPort(): Promise<number> {
+  function reserveClosedPort(): number {
     const server = Bun.serve({
       port: 0,
       fetch() {
@@ -79,13 +86,27 @@ describe('chrome reuse resolver', () => {
       },
     });
     const port = server.port;
-    server.stop(true);
+    if (port === undefined) {
+      server.stop();
+      throw new Error('Failed to reserve a DevTools test port');
+    }
+    server.stop();
     return port;
   }
 
+  beforeEach(() => {
+    delete process.env.CCS_BROWSER_USER_DATA_DIR;
+    delete process.env.CCS_BROWSER_PROFILE_DIR;
+    delete process.env.CCS_BROWSER_DEVTOOLS_PORT;
+    delete process.env.CCS_BROWSER_DEVTOOLS_HOST;
+    delete process.env.CCS_BROWSER_DEVTOOLS_HTTP_URL;
+    delete process.env.CCS_BROWSER_DEVTOOLS_WS_URL;
+    delete process.env.CCS_BROWSER_EVAL_MODE;
+  });
+
   afterEach(() => {
     for (const server of servers) {
-      server.stop(true);
+      server.stop();
     }
     servers = [];
 
@@ -110,6 +131,48 @@ describe('chrome reuse resolver', () => {
       delete process.env.USERPROFILE;
     } else {
       process.env.USERPROFILE = originalUserProfile;
+    }
+
+    if (originalBrowserUserDataDir === undefined) {
+      delete process.env.CCS_BROWSER_USER_DATA_DIR;
+    } else {
+      process.env.CCS_BROWSER_USER_DATA_DIR = originalBrowserUserDataDir;
+    }
+
+    if (originalBrowserProfileDir === undefined) {
+      delete process.env.CCS_BROWSER_PROFILE_DIR;
+    } else {
+      process.env.CCS_BROWSER_PROFILE_DIR = originalBrowserProfileDir;
+    }
+
+    if (originalBrowserDevtoolsPort === undefined) {
+      delete process.env.CCS_BROWSER_DEVTOOLS_PORT;
+    } else {
+      process.env.CCS_BROWSER_DEVTOOLS_PORT = originalBrowserDevtoolsPort;
+    }
+
+    if (originalBrowserDevtoolsHost === undefined) {
+      delete process.env.CCS_BROWSER_DEVTOOLS_HOST;
+    } else {
+      process.env.CCS_BROWSER_DEVTOOLS_HOST = originalBrowserDevtoolsHost;
+    }
+
+    if (originalBrowserDevtoolsHttpUrl === undefined) {
+      delete process.env.CCS_BROWSER_DEVTOOLS_HTTP_URL;
+    } else {
+      process.env.CCS_BROWSER_DEVTOOLS_HTTP_URL = originalBrowserDevtoolsHttpUrl;
+    }
+
+    if (originalBrowserDevtoolsWsUrl === undefined) {
+      delete process.env.CCS_BROWSER_DEVTOOLS_WS_URL;
+    } else {
+      process.env.CCS_BROWSER_DEVTOOLS_WS_URL = originalBrowserDevtoolsWsUrl;
+    }
+
+    if (originalBrowserEvalMode === undefined) {
+      delete process.env.CCS_BROWSER_EVAL_MODE;
+    } else {
+      process.env.CCS_BROWSER_EVAL_MODE = originalBrowserEvalMode;
     }
   });
 
@@ -175,7 +238,7 @@ describe('chrome reuse resolver', () => {
   it('throws a clear error when DevToolsActivePort metadata is missing', async () => {
     const profileDir = createTempDir('ccs-chrome-missing-metadata-');
 
-    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome reuse metadata not found: ${path.join(profileDir, 'DevToolsActivePort')}`
     );
   });
@@ -184,17 +247,17 @@ describe('chrome reuse resolver', () => {
     const profileDir = createTempDir('ccs-chrome-invalid-metadata-');
     writeDevToolsActivePort(profileDir, 'not-a-port\n/devtools/browser/target');
 
-    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome reuse metadata is invalid: ${path.join(profileDir, 'DevToolsActivePort')}`
     );
   });
 
   it('throws before launch fallback when the DevTools endpoint is stale or unreachable', async () => {
     const profileDir = createTempDir('ccs-chrome-unreachable-');
-    const port = await reserveClosedPort();
+    const port = reserveClosedPort();
     writeDevToolsActivePort(profileDir, `${port}\n/devtools/browser/stale`);
 
-    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint is unreachable: http://127.0.0.1:${port}`
     );
   });
@@ -204,7 +267,7 @@ describe('chrome reuse resolver', () => {
     const server = await startDevToolsServer({ Browser: 'Chrome/136.0.0.0' });
     writeDevToolsActivePort(profileDir, `${server.port}\n/devtools/browser/no-ws`);
 
-    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint did not provide a websocket target: http://127.0.0.1:${server.port}/json/version`
     );
   });
@@ -214,7 +277,7 @@ describe('chrome reuse resolver', () => {
     const server = await startFailingDevToolsServer(500);
     writeDevToolsActivePort(profileDir, `${server.port}\n/devtools/browser/bad-status`);
 
-    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint is unreachable: http://127.0.0.1:${server.port}`
     );
   });
@@ -224,7 +287,7 @@ describe('chrome reuse resolver', () => {
     const server = await startMalformedJsonDevToolsServer();
     writeDevToolsActivePort(profileDir, `${server.port}\n/devtools/browser/bad-json`);
 
-    await expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
+    expect(resolveBrowserRuntimeEnv({ profileDir })).rejects.toThrow(
       `Chrome DevTools endpoint is unreachable: http://127.0.0.1:${server.port}`
     );
   });
@@ -262,7 +325,7 @@ describe('chrome reuse resolver', () => {
       'missing-profile'
     );
 
-    await expect(resolveBrowserRuntimeEnv({ profileDir: missingProfileDir })).rejects.toThrow(
+    expect(resolveBrowserRuntimeEnv({ profileDir: missingProfileDir })).rejects.toThrow(
       `Chrome profile directory is invalid: ${missingProfileDir}`
     );
   });

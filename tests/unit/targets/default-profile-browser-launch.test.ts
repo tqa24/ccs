@@ -119,6 +119,7 @@ describe('default profile browser launch', () => {
 printf "%s\n" "$@" > "${claudeArgsLogPath}"
 {
   printf "userDataDir=%s\n" "$CCS_BROWSER_USER_DATA_DIR"
+  printf "legacyProfileDir=%s\n" "$CCS_BROWSER_PROFILE_DIR"
   printf "host=%s\n" "$CCS_BROWSER_DEVTOOLS_HOST"
   printf "port=%s\n" "$CCS_BROWSER_DEVTOOLS_PORT"
   printf "httpUrl=%s\n" "$CCS_BROWSER_DEVTOOLS_HTTP_URL"
@@ -137,6 +138,13 @@ exit 0
       CCS_HOME: tmpHome,
       CCS_CLAUDE_PATH: fakeClaudePath,
       CCS_DEBUG: '1',
+      CCS_BROWSER_USER_DATA_DIR: '',
+      CCS_BROWSER_PROFILE_DIR: '',
+      CCS_BROWSER_DEVTOOLS_HOST: '',
+      CCS_BROWSER_DEVTOOLS_PORT: '',
+      CCS_BROWSER_DEVTOOLS_HTTP_URL: '',
+      CCS_BROWSER_DEVTOOLS_WS_URL: '',
+      CCS_BROWSER_EVAL_MODE: '',
     };
   });
 
@@ -257,6 +265,30 @@ server.listen(0, '127.0.0.1', () => {
     expect(launchedEnv).not.toContain(`port=${port}`);
     expect(launchedEnv).not.toContain(`httpUrl=http://127.0.0.1:${port}`);
     expect(launchedEnv).not.toContain('wsUrl=ws://127.0.0.1/devtools/browser/default-target');
+  });
+
+  it('scrubs inherited CCS_BROWSER_* env from browser-off default Claude launches', () => {
+    if (process.platform === 'win32') return;
+
+    const result = runCcs(['default', 'smoke'], {
+      ...baseEnv,
+      CCS_BROWSER_USER_DATA_DIR: '/tmp/stale-browser-runtime',
+      CCS_BROWSER_PROFILE_DIR: '/tmp/stale-browser-legacy',
+      CCS_BROWSER_DEVTOOLS_HOST: '127.0.0.1',
+      CCS_BROWSER_DEVTOOLS_PORT: '9555',
+      CCS_BROWSER_DEVTOOLS_HTTP_URL: 'http://127.0.0.1:9555',
+      CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/stale-default-env',
+    });
+
+    expect(result.status).toBe(0);
+    const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
+    expect(launchedArgs).not.toContain(BROWSER_PROMPT_SNIPPET);
+
+    const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
+    expect(launchedEnv).not.toContain('/tmp/stale-browser-runtime');
+    expect(launchedEnv).not.toContain('/tmp/stale-browser-legacy');
+    expect(launchedEnv).not.toContain('9555');
+    expect(launchedEnv).not.toContain('stale-default-env');
   });
 
   it('skips managed browser attach when the default CCS browser profile directory is missing', () => {

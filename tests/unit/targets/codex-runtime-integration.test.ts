@@ -124,6 +124,9 @@ if (envOut) {
       CODEX_MANAGED_BY_BUN: process.env.CODEX_MANAGED_BY_BUN,
       CODEX_THREAD_ID: process.env.CODEX_THREAD_ID,
       ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL,
+      CCS_BROWSER_USER_DATA_DIR: process.env.CCS_BROWSER_USER_DATA_DIR,
+      CCS_BROWSER_PROFILE_DIR: process.env.CCS_BROWSER_PROFILE_DIR,
+      CCS_BROWSER_DEVTOOLS_WS_URL: process.env.CCS_BROWSER_DEVTOOLS_WS_URL,
     }) + '\\n'
   );
 }
@@ -173,12 +176,28 @@ process.exit(0);
       CCS_HOME: tmpHome,
       CCS_CODEX_PATH: fakeCodexPath,
       CCS_TEST_CODEX_ARGS_OUT: codexArgsLogPath,
+      CCS_TEST_CODEX_ENV_OUT: codexEnvLogPath,
       CCS_THINKING: '8192',
+      CCS_BROWSER_USER_DATA_DIR: '/tmp/stale-codex-browser-runtime',
+      CCS_BROWSER_PROFILE_DIR: '/tmp/stale-codex-browser-legacy',
+      CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/stale-codex-env',
     });
 
     expect(result.status).toBe(0);
     const calls = readLoggedCodexCalls(codexArgsLogPath);
     expect(calls).toEqual([['fix failing tests']]);
+    expect(readLoggedCodexEnv(codexEnvLogPath)).toEqual([
+      {
+        CODEX_HOME: undefined,
+        CODEX_CI: undefined,
+        CODEX_MANAGED_BY_BUN: undefined,
+        CODEX_THREAD_ID: undefined,
+        ANTHROPIC_BASE_URL: undefined,
+        CCS_BROWSER_USER_DATA_DIR: undefined,
+        CCS_BROWSER_PROFILE_DIR: undefined,
+        CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
+      },
+    ]);
   });
 
   it('injects browser MCP runtime overrides when Codex browser policy is explicitly auto-enabled', () => {
@@ -493,6 +512,9 @@ process.exit(0);
         CODEX_MANAGED_BY_BUN: undefined,
         CODEX_THREAD_ID: undefined,
         ANTHROPIC_BASE_URL: undefined,
+        CCS_BROWSER_USER_DATA_DIR: undefined,
+        CCS_BROWSER_PROFILE_DIR: undefined,
+        CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
       },
     ]);
   });
@@ -533,6 +555,9 @@ process.exit(0);
       CODEX_MANAGED_BY_BUN: undefined,
       CODEX_THREAD_ID: undefined,
       ANTHROPIC_BASE_URL: undefined,
+      CCS_BROWSER_USER_DATA_DIR: undefined,
+      CCS_BROWSER_PROFILE_DIR: undefined,
+      CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
     });
   });
 
@@ -611,6 +636,9 @@ process.exit(0);
         CODEX_MANAGED_BY_BUN: undefined,
         CODEX_THREAD_ID: undefined,
         ANTHROPIC_BASE_URL: undefined,
+        CCS_BROWSER_USER_DATA_DIR: undefined,
+        CCS_BROWSER_PROFILE_DIR: undefined,
+        CCS_BROWSER_DEVTOOLS_WS_URL: undefined,
       },
     ]);
   });

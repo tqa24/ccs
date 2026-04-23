@@ -3,7 +3,7 @@
  * Session-based auth with httpOnly cookies for CCS dashboard.
  */
 
-import type { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import session from 'express-session';
 import rateLimit from 'express-rate-limit';
 import { getDashboardAuthConfig, isDashboardAuthEnabled } from '../../config/unified-config-loader';

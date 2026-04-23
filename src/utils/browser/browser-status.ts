@@ -1,5 +1,9 @@
 import * as path from 'path';
-import type { BrowserConfig, BrowserToolPolicy } from '../../config/unified-config-types';
+import type {
+  BrowserConfig,
+  BrowserEvalMode,
+  BrowserToolPolicy,
+} from '../../config/unified-config-types';
 import { getBrowserConfig, loadUnifiedConfig } from '../../config/unified-config-loader';
 import { getCcsPathDisplay } from '../config-manager';
 import { getCodexBinaryInfo } from '../../targets/codex-detector';
@@ -19,6 +23,7 @@ import {
 export interface ClaudeBrowserStatus {
   enabled: boolean;
   policy: BrowserToolPolicy;
+  evalMode: BrowserEvalMode;
   source: 'config' | 'CCS_BROWSER_USER_DATA_DIR' | 'CCS_BROWSER_PROFILE_DIR';
   overrideActive: boolean;
   state: 'disabled' | 'path_missing' | 'browser_not_running' | 'endpoint_unreachable' | 'ready';
@@ -37,6 +42,7 @@ export interface ClaudeBrowserStatus {
 export interface CodexBrowserStatus {
   enabled: boolean;
   policy: BrowserToolPolicy;
+  evalMode: BrowserEvalMode;
   state: 'disabled' | 'enabled' | 'unsupported_build';
   title: string;
   detail: string;
@@ -69,6 +75,12 @@ function resolveSafeBrowserPolicy(policy: BrowserToolPolicy | undefined): Browse
   return policy === 'auto' || policy === 'manual' ? policy : 'manual';
 }
 
+function resolveSafeBrowserEvalMode(evalMode: BrowserEvalMode | undefined): BrowserEvalMode {
+  return evalMode === 'disabled' || evalMode === 'readonly' || evalMode === 'readwrite'
+    ? evalMode
+    : 'readonly';
+}
+
 export function getUserFacingBrowserConfig(): BrowserConfig {
   const canonical = getBrowserConfig();
   const persisted = loadUnifiedConfig()?.browser as PersistedBrowserConfig | undefined;
@@ -79,11 +91,13 @@ export function getUserFacingBrowserConfig(): BrowserConfig {
         ...canonical.claude,
         enabled: false,
         policy: 'manual',
+        eval_mode: resolveSafeBrowserEvalMode(canonical.claude.eval_mode),
       },
       codex: {
         ...canonical.codex,
         enabled: false,
         policy: 'manual',
+        eval_mode: resolveSafeBrowserEvalMode(canonical.codex.eval_mode),
       },
     };
   }
@@ -93,11 +107,17 @@ export function getUserFacingBrowserConfig(): BrowserConfig {
       ...canonical.claude,
       enabled: persisted.claude?.enabled ?? false,
       policy: resolveSafeBrowserPolicy(persisted.claude?.policy),
+      eval_mode: resolveSafeBrowserEvalMode(
+        persisted.claude?.eval_mode ?? canonical.claude.eval_mode
+      ),
     },
     codex: {
       ...canonical.codex,
       enabled: persisted.codex?.enabled ?? false,
       policy: resolveSafeBrowserPolicy(persisted.codex?.policy),
+      eval_mode: resolveSafeBrowserEvalMode(
+        persisted.codex?.eval_mode ?? canonical.codex.eval_mode
+      ),
     },
   };
 }
@@ -110,6 +130,7 @@ async function buildClaudeBrowserStatus(
   const base: Omit<ClaudeBrowserStatus, 'state' | 'title' | 'detail' | 'nextStep'> = {
     enabled: effective.enabled,
     policy: browserConfig.claude.policy,
+    evalMode: resolveSafeBrowserEvalMode(browserConfig.claude.eval_mode),
     source: effective.source,
     overrideActive: effective.overrideActive,
     effectiveUserDataDir: effective.userDataDir,
@@ -224,6 +245,7 @@ function buildCodexBrowserStatus(browserConfig = getUserFacingBrowserConfig()): 
     return {
       enabled: false,
       policy: browserConfig.codex.policy,
+      evalMode: resolveSafeBrowserEvalMode(browserConfig.codex.eval_mode),
       state: 'disabled',
       title: 'Codex Browser Tools are disabled.',
       detail:
@@ -242,6 +264,7 @@ function buildCodexBrowserStatus(browserConfig = getUserFacingBrowserConfig()): 
     return {
       enabled: true,
       policy: browserConfig.codex.policy,
+      evalMode: resolveSafeBrowserEvalMode(browserConfig.codex.eval_mode),
       state: 'unsupported_build',
       title: 'Codex Browser Tools need a Codex build with --config override support.',
       detail: binaryInfo
@@ -258,6 +281,7 @@ function buildCodexBrowserStatus(browserConfig = getUserFacingBrowserConfig()): 
   return {
     enabled: true,
     policy: browserConfig.codex.policy,
+    evalMode: resolveSafeBrowserEvalMode(browserConfig.codex.eval_mode),
     state: 'enabled',
     title: 'Codex Browser Tools are enabled.',
     detail:
@@ -283,5 +307,6 @@ export function getManagedBrowserSetupHint(): string {
     userDataDir: getRecommendedBrowserUserDataDir(),
     devtoolsPort: 9222,
     hasExplicitDevtoolsPort: true,
+    evalMode: 'readonly',
   }).join('\n');
 }
