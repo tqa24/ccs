@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'bun:test';
 import { spawn } from 'child_process';
-import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import * as http from 'node:http';
 import { WebSocketServer } from 'ws';
 import { tmpdir } from 'node:os';
@@ -114,6 +114,7 @@ type MockFileInputPlan = MockFileInputState | MockFileInputState[];
 
 type MockDropzoneState = {
   accepted?: boolean;
+  acceptedByCancel?: boolean;
   requireFiles?: boolean;
   receivedEventTypes?: string[];
   receivedFiles?: Array<{ name: string; size: number; type: string }>;
@@ -203,6 +204,7 @@ type MockRecordingPlan = {
   events?: MockRecordedEvent[];
   warnings?: MockRecordingWarning[];
   injectionError?: string;
+  finalizeError?: string;
 };
 
 type MockFrameState = {
@@ -226,6 +228,7 @@ type MockEvalPlan = Record<
     result?: unknown;
     error?: string;
     nonSerializable?: boolean;
+    unserializableValue?: string;
   }
 >;
 
@@ -1121,6 +1124,15 @@ function createMockBrowser(pagesInput: MockPageState[]) {
 
         if (expression.includes('globalThis.__CCS_BROWSER_RECORDING_RECORDER__ || { events: [], warnings: [] }')) {
           const plan = getMockRecordingPlan(page);
+          if (plan.finalizeError) {
+            socket.send(
+              JSON.stringify({
+                id: message.id,
+                result: { exceptionDetails: { text: plan.finalizeError } },
+              })
+            );
+            return;
+          }
           reply({
             result: {
               type: 'object',
@@ -1174,7 +1186,14 @@ function createMockBrowser(pagesInput: MockPageState[]) {
             size: file.size,
             type: file.mimeType,
           }));
-          reply({ result: { type: 'object', value: { accepted: target.accepted !== false } } });
+          reply({
+            result: {
+              type: 'object',
+              value: {
+                accepted: target.acceptedByCancel === true ? true : target.accepted !== false,
+              },
+            },
+          });
           return;
         }
 
@@ -1191,6 +1210,20 @@ function createMockBrowser(pagesInput: MockPageState[]) {
           }
           if (evalPlan.nonSerializable) {
             socket.send(JSON.stringify({ id: message.id, result: { result: { type: 'object' } } }));
+            return;
+          }
+          if (typeof evalPlan.unserializableValue === 'string') {
+            socket.send(
+              JSON.stringify({
+                id: message.id,
+                result: {
+                  result: {
+                    type: 'number',
+                    unserializableValue: evalPlan.unserializableValue,
+                  },
+                },
+              })
+            );
             return;
           }
           socket.send(
@@ -5039,6 +5072,9 @@ describe('ccs-browser MCP server', () => {
             'throw new Error("boom")': {
               error: 'boom',
             },
+            Infinity: {
+              unserializableValue: 'Infinity',
+            },
             window: {
               nonSerializable: true,
             },
@@ -5088,6 +5124,15 @@ describe('ccs-browser MCP server', () => {
           method: 'tools/call',
           params: {
             name: 'browser_eval',
+            arguments: { expression: 'Infinity' },
+          },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 55,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
             arguments: { expression: 'window' },
           },
         },
@@ -5111,6 +5156,9 @@ describe('ccs-browser MCP server', () => {
       'Browser MCP failed: boom'
     );
     expect(getResponseText(responses.find((message) => message.id === 54))).toContain(
+      'value: "Infinity"'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 55))).toContain(
       'Browser MCP failed: evaluation result is not JSON-serializable'
     );
   });
@@ -5148,6 +5196,37 @@ describe('ccs-browser MCP server', () => {
     );
     expect(getResponseText(responses.find((message) => message.id === 54))).toContain(
       'value: "ok"'
+    );
+  });
+
+  it('hides browser_eval when eval mode is disabled', async () => {
+    const responses = await runMcpRequests(
+      [{ id: 'page-1', title: 'Eval Disabled Page', currentUrl: 'https://example.com/' }],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 56,
+          method: 'tools/list',
+          params: {},
+        },
+        {
+          jsonrpc: '2.0',
+          id: 57,
+          method: 'tools/call',
+          params: {
+            name: 'browser_eval',
+            arguments: { expression: '1 + 1' },
+          },
+        },
+      ],
+      { childEnv: { ...process.env, CCS_BROWSER_EVAL_MODE: 'disabled' } }
+    );
+
+    const tools = (responses.find((message) => message.id === 56)?.result as { tools?: Array<{ name?: string }> })
+      ?.tools || [];
+    expect(tools.some((tool) => tool.name === 'browser_eval')).toBe(false);
+    expect((responses.find((message) => message.id === 57)?.error as { message?: string })?.message).toBe(
+      'Unknown tool: browser_eval'
     );
   });
 
@@ -5763,6 +5842,48 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(responses.find((message) => message.id === 1019))).toContain('pageIndex and pageId cannot be used together');
   });
 
+  it('cleans up recording state when stop finalization fails', async () => {
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Broken Stop Recording Page',
+          currentUrl: 'https://example.com/broken-stop-recording',
+          recording: {
+            finalizeError: 'recording finalize failed',
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 1019_1,
+          method: 'tools/call',
+          params: { name: 'browser_start_recording', arguments: {} },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1019_2,
+          method: 'tools/call',
+          params: { name: 'browser_stop_recording', arguments: {} },
+        },
+        {
+          jsonrpc: '2.0',
+          id: 1019_3,
+          method: 'tools/call',
+          params: { name: 'browser_start_recording', arguments: {} },
+        },
+      ]
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 1019_2))).toContain(
+      'recording finalize failed'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 1019_3))).toContain(
+      'status: recording'
+    );
+  });
+
   it('rolls back recording state when recorder injection fails', async () => {
     const responses = await runMcpRequests(
       [
@@ -6069,6 +6190,105 @@ describe('ccs-browser MCP server', () => {
     expect(text).toContain('element index 0 is out of range for selector: #missing');
   });
 
+  it('cancels a replay before later steps run', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Replay Cancel Page',
+        currentUrl: 'https://example.com/replay-cancel',
+        click: {
+          '#submit': {},
+        },
+        query: {
+          '#handle': {
+            exists: true,
+            connected: true,
+            rect: {
+              x: 20,
+              y: 30,
+              width: 40,
+              height: 40,
+              top: 30,
+              right: 60,
+              bottom: 70,
+              left: 20,
+            },
+            display: 'block',
+            visibility: 'visible',
+            opacity: '1',
+          },
+          '#submit': {
+            exists: true,
+            connected: true,
+            rect: {
+              x: 120,
+              y: 30,
+              width: 100,
+              height: 40,
+              top: 30,
+              right: 220,
+              bottom: 70,
+              left: 120,
+            },
+            display: 'block',
+            visibility: 'visible',
+            opacity: '1',
+          },
+        },
+      },
+    ];
+
+    const responses = await runMcpRequests(pages, [
+      {
+        jsonrpc: '2.0',
+        id: 1116,
+        method: 'tools/call',
+        params: {
+          name: 'browser_start_replay',
+          arguments: {
+            steps: [
+              createReplayStep({
+                type: 'pointer_action',
+                pageId: 'page-1',
+                args: {
+                  actions: [
+                    { type: 'move', selector: '#handle' },
+                    { type: 'pause', durationMs: 400 },
+                  ],
+                },
+              }),
+              createReplayStep({
+                type: 'click',
+                pageId: 'page-1',
+                selector: '#submit',
+                args: {},
+              }),
+            ],
+          },
+        },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 1117,
+        method: 'tools/call',
+        params: { name: 'browser_cancel_replay', arguments: {} },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 1118,
+        method: 'tools/call',
+        params: { name: 'browser_get_replay', arguments: {} },
+      },
+    ]);
+
+    expect(getResponseText(responses.find((message) => message.id === 1116))).toContain(
+      'status: running'
+    );
+    const text = getResponseText(responses.find((message) => message.id === 1118));
+    expect(text).toContain('status: canceled');
+    expect(text).not.toContain('completedSteps: 2');
+  });
+
   it('replays drag_element and pointer_action steps successfully', async () => {
     const pages: MockPageState[] = [
       {
@@ -6242,6 +6462,112 @@ describe('ccs-browser MCP server', () => {
     expect(getResponseText(responses.find((message) => message.id === 1201))).toContain('status: completed');
     expect(getResponseText(responses.find((message) => message.id === 1202))).toContain('completedBlocks: 1');
     expect(getResponseText(responses.find((message) => message.id === 1202))).toContain('status: completed');
+  });
+
+  it('cancels orchestration before later blocks run', async () => {
+    const pages: MockPageState[] = [
+      {
+        id: 'page-1',
+        title: 'Orchestration Cancel Page',
+        currentUrl: 'https://example.com/orchestration-cancel',
+        query: {
+          '#handle': {
+            exists: true,
+            connected: true,
+            rect: {
+              x: 20,
+              y: 30,
+              width: 40,
+              height: 40,
+              top: 30,
+              right: 60,
+              bottom: 70,
+              left: 20,
+            },
+            display: 'block',
+            visibility: 'visible',
+            opacity: '1',
+          },
+          '#status': {
+            exists: true,
+            connected: true,
+            innerText: 'ready',
+            textContent: 'ready',
+            rect: {
+              x: 80,
+              y: 30,
+              width: 80,
+              height: 20,
+              top: 30,
+              right: 160,
+              bottom: 50,
+              left: 80,
+            },
+            display: 'block',
+            visibility: 'visible',
+            opacity: '1',
+          },
+        },
+      },
+    ];
+
+    const responses = await runMcpRequests(pages, [
+      {
+        jsonrpc: '2.0',
+        id: 1202_1,
+        method: 'tools/call',
+        params: {
+          name: 'browser_start_orchestration',
+          arguments: {
+            blocks: [
+              createOrchestrationBlock({
+                type: 'run_replay_sequence',
+                args: {
+                  steps: [
+                    createReplayStep({
+                      type: 'pointer_action',
+                      pageId: 'page-1',
+                      args: {
+                        actions: [
+                          { type: 'move', selector: '#handle' },
+                          { type: 'pause', durationMs: 400 },
+                        ],
+                      },
+                    }),
+                  ],
+                },
+              }),
+              createOrchestrationBlock({
+                type: 'assert_query',
+                args: {
+                  query: { selector: '#status', fields: ['innerText'] },
+                  assertions: [{ field: 'innerText', op: 'equals', value: 'ready' }],
+                },
+              }),
+            ],
+          },
+        },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 1202_2,
+        method: 'tools/call',
+        params: { name: 'browser_cancel_orchestration', arguments: {} },
+      },
+      {
+        jsonrpc: '2.0',
+        id: 1202_3,
+        method: 'tools/call',
+        params: { name: 'browser_get_orchestration', arguments: {} },
+      },
+    ]);
+
+    expect(getResponseText(responses.find((message) => message.id === 1202_1))).toContain(
+      'status: running'
+    );
+    const text = getResponseText(responses.find((message) => message.id === 1202_3));
+    expect(text).toContain('status: canceled');
+    expect(text).not.toContain('completedBlocks: 2');
   });
 
   it('completes a wait_then_type flow', async () => {
@@ -7108,6 +7434,7 @@ describe('ccs-browser MCP server', () => {
     ]);
 
     const text = getResponseText(responses.find((message) => message.id === 1502));
+    expect(text).toContain('status: completed_with_failures');
     expect(text).toContain('completedBlocks: 2');
     expect(text).toContain('failedCount: 1');
     expect(text).toContain('failure[0].blockIndex: 0');
@@ -7187,6 +7514,7 @@ describe('ccs-browser MCP server', () => {
     ]);
 
     const text = getResponseText(responses.find((message) => message.id === 1504));
+    expect(text).toContain('status: completed_with_failures');
     expect(text).toContain('completedBlocks: 1');
     expect(text).toContain('failedCount: 1');
     expect(text).toContain('failure[0].sequenceStepIndex: 0');
@@ -7305,6 +7633,7 @@ describe('ccs-browser MCP server', () => {
     ]);
 
     const text = getResponseText(responses.find((message) => message.id === 1507));
+    expect(text).toContain('status: completed_with_failures');
     expect(text).toContain('completedBlocks: 2');
     expect(text).toContain('failedCount: 1');
     expect(text).toContain('failure[0].sequenceStepIndex: 0');
@@ -7500,6 +7829,10 @@ describe('ccs-browser MCP server', () => {
   });
 
   it('rejects duplicate export, invalid import payload, and missing artifact delete target', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-artifact-failures-'));
+    const oversizedArtifactPath = join(tempDir, 'oversized-artifact.json');
+    writeFileSync(oversizedArtifactPath, Buffer.alloc(5 * 1024 * 1024 + 1, 'a'));
+
     const responses = await runMcpRequests(
       [
         {
@@ -7518,12 +7851,24 @@ describe('ccs-browser MCP server', () => {
         { jsonrpc: '2.0', id: 1615, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: 'dup-artifact' } } },
         { jsonrpc: '2.0', id: 1616, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: 'artifact:invalid-json' } } },
         { jsonrpc: '2.0', id: 1617, method: 'tools/call', params: { name: 'browser_delete_artifact', arguments: { name: 'missing-artifact' } } },
+        { jsonrpc: '2.0', id: 1618, method: 'tools/call', params: { name: 'browser_export_artifact', arguments: { kind: 'recording', name: '../escape' } } },
+        { jsonrpc: '2.0', id: 1619, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: 'artifact:../escape' } } },
+        { jsonrpc: '2.0', id: 1620, method: 'tools/call', params: { name: 'browser_import_artifact', arguments: { path: oversizedArtifactPath } } },
       ]
     );
 
     expect(getResponseText(responses.find((message) => message.id === 1615))).toContain('artifact already exists');
     expect(getResponseText(responses.find((message) => message.id === 1616))).toContain('artifact file not found');
     expect(getResponseText(responses.find((message) => message.id === 1617))).toContain('artifact not found');
+    expect(getResponseText(responses.find((message) => message.id === 1618))).toContain(
+      'artifact name must start with a letter or number'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 1619))).toContain(
+      'artifact name must start with a letter or number'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 1620))).toContain(
+      'artifact file exceeds maximum size'
+    );
   });
 
   it('runs select_page_then_run and executes the inner single-page block on the selected page', async () => {
@@ -7798,6 +8143,7 @@ describe('ccs-browser MCP server', () => {
         currentUrl: 'https://example.com/uploads',
         dropzones: {
           '#dropzone': { accepted: true },
+          '#cancel-dropzone': { acceptedByCancel: true },
         },
         frames: [
           {
@@ -7854,6 +8200,18 @@ describe('ccs-browser MCP server', () => {
           },
         },
       },
+      {
+        jsonrpc: '2.0',
+        id: 904,
+        method: 'tools/call',
+        params: {
+          name: 'browser_drag_files',
+          arguments: {
+            selector: '#cancel-dropzone',
+            files: [invoicePath],
+          },
+        },
+      },
     ]);
 
     expect(getResponseText(responses.find((message) => message.id === 901))).toContain('status: files-dropped');
@@ -7872,6 +8230,12 @@ describe('ccs-browser MCP server', () => {
     expect(
       getMockDropzoneState(pages[0]!, '#shadow-dropzone', { pierceShadow: true })?.receivedFiles
     ).toEqual([{ name: 'receipt.png', size: 7, type: 'image/png' }]);
+    expect(getResponseText(responses.find((message) => message.id === 904))).toContain(
+      'status: files-dropped'
+    );
+    expect(getMockDropzoneState(pages[0]!, '#cancel-dropzone')?.receivedFiles).toEqual([
+      { name: 'invoice.pdf', size: 7, type: 'application/pdf' },
+    ]);
   });
 
   it('rejects browser_drag_files for missing files, page conflicts, missing targets, and rejected drops', async () => {
@@ -8337,12 +8701,89 @@ describe('ccs-browser MCP server', () => {
           },
         },
       },
+      {
+        jsonrpc: '2.0',
+        id: 920,
+        method: 'tools/call',
+        params: {
+          name: 'browser_pointer_action',
+          arguments: {
+            actions: [
+              { type: 'move', selector: '#handle' },
+              { type: 'down', button: 'left' },
+              { type: 'up', button: 'right' },
+            ],
+          },
+        },
+      },
     ]);
 
     expect(getResponseText(responses.find((message) => message.id === 914))).toContain('pointer state error');
     expect(getResponseText(responses.find((message) => message.id === 915))).toContain('drag coordinates unavailable');
     expect(getResponseText(responses.find((message) => message.id === 919))).toContain(
       'pageIndex and pageId cannot be used together'
+    );
+    expect(getResponseText(responses.find((message) => message.id === 920))).toContain(
+      'pointer state error'
+    );
+  });
+
+  it('rejects mutating browser tools when the selected page becomes stale', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'ccs-browser-stale-selection-'));
+    const patchedServerPath = join(tempDir, 'ccs-browser-server.cjs');
+    writeFileSync(
+      patchedServerPath,
+      readFileSync(bundledServerPath, 'utf8').replace(
+        "let selectedPageId = '';",
+        "let selectedPageId = 'page-2';"
+      )
+    );
+
+    const responses = await runMcpRequests(
+      [
+        {
+          id: 'page-1',
+          title: 'Primary Page',
+          currentUrl: 'https://example.com/primary',
+          query: {
+            '#handle': {
+              exists: true,
+              connected: true,
+              rect: {
+                x: 30,
+                y: 50,
+                width: 40,
+                height: 20,
+                top: 50,
+                right: 70,
+                bottom: 70,
+                left: 30,
+              },
+              display: 'block',
+              visibility: 'visible',
+              opacity: '1',
+            },
+          },
+        },
+      ],
+      [
+        {
+          jsonrpc: '2.0',
+          id: 923,
+          method: 'tools/call',
+          params: {
+            name: 'browser_pointer_action',
+            arguments: {
+              actions: [{ type: 'move', selector: '#handle' }],
+            },
+          },
+        },
+      ],
+      { serverPath: patchedServerPath }
+    );
+
+    expect(getResponseText(responses.find((message) => message.id === 923))).toContain(
+      'Selected page is no longer available; specify pageIndex or pageId explicitly.'
     );
   });
 
