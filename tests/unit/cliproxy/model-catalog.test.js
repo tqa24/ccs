@@ -142,6 +142,19 @@ describe('Model Catalog', () => {
       assert.strictEqual(sonnet.name, 'Claude Sonnet 4.6');
     });
 
+    it('includes Claude Opus 4.7 with provider-specific settings', () => {
+      const { MODEL_CATALOG } = modelCatalog;
+      const opus47 = MODEL_CATALOG.claude.models.find((m) => m.id === 'claude-opus-4-7');
+      assert(opus47, 'Should include Claude Opus 4.7');
+      assert.strictEqual(opus47.name, 'Claude Opus 4.7');
+      // Opus 4.7 requires adaptive thinking (type: 'levels'); manual budget_tokens
+      // is rejected by the Anthropic API with 400. Extended (1M) context is available.
+      assert.strictEqual(opus47.thinking.type, 'levels');
+      assert.deepStrictEqual(opus47.thinking.levels, ['low', 'medium', 'high', 'xhigh', 'max']);
+      assert.strictEqual(opus47.thinking.maxLevel, 'max');
+      assert.strictEqual(opus47.extendedContext, true);
+    });
+
     it('retains previous 4.5 snapshot models for explicit selection', () => {
       const { MODEL_CATALOG } = modelCatalog;
       const ids = MODEL_CATALOG.claude.models.map((m) => m.id);
@@ -266,6 +279,13 @@ describe('Model Catalog', () => {
   });
 
   describe('findModel', () => {
+    it('finds Claude Opus 4.7 in claude', () => {
+      const { findModel } = modelCatalog;
+      const model = findModel('claude', 'claude-opus-4-7');
+      assert(model, 'Should find model');
+      assert.strictEqual(model.name, 'Claude Opus 4.7');
+    });
+
     it('finds Claude Opus 4.6 Thinking in agy', () => {
       const { findModel } = modelCatalog;
       const model = findModel('agy', 'claude-opus-4-6-thinking');

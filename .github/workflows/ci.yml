@@ -17,13 +17,17 @@ concurrency:
 jobs:
   validate:
     runs-on: [self-hosted, linux, x64]
+    env:
+      # Keep Bun cache isolated per job workspace so parallel self-hosted runs
+      # do not race on ~/.bun/install/cache and corrupt restore/install state.
+      BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun/install/cache
     strategy:
       fail-fast: false
       matrix:
         check:
           - { name: typecheck, cmd: 'bun run typecheck' }
-          - { name: lint,      cmd: 'bun run lint' }
-          - { name: format,    cmd: 'bun run format:check' }
+          - { name: lint, cmd: 'bun run lint' }
+          - { name: format, cmd: 'bun run format:check' }
     name: ${{ matrix.check.name }}
 
     steps:
@@ -40,21 +44,15 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Restore bun + node_modules cache
+      - name: Restore bun package cache
         uses: actions/cache@v4
         with:
           path: |
-            ~/.bun/install/cache
-            node_modules
-            ui/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'ui/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ env.BUN_INSTALL_CACHE_DIR }}
+          key: ${{ runner.os }}-bun-cache-v2-${{ hashFiles('bun.lock', 'ui/bun.lock') }}
 
       - name: Ensure dependencies
-        run: |
-          [ -d node_modules ] || bun install --frozen-lockfile
-          [ -d ui/node_modules ] || (cd ui && bun install --frozen-lockfile)
+        run: bash scripts/ensure-deps.sh
 
       - name: Run ${{ matrix.check.name }}
         run: ${{ matrix.check.cmd }}
@@ -62,6 +60,8 @@ jobs:
   build:
     runs-on: [self-hosted, linux, x64]
     name: build
+    env:
+      BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun/install/cache
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -76,21 +76,15 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Restore bun + node_modules cache
+      - name: Restore bun package cache
         uses: actions/cache@v4
         with:
           path: |
-            ~/.bun/install/cache
-            node_modules
-            ui/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'ui/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ env.BUN_INSTALL_CACHE_DIR }}
+          key: ${{ runner.os }}-bun-cache-v2-${{ hashFiles('bun.lock', 'ui/bun.lock') }}
 
       - name: Ensure dependencies
-        run: |
-          [ -d node_modules ] || bun install --frozen-lockfile
-          [ -d ui/node_modules ] || (cd ui && bun install --frozen-lockfile)
+        run: bash scripts/ensure-deps.sh
 
       - name: Build
         run: bun run build:all
@@ -107,6 +101,8 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     name: test
     needs: [build]
+    env:
+      BUN_INSTALL_CACHE_DIR: ${{ github.workspace }}/.bun/install/cache
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -121,21 +117,15 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Restore bun + node_modules cache
+      - name: Restore bun package cache
         uses: actions/cache@v4
         with:
           path: |
-            ~/.bun/install/cache
-            node_modules
-            ui/node_modules
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock', 'ui/bun.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-bun-
+            ${{ env.BUN_INSTALL_CACHE_DIR }}
+          key: ${{ runner.os }}-bun-cache-v2-${{ hashFiles('bun.lock', 'ui/bun.lock') }}
 
       - name: Ensure dependencies
-        run: |
-          [ -d node_modules ] || bun install --frozen-lockfile
-          [ -d ui/node_modules ] || (cd ui && bun install --frozen-lockfile)
+        run: bash scripts/ensure-deps.sh
 
       - name: Download dist artifact
         uses: actions/download-artifact@v4
@@ -145,3 +135,8 @@ jobs:
 
       - name: Test
         run: bun run test:all
+
+      - name: Test CLI e2e
+        env:
+          CCS_E2E_SKIP_BUILD: '1'
+        run: bun run test:e2e

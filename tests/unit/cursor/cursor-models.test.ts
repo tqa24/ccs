@@ -26,6 +26,13 @@ describe('DEFAULT_CURSOR_MODELS', () => {
     expect(providers.has('google')).toBe(true);
   });
 
+  it('keeps both Claude 4.6 Opus and Claude 4.7 Opus in the fallback catalog', () => {
+    const ids = DEFAULT_CURSOR_MODELS.map((model) => model.id);
+    expect(ids).toContain('claude-4.6-opus');
+    expect(ids).toContain('claude-4.7-opus');
+    expect(ids).toContain('claude-4.7-opus-fast-mode');
+  });
+
   it('has exactly one default model', () => {
     const defaults = DEFAULT_CURSOR_MODELS.filter((m) => m.isDefault);
     expect(defaults).toHaveLength(1);
@@ -88,6 +95,7 @@ describe('detectProvider', () => {
   it('detects anthropic models', () => {
     expect(detectProvider('claude-4.5-sonnet')).toBe('anthropic');
     expect(detectProvider('claude-4.6-opus')).toBe('anthropic');
+    expect(detectProvider('claude-4.7-opus')).toBe('anthropic');
   });
 
   it('detects openai models', () => {

@@ -26,8 +26,9 @@ import { CLIPROXY_PROVIDER_IDS } from '../cliproxy/provider-capabilities';
  * Version 10 = Exa + Tavily WebSearch backends
  * Version 11 = Discord Channels runtime auto-enable preferences
  * Version 12 = Official Channels multi-provider support (Telegram, Discord, iMessage)
+ * Version 13 = Browser automation defaults to safe manual/off exposure
  */
-export const UNIFIED_CONFIG_VERSION = 12;
+export const UNIFIED_CONFIG_VERSION = 13;
 
 /**
  * Supported CLIProxy providers.
@@ -508,6 +509,10 @@ export interface OpenAICompatProxyRoutingConfig {
 }
 
 export interface OpenAICompatProxyConfig {
+  /** Default local port for OpenAI-compatible proxy instances */
+  port?: number;
+  /** Optional profile-scoped local port overrides */
+  profile_ports?: Record<string, number>;
   routing?: OpenAICompatProxyRoutingConfig;
 }
 
@@ -816,18 +821,29 @@ export const DEFAULT_DASHBOARD_AUTH_CONFIG: DashboardAuthConfig = {
  * Browser automation configuration.
  * Controls Claude browser attach and Codex browser tooling.
  */
+export type BrowserToolPolicy = 'auto' | 'manual';
+export type BrowserEvalMode = 'disabled' | 'readonly' | 'readwrite';
+
 export interface BrowserClaudeConfig {
   /** Enable Claude browser attach (default: false) */
   enabled: boolean;
+  /** Control whether Claude browser attach is exposed automatically or only via --browser */
+  policy: BrowserToolPolicy;
   /** Chrome user-data directory used for attach mode */
   user_data_dir: string;
   /** DevTools port used for attach mode (default: 9222) */
   devtools_port: number;
+  /** Eval access mode exposed through browser settings/status surfaces */
+  eval_mode?: BrowserEvalMode;
 }
 
 export interface BrowserCodexConfig {
-  /** Enable Codex browser tooling injection (default: true) */
+  /** Enable Codex browser tooling injection (default: false) */
   enabled: boolean;
+  /** Control whether Codex browser tooling is exposed automatically or only via --browser */
+  policy: BrowserToolPolicy;
+  /** Eval access mode exposed through browser settings/status surfaces */
+  eval_mode?: BrowserEvalMode;
 }
 
 export interface BrowserConfig {
@@ -838,11 +854,15 @@ export interface BrowserConfig {
 export const DEFAULT_BROWSER_CONFIG: BrowserConfig = {
   claude: {
     enabled: false,
+    policy: 'manual',
     user_data_dir: '',
     devtools_port: 9222,
+    eval_mode: 'readonly',
   },
   codex: {
-    enabled: true,
+    enabled: false,
+    policy: 'manual',
+    eval_mode: 'readonly',
   },
 };
 
@@ -986,6 +1006,7 @@ export const DEFAULT_CLIPROXY_SERVER_CONFIG: CliproxyServerConfig = {
 };
 
 export const DEFAULT_OPENAI_COMPAT_PROXY_CONFIG: OpenAICompatProxyConfig = {
+  profile_ports: {},
   routing: {
     longContextThreshold: 60_000,
   },
@@ -1016,6 +1037,8 @@ export function createEmptyUnifiedConfig(): UnifiedConfig {
       },
     },
     proxy: {
+      port: DEFAULT_OPENAI_COMPAT_PROXY_CONFIG.port,
+      profile_ports: { ...DEFAULT_OPENAI_COMPAT_PROXY_CONFIG.profile_ports },
       routing: {
         ...DEFAULT_OPENAI_COMPAT_PROXY_CONFIG.routing,
       },

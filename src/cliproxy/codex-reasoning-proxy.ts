@@ -24,6 +24,8 @@ export interface CodexReasoningProxyConfig {
   modelMap: CodexReasoningModelMap;
   defaultEffort?: CodexReasoningEffort;
   traceFilePath?: string;
+  /** Skip TLS certificate validation for self-signed remote HTTPS proxies */
+  allowSelfSigned?: boolean;
   /**
    * Path prefix to strip from incoming requests before forwarding to upstream.
    * Used for remote proxy mode where upstream expects /v1/messages, not /api/provider/codex/v1/messages.
@@ -179,6 +181,7 @@ export class CodexReasoningProxy {
       | 'defaultEffort'
       | 'traceFilePath'
       | 'disableEffort'
+      | 'allowSelfSigned'
     >
   > &
     Pick<CodexReasoningProxyConfig, 'modelMap' | 'stripPathPrefix'>;
@@ -203,6 +206,7 @@ export class CodexReasoningProxy {
       traceFilePath: config.traceFilePath ?? '',
       stripPathPrefix: config.stripPathPrefix,
       disableEffort: config.disableEffort ?? false,
+      allowSelfSigned: config.allowSelfSigned ?? false,
     };
     this.modelEffort = buildCodexModelEffortMap(this.config.modelMap, this.config.defaultEffort);
   }
@@ -508,6 +512,38 @@ export class CodexReasoningProxy {
     return url.protocol === 'https:' ? https.request : http.request;
   }
 
+  private startResponseTimeout(upstreamReq: http.ClientRequest): () => void {
+    const deadline = setTimeout(() => {
+      upstreamReq.destroy(new Error('Upstream request timeout'));
+    }, this.config.timeoutMs);
+    upstreamReq.setTimeout(this.config.timeoutMs, () => {
+      upstreamReq.destroy(new Error('Upstream request timeout'));
+    });
+    return () => clearTimeout(deadline);
+  }
+
+  private buildRequestOptions(
+    upstreamUrl: URL,
+    method: string | undefined,
+    headers: http.OutgoingHttpHeaders
+  ): https.RequestOptions {
+    const options: https.RequestOptions = {
+      protocol: upstreamUrl.protocol,
+      hostname: upstreamUrl.hostname,
+      port: upstreamUrl.port,
+      path: upstreamUrl.pathname + upstreamUrl.search,
+      method,
+      timeout: this.config.timeoutMs,
+      headers,
+    };
+
+    if (upstreamUrl.protocol === 'https:' && this.config.allowSelfSigned) {
+      options.rejectUnauthorized = false;
+    }
+
+    return options;
+  }
+
   private forwardRaw(
     originalReq: http.IncomingMessage,
     clientRes: http.ServerResponse,
@@ -515,17 +551,15 @@ export class CodexReasoningProxy {
   ): Promise<void> {
     return new Promise((resolve, reject) => {
       const requestFn = this.getRequestFn(upstreamUrl);
+      let clearResponseTimeout: () => void = () => undefined;
       const upstreamReq = requestFn(
-        {
-          protocol: upstreamUrl.protocol,
-          hostname: upstreamUrl.hostname,
-          port: upstreamUrl.port,
-          path: upstreamUrl.pathname + upstreamUrl.search,
-          method: originalReq.method,
-          timeout: this.config.timeoutMs,
-          headers: this.buildForwardHeaders(originalReq.headers),
-        },
+        this.buildRequestOptions(
+          upstreamUrl,
+          originalReq.method,
+          this.buildForwardHeaders(originalReq.headers)
+        ),
         (upstreamRes) => {
+          clearResponseTimeout();
           clientRes.writeHead(upstreamRes.statusCode || 200, upstreamRes.headers);
           upstreamRes.pipe(clientRes);
           upstreamRes.on('end', () => resolve());
@@ -533,8 +567,12 @@ export class CodexReasoningProxy {
         }
       );
 
+      clearResponseTimeout = this.startResponseTimeout(upstreamReq);
       upstreamReq.on('timeout', () => upstreamReq.destroy(new Error('Upstream request timeout')));
-      upstreamReq.on('error', reject);
+      upstreamReq.on('error', (err) => {
+        clearResponseTimeout();
+        reject(err);
+      });
       originalReq.pipe(upstreamReq);
     });
   }
@@ -549,17 +587,15 @@ export class CodexReasoningProxy {
     return new Promise((resolve, reject) => {
       const bodyString = JSON.stringify(body);
       const requestFn = this.getRequestFn(upstreamUrl);
+      let clearResponseTimeout: () => void = () => undefined;
       const upstreamReq = requestFn(
-        {
-          protocol: upstreamUrl.protocol,
-          hostname: upstreamUrl.hostname,
-          port: upstreamUrl.port,
-          path: upstreamUrl.pathname + upstreamUrl.search,
-          method: originalReq.method,
-          timeout: this.config.timeoutMs,
-          headers: this.buildForwardHeaders(originalReq.headers, bodyString),
-        },
+        this.buildRequestOptions(
+          upstreamUrl,
+          originalReq.method,
+          this.buildForwardHeaders(originalReq.headers, bodyString)
+        ),
         (upstreamRes) => {
+          clearResponseTimeout();
           const statusCode = upstreamRes.statusCode || 200;
           if (statusCode >= 200 && statusCode < 300) {
             clientRes.writeHead(statusCode, upstreamRes.headers);
@@ -631,8 +667,12 @@ export class CodexReasoningProxy {
         }
       );
 
+      clearResponseTimeout = this.startResponseTimeout(upstreamReq);
       upstreamReq.on('timeout', () => upstreamReq.destroy(new Error('Upstream request timeout')));
-      upstreamReq.on('error', reject);
+      upstreamReq.on('error', (err) => {
+        clearResponseTimeout();
+        reject(err);
+      });
       upstreamReq.write(bodyString);
       upstreamReq.end();
     });

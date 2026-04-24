@@ -215,6 +215,42 @@ describe('resolveCliproxyImageAnalysisEnv', () => {
     expect(result.warning).toContain('native Read');
   });
 
+  it('strips browser env injected through settings before building Claude runtime env', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ccs-browser-env-strip-'));
+    tempDirs.push(tempDir);
+
+    const settingsPath = path.join(tempDir, 'browser-env.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify(
+        {
+          env: {
+            ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/agy',
+            ANTHROPIC_AUTH_TOKEN: 'test-token',
+            ANTHROPIC_MODEL: 'gemini-2.5-pro',
+            CCS_BROWSER_USER_DATA_DIR: '/tmp/embedded-browser-runtime',
+            CCS_BROWSER_PROFILE_DIR: '/tmp/embedded-browser-legacy',
+            CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/settings-env',
+          },
+        },
+        null,
+        2
+      ) + '\n'
+    );
+
+    const env = buildClaudeEnvironment({
+      provider: 'agy',
+      useRemoteProxy: false,
+      localPort: 8317,
+      customSettingsPath: settingsPath,
+      verbose: false,
+    });
+
+    expect(env.CCS_BROWSER_USER_DATA_DIR).toBeUndefined();
+    expect(env.CCS_BROWSER_PROFILE_DIR).toBeUndefined();
+    expect(env.CCS_BROWSER_DEVTOOLS_WS_URL).toBeUndefined();
+  });
+
   it('keeps cliproxy image analysis active when the execution target is reachable', async () => {
     const result = await resolveCliproxyImageAnalysisEnv(
       {

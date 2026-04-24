@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import getPort from 'get-port';
 import * as http from 'http';
 import { startOpenAICompatProxyServer } from '../../../src/proxy/server/proxy-server';
 import type { OpenAICompatProfileConfig } from '../../../src/proxy/profile-router';
@@ -10,28 +9,64 @@ let upstreamBody: unknown;
 let upstreamPort: number;
 let proxyPort: number;
 
-function startMockUpstream(): Promise<void> {
-  return new Promise((resolve) => {
-    upstreamServer = http.createServer(async (req, res) => {
-      if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
-        res.writeHead(404).end();
-        return;
-      }
+function resolveListeningPort(server: http.Server): number {
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Failed to resolve server port');
+  }
+  return address.port;
+}
 
-      let body = '';
-      for await (const chunk of req) {
-        body += chunk.toString();
-      }
-      upstreamBody = JSON.parse(body);
-      const parsed = upstreamBody as { stream?: boolean };
+async function waitForServerListening(server: http.Server): Promise<number> {
+  if (server.listening) {
+    return resolveListeningPort(server);
+  }
 
-      if (parsed.stream) {
-        res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+  return new Promise<number>((resolve, reject) => {
+    const onError = (error: Error) => reject(error);
+    server.once('error', onError);
+    server.once('listening', () => {
+      server.off('error', onError);
+      resolve(resolveListeningPort(server));
+    });
+  });
+}
+
+async function startMockUpstream(): Promise<void> {
+  upstreamServer = http.createServer(async (req, res) => {
+    if (req.method !== 'POST' || req.url !== '/v1/chat/completions') {
+      res.writeHead(404).end();
+      return;
+    }
+
+    let body = '';
+    for await (const chunk of req) {
+      body += chunk.toString();
+    }
+    upstreamBody = JSON.parse(body);
+    const parsed = upstreamBody as {
+      stream?: boolean;
+      messages?: Array<{
+        role?: string;
+        content?: string | Array<{ type?: string; text?: string }>;
+      }>;
+    };
+
+    if (parsed.stream) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+
+      if (parsed.messages?.[0]?.content === 'interleaved tool fragments') {
         res.write(
-          'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"}}]}\n\n'
+          'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"search"}}]}}]}\n\n'
         );
         res.write(
-          'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"search","arguments":"{\\"q\\":\\"docs\\"}"}}]}}]}\n\n'
+          'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"id":"call_2","type":"function","function":{"name":"open"}}]}}]}\n\n'
+        );
+        res.write(
+          'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"path\\":\\"a.ts\\"}"}}]}}]}\n\n'
+        );
+        res.write(
+          'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\\"path\\":\\"b.ts\\"}"}}]}}]}\n\n'
         );
         res.write(
           'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":9,"completion_tokens":4}}\n\n'
@@ -40,25 +75,38 @@ function startMockUpstream(): Promise<void> {
         return;
       }
 
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          id: 'chatcmpl_1',
-          model: 'hf-model',
-          choices: [
-            {
-              index: 0,
-              message: { role: 'assistant', content: 'Plain answer' },
-              finish_reason: 'stop',
-            },
-          ],
-          usage: { prompt_tokens: 2, completion_tokens: 3 },
-        })
+      res.write(
+        'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"role":"assistant","content":"Hello"}}]}\n\n'
       );
-    });
+      res.write(
+        'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"search","arguments":"{\\"q\\":\\"docs\\"}"}}]}}]}\n\n'
+      );
+      res.write(
+        'data: {"id":"chatcmpl_1","model":"hf-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":9,"completion_tokens":4}}\n\n'
+      );
+      res.end('data: [DONE]\n\n');
+      return;
+    }
 
-    upstreamServer.listen(upstreamPort, '127.0.0.1', () => resolve());
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(
+      JSON.stringify({
+        id: 'chatcmpl_1',
+        model: 'hf-model',
+        choices: [
+          {
+            index: 0,
+            message: { role: 'assistant', content: 'Plain answer' },
+            finish_reason: 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 2, completion_tokens: 3 },
+      })
+    );
   });
+
+  upstreamServer.listen(0, '127.0.0.1');
+  upstreamPort = await waitForServerListening(upstreamServer);
 }
 
 async function requestProxy(payload: unknown): Promise<Response> {
@@ -74,8 +122,6 @@ async function requestProxy(payload: unknown): Promise<Response> {
 }
 
 beforeEach(async () => {
-  upstreamPort = await getPort();
-  proxyPort = await getPort();
   upstreamBody = undefined;
   await startMockUpstream();
   const profile: OpenAICompatProfileConfig = {
@@ -88,9 +134,10 @@ beforeEach(async () => {
   };
   proxyServer = startOpenAICompatProxyServer({
     profile,
-    port: proxyPort,
+    port: 0,
     authToken: 'test-proxy-token',
   });
+  proxyPort = await waitForServerListening(proxyServer);
 });
 
 afterEach(async () => {
@@ -296,5 +343,209 @@ describe('openai proxy messages endpoint', () => {
     });
 
     expect(response.status).toBe(200);
+  });
+
+  it('responds 200 to HEAD / (health probe from Claude Code)', async () => {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/`, { method: 'HEAD' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json');
+    expect(await response.text()).toBe('');
+  });
+
+  it('responds 200 to HEAD /health', async () => {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/health`, { method: 'HEAD' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json');
+    expect(await response.text()).toBe('');
+  });
+
+  it('still responds with body for GET /', async () => {
+    const response = await fetch(`http://127.0.0.1:${proxyPort}/`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { ok: boolean; service: string; endpoints: string[] };
+    expect(body.ok).toBe(true);
+    expect(body.endpoints).toContain('/v1/messages');
+  });
+
+  it('translates user messages with tool_result followed by text', async () => {
+    const response = await requestProxy({
+      model: 'hf-model',
+      stream: false,
+      messages: [
+        { role: 'user', content: 'search docs' },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Let me search.' },
+            { type: 'tool_use', id: 'toolu_01', name: 'search', input: { q: 'docs' } },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_01', content: 'found 3 docs' },
+            { type: 'text', text: 'What should I do next?' },
+          ],
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const parsedUpstream = upstreamBody as {
+      messages?: Array<{ role: string; content: string; tool_call_id?: string }>;
+    };
+    const roles = parsedUpstream.messages?.map((m) => m.role);
+    expect(roles).toEqual(['user', 'assistant', 'tool', 'user']);
+    const toolMsg = parsedUpstream.messages?.find((m) => m.role === 'tool');
+    expect(toolMsg?.tool_call_id).toBe('toolu_01');
+    expect(toolMsg?.content).toBe('found 3 docs');
+    const userAfterTool = parsedUpstream.messages?.filter((m) => m.role === 'user');
+    expect(userAfterTool?.[1]?.content).toBe('What should I do next?');
+  });
+
+  it('rejects text before tool_result blocks when tool results are pending', async () => {
+    const response = await requestProxy({
+      model: 'hf-model',
+      stream: false,
+      messages: [
+        { role: 'user', content: 'search docs' },
+        {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'toolu_01', name: 'search', input: { q: 'docs' } }],
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'before' },
+            { type: 'tool_result', tool_use_id: 'toolu_01', content: 'found 3 docs' },
+          ],
+        },
+      ],
+    });
+
+    const body = (await response.json()) as { error?: { type?: string; message?: string } };
+    expect(response.status).toBe(400);
+    expect(body.error?.type).toBe('invalid_request_error');
+    expect(body.error?.message).toContain(
+      'text is not allowed before tool_result blocks for pending tool_use ids'
+    );
+  });
+
+  it('rejects follow-up text between pending tool_result blocks', async () => {
+    const response = await requestProxy({
+      model: 'hf-model',
+      stream: false,
+      messages: [
+        { role: 'user', content: 'read both files' },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'toolu_01', name: 'Read', input: { file_path: 'a.ts' } },
+            { type: 'tool_use', id: 'toolu_02', name: 'Read', input: { file_path: 'b.ts' } },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_01', content: 'content of a' },
+            { type: 'text', text: 'Now compare them' },
+            { type: 'tool_result', tool_use_id: 'toolu_02', content: 'content of b' },
+          ],
+        },
+      ],
+    });
+
+    const body = (await response.json()) as { error?: { type?: string; message?: string } };
+    expect(response.status).toBe(400);
+    expect(body.error?.type).toBe('invalid_request_error');
+    expect(body.error?.message).toContain(
+      'text is not allowed between tool_result blocks for pending tool_use ids'
+    );
+  });
+
+  it('translates parallel tool calls with streaming', async () => {
+    const response = await requestProxy({
+      model: 'hf-model',
+      stream: true,
+      messages: [
+        { role: 'user', content: 'read both files' },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'toolu_01', name: 'Read', input: { file_path: 'a.ts' } },
+            { type: 'tool_use', id: 'toolu_02', name: 'Read', input: { file_path: 'b.ts' } },
+          ],
+        },
+        {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_01', content: 'content of a' },
+            { type: 'tool_result', tool_use_id: 'toolu_02', content: 'content of b' },
+            { type: 'text', text: 'Now compare them' },
+          ],
+        },
+      ],
+      tools: [
+        {
+          name: 'Read',
+          description: 'Read a file',
+          input_schema: {
+            type: 'object',
+            properties: { file_path: { type: 'string' } },
+            required: ['file_path'],
+          },
+        },
+      ],
+    });
+
+    expect(response.status).toBe(200);
+    const parsedUpstream = upstreamBody as {
+      messages?: Array<{
+        role: string;
+        content: string;
+        tool_call_id?: string;
+        tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
+      }>;
+    };
+    const assistantMsg = parsedUpstream.messages?.find((m) => m.role === 'assistant');
+    expect(assistantMsg?.tool_calls?.length).toBe(2);
+    expect(assistantMsg?.tool_calls?.[0]?.function.name).toBe('Read');
+    expect(assistantMsg?.tool_calls?.[1]?.function.name).toBe('Read');
+    const toolMsgs = parsedUpstream.messages?.filter((m) => m.role === 'tool');
+    expect(toolMsgs?.length).toBe(2);
+    expect(toolMsgs?.[0]?.tool_call_id).toBe('toolu_01');
+    expect(toolMsgs?.[1]?.tool_call_id).toBe('toolu_02');
+  });
+
+  it('streams interleaved tool call fragments without premature block stops', async () => {
+    const response = await requestProxy({
+      model: 'hf-model',
+      stream: true,
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'interleaved tool fragments' }] }],
+      tools: [
+        {
+          name: 'search',
+          description: 'Search docs',
+          input_schema: { type: 'object', properties: { path: { type: 'string' } } },
+        },
+        {
+          name: 'open',
+          description: 'Open a file',
+          input_schema: { type: 'object', properties: { path: { type: 'string' } } },
+        },
+      ],
+    });
+
+    const body = await response.text();
+    expect(response.status).toBe(200);
+    expect(body.match(/event: content_block_start/g)?.length).toBe(2);
+    expect(body.match(/event: content_block_stop/g)?.length).toBe(2);
+
+    const stopIndex = body.indexOf('event: content_block_stop');
+    const deltaAIndex = body.indexOf('"partial_json":"{\\"path\\":\\"a.ts\\"}"');
+    const deltaBIndex = body.indexOf('"partial_json":"{\\"path\\":\\"b.ts\\"}"');
+    expect(deltaAIndex).toBeGreaterThan(-1);
+    expect(deltaBIndex).toBeGreaterThan(-1);
+    expect(stopIndex).toBeGreaterThan(deltaBIndex);
   });
 });

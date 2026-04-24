@@ -35,32 +35,42 @@ export function startOpenAICompatProxyServer(options: OpenAICompatProxyServerOpt
     const pathname =
       parsedUrl.pathname.length > 1 ? parsedUrl.pathname.replace(/\/+$/, '') : parsedUrl.pathname;
 
-    if (method === 'GET' && pathname === '/health') {
-      writeJson(res, 200, {
-        ok: true,
-        service: OPENAI_COMPAT_PROXY_SERVICE_NAME,
-        host,
-        profile: options.profile.profileName,
-        port: options.port,
-      });
+    if ((method === 'GET' || method === 'HEAD') && pathname === '/health') {
+      if (method === 'HEAD') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end();
+      } else {
+        writeJson(res, 200, {
+          ok: true,
+          service: OPENAI_COMPAT_PROXY_SERVICE_NAME,
+          host,
+          profile: options.profile.profileName,
+          port: options.port,
+        });
+      }
       return;
     }
 
-    if (method === 'GET' && pathname === '/') {
-      writeJson(res, 200, {
-        ok: true,
-        service: OPENAI_COMPAT_PROXY_SERVICE_NAME,
-        bind: {
-          host,
-          port: options.port,
-        },
-        profile: {
-          name: options.profile.profileName,
-          provider: options.profile.provider,
-          model: options.profile.model || null,
-        },
-        endpoints: ['/health', '/v1/messages', '/v1/models'],
-      });
+    if ((method === 'GET' || method === 'HEAD') && pathname === '/') {
+      if (method === 'HEAD') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end();
+      } else {
+        writeJson(res, 200, {
+          ok: true,
+          service: OPENAI_COMPAT_PROXY_SERVICE_NAME,
+          bind: {
+            host,
+            port: options.port,
+          },
+          profile: {
+            name: options.profile.profileName,
+            provider: options.profile.provider,
+            model: options.profile.model || null,
+          },
+          endpoints: ['/health', '/v1/messages', '/v1/models'],
+        });
+      }
       return;
     }
 

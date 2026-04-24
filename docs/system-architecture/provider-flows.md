@@ -12,6 +12,10 @@ Detailed provider integration flows including CLIProxyAPI, legacy GLMT compatibi
 
 CLIProxyAPI is a local OAuth proxy binary that enables seamless integration with multiple AI providers. CCS manages the binary and configuration automatically.
 
+### Local Backend Choice
+
+CCS defaults to the original `router-for-me/CLIProxyAPI` backend because it is the stable MIT upstream. The `plus` backend is an explicit opt-in path that downloads the community-maintained `kaitranntt/CLIProxyAPIPlus` fork for providers that still require Plus-only support, such as Kiro, GitHub Copilot, Cursor, GitLab, CodeBuddy, and Kilo. CCS does not silently downgrade `backend: plus` to `original`; users choose that backend deliberately when they need those providers.
+
 ```
 +===========================================================================+
 |                      CLIProxyAPI Integration                               |
@@ -22,7 +26,7 @@ CLIProxyAPI is a local OAuth proxy binary that enables seamless integration with
         | ANTHROPIC_BASE_URL = localhost:XXXX
         v
   +------------------+
-  |   CLIProxyAPI    |  Local proxy binary (CLIProxyAPIPlus for kiro/ghcp)
+  |   CLIProxyAPI    |  Local proxy binary (Plus fork opt-in for plus-only providers)
   |   (binary)       |
   +------------------+
         |
@@ -73,8 +77,8 @@ CLIProxyAPI is a local OAuth proxy binary that enables seamless integration with
 | Gemini | `gemini` | Authorization Code | 9876 | CLIProxyAPI |
 | Codex | `codex` | Authorization Code | 9876 | CLIProxyAPI |
 | Antigravity | `agy` | Authorization Code | 9876 | CLIProxyAPI |
-| Kiro (AWS) | `kiro` | Method-aware (default: Device Code) | 9876 | CLIProxyAPIPlus |
-| GitHub Copilot | `ghcp` | Device Code | none | CLIProxyAPIPlus |
+| Kiro (AWS) | `kiro` | Method-aware (default: Device Code) | 9876 | CLIProxyAPIPlus fork |
+| GitHub Copilot | `ghcp` | Device Code | none | CLIProxyAPIPlus fork |
 
 ### Codex Duplicate-Email Account Identity
 
@@ -257,6 +261,7 @@ async function checkRemoteProxyHealth(config: ResolvedProxyConfig): Promise<bool
 ### Overview
 
 Hybrid quota management enables automatic detection of exhausted accounts and failover to next available account.
+When CCS detects exhaustion and a healthy fallback exists, it also temporarily pauses the exhausted account out of CLIProxy rotation and automatically resumes that pause after the configured cooldown expires.
 
 ```
 +===========================================================================+
@@ -293,6 +298,11 @@ Hybrid quota management enables automatic detection of exhausted accounts and fa
         +---> Select best account (not paused, not exhausted)
         |
         +---> Auto-failover to next account if current exhausted
+        |
+        +---> Temporarily pause exhausted account when fallback exists
+        |       - move token out of live auth discovery
+        |       - persist cooldown expiry across launches
+        |       - auto-resume only CCS-created quota pauses
 
   CLI Commands:
     ccs cliproxy pause <account>   --> Set isPaused=true in account-manager

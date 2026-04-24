@@ -12,6 +12,7 @@ import type { ProfileType } from '../types/profile';
 import {
   escapeShellArg,
   getWindowsEscapedCommandShell,
+  stripBrowserEnv,
   stripAnthropicEnv,
   stripClaudeCodeEnv,
 } from '../utils/shell-executor';
@@ -60,10 +61,10 @@ export class ClaudeAdapter implements TargetAdapter {
         ? stripAnthropicEnv(process.env)
         : process.env;
 
-    const env: NodeJS.ProcessEnv = { ...baseEnv, ...webSearchEnv };
+    const env: NodeJS.ProcessEnv = { ...stripBrowserEnv(baseEnv), ...webSearchEnv };
 
     if (creds.envVars) {
-      Object.assign(env, creds.envVars);
+      Object.assign(env, stripBrowserEnv(creds.envVars));
     }
     if (creds.browserRuntimeEnv) {
       Object.assign(env, creds.browserRuntimeEnv);

@@ -26,8 +26,9 @@ jobs:
         with:
           fetch-depth: 0
           ref: dev
-          # Always use the built-in workflow token; PAT rotation/breakage must not block dev releases.
-          token: ${{ github.token }}
+          # PAT_TOKEN required: dev-release pushes version bump commits to dev,
+          # and protected branches reject github.token writes once status checks are required.
+          token: ${{ secrets.PAT_TOKEN }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -41,24 +42,30 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
-        run: |
-          bun install --frozen-lockfile
-          cd ui && bun install --frozen-lockfile
+        run: bash scripts/ensure-deps.sh
 
       - name: Build
         run: bun run build:all
 
-      - name: Validate (typecheck + lint + format + tests)
+      - name: Validate fast gate
         run: bun run validate
+
+      - name: Test slow bucket
+        run: bun run test:slow
+
+      - name: Test CLI e2e
+        env:
+          CCS_E2E_SKIP_BUILD: '1'
+        run: bun run test:e2e
 
       - name: Release
         id: release
         env:
           HUSKY: 0
-          # Use built-in GITHUB_TOKEN for release + issue operations.
-          # Checkout credentials are resolved above with PAT fallback.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT_TOKEN bypasses branch protection so the workflow can push
+          # the dev release commit and tag back to the protected dev branch.
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |

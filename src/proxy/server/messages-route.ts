@@ -139,20 +139,13 @@ export function attachDisconnectAbortHandlers(
 
   const cleanupFns = [
     registerOnceListener(req, 'aborted', () => abortOnDisconnect('req.aborted')),
-    registerOnceListener(req, 'close', () => abortOnDisconnect('req.close')),
     registerOnceListener(req.socket, 'close', () => abortOnDisconnect('req.socket.close')),
-    registerOnceListener(res, 'close', () => abortOnDisconnect('res.close')),
     registerOnceListener(res.socket, 'close', () => abortOnDisconnect('res.socket.close')),
   ];
 
   const disconnectPoll = setInterval(() => {
-    if (
-      req.destroyed ||
-      res.destroyed ||
-      req.socket?.destroyed === true ||
-      res.socket?.destroyed === true
-    ) {
-      abortOnDisconnect('poll.destroyed');
+    if (req.socket?.destroyed === true) {
+      abortOnDisconnect('poll.socket.destroyed');
     }
   }, 50);
 

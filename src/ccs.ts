@@ -39,7 +39,10 @@ import {
 import {
   appendBrowserToolArgs,
   ensureBrowserMcpOrThrow,
+  getBlockedBrowserOverrideWarning,
   getEffectiveClaudeBrowserAttachConfig,
+  resolveBrowserExposure,
+  resolveBrowserLaunchFlagResolution,
   resolveOptionalBrowserAttachRuntime,
   syncBrowserMcpToConfigDir,
 } from './utils/browser';
@@ -77,12 +80,13 @@ import { handleError, runCleanup } from './errors';
 import { tryHandleRootCommand } from './commands/root-command-router';
 
 // Import extracted utility functions
-import { execClaude } from './utils/shell-executor';
+import { execClaude, stripAnthropicRoutingEnv, stripBrowserEnv } from './utils/shell-executor';
 import { isDeprecatedGlmtProfileName, normalizeDeprecatedGlmtEnv } from './utils/glmt-deprecation';
 import { maybeWarnAboutResumeLaneMismatch } from './auth/resume-lane-warning';
 import { createLogger } from './services/logging';
 import { buildCodexBrowserMcpOverrides } from './utils/browser-codex-overrides';
 import type { ProfileDetectionResult } from './auth/profile-detector';
+import type { BrowserLaunchOverride } from './utils/browser';
 
 // Import target adapter system
 import {
@@ -137,11 +141,21 @@ const CODEX_RUNTIME_REASONING_LEVELS = new Set(['minimal', 'low', 'medium', 'hig
 const CODEX_NATIVE_PASSTHROUGH_FLAGS = new Set(['--help', '-h', '--version', '-v']);
 
 function resolveCodexRuntimeConfigOverrides(
-  target: ReturnType<typeof resolveTargetType>
+  target: ReturnType<typeof resolveTargetType>,
+  browserLaunchOverride: BrowserLaunchOverride | undefined
 ): string[] {
-  if (target !== 'codex' || !getBrowserConfig().codex.enabled) {
+  if (target !== 'codex') {
     return [];
   }
+
+  const codexBrowserExposure = resolveBrowserExposure(
+    getBrowserConfig().codex,
+    browserLaunchOverride
+  );
+  if (!codexBrowserExposure.exposeForLaunch) {
+    return [];
+  }
+
   return buildCodexBrowserMcpOverrides();
 }
 
@@ -449,6 +463,16 @@ async function main(): Promise<void> {
   }
 
   args = normalizeLegacyCursorArgs(args);
+  let browserLaunchOverride: BrowserLaunchOverride | undefined;
+  try {
+    const browserLaunchFlags = resolveBrowserLaunchFlagResolution(args);
+    browserLaunchOverride = browserLaunchFlags.override;
+    args = browserLaunchFlags.argsWithoutFlags;
+  } catch (error) {
+    console.error(fail((error as Error).message));
+    process.exit(1);
+    return;
+  }
 
   cliLogger.info('command.start', 'CLI invocation started', {
     command: args[0] || 'default',
@@ -697,7 +721,38 @@ async function main(): Promise<void> {
 
     // For non-claude targets, verify target binary exists once and pass it through.
     const targetBinaryInfo = targetAdapter?.detectBinary() ?? null;
-    const codexRuntimeConfigOverrides = resolveCodexRuntimeConfigOverrides(resolvedTarget);
+    const browserConfig = getBrowserConfig();
+    const claudeAttachConfig =
+      resolvedTarget === 'claude'
+        ? getEffectiveClaudeBrowserAttachConfig(browserConfig)
+        : undefined;
+    const codexRuntimeConfigOverrides = resolveCodexRuntimeConfigOverrides(
+      resolvedTarget,
+      browserLaunchOverride
+    );
+    const claudeBrowserExposure =
+      resolvedTarget === 'claude'
+        ? resolveBrowserExposure(
+            {
+              enabled: claudeAttachConfig?.enabled ?? browserConfig.claude.enabled,
+              policy: browserConfig.claude.policy,
+            },
+            browserLaunchOverride
+          )
+        : undefined;
+    const codexBrowserExposure =
+      resolvedTarget === 'codex'
+        ? resolveBrowserExposure(browserConfig.codex, browserLaunchOverride)
+        : undefined;
+    const blockedBrowserOverrideWarning =
+      resolvedTarget === 'claude' && claudeBrowserExposure
+        ? getBlockedBrowserOverrideWarning('Claude Browser Attach', claudeBrowserExposure)
+        : resolvedTarget === 'codex' && codexBrowserExposure
+          ? getBlockedBrowserOverrideWarning('Codex Browser Tools', codexBrowserExposure)
+          : undefined;
+    if (blockedBrowserOverrideWarning) {
+      console.error(warn(blockedBrowserOverrideWarning));
+    }
     if (resolvedTarget !== 'claude' && !targetBinaryInfo) {
       const displayName = targetAdapter?.displayName || resolvedTarget;
       console.error(fail(`${displayName} CLI not found.`));
@@ -1057,13 +1112,11 @@ async function main(): Promise<void> {
       // Settings-based profiles (glm, glmt) are third-party providers
       const imageAnalysisMcpReady =
         resolvedTarget === 'claude' ? ensureImageAnalysisMcpOrThrow() : true;
-      const browserAttachConfig =
-        resolvedTarget === 'claude'
-          ? getEffectiveClaudeBrowserAttachConfig(getBrowserConfig())
-          : undefined;
       const browserAttachRuntime =
-        resolvedTarget === 'claude' && browserAttachConfig?.enabled
-          ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+        resolvedTarget === 'claude' &&
+        claudeBrowserExposure?.exposeForLaunch &&
+        claudeAttachConfig?.enabled
+          ? await resolveOptionalBrowserAttachRuntime(claudeAttachConfig)
           : undefined;
       const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
       if (browserAttachRuntime?.warning) {
@@ -1276,6 +1329,10 @@ async function main(): Promise<void> {
             ...imageAnalysisEnv,
             CCS_CURRENT_PROVIDER: '',
             CCS_IMAGE_ANALYSIS_SKIP: '1',
+            CCS_IMAGE_ANALYSIS_RUNTIME_PATH: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_BASE_URL: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_API_KEY: '',
+            CCS_IMAGE_ANALYSIS_RUNTIME_ALLOW_SELF_SIGNED: '0',
           };
         } else if (imageAnalysisStatus.proxyReadiness === 'stopped') {
           const ensureServiceResult = await ensureCliproxyService(
@@ -1306,11 +1363,24 @@ async function main(): Promise<void> {
         console.error(info(`Global env: ${envNames}`));
       }
 
-      // Explicitly inject effective settings env vars so stale ANTHROPIC_*
-      // values from prior sessions cannot leak into the active profile.
+      // For Claude target launches that already pass `--settings`, keep runtime
+      // env free of ANTHROPIC routing/auth while preserving non-routing profile
+      // env so nested Team/subagent sessions can still inherit model intent and
+      // other profile-scoped runtime flags.
+      const settingsRuntimeEnv = stripBrowserEnv({ ...globalEnv, ...settingsEnv });
+      const claudeRuntimeEnvVars: NodeJS.ProcessEnv = {
+        ...stripAnthropicRoutingEnv(settingsRuntimeEnv),
+        ...(inheritedClaudeConfigDir ? { CLAUDE_CONFIG_DIR: inheritedClaudeConfigDir } : {}),
+        ...webSearchEnv,
+        ...imageAnalysisEnv,
+        ...(browserRuntimeEnv || {}),
+        CCS_PROFILE_TYPE: 'settings',
+        CCS_STRIP_INHERITED_ANTHROPIC_ENV: '1',
+      };
+
+      // Non-Claude targets still need effective credentials injected directly.
       const envVars: NodeJS.ProcessEnv = {
-        ...globalEnv,
-        ...settingsEnv,
+        ...settingsRuntimeEnv,
         ...(inheritedClaudeConfigDir ? { CLAUDE_CONFIG_DIR: inheritedClaudeConfigDir } : {}),
         ...webSearchEnv,
         ...imageAnalysisEnv,
@@ -1419,7 +1489,7 @@ async function main(): Promise<void> {
         settingsPath: expandedSettingsPath,
       });
 
-      execClaude(claudeCli, launchArgs, { ...envVars, ...traceEnv });
+      execClaude(claudeCli, launchArgs, { ...claudeRuntimeEnvVars, ...traceEnv });
     } else if (profileInfo.type === 'account') {
       // NEW FLOW: Account-based profile (work, personal)
       // All platforms: Use instance isolation with CLAUDE_CONFIG_DIR
@@ -1467,13 +1537,11 @@ async function main(): Promise<void> {
         CCS_WEBSEARCH_SKIP: '1',
         CCS_IMAGE_ANALYSIS_SKIP: '1',
       };
-      const browserAttachConfig =
-        resolvedTarget === 'claude'
-          ? getEffectiveClaudeBrowserAttachConfig(getBrowserConfig())
-          : undefined;
       const browserAttachRuntime =
-        resolvedTarget === 'claude' && browserAttachConfig?.enabled
-          ? await resolveOptionalBrowserAttachRuntime(browserAttachConfig)
+        resolvedTarget === 'claude' &&
+        claudeBrowserExposure?.exposeForLaunch &&
+        claudeAttachConfig?.enabled
+          ? await resolveOptionalBrowserAttachRuntime(claudeAttachConfig)
           : undefined;
       const browserRuntimeEnv = browserAttachRuntime?.runtimeEnv;
       if (browserAttachRuntime?.warning) {

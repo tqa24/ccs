@@ -118,7 +118,8 @@ config. Deep dive:
 
 Manage OAuth-backed providers, quota visibility, and proxy-wide routing from one place. CCS now
 surfaces round-robin vs fill-first natively in both CLI and dashboard flows instead of hiding that
-choice inside raw upstream controls.
+choice inside raw upstream controls. The original CLIProxyAPI backend remains the default; the
+community-maintained CLIProxyAPIPlus fork is opt-in for plus-only providers.
 Deep dive:
 [CLIProxy API](https://docs.ccs.kaitran.ca/features/proxy/cliproxy-api).
 
@@ -177,6 +178,9 @@ ccs ollama "summarize these logs"
 ## Contribute And Report Safely
 
 - Contributing guide: [CONTRIBUTING.md](./CONTRIBUTING.md)
+- Daily local gate: `bun run format && bun run lint:fix && bun run validate` (`validate` is the fast path only)
+- Before review or merge confidence: `bun run validate:ci-parity`
+- If PR checks stay queued for more than 10 minutes, assume the self-hosted runner is offline and notify a maintainer instead of retrying blindly
 - Starter work:
   [good first issue](https://github.com/kaitranntt/ccs/labels/good%20first%20issue),
   [help wanted](https://github.com/kaitranntt/ccs/labels/help%20wanted)

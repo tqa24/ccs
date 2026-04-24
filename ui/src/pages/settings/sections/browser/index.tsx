@@ -2,29 +2,36 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Browser,
-  Gear,
-  CheckCircle,
-  WarningCircle,
-  XCircle,
+  AlertCircle,
   ArrowRight,
-  ClipboardText,
-  ArrowsClockwise,
-  TerminalWindow,
-  CaretDown,
+  CheckCircle2,
+  ChevronDown,
+  Clipboard,
   Info,
-} from '@phosphor-icons/react';
+  Monitor,
+  RefreshCw,
+  Settings,
+  Terminal,
+  XCircle,
+} from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { getClientPlatformKey } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 import { useBrowserConfig, useRawConfig } from '../../hooks';
-import type { BrowserConfig } from '../../types';
+import type { BrowserConfig, BrowserEvalMode } from '../../types';
 
 // --- Constants & Helpers ---
 
@@ -33,6 +40,12 @@ function parsePortDraft(value: string): number | null {
   const port = Number.parseInt(value.trim(), 10);
   if (port < 1 || port > 65535) return null;
   return port;
+}
+
+const BROWSER_EVAL_MODE_OPTIONS: BrowserEvalMode[] = ['disabled', 'readonly', 'readwrite'];
+
+function getBrowserEvalModeLabel(t: ReturnType<typeof useTranslation>['t'], mode: BrowserEvalMode) {
+  return t(`settingsPage.browserSection.evalMode.options.${mode}`);
 }
 
 function buildLaunchCommand(
@@ -142,11 +155,11 @@ function StatusStrip({
           )}
         >
           {isReady ? (
-            <CheckCircle weight="duotone" size={24} />
+            <CheckCircle2 size={24} />
           ) : isError ? (
-            <WarningCircle weight="duotone" size={24} />
+            <AlertCircle size={24} />
           ) : (
-            <XCircle weight="duotone" size={24} />
+            <XCircle size={24} />
           )}
         </div>
         <div className="min-w-0 flex-1 space-y-1">
@@ -205,10 +218,10 @@ function DiagnosticsSection({
       <CollapsibleTrigger asChild>
         <button className="flex w-full items-center justify-between px-6 py-4 text-sm font-medium transition-colors hover:bg-muted/40 dark:hover:bg-zinc-900/50">
           <div className="flex items-center gap-2">
-            <Gear size={16} weight="bold" className="text-muted-foreground" />
+            <Settings size={16} className="text-muted-foreground" />
             {title}
           </div>
-          <CaretDown
+          <ChevronDown
             size={16}
             className={cn('transition-transform duration-300', isOpen && 'rotate-180')}
           />
@@ -275,11 +288,13 @@ export default function BrowserSection() {
     effectiveConfig !== null &&
     (config.claude.enabled !== effectiveConfig.claude.enabled ||
       config.claude.userDataDir !== effectiveConfig.claude.userDataDir ||
-      config.claude.devtoolsPort !== claudePort);
+      config.claude.devtoolsPort !== claudePort ||
+      config.claude.evalMode !== effectiveConfig.claude.evalMode);
   const hasCodexChanges =
     config !== null &&
     effectiveConfig !== null &&
-    config.codex.enabled !== effectiveConfig.codex.enabled;
+    (config.codex.enabled !== effectiveConfig.codex.enabled ||
+      config.codex.evalMode !== effectiveConfig.codex.evalMode);
 
   const refreshAll = useCallback(async () => {
     setActionMessage(null);
@@ -302,6 +317,7 @@ export default function BrowserSection() {
         enabled: effectiveConfig.claude.enabled,
         userDataDir: effectiveConfig.claude.userDataDir.trim(),
         devtoolsPort: claudePort,
+        evalMode: effectiveConfig.claude.evalMode,
       },
     });
     if (saved) {
@@ -317,6 +333,7 @@ export default function BrowserSection() {
     const saved = await saveConfig({
       codex: {
         enabled: effectiveConfig.codex.enabled,
+        evalMode: effectiveConfig.codex.evalMode,
       },
     });
     if (saved) {
@@ -343,7 +360,7 @@ export default function BrowserSection() {
             animate={{ rotate: 360 }}
             transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }}
           >
-            <ArrowsClockwise size={32} />
+            <RefreshCw size={32} />
           </motion.div>
           <span className="text-sm font-medium uppercase tracking-widest opacity-60">
             {t('settings.loading')}
@@ -357,7 +374,7 @@ export default function BrowserSection() {
     return (
       <div className="p-8">
         <Alert variant="destructive" className="rounded-[2rem] p-8 shadow-xl">
-          <XCircle weight="duotone" size={24} />
+          <XCircle size={24} />
           <AlertDescription className="mt-2 text-md leading-relaxed">
             {error ?? t('settingsPage.browserSection.description')}
           </AlertDescription>
@@ -367,7 +384,7 @@ export default function BrowserSection() {
               className="rounded-full px-6 transition-transform active:scale-95"
               onClick={refreshAll}
             >
-              <ArrowsClockwise className="mr-2 h-4 w-4" />
+              <RefreshCw className="mr-2 h-4 w-4" />
               {t('sharedPage.retry')}
             </Button>
           </div>
@@ -389,12 +406,12 @@ export default function BrowserSection() {
           >
             {error ? (
               <div className="flex items-center gap-3 rounded-full border border-rose-500/20 bg-card/95 px-6 py-2.5 text-sm font-medium text-rose-600 shadow-2xl dark:bg-zinc-900/85">
-                <XCircle size={18} weight="bold" />
+                <XCircle size={18} />
                 {error}
               </div>
             ) : (
               <div className="flex items-center gap-3 rounded-full border border-emerald-500/20 bg-card/95 px-6 py-2.5 text-sm font-medium text-emerald-600 shadow-2xl dark:bg-zinc-900/85">
-                <CheckCircle size={18} weight="bold" />
+                <CheckCircle2 size={18} />
                 {actionMessage ?? t('commonToast.settingsSaved')}
               </div>
             )}
@@ -413,7 +430,7 @@ export default function BrowserSection() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                  <Browser weight="duotone" size={28} />
+                  <Monitor size={28} />
                 </div>
                 <div>
                   <h1 className="text-3xl font-bold tracking-tight">
@@ -431,7 +448,7 @@ export default function BrowserSection() {
               onClick={refreshAll}
               disabled={saving || loading}
             >
-              <ArrowsClockwise className={cn('mr-2 h-4 w-4', statusLoading && 'animate-spin')} />
+              <RefreshCw className={cn('mr-2 h-4 w-4', statusLoading && 'animate-spin')} />
               {t('settings.refresh')}
             </Button>
           </motion.div>
@@ -442,7 +459,7 @@ export default function BrowserSection() {
             transition={{ delay: 0.1 }}
           >
             <Alert className="items-center rounded-3xl border-primary/10 bg-primary/[0.04] p-6 py-4 dark:border-primary/15 dark:bg-primary/[0.05]">
-              <Info className="h-5 w-5 text-primary" weight="duotone" />
+              <Info className="h-5 w-5 text-primary" />
               <AlertDescription className="ml-2 text-sm">
                 <span className="font-semibold text-primary/80">
                   {t('settingsPage.browserSection.primaryTitle')}
@@ -486,9 +503,9 @@ export default function BrowserSection() {
                     className="rounded-full px-6 shadow-md transition-transform active:scale-95"
                   >
                     {saving ? (
-                      <ArrowsClockwise className="mr-2 h-4 w-4 animate-spin" />
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <CheckCircle weight="bold" size={16} className="mr-2" />
+                      <CheckCircle2 size={16} className="mr-2" />
                     )}
                     {t('settingsPage.browserSection.actions.saveClaude')}
                   </Button>
@@ -498,7 +515,7 @@ export default function BrowserSection() {
                     onClick={refreshStatus}
                     disabled={saving || statusLoading || hasClaudeChanges || claudePortInvalid}
                   >
-                    <TerminalWindow weight="bold" size={16} className="mr-2" />
+                    <Terminal size={16} className="mr-2" />
                     {t('settingsPage.browserSection.actions.testConnection')}
                   </Button>
                 </div>
@@ -564,6 +581,36 @@ export default function BrowserSection() {
                           : t('settingsPage.browserSection.claude.devtoolsPortHint')}
                       </p>
                     </div>
+
+                    <div className="space-y-3">
+                      <Label className="text-sm font-semibold tracking-wide text-muted-foreground/80">
+                        {t('settingsPage.browserSection.evalMode.label')}
+                      </Label>
+                      <Select
+                        value={effectiveConfig.claude.evalMode}
+                        onValueChange={(next) =>
+                          setDraft((current) =>
+                            updateClaudeDraft(current ?? effectiveConfig, {
+                              evalMode: next as BrowserEvalMode,
+                            })
+                          )
+                        }
+                      >
+                        <SelectTrigger className="rounded-xl border-border/70 bg-background/85 dark:border-white/[0.08] dark:bg-zinc-900/70">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {BROWSER_EVAL_MODE_OPTIONS.map((mode) => (
+                            <SelectItem key={mode} value={mode}>
+                              {getBrowserEvalModeLabel(t, mode)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                        {t('settingsPage.browserSection.claude.evalModeHint')}
+                      </p>
+                    </div>
                   </div>
 
                   <div className="space-y-6">
@@ -584,7 +631,7 @@ export default function BrowserSection() {
                           onClick={copyLaunchCommand}
                           disabled={!preferredLaunchCommand}
                         >
-                          <ClipboardText size={18} />
+                          <Clipboard size={18} />
                         </Button>
                       </div>
                       <code className="mt-4 block break-all rounded-lg border border-border/50 bg-background/80 p-3 font-mono text-[10px] leading-relaxed dark:border-white/[0.05] dark:bg-zinc-900/60">
@@ -594,7 +641,7 @@ export default function BrowserSection() {
 
                     {status.claude.overrideActive && (
                       <div className="flex items-center gap-3 rounded-2xl border border-amber-500/10 bg-amber-500/[0.05] p-4 text-xs font-medium text-amber-700 dark:text-amber-300">
-                        <WarningCircle size={18} weight="duotone" />
+                        <AlertCircle size={18} />
                         {t('settingsPage.browserSection.claude.overrideMessage', {
                           source: status.claude.source,
                         })}
@@ -634,6 +681,16 @@ export default function BrowserSection() {
                         </p>
                         <p className="mt-1 break-all font-mono text-[11px] leading-relaxed text-muted-foreground/80">
                           {status.claude.managedMcpServerPath}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                        {t('settingsPage.browserSection.evalMode.label')}
+                      </p>
+                      <div className="rounded-lg border border-border/50 bg-muted/25 p-3 dark:border-white/[0.05] dark:bg-zinc-900/45">
+                        <p className="font-mono text-[11px] font-semibold">
+                          {getBrowserEvalModeLabel(t, status.claude.evalMode)}
                         </p>
                       </div>
                     </div>
@@ -677,9 +734,9 @@ export default function BrowserSection() {
                     className="rounded-full px-6 shadow-md transition-transform active:scale-95"
                   >
                     {saving ? (
-                      <ArrowsClockwise className="mr-2 h-4 w-4 animate-spin" />
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                     ) : (
-                      <CheckCircle weight="bold" size={16} className="mr-2" />
+                      <CheckCircle2 size={16} className="mr-2" />
                     )}
                     {t('settingsPage.browserSection.actions.saveCodex')}
                   </Button>
@@ -693,6 +750,36 @@ export default function BrowserSection() {
                   detail={status.codex.detail}
                   nextStep={status.codex.nextStep}
                 />
+
+                <div className="max-w-md space-y-3">
+                  <Label className="text-sm font-semibold tracking-wide text-muted-foreground/80">
+                    {t('settingsPage.browserSection.evalMode.label')}
+                  </Label>
+                  <Select
+                    value={effectiveConfig.codex.evalMode}
+                    onValueChange={(next) =>
+                      setDraft((current) =>
+                        updateCodexDraft(current ?? effectiveConfig, {
+                          evalMode: next as BrowserEvalMode,
+                        })
+                      )
+                    }
+                  >
+                    <SelectTrigger className="rounded-xl border-border/70 bg-background/85 dark:border-white/[0.08] dark:bg-zinc-900/70">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BROWSER_EVAL_MODE_OPTIONS.map((mode) => (
+                        <SelectItem key={mode} value={mode}>
+                          {getBrowserEvalModeLabel(t, mode)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground/70">
+                    {t('settingsPage.browserSection.codex.evalModeHint')}
+                  </p>
+                </div>
 
                 <DiagnosticsSection
                   title={t('settingsPage.browserSection.technicalDetails')}
@@ -715,9 +802,9 @@ export default function BrowserSection() {
                       </p>
                       <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/25 p-3 font-medium text-xs dark:border-white/[0.05] dark:bg-zinc-900/45">
                         {status.codex.supportsConfigOverrides ? (
-                          <CheckCircle className="text-emerald-500" size={16} weight="bold" />
+                          <CheckCircle2 className="text-emerald-500" size={16} />
                         ) : (
-                          <XCircle className="text-rose-500" size={16} weight="bold" />
+                          <XCircle className="text-rose-500" size={16} />
                         )}
                         {status.codex.supportsConfigOverrides
                           ? t('settingsPage.browserSection.codex.overrideSupported')
@@ -738,6 +825,16 @@ export default function BrowserSection() {
                             {status.codex.version}
                           </div>
                         )}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
+                        {t('settingsPage.browserSection.evalMode.label')}
+                      </p>
+                      <div className="rounded-lg border border-border/50 bg-muted/25 p-3 dark:border-white/[0.05] dark:bg-zinc-900/45">
+                        <p className="font-mono text-[11px] font-semibold">
+                          {getBrowserEvalModeLabel(t, status.codex.evalMode)}
+                        </p>
                       </div>
                     </div>
                   </div>

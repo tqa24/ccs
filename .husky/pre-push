@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# Husky v9 invokes hooks via `sh -e` (see .husky/_/h), ignoring this shebang.
+# Re-exec under bash so `set -o pipefail` and `[[ ... ]]` below work portably.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 set -euo pipefail
 
 # Protected branches keep the full CI parity gate.
@@ -39,9 +45,9 @@ echo "    branch: $CURRENT_BRANCH"
 echo "    base:   $BASE_BRANCH"
 
 bun run typecheck
-bun run lint:fix
+bun run lint
 bun run format:check
-bun run build:all
+bun run test:fast
 
 git fetch origin "$BASE_BRANCH" --quiet || true
 DIFF_RANGE="HEAD"

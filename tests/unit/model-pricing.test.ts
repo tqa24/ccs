@@ -148,6 +148,18 @@ describe('model-pricing', () => {
       expect(opus46.inputPerMillion).toBe(5.0);
       expect(opus46.outputPerMillion).toBe(25.0);
     });
+
+    it('should return correct pricing for Claude Opus 4.7', () => {
+      const opus47 = getModelPricing('claude-opus-4-7');
+      expect(opus47.inputPerMillion).toBe(5.0);
+      expect(opus47.outputPerMillion).toBe(25.0);
+    });
+
+    it('should match date-stamped Claude Opus 4.7 to correct pricing', () => {
+      const opus47dated = getModelPricing('claude-opus-4-7-20260401');
+      expect(opus47dated.inputPerMillion).toBe(5.0);
+      expect(opus47dated.outputPerMillion).toBe(25.0);
+    });
   });
 
   describe('calculateCost', () => {
@@ -216,6 +228,28 @@ describe('model-pricing', () => {
         cacheReadTokens: 1_000_000,
       };
       const cost = calculateCost(usage, 'claude-opus-4-6');
+      expect(cost).toBe(36.75); // 5 + 25 + 6.25 + 0.5
+    });
+
+    it('should calculate Claude Opus 4.7 cost including cache token rates', () => {
+      const usage: TokenUsage = {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        cacheReadTokens: 1_000_000,
+      };
+      const cost = calculateCost(usage, 'claude-opus-4-7');
+      expect(cost).toBe(36.75); // 5 + 25 + 6.25 + 0.5
+    });
+
+    it('should calculate Claude Opus 4.7 cache cost consistently across repeat lookups', () => {
+      const usage: TokenUsage = {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        cacheReadTokens: 1_000_000,
+      };
+      const cost = calculateCost(usage, 'claude-opus-4-7');
       expect(cost).toBe(36.75); // 5 + 25 + 6.25 + 0.5
     });
   });

@@ -32,7 +32,7 @@ When to use CCS:
 
 When you launch a compatible settings profile with the Claude target, CCS now:
 
-1. Starts a local proxy on `127.0.0.1`
+1. Starts a local proxy on `127.0.0.1` using the resolved local port for that profile
 2. Accepts Anthropic `/v1/messages` traffic from Claude Code
 3. Translates requests into OpenAI chat-completions format
 4. Forwards them to your configured upstream provider
@@ -72,8 +72,23 @@ Useful variants:
 
 ```bash
 ccs proxy start hf --host 127.0.0.1
+ccs proxy start hf --port 3460
+ccs proxy activate hf
 ccs proxy activate --fish
+ccs proxy status hf
+ccs proxy stop hf
 ```
+
+Port selection precedence is:
+
+1. CLI `--port` for an exact one-off pin
+2. `proxy.profile_ports[profile]` for an exact per-profile pin
+3. `proxy.port` for a shared preferred starting port
+4. adaptive per-profile fallback when nothing is pinned
+
+Legacy shared `proxy.port: 3456` values are treated as unset so older configs
+move onto the adaptive path instead of staying on the hot legacy default. If
+you need an exact `3456` binding now, pin it via `--port` or `proxy.profile_ports`.
 
 `ccs proxy activate` now prints the full local runtime contract:
 
@@ -85,16 +100,28 @@ ccs proxy activate --fish
 - `API_TIMEOUT_MS`
 - `NO_PROXY`
 
-## One Active Proxy Profile
+## Multiple Active Proxy Profiles
 
-The current runtime is a single local proxy daemon.
+CCS now stores OpenAI-compatible proxy state per profile instead of treating the
+runtime as a singleton.
 
-- Reusing the same OpenAI-compatible profile is supported
-- Starting a different OpenAI-compatible profile while one proxy is already
-  running is rejected instead of silently replacing the active upstream
+- Different compatible profiles can run at the same time on separate local ports
+- `ccs proxy activate` without a profile stays convenient when only one proxy is
+  running
+- When multiple proxies are running, pass the profile explicitly to
+  `activate`, `status`, or `stop`
+- `status` and `activate` always reflect the actual running port instead of an
+  assumed default
 
-This is intentional to avoid breaking an in-flight Claude session by swapping
-its upstream provider out from under it.
+If you want to pin or guide ports explicitly, configure them in `~/.ccs/config.yaml`:
+
+```yaml
+proxy:
+  port: 45000
+  profile_ports:
+    hf: 3460
+    openai: 3461
+```
 
 ## Request-Time Routing
 
@@ -288,10 +315,12 @@ That flag is respected by both:
 - Add `CCS_OPENAI_PROXY_INSECURE=1` to the profile settings
 - Restart the proxy after changing the setting
 
-### Port conflict on `3456`
+### Need to pin or verify the local port
 
-- Start with a fixed port: `ccs proxy start hf --port 3457`
-- Re-run `ccs proxy activate` after changing the port
+- Check the active binding with `ccs proxy status hf`
+- Pin a one-off port with `ccs proxy start hf --port 3460`
+- Reserve a stable profile port with `proxy.profile_ports`
+- Re-run `ccs proxy activate hf` after changing the port
 
 ### Provider returns `429` or empty upstream output
 

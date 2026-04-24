@@ -78,8 +78,11 @@ describe('help command parity', () => {
     expect(rendered.includes('Codex Browser Tools inject managed Playwright MCP overrides')).toBe(
       true
     );
+    expect(rendered.includes('ccs browser setup')).toBe(true);
     expect(rendered.includes('ccs browser status')).toBe(true);
     expect(rendered.includes('ccs browser doctor')).toBe(true);
+    expect(rendered.includes('ccs browser policy')).toBe(true);
+    expect(rendered.includes('--browser')).toBe(true);
   });
 
   test('completion topic documents install and verification paths', async () => {

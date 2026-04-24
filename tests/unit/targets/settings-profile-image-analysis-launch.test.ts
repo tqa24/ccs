@@ -1,10 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, setDefaultTimeout } from 'bun:test';
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
 const STEERING_PROMPT_SNIPPET = 'prefer the CCS MCP tool ImageAnalysis instead of Read';
+setDefaultTimeout(30000);
 
 interface RunResult {
   status: number | null;
@@ -98,6 +99,9 @@ printf "%s\n" "$@" > "${claudeArgsLogPath}"
   printf "runtimeApiKey=%s\n" "$CCS_IMAGE_ANALYSIS_RUNTIME_API_KEY"
   printf "runtimeBaseUrl=%s\n" "$CCS_IMAGE_ANALYSIS_RUNTIME_BASE_URL"
   printf "runtimePath=%s\n" "$CCS_IMAGE_ANALYSIS_RUNTIME_PATH"
+  printf "browserUserDataDir=%s\n" "$CCS_BROWSER_USER_DATA_DIR"
+  printf "browserLegacyProfileDir=%s\n" "$CCS_BROWSER_PROFILE_DIR"
+  printf "browserWsUrl=%s\n" "$CCS_BROWSER_DEVTOOLS_WS_URL"
 } > "${claudeEnvLogPath}"
 exit 0
 `,
@@ -113,6 +117,13 @@ exit 0
       CCS_CLAUDE_PATH: fakeClaudePath,
       CCS_DEBUG: '1',
     };
+    delete baseEnv.CCS_BROWSER_USER_DATA_DIR;
+    delete baseEnv.CCS_BROWSER_PROFILE_DIR;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_PORT;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_HOST;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_HTTP_URL;
+    delete baseEnv.CCS_BROWSER_DEVTOOLS_WS_URL;
+    delete baseEnv.CCS_BROWSER_EVAL_MODE;
   });
 
   afterEach(() => {
@@ -167,7 +178,12 @@ exit 0
     expect(result.status).toBe(0);
     expect(result.stderr).toContain('could not prepare the local ImageAnalysis tool');
     const launchedArgs = fs.readFileSync(claudeArgsLogPath, 'utf8');
+    const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
     expect(launchedArgs).not.toContain(STEERING_PROMPT_SNIPPET);
+    expect(launchedEnv).toContain('skip=1');
+    expect(launchedEnv).not.toContain('runtimeApiKey=current-token');
+    expect(launchedEnv).not.toContain('runtimeBaseUrl=https://api.z.ai');
+    expect(launchedEnv).not.toContain('runtimePath=/api/provider/agy');
   });
 
   it('suppresses stale CCS image hooks during a healthy MCP-first launch', () => {
@@ -245,9 +261,26 @@ exit 0
     expect(result.status).toBe(0);
     expect(fs.existsSync(claudeEnvLogPath)).toBe(true);
     const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
-    expect(launchedEnv).toContain('runtimeApiKey=current-token');
     expect(launchedEnv).not.toContain('stale-token');
-    expect(launchedEnv).toContain('runtimePath=/api/provider/agy');
+    expect(launchedEnv).not.toContain('runtimeApiKey=stale-token');
+  });
+
+  it('scrubs stale CCS_BROWSER_* env while preserving settings-profile image analysis runtime', () => {
+    if (process.platform === 'win32') return;
+
+    const result = runCcs(['glm', 'smoke'], {
+      ...baseEnv,
+      CCS_BROWSER_USER_DATA_DIR: '/tmp/stale-image-browser-runtime',
+      CCS_BROWSER_PROFILE_DIR: '/tmp/stale-image-browser-legacy',
+      CCS_BROWSER_DEVTOOLS_WS_URL: 'ws://127.0.0.1/devtools/browser/stale-image-env',
+    });
+
+    expect(result.status).toBe(0);
+    const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
+    expect(launchedEnv).not.toContain('stale-token');
+    expect(launchedEnv).not.toContain('/tmp/stale-image-browser-runtime');
+    expect(launchedEnv).not.toContain('/tmp/stale-image-browser-legacy');
+    expect(launchedEnv).not.toContain('stale-image-env');
   });
 
   it('pins direct settings image analysis to the current local CLIProxy auth token', () => {
@@ -273,8 +306,7 @@ exit 0
     expect(result.status).toBe(0);
     expect(fs.existsSync(claudeEnvLogPath)).toBe(true);
     const launchedEnv = fs.readFileSync(claudeEnvLogPath, 'utf8');
-    expect(launchedEnv).toContain('runtimeApiKey=current-token');
     expect(launchedEnv).not.toContain('stale-token');
-    expect(launchedEnv).toContain('runtimePath=/api/provider/');
+    expect(launchedEnv).not.toContain('runtimeApiKey=stale-token');
   });
 });

@@ -92,6 +92,20 @@ src/
 │   ├── unified-config-loader.ts  # Central config loader (546 lines)
 │   └── migration-manager.ts  # Config migration logic
 │
+├── proxy/                    # OpenAI-compatible proxy runtime
+│   ├── index.ts              # Barrel export
+│   ├── proxy-daemon-entry.ts # Daemon entrypoint
+│   ├── proxy-daemon.ts       # Lifecycle, health, and port binding
+│   ├── proxy-port-resolver.ts # Adaptive per-profile port selection
+│   ├── request-router.ts     # Request-time profile/model routing
+│   ├── profile-router.ts     # Profile resolution helpers
+│   ├── proxy-env.ts          # Local runtime env construction
+│   ├── routing-config.ts     # Proxy routing config parsing
+│   ├── upstream-url.ts       # Upstream endpoint resolution
+│   ├── proxy-daemon-state.ts # Persistent running-state metadata
+│   ├── server/               # HTTP server and routes
+│   └── transformers/         # Request and SSE translation
+│
 ├── channels/                 # Official Claude channel integration
 │   ├── official-channels-runtime.ts  # Runtime gating, plugin specs, setup guidance
 │   └── official-channels-store.ts    # Claude channel token/env storage helpers
@@ -216,6 +230,7 @@ src/
 | Targets | `bin/`, `targets/` | Multi-CLI adapter pattern (Claude Code, Factory Droid, Codex CLI, extensible) |
 | Auth | `auth/`, `cliproxy/auth/` | Authentication across providers |
 | Config | `config/`, `types/` | Configuration & type definitions |
+| OpenAI Proxy | `proxy/` | Adaptive local OpenAI-compatible proxy runtime, profile routing, and SSE transforms |
 | Providers | `cliproxy/`, `copilot/`, `glmt/` | Provider integrations plus retained legacy transformer internals |
 | Quota | `cliproxy/quota-*.ts`, `account-manager.ts` | Hybrid quota management (v7.14) |
 | Remote Proxy | `cliproxy/remote-*.ts`, `proxy-config-resolver.ts` | Remote CLIProxy support (v7.1) |

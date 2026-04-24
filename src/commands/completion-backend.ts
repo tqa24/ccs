@@ -84,6 +84,15 @@ function completeSubcommands(
   return uniqueStrings([...values, ...flags]).map((value) => suggestion(value));
 }
 
+function completeBrowserPolicyArgs(tokensBeforeCurrent: string[]): CompletionSuggestion[] {
+  const lastToken = tokensBeforeCurrent[tokensBeforeCurrent.length - 1];
+  if (lastToken === '--all' || lastToken === '--claude' || lastToken === '--codex') {
+    return completeSubcommands(['auto', 'manual'], ['--help', '-h']);
+  }
+
+  return completeSubcommands(['--all', '--claude', '--codex'], ['--help', '-h']);
+}
+
 function getSuggestionsForCommand(tokensBeforeCurrent: string[]): CompletionSuggestion[] {
   const [command, subcommand] = tokensBeforeCurrent;
   const lastToken = tokensBeforeCurrent[tokensBeforeCurrent.length - 1];
@@ -188,6 +197,23 @@ function getSuggestionsForCommand(tokensBeforeCurrent: string[]): CompletionSugg
       if (subcommand === 'logs')
         return completeSubcommands([], ['--follow', '--service', '--host', '--help', '-h']);
       return completeSubcommands([], COMMAND_FLAG_SUGGESTIONS.docker);
+    case 'browser':
+      if (!subcommand || subcommand.startsWith('-')) {
+        return completeSubcommands(
+          ['setup', 'status', 'doctor', 'policy', 'enable', 'disable'],
+          ['--help', '-h']
+        );
+      }
+      if (subcommand === 'enable' || subcommand === 'disable') {
+        return completeSubcommands(['claude', 'codex', 'all'], ['--help', '-h']);
+      }
+      if (subcommand === 'policy') {
+        return completeBrowserPolicyArgs(tokensBeforeCurrent);
+      }
+      if (subcommand === 'setup' || subcommand === 'doctor') {
+        return completeSubcommands([], ['--help', '-h']);
+      }
+      return completeSubcommands([], ['--help', '-h']);
     case 'cursor':
       return completeSubcommands(CURSOR_COMPLETION_SUBCOMMANDS);
     case 'proxy':

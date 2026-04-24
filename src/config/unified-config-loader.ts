@@ -19,6 +19,7 @@ import {
   DEFAULT_GLOBAL_ENV,
   DEFAULT_CLIPROXY_SERVER_CONFIG,
   DEFAULT_CLIPROXY_SAFETY_CONFIG,
+  DEFAULT_OPENAI_COMPAT_PROXY_CONFIG,
   DEFAULT_QUOTA_MANAGEMENT_CONFIG,
   DEFAULT_THINKING_CONFIG,
   DEFAULT_OFFICIAL_CHANNELS_CONFIG,
@@ -36,6 +37,8 @@ import type {
   OfficialChannelId,
   DashboardAuthConfig,
   BrowserConfig,
+  BrowserEvalMode,
+  BrowserToolPolicy,
   ImageAnalysisConfig,
   LoggingConfig,
   CursorConfig,
@@ -70,15 +73,41 @@ function normalizeBrowserDevtoolsPort(value: number | undefined): number {
   return port;
 }
 
-function canonicalizeBrowserConfig(config?: BrowserConfig): BrowserConfig {
+function normalizeBrowserPolicy(value: string | undefined): BrowserToolPolicy {
+  return value === 'auto' || value === 'manual' ? value : DEFAULT_BROWSER_CONFIG.claude.policy;
+}
+
+function normalizeBrowserEvalMode(value: string | undefined): BrowserEvalMode {
+  if (value === 'disabled' || value === 'readonly' || value === 'readwrite') {
+    return value;
+  }
+
+  return DEFAULT_BROWSER_CONFIG.claude.eval_mode ?? 'readonly';
+}
+
+function canonicalizeBrowserConfig(
+  config?: BrowserConfig,
+  fallback: BrowserConfig = DEFAULT_BROWSER_CONFIG
+): BrowserConfig {
+  const claudeUserDataDir =
+    config?.claude?.user_data_dir === undefined
+      ? fallback.claude.user_data_dir || getRecommendedBrowserUserDataDir()
+      : config.claude.user_data_dir.trim() || getRecommendedBrowserUserDataDir();
+
   return {
     claude: {
-      enabled: config?.claude?.enabled ?? DEFAULT_BROWSER_CONFIG.claude.enabled,
-      user_data_dir: config?.claude?.user_data_dir?.trim() || getRecommendedBrowserUserDataDir(),
-      devtools_port: normalizeBrowserDevtoolsPort(config?.claude?.devtools_port),
+      enabled: config?.claude?.enabled ?? fallback.claude.enabled,
+      policy: normalizeBrowserPolicy(config?.claude?.policy ?? fallback.claude.policy),
+      user_data_dir: claudeUserDataDir,
+      devtools_port: normalizeBrowserDevtoolsPort(
+        config?.claude?.devtools_port ?? fallback.claude.devtools_port
+      ),
+      eval_mode: normalizeBrowserEvalMode(config?.claude?.eval_mode ?? fallback.claude.eval_mode),
     },
     codex: {
-      enabled: config?.codex?.enabled ?? DEFAULT_BROWSER_CONFIG.codex.enabled,
+      enabled: config?.codex?.enabled ?? fallback.codex.enabled,
+      policy: normalizeBrowserPolicy(config?.codex?.policy ?? fallback.codex.policy),
+      eval_mode: normalizeBrowserEvalMode(config?.codex?.eval_mode ?? fallback.codex.eval_mode),
     },
   };
 }
@@ -414,6 +443,10 @@ function mergeWithDefaults(partial: Partial<UnifiedConfig>): UnifiedConfig {
       },
     },
     proxy: {
+      port: partial.proxy?.port ?? DEFAULT_OPENAI_COMPAT_PROXY_CONFIG.port,
+      profile_ports: partial.proxy?.profile_ports ?? {
+        ...DEFAULT_OPENAI_COMPAT_PROXY_CONFIG.profile_ports,
+      },
       routing: {
         default: partial.proxy?.routing?.default ?? defaults.proxy?.routing?.default,
         background: partial.proxy?.routing?.background ?? defaults.proxy?.routing?.background,
@@ -892,7 +925,9 @@ function generateYamlWithComments(config: UnifiedConfig): string {
     lines.push(
       '# Modes: auto (use tier_defaults), off (disable), manual (--thinking/--effort flags)'
     );
-    lines.push('# Levels: minimal (512), low (1K), medium (8K), high (24K), xhigh (32K), auto');
+    lines.push(
+      '# Levels: minimal (512), low (1K), medium (8K), high (24K), xhigh (32K), max (adaptive ceiling), auto'
+    );
     lines.push('# Override: Set global override value (number or level name)');
     lines.push('# Provider overrides: Per-provider tier defaults');
     lines.push('# ----------------------------------------------------------------------------');
@@ -1119,7 +1154,13 @@ export function saveUnifiedConfig(config: UnifiedConfig): void {
 export function mutateUnifiedConfig(mutator: (config: UnifiedConfig) => void): UnifiedConfig {
   return withConfigWriteLock(() => {
     const current = loadUnifiedConfigWithLockHeld();
+    const previousBrowser = current.browser
+      ? canonicalizeBrowserConfig(current.browser)
+      : undefined;
     mutator(current);
+    if (current.browser) {
+      current.browser = canonicalizeBrowserConfig(current.browser, previousBrowser);
+    }
     writeUnifiedConfigWithLockHeld(current);
     return current;
   });
