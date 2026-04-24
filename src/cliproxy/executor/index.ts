@@ -126,6 +126,7 @@ import {
   resolveRuntimeThinkingOverride,
   shouldDisableCodexReasoning,
 } from './thinking-override-resolver';
+import { shouldStartHttpsTunnel } from './https-tunnel-policy';
 
 /** Default executor configuration */
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -1017,7 +1018,15 @@ export async function execClaudeWithCLIProxy(
   let httpsTunnel: HttpsTunnelProxy | null = null;
   let tunnelPort: number | null = null;
 
-  if (useRemoteProxy && proxyConfig.protocol === 'https' && proxyConfig.host) {
+  const useHttpsTunnel = shouldStartHttpsTunnel({
+    provider,
+    useRemoteProxy,
+    protocol: proxyConfig.protocol,
+    host: proxyConfig.host,
+    isComposite: cfg.isComposite,
+  });
+
+  if (useHttpsTunnel && proxyConfig.host) {
     try {
       httpsTunnel = new HttpsTunnelProxy({
         remoteHost: proxyConfig.host,
@@ -1028,13 +1037,15 @@ export async function execClaudeWithCLIProxy(
       });
       tunnelPort = await httpsTunnel.start();
       log(
-        `HTTPS tunnel started on port ${tunnelPort} → https://${proxyConfig.host}:${proxyConfig.port}`
+        `HTTPS tunnel started on port ${tunnelPort} -> https://${proxyConfig.host}:${proxyConfig.port}`
       );
     } catch (error) {
       const err = error as Error;
       console.error(warn(`Failed to start HTTPS tunnel: ${err.message}`));
       throw new Error(`HTTPS tunnel startup failed: ${err.message}`);
     }
+  } else if (useRemoteProxy && proxyConfig.protocol === 'https' && provider === 'codex') {
+    log('HTTPS tunnel skipped for Codex; local proxy chain will connect to remote HTTPS directly');
   }
 
   const imageAnalysisProxyTarget =
@@ -1135,6 +1146,7 @@ export async function execClaudeWithCLIProxy(
         upstreamBaseUrl: initialEnvVars.ANTHROPIC_BASE_URL,
         verbose,
         warnOnSanitize: true,
+        allowSelfSigned: useRemoteProxy ? (proxyConfig.allowSelfSigned ?? false) : false,
       });
       toolSanitizationPort = await toolSanitizationProxy.start();
       log(`Tool sanitization proxy active on port ${toolSanitizationPort}`);
@@ -1173,6 +1185,7 @@ export async function execClaudeWithCLIProxy(
           defaultEffort: 'medium',
           disableEffort: codexThinkingOff,
           traceFilePath: traceEnabled ? path.join(getCcsDir(), 'codex-reasoning-proxy.log') : '',
+          allowSelfSigned: useRemoteProxy ? (proxyConfig.allowSelfSigned ?? false) : false,
           modelMap: {
             defaultModel: initialEnvVars.ANTHROPIC_MODEL,
             opusModel: initialEnvVars.ANTHROPIC_DEFAULT_OPUS_MODEL,
