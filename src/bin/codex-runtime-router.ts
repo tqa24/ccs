@@ -85,8 +85,8 @@ export async function main(argv: string[]): Promise<number> {
         process.stderr.write(`[X] codex-auth: ${msg}\n`);
         return 1;
       }
-      // Resolver module threw unexpectedly — degrade to legacy mode.
-      process.stderr.write(`[!] codex-auth: profile resolution skipped (${msg})\n`);
+      process.stderr.write(`[X] codex-auth: profile resolution failed (${msg})\n`);
+      return 1;
     }
   }
 

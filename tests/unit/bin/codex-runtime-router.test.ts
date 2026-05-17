@@ -215,6 +215,24 @@ describe('codex-runtime router — non-auth profile resolution', () => {
     expect(stderr).toContain('registry YAML could not be parsed');
   });
 
+  it('fails fast when registry YAML is corrupt even without CCS_CODEX_PROFILE', async () => {
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    fs.writeFileSync(registryPath, 'profiles: [unterminated\n');
+
+    const { result: code, stderr } = await withCapturedStderr(async () => {
+      require.cache[ccsPath] = { exports: {} } as NodeJS.Module;
+      flushRouterCache();
+      require.cache[ccsPath] = { exports: {} } as NodeJS.Module;
+
+      const { main } = require(routerPath) as { main: (argv: string[]) => Promise<number> };
+      return main(['node', 'codex-runtime', 'chat']);
+    });
+
+    expect(code).toBe(1);
+    expect(process.env.CODEX_HOME).toBeUndefined();
+    expect(stderr).toContain('registry YAML could not be parsed');
+  });
+
   it('fails fast when CCS_CODEX_PROFILE is set and registry is not an object', async () => {
     fs.mkdirSync(path.dirname(registryPath), { recursive: true });
     fs.writeFileSync(registryPath, '- not\n- an\n- object\n');
@@ -254,6 +272,29 @@ describe('codex-runtime router — non-auth profile resolution', () => {
     expect(code).toBe(1);
     expect(process.env.CODEX_HOME).toBeUndefined();
     expect(stderr).toContain('boundary failure');
+  });
+
+  it('fails closed for unexpected resolver errors instead of falling back to legacy mode', async () => {
+    const { result: code, stderr } = await withCapturedStderr(async () => {
+      require.cache[ccsPath] = { exports: {} } as NodeJS.Module;
+      flushRouterCache();
+      require.cache[ccsPath] = { exports: {} } as NodeJS.Module;
+      require.cache[resolveProfilePath] = {
+        exports: {
+          resolveActiveProfile: () => {
+            throw new Error('permission denied');
+          },
+        },
+      } as NodeJS.Module;
+
+      const { main } = require(routerPath) as { main: (argv: string[]) => Promise<number> };
+      return main(['node', 'codex-runtime', 'chat']);
+    });
+
+    expect(code).toBe(1);
+    expect(process.env.CODEX_HOME).toBeUndefined();
+    expect(stderr).toContain('profile resolution failed');
+    expect(stderr).toContain('permission denied');
   });
 
   it('preserves an explicit CODEX_HOME already in env — does not overwrite', async () => {

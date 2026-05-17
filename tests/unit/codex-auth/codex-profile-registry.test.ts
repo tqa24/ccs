@@ -156,13 +156,24 @@ describe('CodexProfileRegistry — listProfiles', () => {
   });
 });
 
-describe('CodexProfileRegistry — corrupt YAML recovery', () => {
-  it('returns empty state on corrupt YAML without throwing', () => {
+describe('CodexProfileRegistry — corrupt YAML safety', () => {
+  it('throws on corrupt YAML without rewriting the registry', () => {
     fs.mkdirSync(path.dirname(registryPath), { recursive: true });
-    fs.writeFileSync(registryPath, '{ invalid: yaml: content: [', { mode: 0o600 });
+    const corrupt = '{ invalid: yaml: content: [';
+    fs.writeFileSync(registryPath, corrupt, { mode: 0o600 });
     const reg = new CodexProfileRegistry(registryPath);
-    expect(reg.listProfiles()).toEqual([]);
-    expect(reg.getDefault()).toBeNull();
+    expect(() => reg.listProfiles()).toThrow(/could not be read safely/i);
+    expect(fs.readFileSync(registryPath, 'utf8')).toBe(corrupt);
+  });
+
+  it('refuses mutating writes when the registry shape is invalid', () => {
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    const invalidShape = 'version: "1.0"\ndefault: null\nprofiles: []\n';
+    fs.writeFileSync(registryPath, invalidShape, { mode: 0o600 });
+    const reg = new CodexProfileRegistry(registryPath);
+
+    expect(() => reg.createProfile('work')).toThrow(/profiles map/i);
+    expect(fs.readFileSync(registryPath, 'utf8')).toBe(invalidShape);
   });
 });
 

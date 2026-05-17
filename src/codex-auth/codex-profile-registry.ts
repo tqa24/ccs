@@ -16,6 +16,33 @@ function emptyRegistry(): CodexProfileData {
   return { version: CODEX_PROFILE_SCHEMA_VERSION, default: null, profiles: {} };
 }
 
+export class CodexProfileRegistryReadError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CodexProfileRegistryReadError';
+  }
+}
+
+function validateRegistryData(parsed: unknown): CodexProfileData {
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('registry YAML root is not an object');
+  }
+
+  const data = parsed as Partial<CodexProfileData>;
+  if (!data.profiles || typeof data.profiles !== 'object' || Array.isArray(data.profiles)) {
+    throw new Error('registry YAML is missing an object profiles map');
+  }
+  if (data.default !== undefined && data.default !== null && typeof data.default !== 'string') {
+    throw new Error('registry YAML default must be a string or null');
+  }
+
+  return {
+    version: typeof data.version === 'string' ? data.version : CODEX_PROFILE_SCHEMA_VERSION,
+    default: data.default ?? null,
+    profiles: data.profiles as Record<string, CodexProfileMetadata>,
+  };
+}
+
 function sleepSync(ms: number): void {
   try {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
@@ -55,18 +82,16 @@ export class CodexProfileRegistry {
     }
     try {
       const raw = fs.readFileSync(this.registryPath, 'utf8');
-      const parsed = yaml.load(raw) as CodexProfileData | null;
-      if (!parsed || typeof parsed !== 'object' || !parsed.profiles) {
-        return emptyRegistry();
-      }
-      return parsed;
+      return validateRegistryData(yaml.load(raw));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       logger.warn(
-        'codex-auth.registry.corrupt',
-        `Corrupt registry at ${this.registryPath}, returning empty state: ${msg}`
+        'codex-auth.registry.read-failed',
+        `Registry at ${this.registryPath} could not be read safely; refusing empty-state rewrite: ${msg}`
       );
-      return emptyRegistry();
+      throw new CodexProfileRegistryReadError(
+        `Codex profile registry at ${this.registryPath} could not be read safely: ${msg}. Refusing to rewrite it.`
+      );
     }
   }
 

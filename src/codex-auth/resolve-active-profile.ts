@@ -51,6 +51,13 @@ function registryDisplayPath(registryPath: string): string {
   return registryPath;
 }
 
+function resolutionFailure(message: string, envName: string, displayEnvName: string): never {
+  const prefix = envName ? `CCS_CODEX_PROFILE=${displayEnvName} is set but ` : '';
+  throw new CodexAuthProfileResolutionError(
+    `${prefix}${message}. Refusing to fall back to ~/.codex.`
+  );
+}
+
 /** @param env - Process env map; defaults to process.env. Injectable for tests. */
 export function resolveActiveProfile(env: NodeJS.ProcessEnv = process.env): ResolvedProfile | null {
   const registryPath = getCodexAuthRegistryPath();
@@ -74,28 +81,23 @@ export function resolveActiveProfile(env: NodeJS.ProcessEnv = process.env): Reso
     const parsed = yaml.load(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       const msg = `registry at ${displayRegistryPath} is not a valid YAML object`;
-      if (envName) {
-        throw new CodexAuthProfileResolutionError(
-          `CCS_CODEX_PROFILE=${displayEnvName} is set but ${msg}. Refusing to fall back to ~/.codex.`
-        );
-      }
-      process.stderr.write(`[!] codex-auth: ${msg}, falling back to ~/.codex\n`);
-      return null;
+      resolutionFailure(msg, envName, displayEnvName);
     }
     registry = parsed as RegistryShape;
   } catch (err) {
     if (err instanceof CodexAuthProfileResolutionError) throw err;
     const msg = `registry YAML could not be parsed at ${displayRegistryPath}`;
-    if (envName) {
-      throw new CodexAuthProfileResolutionError(
-        `CCS_CODEX_PROFILE=${displayEnvName} is set but ${msg}. Refusing to fall back to ~/.codex.`
-      );
-    }
-    process.stderr.write(`[!] codex-auth: ${msg}, falling back to ~/.codex\n`);
-    return null;
+    resolutionFailure(msg, envName, displayEnvName);
   }
 
-  const profiles = registry.profiles ?? {};
+  const profiles = registry.profiles;
+  if (!profiles || typeof profiles !== 'object' || Array.isArray(profiles)) {
+    resolutionFailure(
+      `registry at ${displayRegistryPath} is missing a valid profiles map`,
+      envName,
+      displayEnvName
+    );
+  }
 
   // F2: explicit env override
   if (envName) {

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -57,28 +57,18 @@ describe('resolveActiveProfile', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null and warns to stderr when registry YAML is corrupt', () => {
+  it('throws when registry YAML is corrupt even without an env override', () => {
     fs.mkdirSync(path.dirname(registryPath), { recursive: true });
     fs.writeFileSync(registryPath, '{ invalid yaml: [[[', { mode: 0o600 });
 
-    const stderrMessages: string[] = [];
-    const origWrite = process.stderr.write.bind(process.stderr);
-    const spy = spyOn(process.stderr, 'write').mockImplementation(
-      (msg: string | Uint8Array, ...rest: unknown[]) => {
-        stderrMessages.push(typeof msg === 'string' ? msg : String(msg));
-        return origWrite(msg as string, ...(rest as Parameters<typeof origWrite>).slice(1));
-      }
-    );
-
-    const result = resolveActiveProfile({});
-
-    spy.mockRestore();
-
-    expect(result).toBeNull();
-    expect(stderrMessages.some((m) => m.includes('codex-auth'))).toBe(true);
-    expect(stderrMessages.join('')).toContain('$CCS_HOME/.ccs/codex-profiles.yaml');
-    expect(stderrMessages.join('')).not.toContain(registryPath);
-    expect(stderrMessages.join('')).not.toContain('invalid yaml');
+    expect(() => resolveActiveProfile({})).toThrow(/registry YAML could not be parsed/);
+    try {
+      resolveActiveProfile({});
+    } catch (err) {
+      expect(String(err)).toContain('$CCS_HOME/.ccs/codex-profiles.yaml');
+      expect(String(err)).not.toContain(registryPath);
+      expect(String(err)).not.toContain('invalid yaml');
+    }
   });
 
   it('throws when CCS_CODEX_PROFILE is set and registry YAML is corrupt', () => {
@@ -97,6 +87,15 @@ describe('resolveActiveProfile', () => {
     expect(String(thrown)).toContain('$CCS_HOME/.ccs/codex-profiles.yaml');
     expect(String(thrown)).not.toContain(registryPath);
     expect(String(thrown)).not.toContain('invalid yaml');
+  });
+
+  it('throws when registry is missing a valid profiles map', () => {
+    fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+    fs.writeFileSync(registryPath, 'version: "1.0"\ndefault: null\nprofiles: []\n', {
+      mode: 0o600,
+    });
+
+    expect(() => resolveActiveProfile({})).toThrow(/valid profiles map/);
   });
 
   it('returns source=env when CCS_CODEX_PROFILE matches a registry entry', () => {
