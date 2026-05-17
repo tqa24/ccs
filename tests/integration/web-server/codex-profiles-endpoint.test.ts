@@ -110,6 +110,19 @@ describe('GET /api/codex/profiles', () => {
     expect((b.profiles as unknown[]).length).toBe(0);
   });
 
+  it('returns 500 when registry YAML is malformed', async () => {
+    const registryPath = path.join(ccsDir, 'codex-profiles.yaml');
+    fs.writeFileSync(registryPath, '{ invalid: yaml: [', { mode: 0o600 });
+
+    const svc = await import('../../../src/codex-auth/codex-auth-dashboard-service');
+    svc.invalidateCodexAuthProfilesCache();
+
+    const { status, body } = await get('/api/codex/profiles');
+
+    expect(status).toBe(500);
+    expect((body as { error?: string }).error).toContain('could not be read safely');
+  });
+
   it('returns 200 with decoded email and plan for a valid profile', async () => {
     const instancesDir = path.join(ccsDir, 'codex-instances');
     const workDir = path.join(instancesDir, 'work');

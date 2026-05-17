@@ -115,6 +115,16 @@ describe('getCodexAuthProfilesSummary', () => {
     expect(result.default).toBeNull();
   });
 
+  it('throws instead of returning an empty list when registry YAML is malformed', async () => {
+    const { getCodexAuthProfilesSummary, invalidateCodexAuthProfilesCache } = await importService();
+    invalidateCodexAuthProfilesCache();
+
+    const registryPath = path.join(ccsDir, 'codex-profiles.yaml');
+    fs.writeFileSync(registryPath, '{ invalid: yaml: [', { mode: 0o600 });
+
+    await expect(getCodexAuthProfilesSummary()).rejects.toThrow(/could not be read safely/i);
+  });
+
   it('returns decoded email, plan, accountId for valid registry with 2 profiles', async () => {
     const { getCodexAuthProfilesSummary, invalidateCodexAuthProfilesCache } = await importService();
     invalidateCodexAuthProfilesCache();

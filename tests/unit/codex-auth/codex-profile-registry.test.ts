@@ -127,6 +127,18 @@ describe('CodexProfileRegistry — remove', () => {
     reg.removeProfile('work');
     expect(reg.getDefault()).toBeNull();
   });
+
+  it('does not promote another profile when the default profile is removed', () => {
+    const reg = new CodexProfileRegistry(registryPath);
+    reg.createProfile('work');
+    reg.createProfile('personal');
+    reg.setDefault('work');
+
+    reg.removeProfile('work');
+
+    expect(reg.listProfiles()).toEqual(['personal']);
+    expect(reg.getDefault()).toBeNull();
+  });
 });
 
 describe('CodexProfileRegistry — default pointer', () => {

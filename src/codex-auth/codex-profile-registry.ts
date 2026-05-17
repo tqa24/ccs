@@ -318,8 +318,7 @@ export class CodexProfileRegistry {
       }
       delete data.profiles[name];
       if (data.default === name) {
-        const remaining = Object.keys(data.profiles);
-        data.default = remaining.length > 0 ? remaining[0] : null;
+        data.default = null;
       }
       this._write(data);
       logger.stage('cleanup', 'codex-auth.profile.deleted', 'Codex profile removed', { name });

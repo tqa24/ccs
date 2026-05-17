@@ -17,12 +17,13 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
 import { createLogger } from '../services/logging';
 import { decodeAccountIdentity } from './codex-account-identity';
 import { hasStructurallyValidIdToken } from './decode-id-token';
 import { getCodexAuthRegistryPath, getCodexInstancesDir } from './codex-profile-paths';
-import type { CodexProfileData } from './types';
+import { CODEX_PROFILE_SCHEMA_VERSION } from './types';
+import { CodexProfileRegistry } from './codex-profile-registry';
+import type { CodexProfileData, CodexProfileMetadata } from './types';
 
 const logger = createLogger('codex-auth:dashboard');
 
@@ -69,19 +70,24 @@ export function invalidateCodexAuthProfilesCache(): void {
 function readRegistry(): CodexProfileData {
   const registryPath = getCodexAuthRegistryPath();
   if (!fs.existsSync(registryPath)) {
-    return { version: '1.0', default: null, profiles: {} };
+    return { version: CODEX_PROFILE_SCHEMA_VERSION, default: null, profiles: {} };
   }
+
   try {
-    const raw = fs.readFileSync(registryPath, 'utf8');
-    const parsed = yaml.load(raw) as CodexProfileData | null;
-    if (!parsed || typeof parsed !== 'object' || !parsed.profiles) {
-      return { version: '1.0', default: null, profiles: {} };
+    const registry = new CodexProfileRegistry(registryPath);
+    const profiles: Record<string, CodexProfileMetadata> = {};
+    for (const name of registry.listProfiles()) {
+      profiles[name] = registry.getProfile(name);
     }
-    return parsed;
+    return {
+      version: CODEX_PROFILE_SCHEMA_VERSION,
+      default: registry.getDefault(),
+      profiles,
+    };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.warn('codex-auth.dashboard.registry-read-failed', `Registry read failed: ${msg}`);
-    return { version: '1.0', default: null, profiles: {} };
+    throw new Error(`Codex auth profile registry could not be read safely: ${msg}`);
   }
 }
 
