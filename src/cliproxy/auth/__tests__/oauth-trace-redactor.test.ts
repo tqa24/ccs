@@ -51,6 +51,25 @@ describe('redactString', () => {
   test('empty input passthrough', () => {
     expect(redactString('')).toBe('');
   });
+
+  test('redacts JSON-style token payloads in plain strings', () => {
+    const out = redactString('{"access_token":"AT_SECRET","refresh_token":"RT_SECRET"}');
+    expect(out).not.toContain('AT_SECRET');
+    expect(out).not.toContain('RT_SECRET');
+    expect(out).toContain(REDACTED_PLACEHOLDER);
+  });
+
+  test('redacts line-leading key/value formats', () => {
+    const out = redactString(
+      'access_token=AT_SECRET refresh_token=RT_SECRET client_secret: CS_SECRET'
+    );
+    expect(out).not.toContain('AT_SECRET');
+    expect(out).not.toContain('RT_SECRET');
+    expect(out).not.toContain('CS_SECRET');
+    expect(out).toContain(`access_token=${REDACTED_PLACEHOLDER}`);
+    expect(out).toContain(`refresh_token=${REDACTED_PLACEHOLDER}`);
+    expect(out).toContain(`client_secret=${REDACTED_PLACEHOLDER}`);
+  });
 });
 
 describe('redactUrl', () => {
