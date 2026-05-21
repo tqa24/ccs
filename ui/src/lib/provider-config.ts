@@ -105,6 +105,7 @@ export const PROVIDER_ASSETS: Partial<Record<ProviderVisualId, string>> = {
   gitlab: '/assets/providers/gitlab.svg',
   codebuddy: '/assets/providers/codebuddy.png',
   kilo: '/assets/providers/kilo.png',
+  qoder: '/assets/providers/qoder.svg',
   ghcp: '/assets/providers/copilot.svg',
   claude: '/assets/providers/claude.svg',
   kimi: '/assets/providers/kimi.svg',
