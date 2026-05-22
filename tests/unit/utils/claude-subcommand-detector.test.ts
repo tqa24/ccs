@@ -110,6 +110,15 @@ describe('stripClaudeSubcommandSessionArgs', () => {
     ).toEqual(['mcp', '--setting-sources', 'user']);
   });
 
+  it('removes --permission-mode for non-agents subcommands', () => {
+    expect(
+      stripClaudeSubcommandSessionArgs(['--permission-mode', 'bypassPermissions', 'doctor'])
+    ).toEqual(['doctor']);
+    expect(stripClaudeSubcommandSessionArgs(['doctor', '--permission-mode=acceptEdits'])).toEqual([
+      'doctor',
+    ]);
+  });
+
   it('preserves --permission-mode for the agents subcommand (after)', () => {
     // `claude agents` accepts `--permission-mode <mode>` as the default
     // permission mode for dispatched sessions; CCS must not strip it.
@@ -122,6 +131,12 @@ describe('stripClaudeSubcommandSessionArgs', () => {
         'in-process',
       ])
     ).toEqual(['agents', '--permission-mode', 'bypassPermissions']);
+  });
+
+  it('preserves --permission-mode for the agents subcommand (before, separate value form)', () => {
+    expect(
+      stripClaudeSubcommandSessionArgs(['--permission-mode', 'bypassPermissions', 'agents'])
+    ).toEqual(['--permission-mode', 'bypassPermissions', 'agents']);
   });
 
   it('preserves --permission-mode for the agents subcommand (before, --flag=value form)', () => {
