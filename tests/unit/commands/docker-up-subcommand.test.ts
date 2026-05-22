@@ -20,12 +20,20 @@ describe('docker up subcommand', () => {
       '../../../src/docker'
     )) as typeof import('../../../src/docker');
     const originalUp = dockerModule.DockerExecutor.prototype.up;
+    const originalGetKeyRotationBanner = dockerModule.DockerExecutor.prototype.getKeyRotationBanner;
     dockerModule.DockerExecutor.prototype.up = function (options: {
       host?: string;
       port: number;
       proxyPort: number;
     }) {
       calls.push(options);
+    };
+    dockerModule.DockerExecutor.prototype.getKeyRotationBanner = function () {
+      return [
+        '[!] Docker CLIProxy API key rotation grace period is active.',
+        '[i] New CLIProxy API key: new-secret',
+        '[i] Legacy key ccs-internal-managed remains valid until 2026-06-05T00:00:00.000Z.',
+      ].join('\n');
     };
 
     try {
@@ -40,10 +48,14 @@ describe('docker up subcommand', () => {
       expect(rendered).toContain('CLIProxy port: 9317');
       expect(rendered).toContain('Full remote management requires dashboard auth');
       expect(rendered).toContain('Without it, remote access stays read-only.');
-      expect(capture.errorLines).toEqual([]);
+      expect(renderCapturedLines(capture.errorLines)).toContain(
+        'Docker CLIProxy API key rotation grace period is active'
+      );
+      expect(renderCapturedLines(capture.errorLines)).toContain('New CLIProxy API key: new-secret');
       expect(process.exitCode).toBe(0);
     } finally {
       dockerModule.DockerExecutor.prototype.up = originalUp;
+      dockerModule.DockerExecutor.prototype.getKeyRotationBanner = originalGetKeyRotationBanner;
     }
   });
 

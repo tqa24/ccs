@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import { spawn } from 'child_process';
+import * as fs from 'fs';
 import { ensureCLIProxyBinary, getInstalledCliproxyVersion } from '../cliproxy/binary-manager';
 import {
   configExists,
@@ -13,34 +14,105 @@ import {
 import { CLIPROXY_DEFAULT_PORT } from '../cliproxy/config/port-manager';
 import { getCliproxyConfigPath } from '../cliproxy/config/path-resolver';
 import { registerSession, unregisterSession } from '../cliproxy/session-tracker';
-import { loadOrCreateUnifiedConfig, mutateConfig } from '../config/config-loader-facade';
+import {
+  getConfigYamlPath,
+  loadOrCreateUnifiedConfig,
+  mutateConfig,
+} from '../config/config-loader-facade';
+import {
+  addLegacyKeyGrace,
+  createDockerBootstrapState,
+  DOCKER_LEGACY_API_KEY,
+  isDockerLegacyKeyGraceActive,
+  isLikelyDockerGeneratedApiKey,
+  readDockerBootstrapState,
+  shouldRestoreDockerLegacyApiKey,
+  writeDockerBootstrapState,
+} from './docker-key-rotation';
 
 function generateDockerSecret(): string {
   return randomBytes(32).toString('base64url');
 }
 
 export function ensureDockerCliproxyAuth(): boolean {
+  const now = new Date();
+  const hadUnifiedConfig = fs.existsSync(getConfigYamlPath());
+  const hadCliproxyConfig = configExists(CLIPROXY_DEFAULT_PORT);
+  const cliproxyConfigPath = getCliproxyConfigPath();
+  const existingCliproxyConfig = hadCliproxyConfig
+    ? fs.readFileSync(cliproxyConfigPath, 'utf8')
+    : '';
   const config = loadOrCreateUnifiedConfig();
   const auth = config.cliproxy.auth;
   const needsApiKey = !auth?.api_key || auth.api_key === CCS_INTERNAL_API_KEY;
   const needsManagementSecret =
     !auth?.management_secret || auth.management_secret === CCS_CONTROL_PANEL_SECRET;
+  const stateRead = readDockerBootstrapState();
+  const existingState = stateRead.state;
+  const existingApiKey = auth?.api_key;
 
-  if (!needsApiKey && !needsManagementSecret) {
-    return false;
+  let replacementApiKey = existingApiKey;
+  let configChanged = false;
+
+  if (needsApiKey || needsManagementSecret) {
+    mutateConfig((nextConfig) => {
+      nextConfig.cliproxy.auth ??= {};
+      if (needsApiKey) {
+        replacementApiKey = generateDockerSecret();
+        nextConfig.cliproxy.auth.api_key = replacementApiKey;
+      }
+      if (needsManagementSecret) {
+        nextConfig.cliproxy.auth.management_secret = generateDockerSecret();
+      }
+    });
+    configChanged = true;
   }
 
-  mutateConfig((nextConfig) => {
-    nextConfig.cliproxy.auth ??= {};
-    if (needsApiKey) {
-      nextConfig.cliproxy.auth.api_key = generateDockerSecret();
-    }
-    if (needsManagementSecret) {
-      nextConfig.cliproxy.auth.management_secret = generateDockerSecret();
-    }
-  });
+  if (!replacementApiKey) {
+    replacementApiKey = loadOrCreateUnifiedConfig().cliproxy.auth?.api_key;
+  }
 
-  return true;
+  const existingLegacyKeyInCliproxyConfig = existingCliproxyConfig.includes(
+    `"${DOCKER_LEGACY_API_KEY}"`
+  );
+  const freshInstall = !hadUnifiedConfig && !hadCliproxyConfig;
+  const oldDefaultUpgrade = needsApiKey && !freshInstall;
+  const explicitLegacyRestore = shouldRestoreDockerLegacyApiKey();
+  const legacyRestoreEligible = !existingState?.legacyKeyGrace;
+  const alreadyBrokenUpgrade =
+    explicitLegacyRestore &&
+    legacyRestoreEligible &&
+    hadCliproxyConfig &&
+    isLikelyDockerGeneratedApiKey(replacementApiKey) &&
+    !existingLegacyKeyInCliproxyConfig;
+  const corruptedRecoverableUpgrade =
+    explicitLegacyRestore &&
+    stateRead.corrupted &&
+    hadCliproxyConfig &&
+    isLikelyDockerGeneratedApiKey(replacementApiKey);
+
+  let nextState = existingState ?? createDockerBootstrapState(replacementApiKey, now);
+
+  if (replacementApiKey && !nextState.apiKey) {
+    nextState = { ...nextState, apiKey: replacementApiKey };
+  }
+
+  if (
+    replacementApiKey &&
+    !isDockerLegacyKeyGraceActive(existingState, now) &&
+    (oldDefaultUpgrade || alreadyBrokenUpgrade || corruptedRecoverableUpgrade)
+  ) {
+    nextState = addLegacyKeyGrace(nextState, replacementApiKey, now);
+  }
+
+  if (!existingState || stateRead.corrupted || nextState !== existingState) {
+    writeDockerBootstrapState(nextState);
+  }
+
+  const legacyShouldBePresent = isDockerLegacyKeyGraceActive(nextState, now);
+  const legacyPresenceChanged = existingLegacyKeyInCliproxyConfig !== legacyShouldBePresent;
+
+  return configChanged || legacyPresenceChanged;
 }
 
 async function prepareIntegratedRuntime(): Promise<{ binaryPath: string; configPath: string }> {
