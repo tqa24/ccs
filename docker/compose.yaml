@@ -21,6 +21,9 @@ services:
     # with the canonical ghcr.io/kaitranntt/ccs prefix.
     image: ${CCS_IMAGE:-ghcr.io/kaitranntt/ccs:latest}
     restart: unless-stopped
+    environment:
+      CCS_DOCKER_LEGACY_KEY_GRACE_DAYS: "${CCS_DOCKER_LEGACY_KEY_GRACE_DAYS:-}"
+      CCS_DOCKER_RESTORE_LEGACY_API_KEY: "${CCS_DOCKER_RESTORE_LEGACY_API_KEY:-}"
     ports:
       - "3000:3000"
       - "8317:8317"

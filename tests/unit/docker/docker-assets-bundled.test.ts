@@ -31,4 +31,26 @@ describe('docker bundled assets', () => {
     expect(compose).not.toContain('"${CCS_DASHBOARD_PORT:-3000}:3000"');
     expect(compose).not.toContain('"${CCS_CLIPROXY_PORT:-8317}:8317"');
   });
+
+  it('passes Docker key rotation controls into the integrated container', () => {
+    const compose = readFileSync(assets.composeFile, 'utf8');
+
+    expect(compose).toContain(
+      'CCS_DOCKER_LEGACY_KEY_GRACE_DAYS: "${CCS_DOCKER_LEGACY_KEY_GRACE_DAYS:-}"'
+    );
+    expect(compose).toContain(
+      'CCS_DOCKER_RESTORE_LEGACY_API_KEY: "${CCS_DOCKER_RESTORE_LEGACY_API_KEY:-}"'
+    );
+  });
+
+  it('passes Docker key rotation controls into the public compose file', () => {
+    const compose = readFileSync('docker/compose.yaml', 'utf8');
+
+    expect(compose).toContain(
+      'CCS_DOCKER_LEGACY_KEY_GRACE_DAYS: "${CCS_DOCKER_LEGACY_KEY_GRACE_DAYS:-}"'
+    );
+    expect(compose).toContain(
+      'CCS_DOCKER_RESTORE_LEGACY_API_KEY: "${CCS_DOCKER_RESTORE_LEGACY_API_KEY:-}"'
+    );
+  });
 });

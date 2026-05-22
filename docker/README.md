@@ -131,6 +131,18 @@ docker exec ccs-cliproxy supervisorctl -c /etc/supervisord.conf restart ccs-dash
 
 On first startup, the integrated container generates per-install CLIProxy API and management secrets when the config is missing custom values. If you have already configured `cliproxy.auth.api_key` or `cliproxy.auth.management_secret`, Docker preserves those custom values.
 
+If you upgraded from an older Docker deployment that used the historical `ccs-internal-managed` API key, CCS keeps that legacy key valid beside the new per-install key for 14 days by default. During the grace period, every `ccs docker up` prints the new key and expiry date to stderr. Override the window with `CCS_DOCKER_LEGACY_KEY_GRACE_DAYS`.
+
+```bash
+ccs docker show-key            # masked
+ccs docker show-key --full     # reveal the current key
+ccs docker finalize-key-rotation
+```
+
+Run `finalize-key-rotation` after updating clients to remove the legacy key immediately.
+
+If a previous upgrade already replaced the old key before this grace logic was available, run once with `CCS_DOCKER_RESTORE_LEGACY_API_KEY=1` to explicitly restore the temporary legacy-key grace window. CCS does not infer this from random-looking custom keys.
+
 ### Post-Deployment: Migrate Existing Auth Tokens
 
 If you have existing CLIProxy OAuth tokens from a previous deployment, copy them into the Docker volume:
