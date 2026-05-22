@@ -12,7 +12,11 @@ import { createLogger } from '../../services/logging';
 import { initUI, info, ok } from '../../utils/ui';
 import { exitWithError } from '../../errors';
 import { ExitCode } from '../../errors/exit-codes';
-import { resolveCodexProfileDir, ensureSharedConfigSymlink } from '../index';
+import {
+  resolveCodexProfileDir,
+  ensureSharedConfigSymlink,
+  ensureCodexProfileResources,
+} from '../index';
 import { decodeAccountIdentity } from '../codex-account-identity';
 import { detectCodexCli } from '../../targets/codex-detector';
 import { parseArgs, rejectUnsupportedOptions, getProfileNameError } from './types';
@@ -46,14 +50,14 @@ export async function handleCreateCodex(ctx: CodexCommandContext, args: string[]
   if (registry.hasProfile(profileName)) {
     if (force) {
       // --force: only re-link config.toml, preserve auth.json
-      console.log(info(`Profile already exists: ${profileName} (re-linking config.toml)`));
-      _ensureSymlinkSafe(profileDir, true);
-      console.log(ok(`Profile config.toml re-linked.`));
+      console.log(info(`Profile already exists: ${profileName} (repairing shared resources)`));
+      _ensureProfileResourcesSafe(profileDir, true);
+      console.log(ok(`Profile shared resources repaired.`));
       console.log(`  Profile dir: ${profileDir}`);
     } else {
-      _ensureSymlinkSafe(profileDir);
+      _ensureProfileResourcesSafe(profileDir);
       console.log(info(`Profile already exists: ${profileName}`));
-      console.log(ok(`Profile config.toml is ready.`));
+      console.log(ok(`Profile shared resources are ready.`));
       console.log(`  Profile dir: ${profileDir}`);
       console.log(`  Run: ccsx auth login ${profileName}`);
     }
@@ -64,7 +68,7 @@ export async function handleCreateCodex(ctx: CodexCommandContext, args: string[]
   // Avoids registry orphan if mkdir hits EACCES/ENOSPC.
   try {
     fs.mkdirSync(profileDir, { recursive: true, mode: 0o700 });
-    _ensureSymlinkSafe(profileDir);
+    _ensureProfileResourcesSafe(profileDir);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if ((err as NodeJS.ErrnoException).code === 'EACCES') {
@@ -118,6 +122,20 @@ function _ensureSymlinkSafe(profileDir: string, overwriteRegularFile = false): v
       error: msg,
     });
     exitWithError(`Failed to prepare profile config.toml: ${msg}`, ExitCode.CONFIG_ERROR);
+  }
+}
+
+function _ensureProfileResourcesSafe(profileDir: string, overwriteRegularFile = false): void {
+  _ensureSymlinkSafe(profileDir, overwriteRegularFile);
+  try {
+    ensureCodexProfileResources(profileDir);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn('codex-auth.create.resource-repair-failed', 'Resource repair failed', {
+      profileDir,
+      error: msg,
+    });
+    exitWithError(`Failed to prepare profile resources: ${msg}`, ExitCode.CONFIG_ERROR);
   }
 }
 

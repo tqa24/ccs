@@ -10,13 +10,20 @@ import * as childProcess from 'child_process';
 
 let tempDir: string;
 let ccsHome: string;
+let homeDir: string;
 const ORIG_CCS_HOME = process.env.CCS_HOME;
 
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-create-test-'));
+  homeDir = path.join(tempDir, 'home');
   ccsHome = path.join(tempDir, 'ccs');
+  fs.mkdirSync(path.join(homeDir, '.codex', 'agents'), { recursive: true });
+  fs.writeFileSync(path.join(homeDir, '.codex', 'agents', 'brainstormer.toml'), 'name = "b"\n');
+  fs.mkdirSync(path.join(homeDir, '.codex', 'skills'), { recursive: true });
+  fs.writeFileSync(path.join(homeDir, '.codex', 'skills', 'review.md'), '# Review\n');
   fs.mkdirSync(path.join(ccsHome, '.ccs'), { recursive: true });
   process.env.CCS_HOME = ccsHome;
+  spyOn(os, 'homedir').mockReturnValue(homeDir);
 });
 
 afterEach(() => {
@@ -87,6 +94,8 @@ describe('handleCreateCodex — happy path', () => {
     expect(ctx.registry.hasProfile('myprofile')).toBe(true);
     const instancesDir = path.join(ccsHome, '.ccs', 'codex-instances', 'myprofile');
     expect(fs.existsSync(instancesDir)).toBe(true);
+    expect(fs.lstatSync(path.join(instancesDir, 'agents')).isSymbolicLink()).toBe(true);
+    expect(fs.lstatSync(path.join(instancesDir, 'skills')).isSymbolicLink()).toBe(true);
   });
 });
 
@@ -109,10 +118,14 @@ describe('handleCreateCodex — idempotent re-run', () => {
 
     const profileDir = path.join(ccsHome, '.ccs', 'codex-instances', 'dupprofile');
     const configPath = path.join(profileDir, 'config.toml');
+    const agentsPath = path.join(profileDir, 'agents');
     const authJsonPath = path.join(profileDir, 'auth.json');
-    const authJson = JSON.stringify({ tokens: { id_token: buildToken({ email: 'idempotent@test' }) } });
+    const authJson = JSON.stringify({
+      tokens: { id_token: buildToken({ email: 'idempotent@test' }) },
+    });
     fs.writeFileSync(authJsonPath, authJson);
     fs.rmSync(configPath, { force: true });
+    fs.rmSync(agentsPath, { recursive: true, force: true });
 
     const restore2 = silenceConsole();
     try {
@@ -124,6 +137,7 @@ describe('handleCreateCodex — idempotent re-run', () => {
     // Profile still has exactly one entry
     expect(ctx.registry.listProfiles().filter((n) => n === 'dupprofile').length).toBe(1);
     expect(fs.existsSync(configPath)).toBe(true);
+    expect(fs.existsSync(path.join(agentsPath, 'brainstormer.toml'))).toBe(true);
     expect(fs.readFileSync(authJsonPath, 'utf8')).toBe(authJson);
   });
 });

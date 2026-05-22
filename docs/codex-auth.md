@@ -10,8 +10,8 @@ refresh in one session overwrites the other's credentials.
 
 `ccsx auth` solves this by giving each account its own profile directory under
 `~/.ccs/codex-instances/<name>/`. Each profile holds its own `auth.json` and
-`history.jsonl`. A shared `config.toml` is linked via symlink so model/provider settings
-stay in sync.
+`history.jsonl`. Shared `config.toml`, `agents/`, and `skills/` resources are linked
+via symlink so model/provider settings and relative agent role config files stay in sync.
 
 ## Quick start (4 commands)
 
@@ -147,20 +147,39 @@ No OAuth tokens are ever returned by the API endpoint or shown in the UI.
         ├── auth.json            # OAuth credentials (Codex writes here)
         ├── history.jsonl        # Per-profile prompt history (optional)
         ├── sessions/            # Per-profile chat session dirs (optional)
-        └── config.toml -> ~/.codex/config.toml   (symlink — shared)
+        ├── config.toml -> ~/.codex/config.toml   (symlink — shared)
+        ├── agents/ -> ~/.codex/agents/           (symlink — shared)
+        └── skills/ -> ~/.codex/skills/           (symlink — shared)
 
 ~/.codex/
-└── config.toml                  # Single shared model/provider config
+├── config.toml                  # Single shared model/provider config
+├── agents/                      # Shared Codex agent role config files
+└── skills/                      # Shared Codex skills
 ```
+
+`ccsx auth create <name>` and `ccsx <name>` both repair these links idempotently.
+This keeps relative Codex config entries such as `agents/foo.toml` valid inside
+each isolated `CODEX_HOME`.
 
 ## Caveats
 
 ### Windows symlinks
 
 On Windows, creating symlinks requires Developer Mode or elevated privileges.
-If symlink creation fails, CCS falls back to copying `config.toml`. In this case,
-changes to `~/.codex/config.toml` are **not** automatically reflected in the profile —
-you must re-run `ccsx auth create <name> --force` to refresh the copy.
+If symlink creation fails, CCS falls back to copying `config.toml`, `agents/`,
+and `skills/`. In this case, changes to `~/.codex/` resources are **not**
+automatically reflected in the profile; re-run `ccsx auth create <name> --force`
+to refresh the copy.
+
+### Native Codex project-local config warnings
+
+`ccsx` preserves your current working directory. If you launch from your home directory,
+native Codex can also see `~/.codex/config.toml` as `./.codex/config.toml`, a
+project-local config file. Codex rejects user-level-only keys such as `model_providers`
+and `notify` in project-local config. That warning comes from native Codex config
+layering, not from the `ccsx auth` profile resource links. Launch from a project
+directory or move project-local Codex config out of `$HOME/.codex/config.toml` if the
+warning is noisy.
 
 ### `ccsx` vs `ccsxp`
 

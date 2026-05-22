@@ -1,6 +1,6 @@
 # CCS Project Roadmap
 
-Last Updated: 2026-05-19
+Last Updated: 2026-05-22
 
 Forward-looking roadmap documenting current priorities, GitHub issues, and future feature plans.
 
@@ -41,6 +41,10 @@ All major modularization work is complete. The codebase evolved from monolithic 
 
 ### Recent Fixes
 
+- **2026-05-22**: **#1332** `ccsx auth` profiles now link native Codex
+  `agents/` and `skills/` resources alongside `config.toml`, and `ccsx <profile>`
+  repairs missing resource links at launch so relative agent role `config_file`
+  entries do not warn on existing profiles.
 - **2026-05-20**: **#1285** Codex model picker aliases now include `minimal` and `low` reasoning effort suffixes alongside `medium`, `high`, and `xhigh`, and the dashboard separates base recommendations, reasoning variants, and fast variants so low-effort selections such as `gpt-5.5-low` are visible.
 - **2026-05-19**: **#1252** Claude extension persistence now rejects Codex CLIProxy profiles instead of writing `ANTHROPIC_BASE_URL=/api/provider/codex` into Claude Code settings. Native Codex subscription use stays on `ccsxp` or `ccs codex --target codex`, and `ccs doctor` warns when stale Claude settings still point at the Codex translator.
 - **2026-05-18**: **#1287** `ccsx resume` now passes through to the native Codex `resume` subcommand before CCS profile detection, preserving Codex session continuation while keeping `ccsx auth` on the managed Codex profile namespace.
