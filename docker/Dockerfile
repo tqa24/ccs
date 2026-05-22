@@ -81,7 +81,7 @@ COPY --from=build /app/LICENSE ./LICENSE
 # Install AI CLI tools (using latest - pin versions in production if needed)
 # These are optional tools for docker exec usage
 RUN npm install -g @google/gemini-cli @vibe-kit/grok-cli @anthropic-ai/claude-code \
-  && npm install -g @kaitranntt/ccs --force \
+  && npm install -g @kaitranntt/ccs --force --ignore-scripts \
   && npm cache clean --force \
   && su -s /bin/bash node -c 'curl -fsSL https://opencode.ai/install | bash -s -- --no-modify-path' \
   && ln -sf /app/dist/ccs.js /usr/local/bin/ccs
