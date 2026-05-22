@@ -111,6 +111,19 @@ export async function main(argv: string[]): Promise<number> {
             `[!] codex-auth: shared config symlink failed (${msg}), continuing\n`
           );
         }
+
+        try {
+          const { ensureCodexProfileResources } =
+            require('../codex-auth/codex-profile-resources') as {
+              ensureCodexProfileResources: (dir: string) => void;
+            };
+          ensureCodexProfileResources(resolved.dir);
+        } catch (resourceErr) {
+          const msg = resourceErr instanceof Error ? resourceErr.message : String(resourceErr);
+          process.stderr.write(
+            `[!] codex-auth: shared resource repair failed (${msg}), continuing\n`
+          );
+        }
       }
     }
   } catch (resolverErr) {

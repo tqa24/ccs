@@ -5,7 +5,7 @@
  * each test so the module re-evaluates with updated stubs and env state.
  * Stub runCodexAuth and require('../ccs') via require.cache injection.
  */
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -16,6 +16,7 @@ const ccsPath = require.resolve('../../../src/ccs.ts');
 const codexAuthRouterPath = require.resolve('../../../src/codex-auth/codex-auth-router.ts');
 const resolveProfilePath = require.resolve('../../../src/codex-auth/resolve-active-profile.ts');
 const symlinkPath = require.resolve('../../../src/codex-auth/codex-config-symlink.ts');
+const resourcePath = require.resolve('../../../src/codex-auth/codex-profile-resources.ts');
 
 const ORIGINAL_CCS_HOME = process.env.CCS_HOME;
 const ORIGINAL_CODEX_HOME = process.env.CODEX_HOME;
@@ -23,6 +24,7 @@ const ORIGINAL_CCS_CODEX_PROFILE = process.env.CCS_CODEX_PROFILE;
 
 let tempDir: string;
 let ccsHome: string;
+let homeDir: string;
 let registryPath: string;
 let instancesDir: string;
 
@@ -31,6 +33,7 @@ function flushRouterCache() {
   delete require.cache[codexAuthRouterPath];
   delete require.cache[resolveProfilePath];
   delete require.cache[symlinkPath];
+  delete require.cache[resourcePath];
   // Keep ccsPath stub intact — tests inject it explicitly each time
 }
 
@@ -61,8 +64,14 @@ async function withCapturedStderr<T>(fn: () => Promise<T>): Promise<{ result: T;
 
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-router-test-'));
+  homeDir = path.join(tempDir, 'home');
   ccsHome = path.join(tempDir, 'ccs');
+  fs.mkdirSync(path.join(homeDir, '.codex', 'agents'), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(homeDir, '.codex', 'agents', 'brainstormer.toml'), 'name = "b"\n');
+  fs.mkdirSync(path.join(homeDir, '.codex', 'skills'), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(homeDir, '.codex', 'skills', 'review.md'), '# Review\n');
   fs.mkdirSync(path.join(ccsHome, '.ccs'), { recursive: true, mode: 0o700 });
+  spyOn(os, 'homedir').mockReturnValue(homeDir);
   process.env.CCS_HOME = ccsHome;
   registryPath = path.join(ccsHome, '.ccs', 'codex-profiles.yaml');
   instancesDir = path.join(ccsHome, '.ccs', 'codex-instances');
@@ -83,6 +92,7 @@ afterEach(() => {
 
   flushRouterCache();
   delete require.cache[ccsPath];
+  mock.restore();
   fs.rmSync(tempDir, { recursive: true, force: true });
 });
 
@@ -165,7 +175,31 @@ describe('codex-runtime router — non-auth profile resolution', () => {
     expect(code).toBe(-1);
     expect(process.env.CCS_CODEX_PROFILE).toBe('ck');
     expect(process.env.CODEX_HOME).toBe(profileDir);
+    expect(fs.existsSync(path.join(profileDir, 'agents', 'brainstormer.toml'))).toBe(true);
     expect(argv).toEqual(['node', 'codex-runtime', 'default', 'fix failing tests']);
+  });
+
+  it('self-heals missing Codex profile resources during launch', async () => {
+    const profileDir = makeProfileDir('ck');
+    writeRegistry({
+      version: '1.0',
+      default: null,
+      profiles: { ck: { type: 'codex', created: '2026-01-01T00:00:00.000Z', last_used: null } },
+    });
+
+    require.cache[ccsPath] = { exports: {} } as NodeJS.Module;
+    flushRouterCache();
+    require.cache[ccsPath] = { exports: {} } as NodeJS.Module;
+
+    const { main } = require(routerPath) as { main: (argv: string[]) => Promise<number> };
+    await main(['node', 'codex-runtime', 'ck']);
+
+    const agentsPath = path.join(profileDir, 'agents');
+    const skillsPath = path.join(profileDir, 'skills');
+    expect(fs.lstatSync(agentsPath).isSymbolicLink()).toBe(true);
+    expect(fs.existsSync(path.join(agentsPath, 'brainstormer.toml'))).toBe(true);
+    expect(fs.lstatSync(skillsPath).isSymbolicLink()).toBe(true);
+    expect(fs.existsSync(path.join(skillsPath, 'review.md'))).toBe(true);
   });
 
   it('leaves CODEX_HOME unset when no registry exists and no env profile set', async () => {
