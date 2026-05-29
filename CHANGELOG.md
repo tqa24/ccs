@@ -1,3 +1,15 @@
+## [8.1.2](https://github.com/kaitranntt/ccs/compare/v8.1.1...v8.1.2) (2026-05-29)
+
+### Hotfixes
+
+* repair Docker image size inspection ([731d43e](https://github.com/kaitranntt/ccs/commit/731d43ec9a331fa34b77c9abc18d4608dde27252)), closes [#1400](https://github.com/kaitranntt/ccs/issues/1400)
+
+## [8.1.1](https://github.com/kaitranntt/ccs/compare/v8.1.0...v8.1.1) (2026-05-29)
+
+### Hotfixes
+
+* repair Docker release publishing ([d49bbda](https://github.com/kaitranntt/ccs/commit/d49bbdaec3a1b391a819653f15985b3b48fdd5d2)), closes [#1400](https://github.com/kaitranntt/ccs/issues/1400)
+
 ## [8.1.0](https://github.com/kaitranntt/ccs/compare/v8.0.0...v8.1.0) (2026-05-23)
 
 ### Features
