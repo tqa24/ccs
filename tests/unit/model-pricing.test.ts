@@ -176,6 +176,46 @@ describe('model-pricing', () => {
       expect(opus48.cacheReadPerMillion).toBe(0.5);
     });
 
+    it('should match date-stamped Claude Opus 4.8 to correct pricing', () => {
+      // Anthropic stopped issuing date-stamped Opus IDs starting with the 4.6
+      // generation, so this is a defensive guard for stripDateSuffix in case
+      // a third-party emits a synthesized dated alias.
+      const opus48dated = getModelPricing('claude-opus-4-8-20260530');
+      expect(opus48dated.inputPerMillion).toBe(5.0);
+      expect(opus48dated.outputPerMillion).toBe(25.0);
+    });
+
+    it('should return fast-tier pricing for Claude Opus 4.8 when serviceTier=fast', () => {
+      // Anthropic's "fast mode" charges 2x for Opus 4.8 ($10/$50 vs $5/$25).
+      // Cache rates scale by the same standard multipliers (1.25x write, 0.1x read).
+      const opus48fast = getModelPricing('claude-opus-4-8', { serviceTier: 'fast' });
+      expect(opus48fast.inputPerMillion).toBe(10.0);
+      expect(opus48fast.outputPerMillion).toBe(50.0);
+      expect(opus48fast.cacheCreationPerMillion).toBe(12.5);
+      expect(opus48fast.cacheReadPerMillion).toBe(1.0);
+    });
+
+    it('should return fast-tier pricing for Claude Opus 4.7 when serviceTier=fast', () => {
+      // Fast mode on 4.7 carries a 6x premium ($30/$150 per Anthropic docs).
+      const opus47fast = getModelPricing('claude-opus-4-7', { serviceTier: 'fast' });
+      expect(opus47fast.inputPerMillion).toBe(30.0);
+      expect(opus47fast.outputPerMillion).toBe(150.0);
+    });
+
+    it('should fall back to standard rates when serviceTier is unknown', () => {
+      // Unknown tier names must not throw; revert to base pricing transparently.
+      const opus48 = getModelPricing('claude-opus-4-8', { serviceTier: 'enterprise-mythos' });
+      expect(opus48.inputPerMillion).toBe(5.0);
+      expect(opus48.outputPerMillion).toBe(25.0);
+    });
+
+    it('should preserve standard rates for Opus 4.8 when serviceTier omitted', () => {
+      // Regression guard: existing callers must keep current behavior.
+      const opus48 = getModelPricing('claude-opus-4-8');
+      expect(opus48.inputPerMillion).toBe(5.0);
+      expect(opus48.outputPerMillion).toBe(25.0);
+    });
+
     it('should not map unknown future model families onto known family pricing', () => {
       const fallback = getModelPricing('unknown-model-xyz');
 
@@ -284,6 +324,17 @@ describe('model-pricing', () => {
       };
       const cost = calculateCost(usage, 'claude-opus-4-8');
       expect(cost).toBe(36.75); // 5 + 25 + 6.25 + 0.5
+    });
+
+    it('should calculate fast-tier Claude Opus 4.8 cost (2x premium)', () => {
+      const usage: TokenUsage = {
+        inputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        cacheCreationTokens: 1_000_000,
+        cacheReadTokens: 1_000_000,
+      };
+      const cost = calculateCost(usage, 'claude-opus-4-8', { serviceTier: 'fast' });
+      expect(cost).toBe(73.5); // 10 + 50 + 12.5 + 1.0
     });
   });
 

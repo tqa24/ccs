@@ -17,11 +17,21 @@ import {
 // TYPE DEFINITIONS
 // ============================================================================
 
-export interface ModelPricing {
+export interface PricingRates {
   inputPerMillion: number;
   outputPerMillion: number;
   cacheCreationPerMillion: number;
   cacheReadPerMillion: number;
+}
+
+export interface ModelPricing extends PricingRates {
+  /**
+   * Optional per-service-tier rate overrides keyed by Anthropic's
+   * `service_tier` request parameter (e.g. `'fast'`). When the lookup is
+   * called with a known tier, these rates replace the base ones; otherwise
+   * the base rates apply.
+   */
+  serviceTiers?: Record<string, PricingRates>;
 }
 
 export interface TokenUsage {
@@ -31,7 +41,14 @@ export interface TokenUsage {
   cacheReadTokens: number;
 }
 
-export type PricingLookupOptions = ModelsDevPricingLookupOptions;
+export interface PricingLookupOptions extends ModelsDevPricingLookupOptions {
+  /**
+   * Anthropic `service_tier` (e.g. `'fast'`). When set and the resolved model
+   * has matching `serviceTiers` rates, those are returned instead of the
+   * base rates. Unknown tiers transparently fall through to base.
+   */
+  serviceTier?: string;
+}
 
 // ============================================================================
 // USER-EDITABLE PRICING TABLE
@@ -223,12 +240,20 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
   },
-  // Claude 4.6 Opus ($5/$25)
+  // Claude 4.6 Opus ($5/$25) — fast mode ($30/$150, 6x premium per Anthropic docs)
   'claude-opus-4-6': {
     inputPerMillion: 5.0,
     outputPerMillion: 25.0,
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
+    serviceTiers: {
+      fast: {
+        inputPerMillion: 30.0,
+        outputPerMillion: 150.0,
+        cacheCreationPerMillion: 37.5,
+        cacheReadPerMillion: 3.0,
+      },
+    },
   },
   'claude-opus-4-6-thinking': {
     inputPerMillion: 5.0,
@@ -236,19 +261,35 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
   },
-  // Claude 4.7 Opus ($5/$25)
+  // Claude 4.7 Opus ($5/$25) — fast mode ($30/$150, 6x premium per Anthropic docs)
   'claude-opus-4-7': {
     inputPerMillion: 5.0,
     outputPerMillion: 25.0,
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
+    serviceTiers: {
+      fast: {
+        inputPerMillion: 30.0,
+        outputPerMillion: 150.0,
+        cacheCreationPerMillion: 37.5, // 30 * 1.25 (5m cache write multiplier)
+        cacheReadPerMillion: 3.0, // 30 * 0.1 (cache read multiplier)
+      },
+    },
   },
-  // Claude 4.8 Opus ($5/$25)
+  // Claude 4.8 Opus ($5/$25) — fast mode ($10/$50, 2x premium per Anthropic docs)
   'claude-opus-4-8': {
     inputPerMillion: 5.0,
     outputPerMillion: 25.0,
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
+    serviceTiers: {
+      fast: {
+        inputPerMillion: 10.0,
+        outputPerMillion: 50.0,
+        cacheCreationPerMillion: 12.5, // 10 * 1.25 (5m cache write multiplier)
+        cacheReadPerMillion: 1.0, // 10 * 0.1 (cache read multiplier)
+      },
+    },
   },
 
   // ---------------------------------------------------------------------------
@@ -894,11 +935,27 @@ function hasProviderContext(model: string, options: PricingLookupOptions): boole
 }
 
 /**
+ * Apply per-service-tier rates if the resolved model declares them and the
+ * caller requested a matching tier. Unknown tiers transparently fall through
+ * to the base rates so existing callers stay unaffected.
+ */
+function applyServiceTier(pricing: ModelPricing, tier: string | undefined): ModelPricing {
+  if (!tier) return pricing;
+  const tierRates = pricing.serviceTiers?.[tier];
+  if (!tierRates) return pricing;
+  return { ...tierRates, serviceTiers: pricing.serviceTiers };
+}
+
+/**
  * Get pricing for a model with narrow fuzzy matching fallback.
  * Unknown future model families should fall back instead of inheriting the
  * first known family tier that happens to share a prefix.
  */
 export function getModelPricing(model: string, options: PricingLookupOptions = {}): ModelPricing {
+  return applyServiceTier(resolveBasePricing(model, options), options.serviceTier);
+}
+
+function resolveBasePricing(model: string, options: PricingLookupOptions): ModelPricing {
   if (hasProviderContext(model, options)) {
     const ccsOverridePricing = getCcsPolicyOverridePricing(model);
     if (ccsOverridePricing !== undefined) {
