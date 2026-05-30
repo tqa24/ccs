@@ -172,6 +172,8 @@ export function AccountSurfaceCard({
   const { t } = useTranslation();
   const identity = getAccountIdentityPresentation(accountId, email, tokenFile);
   const title = displayEmail || identity.email || accountId;
+  const sensitiveTitle = (value: string | null | undefined) =>
+    privacyMode ? undefined : (value ?? undefined);
   const normalizedProvider = provider.toLowerCase();
   const effectiveTier = resolveEffectiveTier(tier, quota);
   const effectiveCodexBadge =
@@ -202,7 +204,7 @@ export function AccountSurfaceCard({
       {normalizedProvider === 'codex'
         ? effectiveCodexBadge?.label && (
             <span
-              title={effectiveCodexBadge.label}
+              title={sensitiveTitle(effectiveCodexBadge.label)}
               className={cn(
                 'text-[8px] font-semibold px-1.5 py-0.5 rounded-md border shrink-0',
                 privacyMode && PRIVACY_BLUR_CLASS,
@@ -214,7 +216,7 @@ export function AccountSurfaceCard({
           )
         : identity.audienceLabel && (
             <span
-              title={identity.audienceLabel}
+              title={sensitiveTitle(identity.audienceLabel)}
               className={cn(
                 'text-[8px] font-semibold px-1.5 py-0.5 rounded-md shrink-0',
                 privacyMode && PRIVACY_BLUR_CLASS,
@@ -226,7 +228,7 @@ export function AccountSurfaceCard({
           )}
       {normalizedProvider !== 'codex' && identity.compactDetailLabel && (
         <span
-          title={identity.detailLabel ?? identity.compactDetailLabel}
+          title={sensitiveTitle(identity.detailLabel ?? identity.compactDetailLabel)}
           className={cn(
             'text-[8px] font-semibold px-1.5 py-0.5 rounded-md border shrink-0',
             privacyMode && PRIVACY_BLUR_CLASS,
@@ -281,7 +283,7 @@ export function AccountSurfaceCard({
               className={cn('flex items-center min-w-0', isCompact ? 'gap-1.5' : 'gap-2 flex-wrap')}
             >
               <span
-                title={title}
+                title={sensitiveTitle(title)}
                 className={cn(
                   isCompact
                     ? 'flex-1 min-w-0 text-xs font-semibold tracking-tight truncate leading-none'
