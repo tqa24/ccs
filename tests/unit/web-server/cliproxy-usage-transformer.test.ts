@@ -110,6 +110,8 @@ describe('cliproxy usage transformer', () => {
     const flat = extractCliproxyUsageHistoryDetails(sampleResponse);
     expect(flat).toHaveLength(4);
     expect(flat[0].provider).toBe('google');
+    expect(flat[0]).not.toHaveProperty('source');
+    expect(flat[0]).not.toHaveProperty('authIndex');
     expect(
       flat.some(
         (entry) => entry.failed === true && entry.inputTokens === 40 && entry.outputTokens === 10
@@ -160,8 +162,8 @@ describe('cliproxy usage transformer', () => {
     const legacyDetail = normalizeCliproxyUsageHistoryDetail({
       model: incoming.model,
       timestamp: incoming.timestamp,
-      source: incoming.source,
-      authIndex: incoming.authIndex,
+      source: 'account-a',
+      authIndex: '0',
       inputTokens: incoming.inputTokens,
       outputTokens: incoming.outputTokens,
       cacheReadTokens: incoming.cacheReadTokens,
@@ -170,11 +172,26 @@ describe('cliproxy usage transformer', () => {
 
     expect(legacyDetail?.requestCount).toBe(1);
     expect(Number.isFinite(legacyDetail?.cost)).toBe(true);
+    expect(legacyDetail).not.toHaveProperty('source');
+    expect(legacyDetail).not.toHaveProperty('authIndex');
 
     const merged = mergeCliproxyUsageHistoryDetails([legacyDetail!], [incoming]);
     expect(merged).toHaveLength(1);
     expect(merged[0].provider).toBe(incoming.provider);
     expect(merged[0].cost).toBe(incoming.cost);
+  });
+
+  it('strips legacy account identifiers when merging persisted history', () => {
+    const details = extractCliproxyUsageHistoryDetails(sampleResponse);
+    const legacyDetail = {
+      ...details[0],
+      source: 'user@example.com',
+      authIndex: 'auth-file-7',
+    };
+    const merged = mergeCliproxyUsageHistoryDetails([legacyDetail], []);
+
+    expect(merged[0]).not.toHaveProperty('source');
+    expect(merged[0]).not.toHaveProperty('authIndex');
   });
 
   it('preserves legitimate duplicate requests when the incoming batch has more occurrences', () => {
