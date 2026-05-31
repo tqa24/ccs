@@ -223,6 +223,14 @@ describe('model-pricing', () => {
       expect(opus48fastDated.cacheReadPerMillion).toBe(1.0);
     });
 
+    it('should preserve serviceTiers metadata when applying tier rates', () => {
+      // applyServiceTier must keep the serviceTiers map on the returned object
+      // so callers can still inspect available tiers after rate substitution.
+      const opus48fast = getModelPricing('claude-opus-4-8', { serviceTier: 'fast' });
+      expect(opus48fast.serviceTiers).toBeDefined();
+      expect(opus48fast.serviceTiers?.fast).toBeDefined();
+    });
+
     it('should fall back to standard rates when serviceTier is unknown', () => {
       // Unknown tier names must not throw; revert to base pricing transparently.
       const opus48 = getModelPricing('claude-opus-4-8', { serviceTier: 'enterprise-mythos' });

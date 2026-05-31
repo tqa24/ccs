@@ -296,6 +296,10 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
       fast: OPUS_46_47_FAST_RATES,
     },
   },
+  // Legacy pricing-only entry for historical analytics data; this id has no
+  // catalog model (Opus 4.7 moved to adaptive thinking levels in 84dc4e24, so
+  // there is no separate -thinking variant). Kept so older usage records still
+  // resolve to the correct rate. No fast tier: the id is never requested live.
   'claude-opus-4-7-thinking': {
     inputPerMillion: 5.0,
     outputPerMillion: 25.0,
