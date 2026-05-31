@@ -70,6 +70,13 @@ function buildRates(inputPerMillion: number, outputPerMillion: number): PricingR
   };
 }
 
+// Anthropic fast-mode premiums (per
+// https://platform.claude.com/docs/en/about-claude/pricing#fast-mode-pricing).
+// Opus 4.6 and 4.7 share the same 6x premium; 4.8 is 2x. Shared constants keep
+// the registry entries in sync rather than repeating the literal rates.
+const OPUS_46_47_FAST_RATES = buildRates(30.0, 150.0);
+const OPUS_48_FAST_RATES = buildRates(10.0, 50.0);
+
 // ============================================================================
 // USER-EDITABLE PRICING TABLE
 // Update rates below (per million tokens in USD)
@@ -267,7 +274,7 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
     serviceTiers: {
-      fast: buildRates(30.0, 150.0),
+      fast: OPUS_46_47_FAST_RATES,
     },
   },
   'claude-opus-4-6-thinking': {
@@ -275,6 +282,9 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     outputPerMillion: 25.0,
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
+    serviceTiers: {
+      fast: OPUS_46_47_FAST_RATES,
+    },
   },
   // Claude 4.7 Opus ($5/$25) — fast mode ($30/$150, 6x premium per Anthropic docs)
   'claude-opus-4-7': {
@@ -283,7 +293,7 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
     serviceTiers: {
-      fast: buildRates(30.0, 150.0),
+      fast: OPUS_46_47_FAST_RATES,
     },
   },
   // Claude 4.8 Opus ($5/$25) — fast mode ($10/$50, 2x premium per Anthropic docs)
@@ -293,7 +303,7 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
     serviceTiers: {
-      fast: buildRates(10.0, 50.0),
+      fast: OPUS_48_FAST_RATES,
     },
   },
   'claude-opus-4-7-thinking': {
@@ -301,6 +311,9 @@ const PRICING_REGISTRY: Record<string, ModelPricing> = {
     outputPerMillion: 25.0,
     cacheCreationPerMillion: 6.25,
     cacheReadPerMillion: 0.5,
+    serviceTiers: {
+      fast: OPUS_46_47_FAST_RATES,
+    },
   },
 
   // ---------------------------------------------------------------------------
