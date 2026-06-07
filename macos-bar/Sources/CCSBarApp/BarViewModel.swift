@@ -83,7 +83,10 @@ final class BarViewModel: ObservableObject {
     perform { try await $0.solo(provider: row.provider, accountId: row.accountId) }
   }
   func setDefault(_ row: BarSummaryRow) {
-    perform { try await $0.setDefault(name: row.accountId) }
+    // The server's /api/accounts/default parses CLIProxy accounts as the
+    // composite "provider:accountId" key; row.id already has that shape.
+    // Sending the bare accountId fails parseCliproxyKey and 500s / no-ops.
+    perform { try await $0.setDefault(name: row.id) }
   }
   func tierLock(_ row: BarSummaryRow, tier: String?) {
     perform { try await $0.tierLock(provider: row.provider, tier: tier) }

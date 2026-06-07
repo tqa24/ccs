@@ -30,12 +30,16 @@ public enum BarFormatting {
     return parts.joined(separator: " \u{00B7} ")
   }
 
-  /// The row to surface in the compact title: the one closest to exhaustion
-  /// (highest quota used). Rows without a known percentage sort last.
+  /// The row to surface in the compact title: the one closest to exhaustion.
+  /// `quota_percentage` is REMAINING quota (higher = more left), so the lead is
+  /// the LOWEST remaining percentage. Rows without a known percentage are not
+  /// chosen unless no row has one.
   static func leadRow(_ rows: [BarSummaryRow]) -> BarSummaryRow? {
-    rows.max { lhs, rhs in
-      (lhs.quotaPercentage ?? -1) < (rhs.quotaPercentage ?? -1)
+    let withPct = rows.filter { $0.quotaPercentage != nil }
+    if let lead = withPct.min(by: { ($0.quotaPercentage ?? 0) < ($1.quotaPercentage ?? 0) }) {
+      return lead
     }
+    return rows.first
   }
 }
 

@@ -54,10 +54,10 @@ case "$SIGNING" in
     ;;
 esac
 
-ZIP="$DIST/CCS-Bar.zip"
+ZIP="$DIST/CCS-Bar.app.zip"
 echo "[i] Zipping -> $ZIP"
 rm -f "$ZIP"
-( cd "$DIST" && ditto -c -k --keepParent "$APP_NAME.app" "CCS-Bar.zip" )
+( cd "$DIST" && ditto -c -k --keepParent "$APP_NAME.app" "CCS-Bar.app.zip" )
 
 echo "[OK] Packaged: $APP"
 echo "[OK] Asset:    $ZIP"

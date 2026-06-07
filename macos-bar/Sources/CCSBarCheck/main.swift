@@ -127,6 +127,16 @@ do {
   check(title.contains("$3.20"), "title shows total cost")
 }
 
+// leadRow features the account CLOSEST TO EXHAUSTION (lowest remaining %),
+// not the healthiest. quota_percentage is REMAINING quota.
+let twoActive = [
+  BarSummaryRow(accountId: "a", provider: "agy", quotaPercentage: 90, health: "ok"),
+  BarSummaryRow(accountId: "b", provider: "agy", quotaPercentage: 30, health: "ok"),
+]
+let twoTitle = BarFormatting.statusTitle(rows: twoActive)
+check(twoTitle.contains("30%"), "title features lowest-remaining (closest to exhaustion)")
+check(!twoTitle.contains("90%"), "title does not feature the healthiest account")
+
 // MARK: RefreshDebouncer (arms at decision time)
 
 var deb = RefreshDebouncer(interval: 15)
