@@ -8,6 +8,7 @@
  */
 
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { getCcsDir } from '../../config/config-loader-facade';
 
@@ -90,11 +91,10 @@ function defaultGetCcsDir(): string {
   return getCcsDir();
 }
 
-const DEFAULT_APP_INSTALL_PATH = path.join(
-  process.env.HOME ?? process.env.CCS_HOME ?? '~',
-  'Applications',
-  'CCS Bar.app'
-);
+// Fix #5: use os.homedir() to match install-subcommand.ts and uninstall-subcommand.ts.
+// process.env.HOME may be unset in restricted environments, and CCS_HOME is the CCS
+// data directory (~/.ccs), not the user's home — neither is a safe fallback here.
+const DEFAULT_APP_INSTALL_PATH = path.join(os.homedir(), 'Applications', 'CCS Bar.app');
 
 // ---------------------------------------------------------------------------
 // Implementation

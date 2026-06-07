@@ -145,13 +145,17 @@ async function defaultFetchReleaseAsset(tag: string, asset: string): Promise<Rel
 }
 
 /**
- * Download a zip from `url` (following up to 5 GitHub 302 redirects) and
- * extract its contents into `dest`.
+ * Download a zip from `url` (following up to 5 GitHub 302 redirects, re-validating
+ * each hop's Location hostname) and extract its contents into `dest`.
  *
  * Fixes applied:
- * - Finding #8: pass `maxRedirections: 5` so GitHub's 302 → objects.githubusercontent.com is followed.
+ * - Fix #6: maxRedirections:0 + manual redirect following so every hop's Location
+ *   header is passed through validateDownloadUrl before following it.
+ *   The previous maxRedirections:5 let undici follow redirects to ANY host unchecked.
+ * - Fix #14: list zip entries with `unzip -l` before extracting; reject the archive
+ *   if any entry path contains ".." or starts with "/" (zip-slip guard).
  * - Finding #11: check `statusCode` and throw a descriptive error before streaming.
- * - Finding #9: validate host+HTTPS before making the request.
+ * - Finding #9: validate host+HTTPS before making the first request.
  */
 async function defaultDownloadAndExtract(url: string, dest: string): Promise<void> {
   const { request } = await import('undici');
@@ -162,34 +166,107 @@ async function defaultDownloadAndExtract(url: string, dest: string): Promise<voi
   const { execFile } = await import('child_process');
   const execFileAsync = promisify(execFile);
 
-  // Finding #9: validate host + HTTPS before any network request.
+  // Validate initial URL (Finding #9)
   validateDownloadUrl(url);
 
   mkdirSync(dest, { recursive: true });
-  const tmpZip = path.join(os.tmpdir(), `ccs-bar-${Date.now()}.zip`);
 
-  // Finding #8: maxRedirections:5 ensures GitHub's 302 to objects.githubusercontent.com is followed.
-  // Finding #11: destructure statusCode and reject non-200 before streaming.
-  const { statusCode, body } = await request(url, {
-    maxRedirections: 5,
-  });
+  // Fix #6: follow redirects manually so each hop is re-validated.
+  const MAX_REDIRECTS = 5;
+  let currentUrl = url;
+  let redirectsFollowed = 0;
 
-  if (statusCode !== 200) {
-    throw new Error(`Download failed: HTTP ${statusCode} for ${url}`);
-  }
+  while (true) {
+    const { statusCode, headers, body } = await request(currentUrl, {
+      maxRedirections: 0, // disable undici's auto-follow; we follow manually
+    });
 
-  // Stream body to tmpZip — undici body is a Node ReadableStream
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await streamPipeline(body as any, createWriteStream(tmpZip));
+    if (statusCode >= 300 && statusCode < 400) {
+      const location = Array.isArray(headers['location'])
+        ? headers['location'][0]
+        : headers['location'];
 
-  // Extract the zip into dest
-  await execFileAsync('unzip', ['-o', tmpZip, '-d', dest]);
+      if (!location) {
+        throw new Error(`Redirect (HTTP ${statusCode}) from ${currentUrl} has no Location header`);
+      }
 
-  // Clean up the temp archive
-  try {
-    fs.unlinkSync(tmpZip);
-  } catch {
-    /* ignore */
+      // Resolve relative redirects against the current URL
+      const resolved = new URL(location, currentUrl).toString();
+
+      // Re-validate the redirect target — this is the key fix for #6
+      validateDownloadUrl(resolved);
+
+      if (redirectsFollowed >= MAX_REDIRECTS) {
+        throw new Error(`Too many redirects (>${MAX_REDIRECTS}) while downloading ${url}`);
+      }
+
+      // Drain the body to free the socket before following the redirect
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (body as any).dump?.();
+      currentUrl = resolved;
+      redirectsFollowed++;
+      continue;
+    }
+
+    if (statusCode !== 200) {
+      throw new Error(`Download failed: HTTP ${statusCode} for ${currentUrl}`);
+    }
+
+    const tmpZip = path.join(os.tmpdir(), `ccs-bar-${Date.now()}.zip`);
+
+    // Stream body to tmpZip
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await streamPipeline(body as any, createWriteStream(tmpZip));
+
+    // Fix #14: zip-slip guard — inspect entries before extraction.
+    // `unzip -l` lists entries in a machine-readable format; we scan for ".." or
+    // absolute paths that would escape the destination directory.
+    try {
+      const { stdout: listing } = await execFileAsync('unzip', ['-l', tmpZip]);
+      const lines = listing.split('\n');
+      for (const line of lines) {
+        // Entry lines look like: "  <size>  <date> <time>  <path>"
+        // We extract the path from the last whitespace-delimited field.
+        const match = /^\s+\d+\s+[\d-]+\s+[\d:]+\s+(.+)$/.exec(line);
+        if (!match || !match[1]) continue;
+        const entryPath = match[1].trim();
+        if (!entryPath || entryPath.endsWith('/')) continue; // skip directory entries
+
+        // Reject absolute paths and paths with traversal components
+        if (path.isAbsolute(entryPath) || entryPath.includes('..')) {
+          try {
+            fs.unlinkSync(tmpZip);
+          } catch {
+            /* ignore */
+          }
+          throw new Error(
+            `Zip-slip detected: archive entry "${entryPath}" contains a path traversal ` +
+              `component. Refusing to extract.`
+          );
+        }
+      }
+    } catch (err) {
+      // If the guard itself throws (e.g. zip-slip detected above), propagate it.
+      // If it's a system error (unzip not available), let extraction proceed and
+      // surface the issue then.
+      if ((err as Error).message?.includes('Zip-slip')) throw err;
+      // Warn but continue — extraction will likely also fail if unzip is missing
+      console.error(
+        `[!] Zip entry scan failed (will attempt extraction): ${(err as Error).message}`
+      );
+    }
+
+    // Extract the zip into dest
+    await execFileAsync('unzip', ['-o', tmpZip, '-d', dest]);
+
+    // Clean up the temp archive
+    try {
+      fs.unlinkSync(tmpZip);
+    } catch {
+      /* ignore */
+    }
+
+    break;
   }
 }
 

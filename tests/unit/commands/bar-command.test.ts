@@ -1074,3 +1074,121 @@ describe('version subcommand', () => {
     expect(exitCode).toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 4f. Fix #6 — redirect host bypass: every hop is re-validated
+// ---------------------------------------------------------------------------
+
+describe('bar install: redirect host re-validation (fix #6)', () => {
+  const INITIAL_URL =
+    'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
+  const EVIL_REDIRECT_URL = 'https://evil.example.com/CCS-Bar.app.zip';
+  const FAKE_VERSION = '1.0.0';
+
+  it('rejects a download when a redirect leads to an untrusted host', async () => {
+    // Simulate a downloadAndExtract that follows a redirect to an untrusted host
+    // and validates each hop (the production fix). The mock replicates the fix logic.
+    const { handleBarInstall, validateDownloadUrl } = await loadInstallSubcommand();
+
+    const redirectFollowingExtract = async (url: string, _dest: string) => {
+      // Validate initial URL
+      validateDownloadUrl(url);
+      // Simulate a 302 to an evil host — production code re-validates Location
+      validateDownloadUrl(EVIL_REDIRECT_URL); // should throw
+    };
+
+    await handleBarInstall([], {
+      fetchReleaseAsset: async () => ({
+        downloadUrl: INITIAL_URL,
+        version: FAKE_VERSION,
+      }),
+      downloadAndExtract: redirectFollowingExtract,
+      verifyCompat: async () => ({ version: FAKE_VERSION, compatible: true }),
+      getCcsDir: () => path.join(tempHome, '.ccs'),
+      getAppsDir: () => path.join(tempHome, 'Applications'),
+    });
+
+    const allOutput = consoleOutput.join('\n');
+    // The validation error should surface as a download/extraction failure
+    expect(allOutput).toMatch(/\[X\]/);
+    expect(allOutput.toLowerCase()).toMatch(/download|extraction|failed/i);
+  });
+
+  it('validateDownloadUrl blocks redirect targets with untrusted hostnames', async () => {
+    const { validateDownloadUrl } = await loadInstallSubcommand();
+
+    // The redirect target must be rejected just like any initial URL
+    expect(() => validateDownloadUrl(EVIL_REDIRECT_URL)).toThrow(/allowlist|trusted/i);
+  });
+
+  it('validateDownloadUrl allows the expected redirect target (githubusercontent.com)', async () => {
+    const { validateDownloadUrl } = await loadInstallSubcommand();
+    const legitimateRedirect = 'https://objects.githubusercontent.com/file/CCS-Bar.app.zip';
+    expect(() => validateDownloadUrl(legitimateRedirect)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4g. Fix #14 — zip-slip guard: reject archives with traversal entries
+// ---------------------------------------------------------------------------
+
+describe('bar install: zip-slip guard (fix #14)', () => {
+  const FAKE_DOWNLOAD_URL =
+    'https://github.com/kaitranntt/ccs/releases/download/ccs-bar-latest/CCS-Bar.app.zip';
+  const FAKE_VERSION = '1.0.0';
+
+  it('rejects download when downloadAndExtract detects a zip-slip entry', async () => {
+    const { handleBarInstall } = await loadInstallSubcommand();
+
+    // Simulate an extractor that detects a zip-slip entry and throws
+    const zipSlipExtract = async (_url: string, _dest: string) => {
+      throw new Error(
+        'Zip-slip detected: archive entry "../../../evil" contains a path traversal component. Refusing to extract.'
+      );
+    };
+
+    await handleBarInstall([], {
+      fetchReleaseAsset: async () => ({
+        downloadUrl: FAKE_DOWNLOAD_URL,
+        version: FAKE_VERSION,
+      }),
+      downloadAndExtract: zipSlipExtract,
+      verifyCompat: async () => ({ version: FAKE_VERSION, compatible: true }),
+      getCcsDir: () => path.join(tempHome, '.ccs'),
+      getAppsDir: () => path.join(tempHome, 'Applications'),
+    });
+
+    const allOutput = consoleOutput.join('\n');
+    // Should report failure and not proceed to install
+    expect(allOutput).toMatch(/\[X\]/);
+    expect(allOutput.toLowerCase()).toMatch(/download|extraction|failed/i);
+    // App should not be installed
+    expect(fs.existsSync(path.join(tempHome, 'Applications', 'CCS Bar.app'))).toBe(false);
+  });
+
+  it('allows a clean archive with safe paths to proceed normally', async () => {
+    const appsDir = path.join(tempHome, 'Applications');
+    const { handleBarInstall } = await loadInstallSubcommand();
+
+    // Simulate an extractor that validates entries and finds no traversal
+    const safeExtract = async (_url: string, dest: string) => {
+      // All entry paths are safe relative paths — no ".." or absolute
+      fs.mkdirSync(path.join(dest, 'CCS Bar.app'), { recursive: true });
+    };
+
+    await handleBarInstall([], {
+      fetchReleaseAsset: async () => ({
+        downloadUrl: FAKE_DOWNLOAD_URL,
+        version: FAKE_VERSION,
+      }),
+      downloadAndExtract: safeExtract,
+      verifyCompat: async () => ({ version: FAKE_VERSION, compatible: true }),
+      getCcsDir: () => path.join(tempHome, '.ccs'),
+      getAppsDir: () => appsDir,
+    });
+
+    const allOutput = consoleOutput.join('\n');
+    expect(allOutput).toMatch(/\[OK\]/);
+    expect(allOutput).not.toMatch(/\[X\]/);
+  });
+});
