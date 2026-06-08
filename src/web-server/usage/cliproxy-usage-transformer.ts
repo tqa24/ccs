@@ -151,16 +151,20 @@ export function normalizeCliproxyUsageHistoryDetail(
   const outputTokens = normalizePersistedNumber(candidate.outputTokens);
   const cacheReadTokens = normalizePersistedNumber(candidate.cacheReadTokens);
   const requestCount = Math.max(1, normalizePersistedNumber(candidate.requestCount, 1));
-  const cost = normalizePersistedNumber(
-    candidate.cost,
-    calculateHistoryDetailCost(
-      candidate.model,
-      provider,
-      inputTokens,
-      outputTokens,
-      cacheReadTokens
-    )
-  );
+  // Compute the cost fallback lazily. calculateHistoryDetailCost is ~6ms/call
+  // (model-pricing lookup); passing it as an eager default argument ran it for
+  // every record even when a persisted cost was already present, turning a few
+  // thousand records into a multi-second event-loop stall.
+  const cost =
+    typeof candidate.cost === 'number' && Number.isFinite(candidate.cost)
+      ? candidate.cost
+      : calculateHistoryDetailCost(
+          candidate.model,
+          provider,
+          inputTokens,
+          outputTokens,
+          cacheReadTokens
+        );
 
   const accountId =
     typeof candidate.accountId === 'string' && candidate.accountId.length > 0
