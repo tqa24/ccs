@@ -87,7 +87,7 @@ export interface InstallDeps {
   getAppsDir: () => string;
   /**
    * Clear the macOS Gatekeeper quarantine attribute from the installed app.
-   * Run via `xattr -dr com.apple.quarantine <appPath>` (execFile, not shell-string).
+   * Run via `/usr/bin/xattr -dr com.apple.quarantine <appPath>` (execFile, not shell-string).
    * Returns true on success, false if xattr is unavailable or the call fails (non-fatal).
    * Injectable for tests — avoids touching the real system.
    */
@@ -98,11 +98,18 @@ export interface InstallDeps {
    */
   launchBar: (args: string[]) => Promise<void>;
   /**
-   * Ask the user whether to launch CCS Bar now (TTY-only).
-   * Returns true on yes/default, false on no or non-TTY.
+   * Ask the user whether to launch CCS Bar now (stdin-TTY-only).
+   * Returns true on yes/default, false on no or non-TTY stdin.
    * Injectable for tests.
    */
   promptLaunch: () => Promise<boolean>;
+  /**
+   * Detect whether CCS Bar is already running.
+   * Production: uses /usr/bin/pgrep -x CCSBar (exit 0 = running, exit 1 = not found).
+   * Returns false on any error (treat pgrep failure as not running).
+   * Injectable for tests — avoids touching the real process table.
+   */
+  isBarRunning: () => Promise<boolean>;
 }
 
 // ---------------------------------------------------------------------------
@@ -362,7 +369,8 @@ function defaultGetAppsDir(): string {
 
 /**
  * Clear the macOS Gatekeeper quarantine attribute from the installed app.
- * Uses `xattr -dr com.apple.quarantine <appPath>` via execFile (not shell-string)
+ * Uses absolute path `/usr/bin/xattr` to avoid PATH hijacking.
+ * Runs `/usr/bin/xattr -dr com.apple.quarantine <appPath>` via execFile (not shell-string)
  * so the path is passed as an argument, not interpolated into a shell command.
  * Returns true on success, false on any error (non-fatal — install already succeeded).
  */
@@ -371,7 +379,7 @@ async function defaultClearQuarantine(appPath: string): Promise<boolean> {
     const { execFile } = await import('child_process');
     const { promisify } = await import('util');
     const execFileAsync = promisify(execFile);
-    await execFileAsync('xattr', ['-dr', 'com.apple.quarantine', appPath]);
+    await execFileAsync('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', appPath]);
     return true;
   } catch {
     return false;
@@ -384,12 +392,32 @@ async function defaultLaunchBar(args: string[]): Promise<void> {
 }
 
 /**
+ * Detect whether CCS Bar is already running using `/usr/bin/pgrep -x CCSBar`.
+ * pgrep exits 0 when a match is found (running), 1 when no match (not running).
+ * execFile surfaces exit code 1 as an error, so we catch and return false.
+ * Any other error (pgrep unavailable, permission denied) is also treated as not running.
+ */
+async function defaultIsBarRunning(): Promise<boolean> {
+  try {
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+    await execFileAsync('/usr/bin/pgrep', ['-x', 'CCSBar']);
+    return true;
+  } catch {
+    // pgrep exits 1 when no match found; execFile throws for non-zero exit codes.
+    return false;
+  }
+}
+
+/**
  * Ask the user whether to launch CCS Bar now.
- * Only prompts when stdout is a TTY. Non-TTY: return false (caller prints guidance).
+ * Only prompts when stdin is a TTY — stdin is what the prompt actually reads.
+ * Non-TTY stdin: return false (caller prints guidance).
  * Default answer is yes (Enter = launch).
  */
 async function defaultPromptLaunch(): Promise<boolean> {
-  if (!process.stdout.isTTY) {
+  if (!process.stdin.isTTY) {
     return false;
   }
   const readline = await import('readline');
@@ -441,6 +469,7 @@ export async function handleBarInstall(
   const clearQuarantine = deps.clearQuarantine ?? defaultClearQuarantine;
   const launchBar = deps.launchBar ?? defaultLaunchBar;
   const promptLaunch = deps.promptLaunch ?? defaultPromptLaunch;
+  const isBarRunning = deps.isBarRunning ?? defaultIsBarRunning;
   const ccsDir = (deps.getCcsDir ?? defaultGetCcsDir)();
   const appsDir = (deps.getAppsDir ?? defaultGetAppsDir)();
 
@@ -567,11 +596,22 @@ export async function handleBarInstall(
   }
 
   // 7. Launch handoff.
+  //    Already-running check: if CCS Bar is running after a (re)install, skip the
+  //    prompt entirely and print a restart hint (the user needs to quit and reopen
+  //    to pick up the new version). --launch with the app already running still
+  //    proceeds — the launch flow opens/activates the app, which is harmless.
+  //
   //    --launch: skip prompt and launch immediately.
   //    --no-launch: skip prompt, print guidance.
-  //    TTY: ask interactively (default yes).
-  //    Non-TTY: print guidance, no prompt.
-  if (forceLaunch) {
+  //    stdin-TTY: ask interactively (default yes).
+  //    Non-TTY stdin: print guidance, no prompt.
+  const barIsRunning = await isBarRunning();
+
+  if (barIsRunning && !forceLaunch) {
+    console.log(
+      '[!] CCS Bar is currently running the previous version. Quit and reopen it (or run `ccs bar`) to use the update.'
+    );
+  } else if (forceLaunch) {
     await launchBar([]);
   } else if (noLaunch) {
     console.log('[i] Run `ccs bar` to launch.');
@@ -580,8 +620,8 @@ export async function handleBarInstall(
     if (shouldLaunch) {
       await launchBar([]);
     } else {
-      // Either user said no or non-TTY
-      if (!process.stdout.isTTY) {
+      // Either user said no or non-TTY stdin
+      if (!process.stdin.isTTY) {
         console.log('[i] Run `ccs bar` to launch.');
       }
     }
