@@ -189,18 +189,6 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
     }
   };
 
-  // Pool suggestion: when creating a 2nd+ native Claude profile, show the
-  // once-per-install onboarding hint.  Print-only, TTY-gated, never blocks.
-  // Pass existingCount + 1 so the hint sees the post-create count (>= 2).
-  // Gated on hasUnifiedConfig() so legacy profiles.json-only installs receive
-  // the hint from ccs doctor only (where dismissal semantics are preserved).
-  if (!profileExistedBeforeCreate && hasUnifiedConfig()) {
-    const existingCount = countNativeClaudeProfiles();
-    if (existingCount >= 1) {
-      maybeShowPoolOnboardingHint(existingCount + 1);
-    }
-  }
-
   try {
     // Create instance directory
     console.log(info(`Creating profile: ${profileName}`));
@@ -326,6 +314,16 @@ export async function handleCreate(ctx: CommandContext, args: string[]): Promise
           )
         );
         console.log('');
+        // Pool suggestion: shown only AFTER the profile creation fully
+        // succeeded (a pre-create hint would burn the once-per-install
+        // dismissal even when creation fails or rolls back).  Print-only,
+        // TTY-gated, never blocks.  Gated on hasUnifiedConfig() so legacy
+        // profiles.json-only installs receive the hint from ccs doctor only
+        // (where dismissal semantics are preserved).  The profile now exists,
+        // so the registry count is already post-create (no +1 needed).
+        if (!profileExistedBeforeCreate && hasUnifiedConfig()) {
+          maybeShowPoolOnboardingHint(countNativeClaudeProfiles());
+        }
         process.exit(0);
       } else {
         await rollbackFailedCreate();

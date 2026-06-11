@@ -320,25 +320,23 @@ describe('Phase 5: Pool Onboarding Hint', () => {
   });
 
   // ── 11. Create-command suggestion: hint fires with post-create count ──────
-  it('hint fires with count 2 when create-command passes existingCount+1 for 1 existing profile', async () => {
+  it('hint fires with count 2 after a successful 2nd-profile create (post-create call site)', async () => {
     // NOTE: SIMULATION of the create-command call site, not the real command.
-    // It replicates the threshold logic (existingCount + 1) and calls the same
-    // exported hint symbol; it does not invoke create-command end to end.
-    // 1 existing profile in the registry, simulating pre-create state.
-    // create-command calls maybeShowPoolOnboardingHint(existingCount + 1) = hint(2).
+    // create-command shows the hint only AFTER profile creation succeeds (a
+    // pre-create hint would burn the once-per-install dismissal on a failed
+    // create).  At that point the registry already contains the new profile,
+    // so the call is maybeShowPoolOnboardingHint(countNativeClaudeProfiles()).
     const ccsDir = path.join(tempHome, '.ccs');
-    writeProfiles(ccsDir, ['work']);
+    writeProfiles(ccsDir, ['work', 'personal']); // post-create state: 2 profiles
 
     const consoleSpy = spyOn(console, 'log').mockImplementation(() => {});
     try {
       const { maybeShowPoolOnboardingHint, countNativeClaudeProfiles } = await import(
         `../routing/pool-onboarding-hint?p5create=${Date.now()}`
       );
-      // Replicate the threshold logic from create-command.ts lines 195-200
-      const existingCount = countNativeClaudeProfiles();
-      expect(existingCount).toBe(1);
-      // existingCount >= 1 so the hint is called with existingCount + 1
-      const result = maybeShowPoolOnboardingHint(existingCount + 1);
+      const count = countNativeClaudeProfiles();
+      expect(count).toBe(2);
+      const result = maybeShowPoolOnboardingHint(count);
       expect(result.printed).toBe(true);
       const allOutput = consoleSpy.mock.calls.map((c) => String(c[0])).join('\n');
       expect(allOutput).toContain('2 Claude profiles');

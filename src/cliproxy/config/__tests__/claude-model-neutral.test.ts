@@ -550,4 +550,38 @@ describe('claude provider model-neutral passthrough (Gap 1)', () => {
     // Priority 1 untouched: the explicit pin survives.
     expect(env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6');
   });
+
+  it('getRemoteEnvVars (claude): migration marker set means pins are user-intentional and NOT filtered', () => {
+    process.env.CCS_HOME = tempHome;
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    // Marker present: the file was already cleaned once, so any pin that
+    // exists now was put there deliberately (e.g. ccs claude --config picked
+    // a value that happens to equal a historical default).
+    const markerDir = path.join(ccsDir, 'cliproxy');
+    fs.mkdirSync(markerDir, { recursive: true });
+    fs.writeFileSync(path.join(markerDir, '.claude-model-migrated'), new Date().toISOString());
+
+    const settingsPath = path.join(ccsDir, 'claude.settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        env: {
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:8317/api/provider/claude',
+          ANTHROPIC_AUTH_TOKEN: 'ccs-internal-managed',
+          ANTHROPIC_MODEL: 'claude-sonnet-4-6', // equals a stale default, but post-migration = explicit
+        },
+      }),
+      'utf-8'
+    );
+
+    const env = getRemoteEnvVars('claude', {
+      host: 'example.com',
+      port: 8317,
+      protocol: 'http',
+    });
+
+    expect(env.ANTHROPIC_MODEL).toBe('claude-sonnet-4-6');
+  });
 });

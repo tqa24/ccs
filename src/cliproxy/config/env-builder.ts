@@ -808,10 +808,14 @@ export function getRemoteEnvVars(
           // never rewrites the file, so a remote-only user whose settings still
           // carry an old auto-written default would stay pinned. Filter stale
           // defaults at read level so values equal to a historical default are
-          // dropped while user-custom pins survive. Priority 1 (explicit custom
-          // settings path) is intentionally left untouched: an explicitly passed
-          // settings file is the user's deliberate choice.
-          if (provider === 'claude') {
+          // dropped while user-custom pins survive. Once the migration marker
+          // exists the file has already been cleaned, so any pin present after
+          // that is user-intentional (e.g. an explicit `ccs claude --config`
+          // pick that happens to equal a historical default) and must NOT be
+          // filtered. Priority 1 (explicit custom settings path) is
+          // intentionally left untouched: an explicitly passed settings file
+          // is the user's deliberate choice.
+          if (provider === 'claude' && !claudeModelMigrationDone()) {
             userEnvVars = filterClaudeStaleModelPins(userEnvVars);
           }
         }
