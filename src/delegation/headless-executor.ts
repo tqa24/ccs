@@ -66,6 +66,25 @@ export type { ExecutionOptions, ExecutionResult, StreamMessage } from './executo
 
 const logger = createLogger('delegation:headless-executor');
 
+export function summarizeClaudeLaunchArgsForLog(
+  args: readonly string[],
+  filteredExtraArgCount: number
+): Record<string, unknown> {
+  return {
+    argCount: args.length,
+    hasPrompt: args.includes('-p'),
+    hasSettings: args.includes('--settings'),
+    outputFormat: args.includes('--output-format') ? 'configured' : 'default',
+    verbose: args.includes('--verbose'),
+    hasResume: args.includes('--resume'),
+    hasPermissionMode: args.includes('--permission-mode'),
+    bypassPermissions: args.includes('--dangerously-skip-permissions'),
+    hasAllowedTools: args.includes('--allowedTools'),
+    hasDisallowedTools: args.includes('--disallowedTools'),
+    filteredExtraArgCount,
+  };
+}
+
 /**
  * Headless executor for Claude CLI delegation
  */
@@ -338,6 +357,7 @@ export class HeadlessExecutor {
 
     // Passthrough extra args (catch-all for new/unknown flags)
     // Filter out duplicates of explicitly handled flags
+    let filteredExtraArgCount = 0;
     if (extraArgs.length > 0) {
       const explicitFlags = new Set(['--max-turns', '--fallback-model', '--agents', '--betas']);
       const filteredExtras: string[] = [];
@@ -353,6 +373,7 @@ export class HeadlessExecutor {
       }
       if (filteredExtras.length > 0) {
         args.push(...filteredExtras);
+        filteredExtraArgCount = filteredExtras.length;
       }
     }
 
@@ -371,7 +392,11 @@ export class HeadlessExecutor {
     });
 
     if (process.env.CCS_DEBUG) {
-      logger.info('claude_cli_args', 'Claude CLI args', { args: launchArgs });
+      logger.info(
+        'claude_cli_args',
+        'Claude CLI args prepared',
+        summarizeClaudeLaunchArgsForLog(launchArgs, filteredExtraArgCount)
+      );
     }
 
     // Initialize UI before spawning

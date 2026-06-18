@@ -93,8 +93,9 @@ Metrics are grep-based and approximate (not a contract). Comments and string/tem
 |---|---:|---:|---:|---|
 | typed-error adoption (locked subdomains) | 0.0% (0/23) | 91.3% (21/23) | >40% | met |
 | typed-error adoption (overall) | 0.9% (5/431) | 8.6% (37/431) | rise | met |
-| hotpath `console.error`/`warn` | 928 | 267 | <10 (diagnostics) | diagnostics fully structured; residual is user-facing CLI output (see P3 note) |
+| hotpath `console.error`/`warn` | 928 | 267 | <10 | partial; high-risk diagnostics migrated + redaction gate closed, but metric target unmet (see P3 note) |
 | files with `createLogger` | 35 | 64 | rise | met |
+| subdomains with zero `createLogger` | 20 | 15 | 0 in named set | partial; logger toe-holds improved coverage but P2 zero-subdomain target unmet |
 | files > 400 LOC | 95 | 89 | <60 | partial (P6 deferred 4 targets) |
 | hardening report freshness | stale | <30d gate | gate | met (P1) |
 | ESLint `no-new-throw-error` | not enforced | error + allowlist | enforced | met (P7) |
@@ -102,11 +103,10 @@ Metrics are grep-based and approximate (not a contract). Comments and string/tem
 
 ### Deferred follow-ups
 
+- P2 remaining zero-logger subdomains (`api`, `channels`, `config`, `dispatcher`, `shared`, and others): add lightweight logger toe-holds when those subdomains next receive behavior work. This epic improved coverage but did not satisfy the original `0` target.
+- P3 remaining 267 non-exempt `console.error`/`warn` call sites: split into true user-facing terminal output vs diagnostics, then either migrate diagnostics to structured logs or update the metric method to exempt confirmed CLI display helpers.
 - P6 remaining 4 targets (`oauth-handler.ts`, `cursor-executor.ts`, `tool-sanitization-proxy.ts`, +1): need dedicated characterization-test work before splitting (the plan's characterization-first hard gate). Each has a clean seam identified in the epic plan.
-- P3 residual ~267 user-facing `console.error` -> `process.stderr.write`: mechanical, no traceability value; continues incrementally.
-
 
 ### P3 residual note (2026-06-18)
 
-The remaining ~267 `console.error`/`warn` are user-facing CLI output (interactive flows, arg-parser usage errors, installers, prompts, adapter launch failures, error-display helpers) routed via `fail()`/`info()`/`warn()` from `utils/ui`. They are legitimate stderr output, not diagnostics. The plan's `<10` target assumed these were diagnostics; in practice the diagnostic subset is fully converted to structured logs. Migrating the residual `console.error` -> `process.stderr.write` is mechanical (near-zero behavior change, no traceability value) and continues incrementally; it does not block P4-P7. The redaction gate makes any further conversion safe.
-
+The remaining 267 non-exempt `console.error`/`warn` occurrences are not fully resolved by this epic. Many are user-facing terminal display paths (interactive flows, arg-parser usage errors, installers, prompts, adapter launch failures, error-display helpers), but the generated metric still counts them because its exemption list is intentionally conservative. Treat P3 as partial until the residual list is classified file-by-file and either migrated to structured logs or explicitly moved into the CLI-UX exemption method. The redaction gate now covers structured message, context, `Error.message`, and `StageOptions.error` metadata so further diagnostic migration is safe.

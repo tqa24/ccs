@@ -1,3 +1,5 @@
+import type { LogErrorInfo } from './log-types';
+
 /**
  * Sensitive log key matcher (single source of truth).
  *
@@ -103,6 +105,14 @@ export function redactContext(
   }
 
   return sanitizeValue(context, 0) as Record<string, unknown>;
+}
+
+export function redactErrorInfo(error: LogErrorInfo | undefined): LogErrorInfo | undefined {
+  if (!error) {
+    return undefined;
+  }
+
+  return sanitizeValue(error, 0) as LogErrorInfo;
 }
 
 /**

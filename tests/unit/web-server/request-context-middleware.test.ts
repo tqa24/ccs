@@ -67,6 +67,36 @@ describe('request-logging-middleware requestId propagation', () => {
     expect(handlerEntry?.requestId).toBe(headerRequestId);
   });
 
+  test('completion log carries top-level requestId for trace grouping', () => {
+    let finishHandler: (() => void) | undefined;
+    let headerRequestId = '';
+    const res = {
+      locals: {} as Record<string, unknown>,
+      setHeader: (_name: string, value: string) => {
+        headerRequestId = value;
+      },
+      on: (event: string, handler: () => void) => {
+        if (event === 'finish') finishHandler = handler;
+      },
+      statusCode: 204,
+      socket: { remoteAddress: '127.0.0.1' },
+    } as unknown as Parameters<typeof requestLoggingMiddleware>[1];
+    const req = {
+      originalUrl: '/api/anything',
+      method: 'POST',
+      headers: { 'user-agent': 'test-agent' },
+      socket: { remoteAddress: '127.0.0.1' },
+    } as unknown as Parameters<typeof requestLoggingMiddleware>[0];
+
+    requestLoggingMiddleware(req, res, () => {});
+    finishHandler?.();
+
+    const entry = getRecentLogEntries().find((e) => e.event === 'request.completed');
+    expect(entry).toBeDefined();
+    expect(entry?.requestId).toBe(headerRequestId);
+    expect((entry?.context as Record<string, unknown>)?.requestId).toBe(headerRequestId);
+  });
+
   test('control: a bare handler log (no middleware) carries no requestId', () => {
     const handlerLogger = createLogger('test:bare-handler');
     handlerLogger.info('test.bare.ran', 'no middleware wrap');

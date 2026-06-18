@@ -90,7 +90,9 @@ describe('hotpath redaction regression (token-laden payloads)', () => {
     test(`scrubs ${name} token in a context value (under a non-sensitive key)`, () => {
       const token = buildToken();
       const logger = createLogger('test:redaction');
-      logger.error('test.token.in.value', `token shape ${name}`, { detail: `request failed: ${token}` });
+      logger.error('test.token.in.value', `token shape ${name}`, {
+        detail: `request failed: ${token}`,
+      });
       const entry = getRecentLogEntries().find((e) => e.event === 'test.token.in.value');
       expect(entry).toBeDefined();
       expect(JSON.stringify(entry)).not.toContain(token);
@@ -107,6 +109,22 @@ describe('hotpath redaction regression (token-laden payloads)', () => {
     expect(JSON.stringify(entry)).not.toContain(token);
   });
 
+  test('scrubs token embedded in stage options.error metadata', () => {
+    const token = anthropicToken();
+    const logger = createLogger('test:redaction');
+    logger.stage('cleanup', 'test.stage.error', 'structured error carrying token', undefined, {
+      level: 'error',
+      error: {
+        name: 'Error',
+        message: `Auth failed: ${token}`,
+        stack: `Error: Auth failed: ${token}\n    at test`,
+      },
+    });
+    const entry = getRecentLogEntries().find((e) => e.event === 'test.stage.error');
+    expect(entry).toBeDefined();
+    expect(JSON.stringify(entry)).not.toContain(token);
+  });
+
   test('scrubs token shapes that leak into the message string (defense-in-depth)', () => {
     const token = anthropicToken();
     const logger = createLogger('test:redaction');
@@ -118,7 +136,9 @@ describe('hotpath redaction regression (token-laden payloads)', () => {
 
   test('preserves non-sensitive prose messages unchanged', () => {
     const logger = createLogger('test:redaction');
-    logger.error('test.prose', 'Delegation failed: target adapter not found', { provider: 'codex' });
+    logger.error('test.prose', 'Delegation failed: target adapter not found', {
+      provider: 'codex',
+    });
     const entry = getRecentLogEntries().find((e) => e.event === 'test.prose');
     expect(entry?.message).toBe('Delegation failed: target adapter not found');
     expect((entry?.context as Record<string, unknown>)?.provider).toBe('codex');

@@ -15,14 +15,16 @@ export function requestLoggingMiddleware(req: Request, res: Response, next: Next
     if (shouldSkipLogging) {
       return;
     }
-    logger.info('request.completed', 'Dashboard request completed', {
-      requestId,
-      method: req.method,
-      path: req.originalUrl,
-      statusCode: res.statusCode,
-      durationMs: Date.now() - startTime,
-      remoteAddress: req.socket.remoteAddress || null,
-      userAgent: req.headers['user-agent'] || null,
+    withRequestContext({ requestId }, () => {
+      logger.info('request.completed', 'Dashboard request completed', {
+        requestId,
+        method: req.method,
+        path: req.originalUrl,
+        statusCode: res.statusCode,
+        durationMs: Date.now() - startTime,
+        remoteAddress: req.socket.remoteAddress || null,
+        userAgent: req.headers['user-agent'] || null,
+      });
     });
   });
 
