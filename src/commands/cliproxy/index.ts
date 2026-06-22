@@ -146,14 +146,14 @@ export async function handleCliproxyCommand(args: string[]): Promise<void> {
   const verbose = hasAnyFlag(remainingArgs, ['--verbose', '-v']);
   const command = remainingArgs[0];
 
-  // Show global cliproxy help only when --help/-h is the top-level intent (no
-  // subcommand, or the flag is the first arg).  Subcommands that accept --help
-  // (e.g. routing affinity --help) handle it themselves after dispatch.
-  if (!command || command === '--help' || command === '-h') {
-    if (hasAnyFlag(remainingArgs, ['--help', '-h'])) {
-      await showHelp();
-      return;
-    }
+  // Show global cliproxy help when there is no real subcommand (no args, or the
+  // first token is a flag) and --help/-h appears anywhere — order-insensitive, so
+  // `cliproxy --verbose --help` still works. Real subcommands (e.g.
+  // `routing affinity --help`) handle --help themselves after dispatch.
+  const hasRealSubcommand = typeof command === 'string' && !command.startsWith('-');
+  if (!hasRealSubcommand && hasAnyFlag(remainingArgs, ['--help', '-h'])) {
+    await showHelp();
+    return;
   }
 
   // Catalog commands
