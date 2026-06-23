@@ -53,9 +53,9 @@ export async function showHelp(): Promise<void> {
     [
       'Quota Management:',
       [
-        ['default <account>', 'Set default account for rotation'],
-        ['pause <account>', 'Pause account (skip in rotation)'],
-        ['resume <account>', 'Resume paused account'],
+        ['default <account> [--provider <name>]', 'Set default account for rotation'],
+        ['pause <account> [--provider <name>]', 'Pause account (skip in rotation)'],
+        ['resume <account> [--provider <name>]', 'Resume paused account'],
         [
           'quota',
           'Show quota status + pool context (drain order, per-account available/cooling/paused)',
@@ -89,9 +89,12 @@ export async function showHelp(): Promise<void> {
       [
         ['start', 'Start CLIProxy instance in background'],
         ['restart', 'Restart CLIProxy instance'],
-        ['status', 'Show running CLIProxy status'],
+        [
+          'status [--verbose]',
+          'Show CLIProxy status + Control Panel URL and login key (--verbose adds uptime)',
+        ],
         ['stop', 'Stop running CLIProxy instance'],
-        ['doctor', 'Quota diagnostics and shared project detection'],
+        ['doctor | diag', 'Quota diagnostics and shared project detection'],
       ],
     ],
     [
