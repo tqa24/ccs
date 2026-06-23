@@ -1,3 +1,36 @@
+## [8.6.0](https://github.com/kaitranntt/ccs/compare/v8.5.0...v8.6.0) (2026-06-23)
+
+### Features
+
+* **bar:** one-click in-app updater with update-available notification ([0a2c549](https://github.com/kaitranntt/ccs/commit/0a2c549268380fef29c5b73c0342c7614c3cf9e6)), closes [#1588](https://github.com/kaitranntt/ccs/issues/1588)
+
+### Bug Fixes
+
+* **auth:** de-duplicate error output and validate legacy profiles in default ([1913961](https://github.com/kaitranntt/ccs/commit/191396149ffa14d5bd6a59de91a594c6faabb6eb))
+* **auth:** re-export interface-only barrel symbols as types for bun dev runs ([40d7617](https://github.com/kaitranntt/ccs/commit/40d7617cc1cc316671f839c1af26be47fa189cc3))
+* **build:** 使用 type-only 导入平台类型 ([66251c5](https://github.com/kaitranntt/ccs/commit/66251c52786704088298098ad1562d5611195c43))
+* **cli:** clearer profile/proxy/api errors and rich not-found suggestions ([9258aed](https://github.com/kaitranntt/ccs/commit/9258aed1ff44dbb8d6318c5f0f43fdf077aae08a))
+* **cliproxy:** gate binary download log, fix pool message prefix and routing affinity help ([9d5b333](https://github.com/kaitranntt/ccs/commit/9d5b33382b36e5c8ce4cc5f77f7c9e4264eeca86))
+* **cliproxy:** honor status --verbose and document --provider/diag in help ([a5feefe](https://github.com/kaitranntt/ccs/commit/a5feefe45a62044bbfede28edaaa175f20795399))
+* **cliproxy:** keep --help working for all subcommands ([d8cd2f9](https://github.com/kaitranntt/ccs/commit/d8cd2f94b58ad0d6799e81cac42384b851618c3a))
+* **cliproxy:** show global help regardless of flag order before --help ([310f4f6](https://github.com/kaitranntt/ccs/commit/310f4f6e522086090d9634812a94e9abde9d17a3))
+* **cliproxy:** surface Control Panel URL and login key in status/start ([cee9822](https://github.com/kaitranntt/ccs/commit/cee982200813f9eda357aad25b6daa6fad80ef0d))
+* **cliproxy:** 按 backend 生成 provider 路由 ([99ed809](https://github.com/kaitranntt/ccs/commit/99ed8090b152974dacf1219e94e36246664bd302))
+* **cli:** warn on tokens --variant without --api-key; list bar serve in help ([5e4a90b](https://github.com/kaitranntt/ccs/commit/5e4a90b3e5694af0678d9f34b5e9c25c601a9a89))
+* **dispatch:** restore copilot and legacy-cursor arg passthrough ([819d439](https://github.com/kaitranntt/ccs/commit/819d43914a7a85e14afde0f117b1f56d61a11cab))
+* **dispatch:** route unknown bar/copilot/cursor subcommands and survive corrupt config ([2900743](https://github.com/kaitranntt/ccs/commit/29007437677183d856d0081a16d28461c7f4da4a))
+* **doctor:** keep diagnostics running on corrupt config or unreadable auth ([8cfd13b](https://github.com/kaitranntt/ccs/commit/8cfd13ba96956532babbc171c9d9f997401620b0))
+* **persist:** accurate symlink guard message on backup read ([e4c91d2](https://github.com/kaitranntt/ccs/commit/e4c91d285330ba73b45f78c159355d8bae996a0a))
+* **proxy:** forward stream_options.include_usage to OpenAI-compatible upstreams ([2aaad43](https://github.com/kaitranntt/ccs/commit/2aaad43fd7940f3d51781a665b236dac6add1bf2))
+
+### Documentation
+
+* normalize Tuning Engines provider preset ([b889a75](https://github.com/kaitranntt/ccs/commit/b889a758b83bfc292f2e470043a8b3e801b65169))
+
+### Tests
+
+* **bar:** cover ccs bar install --await-quit relaunch path ([239f83d](https://github.com/kaitranntt/ccs/commit/239f83df9de368c59f0b7e33c2ea49e50b79bd35))
+
 ## [8.5.0](https://github.com/kaitranntt/ccs/compare/v8.4.0...v8.5.0) (2026-06-21)
 
 ### Features
