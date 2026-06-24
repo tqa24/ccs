@@ -1205,3 +1205,105 @@ describe('multi-profile: getCachedNativeAccountRows reflects per-profile maps', 
     expect(getCachedNativeAccountRows()).toEqual([]);
   });
 });
+
+describe('review focus areas: reauth caching + codex local fallback', () => {
+  it('Claude reauth (401) profile is dimmed, cached, and not re-polled within cooldown', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work'],
+      codexProfiles: [],
+      claudeDefault: 'work',
+      credsForProfile: () => maxCreds(),
+      claudeFetch: async () => reauthQuota(),
+    });
+
+    const first = await getNativeAccountRows(deps);
+    const r1 = first.find((r) => r.profile === 'work');
+    expect(r1?.needsReauth).toBe(true);
+    expect(r1?.paused).toBe(true); // dimmed
+    expect(deps.claudeFetchCount()).toBe(1);
+
+    // A forced refresh within the cooldown serves the cached reauth row and does
+    // NOT re-hit the endpoint (no repeated 401 on the same account).
+    const second = await getNativeAccountRows(deps, { force: true });
+    const r2 = second.find((r) => r.profile === 'work');
+    expect(r2?.needsReauth).toBe(true);
+    expect(r2?.cached).toBe(true);
+    expect(deps.claudeFetchCount()).toBe(1);
+  });
+
+  it('Codex reauth (401) profile is dimmed, cached, and not re-polled within cooldown', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['ck'],
+      codexDefault: 'default',
+      codexNativeAuth: (p) => ({ accessToken: `t-${p}`, accountId: `id-${p}` }),
+      codexNetworkFetch: async () => ({ success: false, needsReauth: true }) as CodexQuotaResult,
+    });
+
+    const first = await getNativeAccountRows(deps);
+    const r1 = first.find((r) => r.profile === 'ck');
+    expect(r1?.needsReauth).toBe(true);
+    expect(r1?.paused).toBe(true);
+    expect(deps.codexNetworkCount()).toBe(1);
+
+    const second = await getNativeAccountRows(deps, { force: true });
+    expect(second.find((r) => r.profile === 'ck')?.cached).toBe(true);
+    expect(deps.codexNetworkCount()).toBe(1);
+  });
+
+  it('Codex named profile without on-disk auth is parked, never filled from global local data', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    let localCalls = 0;
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['ck'],
+      codexDefault: 'default',
+      codexNativeAuth: () => null, // no auth.json for the named profile
+      codexLocalFallback: async () => {
+        localCalls += 1;
+        return codexLocalQuota();
+      },
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const ck = rows.find((r) => r.profile === 'ck');
+    expect(ck).toBeDefined();
+    expect(ck?.paused).toBe(true); // parked, dimmed
+    expect(ck?.needsReauth).toBe(true);
+    expect(ck?.quota_percentage).toBeNull();
+    // The global ~/.codex session data is never attributed to a named profile.
+    expect(localCalls).toBe(0);
+  });
+
+  it('Codex default profile without auth uses the global local session fallback', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 5_000_000 };
+    let localCalls = 0;
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: [],
+      codexProfiles: ['default'],
+      codexDefault: 'default',
+      codexNativeAuth: () => null,
+      codexLocalFallback: async () => {
+        localCalls += 1;
+        return codexLocalQuota();
+      },
+    });
+
+    const rows = await getNativeAccountRows(deps);
+    const def = rows.find((r) => r.profile === 'default');
+    expect(def).toBeDefined();
+    // The bare default legitimately reflects the global ~/.codex local data.
+    expect(localCalls).toBe(1);
+    expect(def?.quotaStatus).not.toBe('unsupported');
+  });
+});

@@ -60,6 +60,10 @@ import { getCcsDir } from '../../utils/config-manager';
 /** On-demand cache TTL. Floor is 5 min; we use 10 min because the bar polls
  *  /summary far more often than a hook fires. */
 const NATIVE_QUOTA_TTL_MS = 600_000; // 10 minutes
+// After a 401/expired result, cache the reauth row and cool the profile down so
+// an expired account is shown dimmed and re-checked at most this often instead
+// of being re-polled (and re-401'd) on every /summary refresh.
+const REAUTH_COOLDOWN_MS = NATIVE_QUOTA_TTL_MS; // 10 minutes
 
 /** Exponential backoff base; delay = min(base * 2^n, MAX) + jitter. */
 const RETRY_BASE_MS = 1_000;
@@ -755,8 +759,10 @@ async function collectClaudeRowForProfile(
         return { ...row, cached: false };
       }
 
-      // 401 -> token expired. Emit a reauth row so the bar can prompt; this is
-      // a real, actionable state distinct from a transient failure.
+      // 401 -> token expired. Emit a dimmed reauth row so the bar can prompt.
+      // Cache it and open a cooldown so the expired account is NOT re-polled
+      // (and re-401'd) on every refresh; it re-checks after REAUTH_COOLDOWN_MS,
+      // picking up a successful re-auth.
       if (quota.needsReauth) {
         const row: BarSummaryRow = {
           account_id: `${SURFACE_CLAUDE}:${profile}`,
@@ -766,7 +772,7 @@ async function collectClaudeRowForProfile(
           is_subscription: true,
           displayName: profile,
           tier,
-          paused: false,
+          paused: true,
           quota_percentage: null,
           quotaStatus: 'error',
           next_reset: null,
@@ -778,9 +784,10 @@ async function collectClaudeRowForProfile(
           fetchedAt: new Date(now).toISOString(),
           needsReauth: true,
         };
-        // Do not cache the reauth row as a good value; it should re-evaluate
-        // once the user re-auths. But return it now.
-        return row;
+        state.cachedRow = row;
+        state.cachedAt = now;
+        state.cooldownUntil = now + REAUTH_COOLDOWN_MS;
+        return { ...row, cached: false };
       }
 
       // 429 / 5xx / transient. Apply backoff + breaker, then serve stale.
@@ -880,8 +887,10 @@ async function collectCodexRowForProfile(
             }
             // else: fall through to LOCAL fallback below.
           } else if (quota.needsReauth) {
-            // Token expired -> reauth row; do NOT cache as a good value.
-            return {
+            // Token expired -> dimmed reauth row. Cache it and cool down so the
+            // expired account is NOT re-polled (and re-401'd) every refresh; it
+            // re-checks after REAUTH_COOLDOWN_MS to pick up a re-auth.
+            const reauthRow: BarSummaryRow = {
               account_id: `${SURFACE_CODEX}:${profile}`,
               provider: CODEX_NATIVE_PROVIDER,
               surface: SURFACE_CODEX,
@@ -889,7 +898,7 @@ async function collectCodexRowForProfile(
               is_subscription: true,
               displayName: profile,
               tier: null,
-              paused: false,
+              paused: true,
               quota_percentage: null,
               quotaStatus: 'error',
               next_reset: null,
@@ -901,6 +910,10 @@ async function collectCodexRowForProfile(
               fetchedAt: new Date(now).toISOString(),
               needsReauth: true,
             };
+            state.cachedRow = reauthRow;
+            state.cachedAt = now;
+            state.cooldownUntil = now + REAUTH_COOLDOWN_MS;
+            return { ...reauthRow, cached: false };
           } else if (quota.httpStatus === 429) {
             // 429: apply breaker + backoff, then fall through to local.
             state.consecutive429 += 1;
@@ -927,23 +940,54 @@ async function collectCodexRowForProfile(
           }
           // Fall through to LOCAL fallback below.
         }
-        // No on-disk auth for this profile -> fall through to local fallback.
+        // No on-disk auth for this profile -> fall through to the fallback below.
       }
 
       // ----------------------------------------------------------------
-      // LOCAL FALLBACK: session log read (zero network, always attempted
-      // when network is unavailable / no auth file / breaker active)
+      // LOCAL FALLBACK: session-log read (zero network). The session logs live
+      // in the GLOBAL ~/.codex, so they represent ONLY the bare default account,
+      // never a named profile. Using them for a named profile would misattribute
+      // the default's usage to the profile, so only the default falls back to
+      // local; named profiles park instead.
       // ----------------------------------------------------------------
-      const localQuota = await getCodex();
-      if (localQuota) {
-        const row = buildCodexRow(localQuota, now, SURFACE_CODEX, profile);
-        state.cachedRow = row;
-        state.cachedAt = now;
-        return { ...row, cached: false };
+      if (profile === DEFAULT_PROFILE) {
+        const localQuota = await getCodex();
+        if (localQuota) {
+          const row = buildCodexRow(localQuota, now, SURFACE_CODEX, profile);
+          state.cachedRow = row;
+          state.cachedAt = now;
+          return { ...row, cached: false };
+        }
       }
 
-      // No local data either: serve stale (may be null).
-      return serveCached(state);
+      // Named profile (or default with no local data): serve the last-known row
+      // if any, else a dimmed parked row -- never global local data for a named
+      // profile.
+      const stale = serveCached(state);
+      if (stale) return stale;
+      const parkedRow: BarSummaryRow = {
+        account_id: `${SURFACE_CODEX}:${profile}`,
+        provider: CODEX_NATIVE_PROVIDER,
+        surface: SURFACE_CODEX,
+        profile,
+        is_subscription: true,
+        displayName: profile,
+        tier: null,
+        paused: true,
+        quota_percentage: null,
+        quotaStatus: 'unsupported',
+        next_reset: null,
+        is_default: false,
+        last_activity_at: null,
+        today_cost: null,
+        health: 'ok',
+        cached: false,
+        fetchedAt: new Date(now).toISOString(),
+        needsReauth: true,
+      };
+      state.cachedRow = parkedRow;
+      state.cachedAt = now;
+      return parkedRow;
     } catch {
       // Network/parse rejection -> treat as transient, serve stale.
       const backoff = computeBackoffMs(state.backoffAttempt);
