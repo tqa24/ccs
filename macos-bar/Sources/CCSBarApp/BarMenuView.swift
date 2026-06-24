@@ -226,7 +226,7 @@ struct BarMenuView: View {
   /// present, preserving the single "Accounts" header for a CLIProxy-only setup.
   @ViewBuilder private var accountsSection: some View {
     let parts = BarFormatting.partitionSubscriptions(viewModel.rows)
-    VStack(alignment: .leading, spacing: 8) {
+    VStack(alignment: .leading, spacing: 6) {
       if let error = viewModel.lastError {
         ErrorBanner(message: error)
       }
@@ -364,17 +364,16 @@ struct BarMenuView: View {
     }
   }
 
-  /// Estimates the height of a single profile carousel so its frame does not
-  /// collapse. Only ONE card is visible at a time, so the height is the tallest
-  /// single card in the carousel: a title row plus one bar per quota window, or a
-  /// compact parked/empty card when there are no windows.
+  /// Height of the tallest single card in a carousel — only one card is visible
+  /// at a time, so the paged frame is sized to fit it WITHOUT reserving blank
+  /// space beneath. Card = vertical padding (16) + title row (~22) + one bar per
+  /// quota window (~20) + an optional stale footnote (~16); a parked/reauth card
+  /// is just the title row plus a one-line status.
   private func carouselHeight(_ rows: [BarSummaryRow]) -> CGFloat {
     let maxWindows = rows.map { $0.quotaWindows?.count ?? 0 }.max() ?? 0
-    if maxWindows == 0 {
-      return 80  // parked / reauth card: title row + status line only.
-    }
-    // ~34pt title row + ~28pt per window bar + vertical padding.
-    return 44 + CGFloat(maxWindows) * 30
+    if maxWindows == 0 { return 60 }
+    let hasFootnote = rows.contains { $0.staleAsOf != nil }
+    return 40 + CGFloat(maxWindows) * 20 + (hasFootnote ? 16 : 0)
   }
 
   private var header: some View {
