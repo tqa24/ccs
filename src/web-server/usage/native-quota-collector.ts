@@ -669,6 +669,26 @@ function markDefault(row: BarSummaryRow, isDefault: boolean): BarSummaryRow {
   return { ...row, is_default: isDefault };
 }
 
+/**
+ * Tag the row with is_default AND write the flag back onto the cached copy. The
+ * collector caches a row before the default profile is known (the default is
+ * resolved in the enumerator), so without this the cache-fallback path
+ * (getCachedNativeAccountRows) would serve the default account with
+ * is_default:false and the UI would stop ordering/tagging it as the default.
+ */
+function markDefaultAndSyncCache(
+  map: Map<string, ProviderState>,
+  profile: string,
+  row: BarSummaryRow,
+  isDefault: boolean
+): BarSummaryRow {
+  const state = map.get(profile);
+  if (state?.cachedRow) {
+    state.cachedRow = { ...state.cachedRow, is_default: isDefault };
+  }
+  return markDefault(row, isDefault);
+}
+
 async function collectClaudeRowForProfile(
   profile: string,
   deps: NativeQuotaDeps,
@@ -1453,7 +1473,7 @@ async function getNativeAccountRowsMultiProfile(
     const isDefault = p === claudeDefault;
     tasks.push(
       collectClaudeRowForProfile(p, deps, force)
-        .then((r) => (r ? markDefault(r, isDefault) : null))
+        .then((r) => (r ? markDefaultAndSyncCache(claudeProfileStates, p, r, isDefault) : null))
         .catch(() => null)
     );
   }
@@ -1462,7 +1482,7 @@ async function getNativeAccountRowsMultiProfile(
     const isDefault = p === codexDefault;
     tasks.push(
       collectCodexRowForProfile(p, deps, force)
-        .then((r) => (r ? markDefault(r, isDefault) : null))
+        .then((r) => (r ? markDefaultAndSyncCache(codexProfileStates, p, r, isDefault) : null))
         .catch(() => null)
     );
   }

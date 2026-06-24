@@ -1306,4 +1306,32 @@ describe('review focus areas: reauth caching + codex local fallback', () => {
     expect(localCalls).toBe(1);
     expect(def?.quotaStatus).not.toBe('unsupported');
   });
+
+  it('cache-fallback rows keep is_default for the default profile', async () => {
+    resetNativeQuotaState();
+    const clock = { now: 6_000_000 };
+    const deps = makeMultiProfileDeps({
+      clock,
+      claudeProfiles: ['work', 'ck'],
+      codexProfiles: ['default', 'ck'],
+      claudeDefault: 'work',
+      codexDefault: 'default',
+      credsForProfile: () => maxCreds(),
+      claudeFetch: async () => successQuota(),
+      codexNativeAuth: (p) => ({ accessToken: `t-${p}`, accountId: `id-${p}` }),
+      codexNetworkFetch: async () => codexSuccessQuota(),
+    });
+
+    await getNativeAccountRows(deps); // populate the per-profile caches
+
+    // The cache-fallback path must preserve is_default so the UI still orders and
+    // tags the default account when /summary serves from cache.
+    const cached = getCachedNativeAccountRows();
+    expect(cached.find((r) => r.surface === 'ccs' && r.profile === 'work')?.is_default).toBe(true);
+    expect(cached.find((r) => r.surface === 'ccsx' && r.profile === 'default')?.is_default).toBe(
+      true
+    );
+    expect(cached.find((r) => r.surface === 'ccs' && r.profile === 'ck')?.is_default).toBe(false);
+    expect(cached.find((r) => r.surface === 'ccsx' && r.profile === 'ck')?.is_default).toBe(false);
+  });
 });
