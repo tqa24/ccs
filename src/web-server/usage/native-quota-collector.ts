@@ -489,6 +489,15 @@ function serveCached(state: ProviderState): BarSummaryRow | null {
  * Never calls security/Keychain — zero new keychain access from this feature.
  */
 function readClaudeCredentialsForProfileFromDisk(profile: string): ClaudeNativeCredentials | null {
+  // The bare `ccs` default login uses the standard global credential lookup:
+  // ~/.claude/.credentials.json, falling back to the single global
+  // "Claude Code-credentials" Keychain item that Claude Code itself maintains.
+  // This is the ONE pre-existing global read the shipped Bar already performs --
+  // NOT a per-profile Keychain scan. Isolated `ccs auth` profiles below stay
+  // file-only and never touch the Keychain.
+  if (profile === DEFAULT_PROFILE) {
+    return readClaudeCredentials();
+  }
   try {
     const instanceDir = path.join(getCcsDir(), 'instances', profile);
     const credFile = path.join(instanceDir, '.credentials.json');
@@ -557,14 +566,22 @@ function listClaudeProfilesFromDisk(): string[] {
       };
     };
     const registry = new ProfileRegistry();
-    return Object.keys(registry.getAllProfilesMerged());
+    const profiles = Object.keys(registry.getAllProfilesMerged());
+    // Add the bare `ccs` default login (DEFAULT_PROFILE) when ~/.claude exists --
+    // the default way of running `ccs`, distinct from named `ccs <profile>`
+    // profiles. unshift so it leads before alphabetical sorting downstream.
+    if (fs.existsSync(path.join(os.homedir(), '.claude'))) {
+      if (!profiles.includes(DEFAULT_PROFILE)) profiles.unshift(DEFAULT_PROFILE);
+    }
+    return profiles;
   } catch {
     return [];
   }
 }
 
 /**
- * Resolve the default Claude profile. Returns null when none is set.
+ * Resolve the default Claude profile. A registry-designated default wins;
+ * otherwise the bare ~/.claude login (DEFAULT_PROFILE) is the default `ccs`.
  */
 function getDefaultClaudeProfileFromDisk(): string | null {
   try {
@@ -574,10 +591,13 @@ function getDefaultClaudeProfileFromDisk(): string | null {
       };
     };
     const registry = new ProfileRegistry();
-    return registry.getDefaultResolved();
+    const reg = registry.getDefaultResolved();
+    if (reg) return reg;
   } catch {
-    return null;
+    // fall through to the bare default below
   }
+  if (fs.existsSync(path.join(os.homedir(), '.claude'))) return DEFAULT_PROFILE;
+  return null;
 }
 
 /**
