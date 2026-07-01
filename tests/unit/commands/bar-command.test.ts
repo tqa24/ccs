@@ -13,7 +13,12 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { BAR_AUTH_TOKEN_HEADER, getOrCreateBarAuthToken } from '../../../src/utils/bar-auth-token';
+import {
+  BAR_AUTH_NONCE_HEADER,
+  BAR_AUTH_TOKEN_HEADER,
+  createBarAuthProof,
+  getOrCreateBarAuthToken,
+} from '../../../src/utils/bar-auth-token';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -99,6 +104,7 @@ beforeEach(() => {
 afterEach(() => {
   restoreConsole();
   mock.restore();
+  process.exitCode = 0;
 
   if (originalCcsHome === undefined) {
     delete process.env.CCS_HOME;
@@ -197,6 +203,8 @@ describe('bar command dispatcher (index.ts)', () => {
     const handleBarCommand = await loadHandleBarCommand();
     // Should print help or error but not crash
     await expect(handleBarCommand(['unknown-subcommand'])).resolves.toBeUndefined();
+    expect(process.exitCode).toBe(1);
+    process.exitCode = 0;
   });
 
   it('dispatches `ccs bar --help` to help subcommand and does not launch', async () => {
@@ -1749,14 +1757,12 @@ describe('defaultFindRunningServer (GH-1500)', () => {
     const ccsDir = path.join(tempHome, '.ccs');
     fs.mkdirSync(ccsDir, { recursive: true });
 
-    // Start an ephemeral server that responds 200 to /api/bar/summary with the shared token.
-    // The server echoes the token unconditionally (reading it from the file), mirroring
-    // production behavior: only a process that owns the 0600 file can produce the value.
-    const server = http.createServer((_req, res) => {
+    const server = http.createServer((req, res) => {
       const token = getOrCreateBarAuthToken(ccsDir);
+      const nonce = String(req.headers[BAR_AUTH_NONCE_HEADER] ?? '');
       res.writeHead(200, {
         'Content-Type': 'application/json',
-        [BAR_AUTH_TOKEN_HEADER]: token,
+        [BAR_AUTH_TOKEN_HEADER]: createBarAuthProof(token, nonce),
       });
       res.end('{}');
     });
@@ -1967,11 +1973,12 @@ describe('defaultFindRunningServer (GH-1500)', () => {
     // This simulates `ccs config` starting the web-server with host 'localhost'
     // on macOS, where 'localhost' resolves to ::1.
     // The server echoes the token unconditionally (from the file), mirroring production.
-    const server = http.createServer((_req, res) => {
+    const server = http.createServer((req, res) => {
       const token = getOrCreateBarAuthToken(ccsDir);
+      const nonce = String(req.headers[BAR_AUTH_NONCE_HEADER] ?? '');
       res.writeHead(200, {
         'Content-Type': 'application/json',
-        [BAR_AUTH_TOKEN_HEADER]: token,
+        [BAR_AUTH_TOKEN_HEADER]: createBarAuthProof(token, nonce),
       });
       res.end('{}');
     });
@@ -2023,11 +2030,12 @@ describe('defaultFindRunningServer: priority over response speed (GH-1500)', () 
 
     // Lower-priority server (default port candidate): responds immediately with 200.
     // Echoes token unconditionally (from file), mirroring production behavior.
-    const fastServer = http.createServer((_req, res) => {
+    const fastServer = http.createServer((req, res) => {
       const token = getOrCreateBarAuthToken(ccsDir);
+      const nonce = String(req.headers[BAR_AUTH_NONCE_HEADER] ?? '');
       res.writeHead(200, {
         'Content-Type': 'application/json',
-        [BAR_AUTH_TOKEN_HEADER]: token,
+        [BAR_AUTH_TOKEN_HEADER]: createBarAuthProof(token, nonce),
       });
       res.end('{}');
     });
@@ -2036,12 +2044,13 @@ describe('defaultFindRunningServer: priority over response speed (GH-1500)', () 
 
     // Higher-priority server (bar.json port): adds ~300 ms artificial delay,
     // but still responds 200 within the 1500 ms timeout.
-    const slowServer = http.createServer((_req, res) => {
+    const slowServer = http.createServer((req, res) => {
       const token = getOrCreateBarAuthToken(ccsDir);
+      const nonce = String(req.headers[BAR_AUTH_NONCE_HEADER] ?? '');
       setTimeout(() => {
         res.writeHead(200, {
           'Content-Type': 'application/json',
-          [BAR_AUTH_TOKEN_HEADER]: token,
+          [BAR_AUTH_TOKEN_HEADER]: createBarAuthProof(token, nonce),
         });
         res.end('{}');
       }, 300);
@@ -3149,7 +3158,17 @@ describe('defaultFindRunningServer: socket-level 401/403 classifies authRequired
           setTimeout(_ms: number, _cb: () => void) {
             return socket;
           },
-          write() {
+          write(data: string) {
+            const nonce =
+              data.match(new RegExp(`${BAR_AUTH_NONCE_HEADER}:\\s*([^\\r\\n]+)`, 'i'))?.[1] ?? '';
+            for (const cb of listeners.data ?? []) {
+              cb(
+                Buffer.from(
+                  `HTTP/1.1 200 OK\r\n${BAR_AUTH_TOKEN_HEADER}: ${createBarAuthProof(token, nonce)}\r\n\r\n`,
+                  'utf8'
+                )
+              );
+            }
             return true;
           },
           destroy() {
@@ -3158,14 +3177,6 @@ describe('defaultFindRunningServer: socket-level 401/403 classifies authRequired
         };
         setImmediate(() => {
           onConnect();
-          for (const cb of listeners.data ?? []) {
-            cb(
-              Buffer.from(
-                `HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${token}\r\n\r\n`,
-                'utf8'
-              )
-            );
-          }
         });
         return socket;
       },
@@ -3207,7 +3218,7 @@ describe('defaultWaitForServerLive: rogue 200 without matching token is rejected
   // fully synchronous and immune to OS socket state.  The invariant is
   // behaviour-coupled: removing the token check causes both tests to fail.
 
-  function buildNetMock(responseHeaders: string) {
+  function buildNetMock(responseHeaders: string | ((request: string) => string)) {
     // Returns a `net` mock whose connect() immediately delivers the response,
     // then emits 'end'.
     return {
@@ -3221,7 +3232,12 @@ describe('defaultWaitForServerLive: rogue 200 without matching token is rejected
           setTimeout(_ms: number, _cb: () => void) {
             return socket;
           },
-          write() {
+          write(data: string) {
+            const response =
+              typeof responseHeaders === 'function' ? responseHeaders(data) : responseHeaders;
+            for (const cb of listeners.data ?? []) {
+              cb(Buffer.from(response, 'utf8'));
+            }
             return true;
           },
           destroy() {
@@ -3230,9 +3246,6 @@ describe('defaultWaitForServerLive: rogue 200 without matching token is rejected
         };
         setImmediate(() => {
           onConnect();
-          for (const cb of listeners.data ?? []) {
-            cb(Buffer.from(responseHeaders, 'utf8'));
-          }
           for (const cb of listeners.end ?? []) {
             cb();
           }
@@ -3296,11 +3309,15 @@ describe('defaultWaitForServerLive: rogue 200 without matching token is rejected
     const { getOrCreateBarAuthToken: getToken } = await import(
       `../../../src/utils/bar-auth-token?test=${Date.now()}-legit-net`
     );
-    const realToken = getToken(ccsDir);
+    const realToken = getToken();
 
-    // Mock net: every probe gets 200 with the CORRECT token.
+    // Mock net: every probe gets 200 with the CORRECT nonce-bound proof.
     mock.module('net', () =>
-      buildNetMock(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${realToken}\r\n\r\n`)
+      buildNetMock((request) => {
+        const nonce =
+          request.match(new RegExp(`${BAR_AUTH_NONCE_HEADER}:\\s*([^\\r\\n]+)`, 'i'))?.[1] ?? '';
+        return `HTTP/1.1 200 OK\r\n${BAR_AUTH_TOKEN_HEADER}: ${createBarAuthProof(realToken, nonce)}\r\n\r\n`;
+      })
     );
 
     moduleSeq++;
@@ -3365,7 +3382,19 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
           setTimeout() {
             return socket;
           },
-          write() {
+          write(data: string) {
+            if (opts.port === 41235) {
+              const nonce =
+                data.match(new RegExp(`${BAR_AUTH_NONCE_HEADER}:\\s*([^\\r\\n]+)`, 'i'))?.[1] ?? '';
+              for (const cb of listeners.data ?? []) {
+                cb(
+                  Buffer.from(
+                    `HTTP/1.1 200 OK\r\n${BAR_AUTH_TOKEN_HEADER}: ${createBarAuthProof(expectedToken, nonce)}\r\n\r\n`,
+                    'utf8'
+                  )
+                );
+              }
+            }
             return true;
           },
           destroy() {
@@ -3377,16 +3406,6 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
         // Fire the connect callback asynchronously, mirroring net.connect.
         setImmediate(() => {
           onConnect();
-          if (opts.port === 41235) {
-            const data = listeners.data ?? [];
-            // The mock server includes the token unconditionally in the response
-            // (read from the 0600 file, not echoed from the request) — this is
-            // exactly what the production CCS Bar server does, and is the property
-            // that prevents a rogue reflector from passing the check.
-            for (const cb of data) {
-              cb(Buffer.from(`HTTP/1.1 200 OK\r\nx-ccs-bar-token: ${expectedToken}\r\n\r\n`, 'utf8'));
-            }
-          }
           // Port 3000 never emits a status line: simulate an endlessly
           // streaming service that must not block the higher-priority hit.
           // Any other port stays silent and is settled by the 1.5s timeout,
@@ -3418,6 +3437,158 @@ describe('defaultFindRunningServer: streaming lower-priority probes', () => {
     });
     expect(highPrioritySocketDestroyed).toBe(true);
     expect(lowerPriorityProbeStarted).toBe(true);
+  });
+});
+
+describe('bar raw socket probes: absolute deadline for malformed streaming peers', () => {
+  it('continues past a higher-priority trickling non-HTTP response and returns a lower-priority hit', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(ccsDir, 'bar.json'),
+      JSON.stringify({ port: 41236, baseUrl: 'http://127.0.0.1:41236', authMode: 'loopback' })
+    );
+
+    const { getOrCreateBarAuthToken: getToken } = await import(
+      `../../../src/utils/bar-auth-token?test=${Date.now()}-deadline-find`
+    );
+    const expectedToken = getToken(ccsDir);
+
+    mock.module('net', () => ({
+      connect: (opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        let interval: ReturnType<typeof setInterval> | undefined;
+        let request = '';
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout() {
+            return socket;
+          },
+          write(data: string) {
+            request = data;
+            return true;
+          },
+          destroy() {
+            if (interval) clearInterval(interval);
+            return socket;
+          },
+        };
+
+        setImmediate(() => {
+          onConnect();
+          if (opts.port === 41236) {
+            interval = setInterval(() => {
+              for (const cb of listeners.data ?? []) cb(Buffer.from('x', 'utf8'));
+            }, 25);
+            interval.unref?.();
+            return;
+          }
+          if (opts.port === 3000) {
+            const nonce =
+              request.match(new RegExp(`${BAR_AUTH_NONCE_HEADER}:\\s*([^\\r\\n]+)`, 'i'))?.[1] ??
+              '';
+            for (const cb of listeners.data ?? []) {
+              cb(
+                Buffer.from(
+                  `HTTP/1.1 200 OK\r\n${BAR_AUTH_TOKEN_HEADER}: ${createBarAuthProof(expectedToken, nonce)}\r\n\r\n`,
+                  'utf8'
+                )
+              );
+            }
+          }
+        });
+
+        return socket;
+      },
+    }));
+
+    moduleSeq++;
+    const { defaultFindRunningServer } = (await import(
+      `../../../src/commands/bar/bar-server-probe?test=${Date.now()}-${moduleSeq}`
+    )) as {
+      defaultFindRunningServer: (
+        ccsDir: string
+      ) => Promise<{ port: number; baseUrl: string; authRequired?: boolean } | null>;
+    };
+
+    const result = await Promise.race([
+      defaultFindRunningServer(ccsDir),
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 2500)),
+    ]);
+
+    expect(result).toEqual({
+      port: 3000,
+      baseUrl: 'http://127.0.0.1:3000',
+      authRequired: false,
+    });
+  });
+
+  it('does not let a single launch wait probe outlive the outer deadline', async () => {
+    const ccsDir = path.join(tempHome, '.ccs');
+    fs.mkdirSync(ccsDir, { recursive: true });
+
+    const realDateNow = Date.now;
+    let dateCall = 0;
+    Date.now = () => {
+      dateCall++;
+      return dateCall < 4 ? 0 : 10_001;
+    };
+
+    mock.module('net', () => ({
+      connect: (_opts: { host: string; port: number }, onConnect: () => void): unknown => {
+        const listeners: Record<string, Array<(arg?: unknown) => void>> = {};
+        let interval: ReturnType<typeof setInterval> | undefined;
+        const socket = {
+          on(event: string, cb: (arg?: unknown) => void) {
+            (listeners[event] ??= []).push(cb);
+            return socket;
+          },
+          setTimeout() {
+            return socket;
+          },
+          write() {
+            return true;
+          },
+          destroy() {
+            if (interval) clearInterval(interval);
+            return socket;
+          },
+        };
+
+        setImmediate(() => {
+          onConnect();
+          interval = setInterval(() => {
+            for (const cb of listeners.data ?? []) cb(Buffer.from('x', 'utf8'));
+          }, 25);
+          interval.unref?.();
+        });
+
+        return socket;
+      },
+    }));
+
+    try {
+      moduleSeq++;
+      const { defaultWaitForServerLive } = (await import(
+        `../../../src/commands/bar/launch-subcommand?test=${Date.now()}-${moduleSeq}`
+      )) as {
+        defaultWaitForServerLive: (baseUrl: string) => Promise<void>;
+      };
+
+      const result = await Promise.race([
+        defaultWaitForServerLive('http://127.0.0.1:9996')
+          .then(() => 'resolved' as const)
+          .catch(() => 'rejected' as const),
+        new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 2500)),
+      ]);
+
+      expect(result).toBe('rejected');
+    } finally {
+      Date.now = realDateNow;
+    }
   });
 });
 
